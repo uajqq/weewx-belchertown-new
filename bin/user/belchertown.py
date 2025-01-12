@@ -284,11 +284,13 @@ class getData(SearchList):
         ) / 60
 
         try:
-            moment_js_tz = self.generator.skin_dict["Units"]["TimeZone"].get("time_zone")
+            moment_js_tz = self.generator.skin_dict["Units"]["TimeZone"].get(
+                "time_zone"
+            )
         except KeyError:
             moment_js_tz = ""
 
-# Highcharts UTC offset is the opposite of normal. Positive values are
+        # Highcharts UTC offset is the opposite of normal. Positive values are
         # west, negative values are east of UTC.
         # https://api.highcharts.com/highcharts/time.timezoneOffset Multiplying
         # by -1 will reverse the number sign and keep 0 (not -0).
@@ -513,13 +515,14 @@ class getData(SearchList):
             radar_html_kiosk = radar_html
         else:
             radar_width_kiosk = self.generator.skin_dict["Extras"]["radar_width_kiosk"]
-            radar_height_kiosk = self.generator.skin_dict["Extras"]["radar_height_kiosk"]
+            radar_height_kiosk = self.generator.skin_dict["Extras"][
+                "radar_height_kiosk"
+            ]
             radar_html_kiosk = '<iframe width="{}px" height="{}px" src="{}" frameborder="0"></iframe>'.format(
                 radar_width_kiosk,
                 radar_height_kiosk,
-                self.generator.skin_dict["Extras"]["radar_html_kiosk"]
+                self.generator.skin_dict["Extras"]["radar_html_kiosk"],
             )
-
 
         # ==============================================================================
         # Build the all time stats.
@@ -771,7 +774,10 @@ class getData(SearchList):
                 locale.format_string("%g", float(rainiest_day_converted)),
             ]
         else:
-            rainiest_day = [calendar.timegm(time.gmtime()), locale.format_string("%.2f", 0)]
+            rainiest_day = [
+                calendar.timegm(time.gmtime()),
+                locale.format_string("%.2f", 0),
+            ]
 
         # All Time Rainiest Day
         at_rainiest_day_query = wx_manager.getSql(
@@ -1177,7 +1183,7 @@ class getData(SearchList):
                     return icon_dict[icon_name]
                 else:
                     logerr("aeris-icon-list.json is missing in " + iconlist_file_path)
-                    return 'unknown'
+                    return "unknown"
 
             forecast_lang = self.generator.skin_dict["Extras"]["forecast_lang"].lower()
             if self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"] == "1":
@@ -1210,22 +1216,28 @@ class getData(SearchList):
                 forecast_alert_limit = self.generator.skin_dict["Extras"][
                     "forecast_alert_limit"
                 ]
-                forecast_alerts_url = "https://api.aerisapi.com/alerts/%s,%s?&format=json&limit=%s&lang=%s&client_id=%s&client_secret=%s" % (
-                    latitude,
-                    longitude,
-                    forecast_alert_limit,
-                    forecast_lang,
-                    forecast_api_id,
-                    forecast_api_secret,
+                forecast_alerts_url = (
+                    "https://api.aerisapi.com/alerts/%s,%s?&format=json&limit=%s&lang=%s&client_id=%s&client_secret=%s"
+                    % (
+                        latitude,
+                        longitude,
+                        forecast_alert_limit,
+                        forecast_lang,
+                        forecast_api_id,
+                        forecast_api_secret,
+                    )
                 )
             else:
                 # Default to 1 alerts to show if the option is missing. Can go up to 10
-                forecast_alerts_url = "https://api.aerisapi.com/alerts/%s,%s?&format=json&limit=1&lang=%s&client_id=%s&client_secret=%s" % (
-                    latitude,
-                    longitude,
-                    forecast_lang,
-                    forecast_api_id,
-                    forecast_api_secret,
+                forecast_alerts_url = (
+                    "https://api.aerisapi.com/alerts/%s,%s?&format=json&limit=1&lang=%s&client_id=%s&client_secret=%s"
+                    % (
+                        latitude,
+                        longitude,
+                        forecast_lang,
+                        forecast_api_id,
+                        forecast_api_secret,
+                    )
                 )
 
             # Determine if the file exists and get it's modified time, enhanced
@@ -1425,16 +1437,16 @@ class getData(SearchList):
                 cloud_cover = ""
 
             try:
-                if (
-                    len(data["aqi"][0]["response"]) > 0
-                ):
+                if len(data["aqi"][0]["response"]) > 0:
                     aqi = data["aqi"][0]["response"][0]["periods"][0]["aqi"]
-                    aqi_category = data["aqi"][0]["response"][0]["periods"][0]["category"]
+                    aqi_category = data["aqi"][0]["response"][0]["periods"][0][
+                        "category"
+                    ]
                     aqi_time = data["aqi"][0]["response"][0]["periods"][0]["timestamp"]
-                    aqi_location = data["aqi"][0]["response"][0]["place"]["name"].title()
-                elif (
-                    data["aqi"][0]["error"]["code"] == "warn_no_data"
-                ):
+                    aqi_location = data["aqi"][0]["response"][0]["place"][
+                        "name"
+                    ].title()
+                elif data["aqi"][0]["error"]["code"] == "warn_no_data":
                     aqi = "No Data"
                     aqi_category = ""
                     aqi_time = 0
@@ -1566,7 +1578,7 @@ class getData(SearchList):
                 long = float(longitude)
                 radiusInKm = int(earthquake_maxradiuskm)
 
-                kmInLongitudeDegree = 111.320 * cos( lat / 180.0 * pi)
+                kmInLongitudeDegree = 111.320 * cos(lat / 180.0 * pi)
 
                 deltaLat = radiusInKm / 111.1
                 deltaLong = radiusInKm / kmInLongitudeDegree
@@ -1578,7 +1590,7 @@ class getData(SearchList):
 
                 earthquake_url = (
                     "https://api.franceseisme.fr/fdsnws/event/1/query?eventtype=earthquake&minmagnitude=2&minlatitude=%.2f&minlongitude=%.2f&maxlatitude=%.2f&maxlongitude=%.2f&format=json&limit=1&orderby=time"
-                    % (minLat, minLong, maxLat, maxLong) 
+                    % (minLat, minLong, maxLat, maxLong)
                 )
             earthquake_is_stale = False
 
@@ -1701,13 +1713,15 @@ class getData(SearchList):
                     )
                     if match("fr_.*", system_locale):
                         equrl = eqdata["features"][0]["properties"]["url"]["fr"]
-                        eqplace = eqdata["features"][0]["properties"]["description"]["fr"]
+                        eqplace = eqdata["features"][0]["properties"]["description"][
+                            "fr"
+                        ]
                     else:
                         equrl = eqdata["features"][0]["properties"]["url"]["en"]
-                        eqplace = eqdata["features"][0]["properties"]["description"]["en"]
-                    eqmag = format(
-                         eqdata["features"][0]["properties"]["mag"], ".1f"
-                    )
+                        eqplace = eqdata["features"][0]["properties"]["description"][
+                            "en"
+                        ]
+                    eqmag = format(eqdata["features"][0]["properties"]["mag"], ".1f")
                 elif (
                     self.generator.skin_dict["Extras"]["earthquake_server"] == "GeoNet"
                 ):
@@ -1790,7 +1804,7 @@ class getData(SearchList):
             self.generator.formatter,
             self.generator.converter,
             None,
-            current_record
+            current_record,
         )
         for obs in station_observations:
             if "data_binding" in obs:
@@ -1813,7 +1827,7 @@ class getData(SearchList):
                     self.generator.formatter,
                     self.generator.converter,
                     None,
-                    current_record
+                    current_record,
                 )
 
             if obs == "visibility":
@@ -2008,25 +2022,37 @@ class getData(SearchList):
                 social_html += twitter_html
             social_html += "</div>"
 
-        #==============================================================================
+        # ==============================================================================
         # MQTT settings for Kiosk page
         # ==============================================================================
 
         if self.generator.skin_dict["Extras"]["mqtt_websockets_host_kiosk"] != "":
             if self.generator.skin_dict["Extras"]["mqtt_websockets_port_kiosk"] != "":
-                mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"]["mqtt_websockets_port_kiosk"]
+                mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
+                    "mqtt_websockets_port_kiosk"
+                ]
             else:
-                mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"]["mqtt_websockets_port"]
+                mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
+                    "mqtt_websockets_port"
+                ]
             if self.generator.skin_dict["Extras"]["mqtt_websockets_ssl_kiosk"] != "":
-                mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"]["mqtt_websockets_ssl_kiosk"]
+                mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"][
+                    "mqtt_websockets_ssl_kiosk"
+                ]
             else:
-                mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"]["mqtt_websockets_ssl"]
+                mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"][
+                    "mqtt_websockets_ssl"
+                ]
         else:
-            mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"]["mqtt_websockets_host"]
-            mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"]["mqtt_websockets_port"]
-            mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"]["mqtt_websockets_ssl"]
-
-
+            mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
+                "mqtt_websockets_host"
+            ]
+            mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
+                "mqtt_websockets_port"
+            ]
+            mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"][
+                "mqtt_websockets_ssl"
+            ]
 
         # Include custom.css if it exists in the HTML_ROOT folder
         custom_css_file = html_root + "/custom.css"
@@ -2178,9 +2204,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         # Loop through each [section]. This is the first bracket group of
         # options including global options.
         for chart_group in self.chart_dict.sections:
-            output[
-                chart_group
-            ] = (
+            output[chart_group] = (
                 OrderedDict()
             )  # This retains the order in which to load the charts on the page.
             chart_options = accumulateLeaves(self.chart_dict[chart_group])
@@ -2326,7 +2350,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     "gapsize", 300
                 )  # Default to 5 minutes in millis
                 if gapsize:
-                    output[chart_group][plotname]["options"]["gapsize"] = int(gapsize) * 1000
+                    output[chart_group][plotname]["options"]["gapsize"] = (
+                        int(gapsize) * 1000
+                    )
 
                 connectNulls = plot_options.get("connectNulls", "false")
                 output[chart_group][plotname]["options"]["connectNulls"] = connectNulls
@@ -2348,12 +2374,12 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 ] = plot_tooltip_date_format
 
                 # Width and height specific CSS overrides
-                output[chart_group][plotname]["options"][
-                    "css_width"
-                ] = plot_options.get("width", "")
-                output[chart_group][plotname]["options"][
-                    "css_height"
-                ] = plot_options.get("height", "")
+                output[chart_group][plotname]["options"]["css_width"] = (
+                    plot_options.get("width", "")
+                )
+                output[chart_group][plotname]["options"]["css_height"] = (
+                    plot_options.get("height", "")
+                )
 
                 # Setup legend option
                 legend = plot_options.get("legend", None)
@@ -2565,7 +2591,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
                     if start_at_whole_hour:
                         minstamp -= minstamp % 3600
-                    
+
                     if start_at_beginning_of_month:
                         start_ts, stop_ts = archiveMonthSpan(minstamp)
                         minstamp = start_ts
@@ -2605,9 +2631,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         try:
                             # Aggregation specified. Get the interval.
                             aggregate_interval = weeutil.weeutil.nominal_spans(
-                                line_options.get(
-                                "aggregate_interval"
-                            ))
+                                line_options.get("aggregate_interval")
+                            )
                         except KeyError:
                             syslog.syslog(
                                 syslog.LOG_ERR,
@@ -2620,9 +2645,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                                 % observation_type,
                             )
                             continue
-                            
+
                     # use different target unit
-                    special_target_unit = line_options.get("unit",None)
+                    special_target_unit = line_options.get("unit", None)
 
                     # Get the unit label
                     if observation_type == "rainTotal":
@@ -2637,7 +2662,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     unit_label = line_options.get(
                         "yAxis_label_unit",
                         self.formatter.get_label_string(
-                            special_target_unit if special_target_unit else self.converter.getTargetUnit(obs_label,aggregate_type)[0]
+                            special_target_unit
+                            if special_target_unit
+                            else self.converter.getTargetUnit(
+                                obs_label, aggregate_type
+                            )[0]
                         ),
                     )
 
@@ -2718,16 +2747,28 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
                     # data rounding
                     obs_round = None
-                    if (obs_round is None and 
-                        self.chart_dict[chart_group][plotname][line_name].get("numberFormat",dict()).get(
-                            "decimals") is not None
-                       ):
+                    if (
+                        obs_round is None
+                        and self.chart_dict[chart_group][plotname][line_name]
+                        .get("numberFormat", dict())
+                        .get("decimals")
+                        is not None
+                    ):
                         # The user specified decimals. Use them for rounding,
                         # too.
                         try:
-                            obs_round = float(self.chart_dict[chart_group][plotname][line_name]["numberFormat"]["decimals"])
-                        except (ValueError,TypeError):
-                            logerr("cannot use numberFormat decimals %s for rounding" % self.chart_dict[chart_group][plotname][line_name]["numberFormat"]["decimals"])
+                            obs_round = float(
+                                self.chart_dict[chart_group][plotname][line_name][
+                                    "numberFormat"
+                                ]["decimals"]
+                            )
+                        except (ValueError, TypeError):
+                            logerr(
+                                "cannot use numberFormat decimals %s for rounding"
+                                % self.chart_dict[chart_group][plotname][line_name][
+                                    "numberFormat"
+                                ]["decimals"]
+                            )
                     if obs_round is None:
                         # Add rounding from weewx.conf/skin.conf so Highcharts can use it
                         if observation_type == "rainTotal":
@@ -2780,7 +2821,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         weatherRange_obs_lookup,
                         wind_rose_color,
                         special_target_unit,
-                        obs_round
+                        obs_round,
                     )
 
                     # Build the final series data JSON
@@ -2805,24 +2846,24 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
                         # No matter what, reset data back to just the series
                         # data and not a dict of values
-                        output[chart_group][plotname]["series"][line_name][
-                            "data"
-                        ] = list(series_data["obsdata"])
+                        output[chart_group][plotname]["series"][line_name]["data"] = (
+                            list(series_data["obsdata"])
+                        )
                     else:
                         # No custom series data overrides, so just add
                         # series_data to the chart series data
-                        output[chart_group][plotname]["series"][line_name][
-                            "data"
-                        ] = list(series_data)
+                        output[chart_group][plotname]["series"][line_name]["data"] = (
+                            list(series_data)
+                        )
 
                     # Final pass through
                     # self.highcharts_series_options_to_float() to convert the
                     # remaining options with numeric values to float such that
                     # Highcharts can make use of them.
-                    output[chart_group][plotname]["series"][
-                        line_name
-                    ] = self.highcharts_series_options_to_float(
-                        output[chart_group][plotname]["series"][line_name]
+                    output[chart_group][plotname]["series"][line_name] = (
+                        self.highcharts_series_options_to_float(
+                            output[chart_group][plotname]["series"][line_name]
+                        )
                     )
 
             # Write the output to the JSON file
@@ -2851,7 +2892,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         weatherRange_obs_lookup,
         wind_rose_color,
         special_target_unit,
-        obs_round
+        obs_round,
     ):
         """
         Get the SQL vectors for the observation, the aggregate type and the
@@ -3275,7 +3316,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     "Error was: %s." % (binding, obs_lookup, e)
                 )
 
-            self.insert_null_value_timestamps_to_end_ts(time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval)
+            self.insert_null_value_timestamps_to_end_ts(
+                time_start_vt,
+                time_stop_vt,
+                obs_vt,
+                start_ts,
+                end_ts,
+                aggregate_interval,
+            )
 
             min_obs_vt = self.converter.convert(obs_vt)
 
@@ -3295,7 +3343,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     "Error was: %s." % (binding, obs_lookup, e)
                 )
 
-            self.insert_null_value_timestamps_to_end_ts(time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval)
+            self.insert_null_value_timestamps_to_end_ts(
+                time_start_vt,
+                time_stop_vt,
+                obs_vt,
+                start_ts,
+                end_ts,
+                aggregate_interval,
+            )
 
             max_obs_vt = self.converter.convert(obs_vt)
 
@@ -3315,7 +3370,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     "Error was: %s." % (binding, obs_lookup, e)
                 )
 
-            self.insert_null_value_timestamps_to_end_ts(time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval)
+            self.insert_null_value_timestamps_to_end_ts(
+                time_start_vt,
+                time_stop_vt,
+                obs_vt,
+                start_ts,
+                end_ts,
+                aggregate_interval,
+            )
 
             avg_obs_vt = self.converter.convert(obs_vt)
 
@@ -3372,8 +3434,15 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     "Error was: %s." % (binding, obs_lookup, e)
                 )
 
-            self.insert_null_value_timestamps_to_end_ts(time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval)
-            
+            self.insert_null_value_timestamps_to_end_ts(
+                time_start_vt,
+                time_stop_vt,
+                obs_vt,
+                start_ts,
+                end_ts,
+                aggregate_interval,
+            )
+
             min_obs_vt = self.converter.convert(obs_vt)
 
             # Get max values
@@ -3392,8 +3461,15 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     "Error was: %s." % (binding, obs_lookup, e)
                 )
 
-            self.insert_null_value_timestamps_to_end_ts(time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval)
-            
+            self.insert_null_value_timestamps_to_end_ts(
+                time_start_vt,
+                time_stop_vt,
+                obs_vt,
+                start_ts,
+                end_ts,
+                aggregate_interval,
+            )
+
             max_obs_vt = self.converter.convert(obs_vt)
 
             obs_unit = max_obs_vt[1]
@@ -3425,10 +3501,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_type = "max"
         else:
             obs_lookup = observation
-            
+
         #   Special aggregation_subtype measures to enable average rainfall, max and min temperatures to be calculated
-        
-        if aggregate_type == "avg" and observation == "avgRainfall" and aggregate_interval == 86400:
+
+        if (
+            aggregate_type == "avg"
+            and observation == "avgRainfall"
+            and aggregate_interval == 86400
+        ):
             obs_lookup = "rain"
             obs_label = "Rainfall"
 
@@ -3470,9 +3550,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_type = "sum"
 
             if isinstance(time_length, int):
-                order_sql = ' ORDER BY dateTime ASC'
+                order_sql = " ORDER BY dateTime ASC"
             else:
-                order_sql = ''
+                order_sql = ""
 
             # Special case for time_length = all, force to use complete days only
             if time_length == "all":
@@ -3480,206 +3560,245 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 end_ts = startOfDay(archive.lastGoodStamp())
 
             # Set up subquery groupby clause
-            if xAxis_groupby == "year": subqry_groupby = '"%Y"'
-            elif xAxis_groupby == "month": subqry_groupby = '"%Y%m"'
-            elif xAxis_groupby == "day": subqry_groupby = '"%Y%m%d"'
-            elif xAxis_groupby == "hour": subqry_groupby = '"%Y%m%d%H"'
-            else: subqry_groupby = ''
-                            
+            if xAxis_groupby == "year":
+                subqry_groupby = '"%Y"'
+            elif xAxis_groupby == "month":
+                subqry_groupby = '"%Y%m"'
+            elif xAxis_groupby == "day":
+                subqry_groupby = '"%Y%m%d"'
+            elif xAxis_groupby == "hour":
+                subqry_groupby = '"%Y%m%d%H"'
+            else:
+                subqry_groupby = ""
+
             if driver == "weedb.sqlite":
                 # Use daily summaries where possible - MUST BE FOR WHOLE DAYS determined by start and stop times otherwise use archive
-                if xAxis_groupby != "hour" and isStartOfDay(start_ts) and isStartOfDay(end_ts) and end_ts - start_ts > 0 :  # 1 or more exact days
+                if (
+                    xAxis_groupby != "hour"
+                    and isStartOfDay(start_ts)
+                    and isStartOfDay(end_ts)
+                    and end_ts - start_ts > 0
+                ):  # 1 or more exact days
                     # Avg is a special case
                     if aggregate_type == "avg":
                         # Avg(sum) requires a subquery with the correct group by clause
                         if average_type is not None and average_type == "sum":
-                            sql_lookup = 'SELECT dt1 AS {0}, ' \
-                                         'AVG(obs1) AS obs ' \
-                                         'FROM (SELECT strftime("{1}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, sum(sum) AS obs1 ' \
-                                                'FROM archive_day_{2} WHERE dateTime >= {3} AND dateTime < {4} '\
-                                                'GROUP BY strftime({5}, datetime(dateTime, "unixepoch", "localtime"))) ' \
-                                         'GROUP BY {0}{6};'.format(
-                                xAxis_groupby,
-                                strformat,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                subqry_groupby,
-                                order_sql
+                            sql_lookup = (
+                                "SELECT dt1 AS {0}, "
+                                "AVG(obs1) AS obs "
+                                'FROM (SELECT strftime("{1}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, sum(sum) AS obs1 '
+                                "FROM archive_day_{2} WHERE dateTime >= {3} AND dateTime < {4} "
+                                'GROUP BY strftime({5}, datetime(dateTime, "unixepoch", "localtime"))) '
+                                "GROUP BY {0}{6};".format(
+                                    xAxis_groupby,
+                                    strformat,
+                                    obs_lookup,
+                                    start_ts,
+                                    end_ts,
+                                    subqry_groupby,
+                                    order_sql,
+                                )
                             )
                         # avg cases with an average_type
                         elif average_type is not None:
-                            sql_lookup = 'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, ' \
-                                         '{2}({3}) AS obs ' \
-                                         'FROM archive_day_{4}  WHERE dateTime >= {5} AND dateTime < {6} ' \
-                                         'GROUP BY {1}{7};'.format(
-                                strformat,
-                                xAxis_groupby,
-                                aggregate_type,
-                                average_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql
+                            sql_lookup = (
+                                'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, '
+                                "{2}({3}) AS obs "
+                                "FROM archive_day_{4}  WHERE dateTime >= {5} AND dateTime < {6} "
+                                "GROUP BY {1}{7};".format(
+                                    strformat,
+                                    xAxis_groupby,
+                                    aggregate_type,
+                                    average_type,
+                                    obs_lookup,
+                                    start_ts,
+                                    end_ts,
+                                    order_sql,
+                                )
                             )
                         # remaining avg cases without an average_type use weighted average
                         else:
-                            sql_lookup = 'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, ' \
-                                         'SUM(wsum)/SUM(sumtime) AS obs ' \
-                                         'FROM archive_day_{2}  WHERE dateTime >= {3} AND dateTime < {4} ' \
-                                         'GROUP BY {1}{5};'.format(
-                                strformat,
-                                xAxis_groupby,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql
+                            sql_lookup = (
+                                'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, '
+                                "SUM(wsum)/SUM(sumtime) AS obs "
+                                "FROM archive_day_{2}  WHERE dateTime >= {3} AND dateTime < {4} "
+                                "GROUP BY {1}{5};".format(
+                                    strformat,
+                                    xAxis_groupby,
+                                    obs_lookup,
+                                    start_ts,
+                                    end_ts,
+                                    order_sql,
+                                )
                             )
                     # other aggregate_type cases use direct interrogation of daily summary
                     else:
-                        sql_lookup = 'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, ' \
-                                     '{2}({2}) AS obs ' \
-                                     'FROM archive_day_{3}  ' \
-                                     'WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};'.format(
-                            strformat,
-                            xAxis_groupby,
-                            aggregate_type,
-                            obs_lookup,
-                            start_ts,
-                            end_ts,
-                            order_sql
+                        sql_lookup = (
+                            'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, '
+                            "{2}({2}) AS obs "
+                            "FROM archive_day_{3}  "
+                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
+                                strformat,
+                                xAxis_groupby,
+                                aggregate_type,
+                                obs_lookup,
+                                start_ts,
+                                end_ts,
+                                order_sql,
+                            )
                         )
                 else:
                     # archive access with no average_type
                     if average_type is None:
-                        sql_lookup = 'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) as {1}, ' \
-                                     'IFNULL({2}({3}),0) AS obs, dateTime FROM archive ' \
-                                     'WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};'.format(
-                            strformat,
-                            xAxis_groupby,
-                            aggregate_type,
-                            obs_lookup,
-                            start_ts,
-                            end_ts,
-                            order_sql
+                        sql_lookup = (
+                            'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) as {1}, '
+                            "IFNULL({2}({3}),0) AS obs, dateTime FROM archive "
+                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
+                                strformat,
+                                xAxis_groupby,
+                                aggregate_type,
+                                obs_lookup,
+                                start_ts,
+                                end_ts,
+                                order_sql,
+                            )
                         )
 
                     # average_type requiring a subquery
                     else:
-                        sql_lookup = 'SELECT dt1 AS {0}, ' \
-                                     '{1}(obs1) AS obs ' \
-                                     'FROM (SELECT strftime("{2}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, '\
-                                            'IFNULL({3}({4}),0) AS obs1 ' \
-                                            'FROM archive WHERE dateTime >= {5} AND dateTime < {6} '\
-                                            'GROUP BY strftime({7}, datetime(dateTime, "unixepoch", "localtime"))) ' \
-                                     'GROUP BY {0}{8};'.format(
-                            xAxis_groupby,
-                            aggregate_type,
-                            strformat,
-                            average_type,
-                            obs_lookup,
-                            start_ts,
-                            end_ts,
-                            subqry_groupby,
-                            order_sql
+                        sql_lookup = (
+                            "SELECT dt1 AS {0}, "
+                            "{1}(obs1) AS obs "
+                            'FROM (SELECT strftime("{2}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, '
+                            "IFNULL({3}({4}),0) AS obs1 "
+                            "FROM archive WHERE dateTime >= {5} AND dateTime < {6} "
+                            'GROUP BY strftime({7}, datetime(dateTime, "unixepoch", "localtime"))) '
+                            "GROUP BY {0}{8};".format(
+                                xAxis_groupby,
+                                aggregate_type,
+                                strformat,
+                                average_type,
+                                obs_lookup,
+                                start_ts,
+                                end_ts,
+                                subqry_groupby,
+                                order_sql,
+                            )
                         )
 
             elif driver == "weedb.mysql":
                 # Use daily summaries where possible - MUST BE FOR WHOLE DAYS determined by start and stop times otherwise use archive
-                if xAxis_groupby != "hour" and isStartOfDay(start_ts) and isStartOfDay(end_ts) and end_ts - start_ts > 0 :  # 1 or more exact days
+                if (
+                    xAxis_groupby != "hour"
+                    and isStartOfDay(start_ts)
+                    and isStartOfDay(end_ts)
+                    and end_ts - start_ts > 0
+                ):  # 1 or more exact days
                     # Avg is a special case
                     if aggregate_type == "avg":
                         # Avg(sum) requires a subquery with the correct group by clause
                         if average_type is not None and average_type == "sum":
-                            sql_lookup = 'SELECT dt1 AS {0}, ' \
-                                         'AVG(obs1) AS obs ' \
-                                         'FROM (SELECT FROM_UNIXTIME( dateTime, "%{1}" ) AS dt1, sum(sum) AS obs1 ' \
-                                                'FROM archive_day_{2} WHERE dateTime >= {3} AND dateTime < {4} '\
-                                                'GROUP BY strftime({5}, datetime(dateTime, "unixepoch", "localtime"))) ' \
-                                         'GROUP BY {0}{6};'.format(
-                                xAxis_groupby,
-                                strformat,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                subqry_groupby,
-                                order_sql
+                            sql_lookup = (
+                                "SELECT dt1 AS {0}, "
+                                "AVG(obs1) AS obs "
+                                'FROM (SELECT FROM_UNIXTIME( dateTime, "%{1}" ) AS dt1, sum(sum) AS obs1 '
+                                "FROM archive_day_{2} WHERE dateTime >= {3} AND dateTime < {4} "
+                                'GROUP BY strftime({5}, datetime(dateTime, "unixepoch", "localtime"))) '
+                                "GROUP BY {0}{6};".format(
+                                    xAxis_groupby,
+                                    strformat,
+                                    obs_lookup,
+                                    start_ts,
+                                    end_ts,
+                                    subqry_groupby,
+                                    order_sql,
+                                )
                             )
                         # avg cases with an average_type
                         elif average_type is not None:
-                            sql_lookup = 'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, ' \
-                                         '{2}({3}) AS obs ' \
-                                         'FROM archive_day_{4}  WHERE dateTime >= {5} AND dateTime < {6} ' \
-                                         'GROUP BY {1}{7};'.format(
-                                strformat,
-                                xAxis_groupby,
-                                aggregate_type,
-                                average_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql
+                            sql_lookup = (
+                                'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, '
+                                "{2}({3}) AS obs "
+                                "FROM archive_day_{4}  WHERE dateTime >= {5} AND dateTime < {6} "
+                                "GROUP BY {1}{7};".format(
+                                    strformat,
+                                    xAxis_groupby,
+                                    aggregate_type,
+                                    average_type,
+                                    obs_lookup,
+                                    start_ts,
+                                    end_ts,
+                                    order_sql,
+                                )
                             )
                         # remaining avg cases without an average_type use weighted average
                         else:
-                            sql_lookup = 'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, ' \
-                                         'SUM(wsum)/SUM(sumtime) AS obs ' \
-                                         'FROM archive_day_{2}  WHERE dateTime >= {3} AND dateTime < {4} ' \
-                                         'GROUP BY {1}{5};'.format(
-                                strformat,
-                                xAxis_groupby,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql
+                            sql_lookup = (
+                                'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, '
+                                "SUM(wsum)/SUM(sumtime) AS obs "
+                                "FROM archive_day_{2}  WHERE dateTime >= {3} AND dateTime < {4} "
+                                "GROUP BY {1}{5};".format(
+                                    strformat,
+                                    xAxis_groupby,
+                                    obs_lookup,
+                                    start_ts,
+                                    end_ts,
+                                    order_sql,
+                                )
                             )
                     # other aggregate_type cases use direct interrogation of daily summary
                     else:
-                        sql_lookup = 'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, ' \
-                                     '{2}({2}) AS obs ' \
-                                     'FROM archive_day_{3}  ' \
-                                     'WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};'.format(
-                            strformat,
-                            xAxis_groupby,
-                            aggregate_type,
-                            obs_lookup,
-                            start_ts,
-                            end_ts,
-                            order_sql
+                        sql_lookup = (
+                            'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, '
+                            "{2}({2}) AS obs "
+                            "FROM archive_day_{3}  "
+                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
+                                strformat,
+                                xAxis_groupby,
+                                aggregate_type,
+                                obs_lookup,
+                                start_ts,
+                                end_ts,
+                                order_sql,
+                            )
                         )
                 else:
                     # archive access with no average_type
                     if average_type is None:
-                        sql_lookup = 'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) as {1}, ' \
-                                     'IFNULL({2}({3}),0) AS obs, dateTime FROM archive ' \
-                                     'WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};'.format(
-                            strformat,
-                            xAxis_groupby,
-                            aggregate_type,
-                            obs_lookup,
-                            start_ts,
-                            end_ts,
-                            order_sql
+                        sql_lookup = (
+                            'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) as {1}, '
+                            "IFNULL({2}({3}),0) AS obs, dateTime FROM archive "
+                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
+                                strformat,
+                                xAxis_groupby,
+                                aggregate_type,
+                                obs_lookup,
+                                start_ts,
+                                end_ts,
+                                order_sql,
+                            )
                         )
 
                     # average_type requiring a subquery
                     else:
-                        sql_lookup = 'SELECT dt1 AS {0}, ' \
-                                     '{1}(obs1) AS obs ' \
-                                     'FROM (SELECT FROM_UNIXTIME( dateTime, "%{2}" ) AS dt1, '\
-                                            'IFNULL({3}({4}),0) AS obs1 ' \
-                                            'FROM archive WHERE dateTime >= {5} AND dateTime < {6} '\
-                                            'GROUP BY strftime({7}, datetime(dateTime, "unixepoch", "localtime"))) ' \
-                                     'GROUP BY {0}{8};'.format(
-                            xAxis_groupby,
-                            aggregate_type,
-                            strformat,
-                            average_type,
-                            obs_lookup,
-                            start_ts,
-                            end_ts,
-                            subqry_groupby,
-                            order_sql
+                        sql_lookup = (
+                            "SELECT dt1 AS {0}, "
+                            "{1}(obs1) AS obs "
+                            'FROM (SELECT FROM_UNIXTIME( dateTime, "%{2}" ) AS dt1, '
+                            "IFNULL({3}({4}),0) AS obs1 "
+                            "FROM archive WHERE dateTime >= {5} AND dateTime < {6} "
+                            'GROUP BY strftime({7}, datetime(dateTime, "unixepoch", "localtime"))) '
+                            "GROUP BY {0}{8};".format(
+                                xAxis_groupby,
+                                aggregate_type,
+                                strformat,
+                                average_type,
+                                obs_lookup,
+                                start_ts,
+                                end_ts,
+                                subqry_groupby,
+                                order_sql,
+                            )
                         )
 
             # Setup values for the converter
@@ -3692,18 +3811,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 obs_group = None
                 obs_unit_from_target_unit = None
 
-            # introduce test to catch any sql errors; a try / except sequence 
-            
+            # introduce test to catch any sql errors; a try / except sequence
+
             try:
                 query = archive.genSql(sql_lookup)
             except:
-                raise Warning(
-                    "SQL error in"
-                    "sql_lookup"
-                    "The error is: %s"
-                        % (error)                    
-                )
-                
+                raise Warning("SQL error in" "sql_lookup" "The error is: %s" % (error))
+
             for row in query:
                 xAxis_labels.append(row[0])
                 row_tuple = (row[1], obs_unit_from_target_unit, obs_group)
@@ -3750,11 +3864,18 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 % (binding, obs_lookup, e)
             )
 
-        self.insert_null_value_timestamps_to_end_ts(time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval)
-        
+        self.insert_null_value_timestamps_to_end_ts(
+            time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval
+        )
+
         if special_target_unit:
-            logdbg("unit_group=%s source_unit=%s special_target_unit=%s" % (obs_vt[2],obs_vt[1],special_target_unit))
-            obs_vt = weewx.units.Converter({obs_vt[2]:special_target_unit}).convert(obs_vt)
+            logdbg(
+                "unit_group=%s source_unit=%s special_target_unit=%s"
+                % (obs_vt[2], obs_vt[1], special_target_unit)
+            )
+            obs_vt = weewx.units.Converter({obs_vt[2]: special_target_unit}).convert(
+                obs_vt
+            )
         else:
             obs_vt = self.converter.convert(obs_vt)
 
@@ -3788,18 +3909,24 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 ]
             else:
                 try:
-                   if obs_round is None:
-                       usage_round = int(
-                           self.skin_dict["Units"]["StringFormats"].get(obs_vt[1], "2f")[-2]
-                       )
-                   else:
-                       usage_round = int(obs_round)+1
+                    if obs_round is None:
+                        usage_round = int(
+                            self.skin_dict["Units"]["StringFormats"].get(
+                                obs_vt[1], "2f"
+                            )[-2]
+                        )
+                    else:
+                        usage_round = int(obs_round) + 1
                 except ValueError:
-                   loginf (
-                      "Observation %s is using unit %s that returns %s for StringFormat, rather than float point decimal format value - using 0 as rounding"
-                      % (observation, obs_vt[1], self.skin_dict["Units"]["StringFormats"].get(obs_vt[1]))
-                   )
-                   usage_round = 0
+                    loginf(
+                        "Observation %s is using unit %s that returns %s for StringFormat, rather than float point decimal format value - using 0 as rounding"
+                        % (
+                            observation,
+                            obs_vt[1],
+                            self.skin_dict["Units"]["StringFormats"].get(obs_vt[1]),
+                        )
+                    )
+                    usage_round = 0
 
                 obs_round_vt = [self.round_none(x, usage_round) for x in obs_vt[0]]
 
@@ -3812,10 +3939,15 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if not aggregate_type:
                 point_timestamp = time_stop_vt
             elif aggregate_interval and (
-                      aggregate_interval == 3600 or aggregate_interval==2629800):
+                aggregate_interval == 3600 or aggregate_interval == 2629800
+            ):
                 point_timestamp = time_start_vt
             else:
-                point_timestamp = ([(x+y)/2.0 for x,y in zip(time_start_vt[0],time_stop_vt[0])],time_start_vt[1],time_start_vt[2])
+                point_timestamp = (
+                    [(x + y) / 2.0 for x, y in zip(time_start_vt[0], time_stop_vt[0])],
+                    time_start_vt[1],
+                    time_start_vt[2],
+                )
         except Exception:
             point_timestamp = time_stop_vt
 
@@ -3830,11 +3962,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
         return data
 
-    def insert_null_value_timestamps_to_end_ts(self, time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, interval):
+    def insert_null_value_timestamps_to_end_ts(
+        self, time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, interval
+    ):
         """
         In weewx 4.5.1 xtypes.py was modified to not return any data points which didn't exist in the archive database.
         This function adds the 'future' data points from the last timestamp in the list up until end_ts with None entries.
-        This means that graphs still have the option of showing a full day or month or year on the x axis depending on the time_length specfied.       
+        This means that graphs still have the option of showing a full day or month or year on the x axis depending on the time_length specfied.
         """
         count = 0
 
@@ -3851,7 +3985,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 count = count + 1
 
         for i in range(count):
-           obs_vt[0].append(None)
+            obs_vt[0].append(None)
 
     def round_none(self, value, places):
         """Round value to 'places' places but also permit a value of None"""
