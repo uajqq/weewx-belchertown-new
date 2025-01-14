@@ -1409,6 +1409,12 @@ class getData(SearchList):
                                 # Catch errors caused by ASCII characters in Python2
                                 file.write(forecast_file_result)
                             loginf("New forecast file downloaded to %s" % forecast_file)
+                    except FileNotFoundError as error:
+                        loginf(
+                            "Belchertown JSON folder does not exist. Usually this "
+                            "is an error that only occurs on the first run. If it "
+                            "is appearing repeatedly, check file permissions."
+                        )
                     except IOError as e:
                         raise Warning(
                             "Error writing forecast info to %s. Reason: %s"
@@ -1532,7 +1538,7 @@ class getData(SearchList):
             visibility = "N/A"
             visibility_unit = ""
             cloud_cover = ""
-            logerr("Aeris/XWeather connection error: %s" % error)
+            logerr("Aeris/Xweather error: %s" % error)
 
         # ==============================================================================
         # Earthquake Data
