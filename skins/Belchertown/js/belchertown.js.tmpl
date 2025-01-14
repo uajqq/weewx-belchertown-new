@@ -1727,7 +1727,12 @@ var mqtt_payload = "";
 // New message from mqtt, process it
 function onMessageArrived(message) {
     belchertown_debug("MQTT: " + message.payloadString);
-    update_current_wx(message.payloadString);
+    try {
+        update_current_wx(message.payloadString);
+    } catch(e) {
+        console.log(e)
+        return
+    }
     mqtt_payload = jQuery.parseJSON(message.payloadString);
 }
 
