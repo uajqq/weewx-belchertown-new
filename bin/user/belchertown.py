@@ -3876,42 +3876,6 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         # windroseData = '[' + ','.join(str(z) for z in windrose_list) + ']'
         return windrose_list
 
-    def get_cardinal_direction(self, degree):
-        if 0 <= degree <= 11.25:
-            return "N"
-        if 11.26 <= degree <= 33.75:
-            return "NNE"
-        if 33.76 <= degree <= 56.25:
-            return "NE"
-        if 56.26 <= degree <= 78.75:
-            return "ENE"
-        if 78.76 <= degree <= 101.25:
-            return "E"
-        if 101.26 <= degree <= 123.75:
-            return "ESE"
-        if 123.76 <= degree <= 146.25:
-            return "SE"
-        if 146.26 <= degree <= 168.75:
-            return "SSE"
-        if 168.76 <= degree <= 191.25:
-            return "S"
-        if 191.26 <= degree <= 213.75:
-            return "SSW"
-        if 213.76 <= degree <= 236.25:
-            return "SW"
-        if 236.26 <= degree <= 258.75:
-            return "WSW"
-        if 258.76 <= degree <= 281.25:
-            return "W"
-        if 281.26 <= degree <= 303.75:
-            return "WNW"
-        if 303.76 <= degree <= 326.25:
-            return "NW"
-        if 326.26 <= degree <= 348.75:
-            return "NNW"
-        if 348.76 <= degree <= 360:
-            return "N"
-
     def highcharts_series_options_to_float(self, d):
         """
         Recurse through all the series options and set any strings that
