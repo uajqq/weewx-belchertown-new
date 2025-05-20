@@ -201,7 +201,7 @@ class getData(SearchList):
         # Divide compass into 16 wedges, then use modular arithmetic to find direction
         # First shift back by 11.25 degrees since N spans from -11.25 to 11.25 degrees
         # Using int() to round down without requiring Math module
-        return(default_ordinate_names[int(((degree-11.25)/22.5) + 1) % 16])
+        return(ordinate_names[int(((degree-11.25)/22.5) + 1) % 16])
 
     def get_extension_list(self, timespan, db_lookup):
         """
