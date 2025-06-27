@@ -2735,16 +2735,36 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         "rounding"
                     ] = obs_round
 
+                    def get_rainbow_color(value, min, max):
+
+                        # If value is off-scale high/low, assign max/min color
+                        if value < min: value = min
+                        elif value > max: value = max
+
+                        # Using sine waves to generate rainbow colors (see
+                        # below). Set the value to range from 8π/7 (blue)
+                        # to 3π (purple).
+                        i = (value - min) / (max - min) * 5.83 + 3.59
+
+                        # https://krazydad.com/tutorials/makecolors.php
+                        # Creating sine waves for red, green, and blue, 
+                        # and then offsetting by 2π/3 and 4π/3, creates
+                        # a loop of rainbow colors. The sine waves are
+                        # centered at 255/2 and have an amplitude of 
+                        # 255/2, so they vary from 0 to 255. 
+                        n = sin(i) * 127.5 + 127.5
+                        red = format(int(n), 'x') #convert to hex
+                        n = sin(i + 2.09) * 127.5 + 127.5;
+                        green = format(int(n), 'x') #convert to hex
+                        n = sin(i + 4.19) * 127.5 + 127.5;
+                        blue = format(int(n), 'x') #convert to hex
+                        return "#" + red + green + blue
+
                     # Set default colors, unless the user has specified
                     # otherwise in graphs.conf
                     wind_rose_color = {}
-                    wind_rose_color[0] = line_options.get("beauford0", "#7cb5ec")
-                    wind_rose_color[1] = line_options.get("beauford1", "#b2df8a")
-                    wind_rose_color[2] = line_options.get("beauford2", "#f7a35c")
-                    wind_rose_color[3] = line_options.get("beauford3", "#8c6bb1")
-                    wind_rose_color[4] = line_options.get("beauford4", "#dd3497")
-                    wind_rose_color[5] = line_options.get("beauford5", "#e4d354")
-                    wind_rose_color[6] = line_options.get("beauford6", "#268bd2")
+                    for x in range(7):
+                        wind_rose_color[x] = line_options.get(("beauford%s" % x), get_rainbow_color(x,0,6))
 
                     # Build series data
                     series_data = self.get_observation_data(
