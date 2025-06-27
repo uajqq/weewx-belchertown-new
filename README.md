@@ -11,7 +11,7 @@ Features include:
 * Extensive graphing system with full customized control on observations, historical timescale, grouping and more. Graphs also update automatically without needing to reload the website.
 * Light and Dark Mode with automatic switching based on sunset and sunrise.
 * Forecast data updated every hour without needing to reload the website. (A free AerisWeather API key required. You qualify for a free key by submitting weather observations to pwsweather.)
-* Information on your closest Earthquake updated automatically.
+* Information on your closest earthquake updated automatically.
 * Weather records for the current year, and for all time. 
 * Responsive design. Mobile and iPad landscape ready! Use your mobile phone or iPad in landscape mode as an additional live console display.
 * Progressive webapp ready enabling the "Add to homescreen" option so your website feels like an app on your mobile devices. 
@@ -72,7 +72,7 @@ Screenshot of light and dark modes
 2) Run the installer as below. Replace `x.x` with the version number that you've downloaded.
 
 ```
-sudo wee_extension --install weewx-belchertown-x.x.tar.gz
+sudo weectl extension install weewx-belchertown-x.x.tar.gz
 ```
 
 3) Edit your `weewx.conf` to [add the required information](https://github.com/poblabs/weewx-belchertown#weewxconf). 
@@ -81,12 +81,15 @@ sudo wee_extension --install weewx-belchertown-x.x.tar.gz
 
 5) Restart weewx:
 
+Linux:
 ```
 sudo /etc/init.d/weewx stop
 sudo /etc/init.d/weewx start
 ```
 
-6) Wait for an archive period, or run `sudo wee_reports` to force an update
+Refer to weewx documentation for starting/restarting in other operating systems. 
+
+6) Wait for an archive period, or run `sudo weectl report run` to force an update
 
 7) Browse to your website to see the skin. It may be in a belchertown subdirectory.
 
@@ -112,9 +115,6 @@ AerisWeather's Forecast API is where the current observations and forecast data 
 * Then sign up for a free AerisWeather developer account by linking your pwsweather account here [https://www.aerisweather.com/signup/pws](https://www.aerisweather.com/signup/pws/)
 * Once you are logged in, you should make a Demo Project as part of the sign up process, then go to [https://www.aerisweather.com/account/apps](https://www.aerisweather.com/account/apps) and and save these keys as `forecast_api_id` and `forecast_api_secret`.
 * The rest of the options can be found below in the [Forecast Options](#forecast-options) table.
-
-### DarkSky API (optional, no longer accepting new applications)
-**DarkSky has been shut down, but if you still have an API key, you can continue using it until DarkSky shuts your API key down.**
 
 ### Forecast Units
 AerisWeather provides all units in 1 API call which is great but the skin still needs a way to determine what units you want it to show. This is why I've decided to keep the Dark Sky unit method so you can determine which units you'd like AerisWeather to show. **All of the unit determination is now being done within the skin, not the API.** 

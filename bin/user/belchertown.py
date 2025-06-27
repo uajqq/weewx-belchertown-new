@@ -91,7 +91,7 @@ else:
 
 
 # Print version in syslog for easier troubleshooting
-VERSION = "1.3.1"
+VERSION = "1.4"
 loginf("version %s" % VERSION)
 
 # Define these as global so they can be used in both the search list extension
@@ -145,14 +145,14 @@ class getData(SearchList):
         https://gist.github.com/jeromer/2005586
         Calculates the bearing between two points.
         :Parameters:
-          - pointA: The tuple representing the latitude/longitude for the
-            first point. Latitude and longitude must be in decimal degrees
-          - pointB: The tuple representing the latitude/longitude for the
-            second point. Latitude and longitude must be in decimal degrees
+            - pointA: The tuple representing the latitude/longitude for the
+                first point. Latitude and longitude must be in decimal degrees
+            - pointB: The tuple representing the latitude/longitude for the
+                second point. Latitude and longitude must be in decimal degrees
         :Returns:
-          The bearing in degrees
+            The bearing in degrees
         :Returns Type:
-          float
+            float
         """
         if not isinstance((pointA, pointB), tuple):
             raise TypeError("Only tuples are supported as arguments")
