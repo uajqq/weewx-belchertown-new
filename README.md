@@ -1,8 +1,10 @@
-# Belchertown weewx skin
+# Belchertown weewx skin NEW
+
+## This is a fork of poblab's excellent Belchertown skin. His repo hasn't been maintained for quite a while now, so this fork will attempt to keep up with bug fixes and new features. Please bear with me!
 
 [![Latest Stable Version](https://img.shields.io/github/v/release/poblabs/weewx-belchertown.svg?style=flat-square)](https://github.com/poblabs/weewx-belchertown/releases) [![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg?style=flat-square&amp;logo=paypal&amp;colorA=aaaaaa)](https://obrienlabs.net/go/donate)
 
-This skin (or theme, or template) is for the [weewx weather software](http://weewx.com) and is modeled after my website [BelchertownWeather.com](https://belchertownweather.com). I originally developed that website with custom coded features but always used weewx as the backend archive software. It was a good fit to remove my customizations and port the site to a weewx skin that anyone can use.
+This skin (or theme, or template) is for the [weewx weather software](http://weewx.com) and is modeled after [BelchertownWeather.com](https://belchertownweather.com).
 
 Features include:
 * Real-time streaming updates on the front page of the webpage without neededing to reload the website. (weewx-mqtt extension required and an MQTT server with Websockets required.)
@@ -292,8 +294,6 @@ The benefit to adding these values to `weewx.conf` is that they persist after sk
 
 Restart weewx once you add your custom options and wait for an archive period to see the results.
 
-For ease of readability I have broken them out into separate tables. However you just add the overrides to the config just like the example above. 
-
 ### General Options
 
 | Name | Default | Description
@@ -371,7 +371,7 @@ For ease of readability I have broken them out into separate tables. However you
 | forecast_provider | "aeris" | The weather forecast provider. Options currently are "aeris" or "darksky"
 | forecast_api_id | "" | Your AerisWeather API ID
 | forecast_api_secret | "" | Your AerisWeather API secret
-| forecast_units | "us" | The units to use for the AerisWeather forecast. I have chosen to keep the Dark Sky unit system going forward with the skin. Other unit options options are: `us`, `si`, `ca` and `uk2`. Check the [Forecast Units](#forecast-units) section for an explanation of the differences.
+| forecast_units | "us" | The units to use for the AerisWeather forecast. Other unit options options are: `us`, `si`, `ca` and `uk2`. Check the [Forecast Units](#forecast-units) section for an explanation of the differences.
 | forecast_lang | "en" | **Only applies to DarkSky Weather** Change the language used in the DarkSky forecast. Read the DarkSky API for valid language options.
 | forecast_stale | 3540 | The number of seconds before the skin will download a new forecast update. Default is 59 minutes so that on the next archive interval at 60 minutes it will download a new file (based on 5 minute archive intervals (see weewx.conf, archive_interval)). ***WARNING*** 1 hour is recommended. Setting this too low will result in being blocked by AerisWeather. Their free tier gives you 1,000 downloads a day, but **the skin uses 3 downloads per interval to download all the data it needs**. Use at your own risk. 3540 seconds = 59 minutes. 3600 seconds = 1 hour. 1800 seconds = 30 minutes. 900 = 15 minutes.
 | forecast_aeris_use_metar | 1 | **AerisWeather Only** The metar option gets observations located at airports or permanent weather stations. If you select this to 0 to disable METAR, then Aeris will get your weather conditions data from local personal weather stations instead.
@@ -482,7 +482,7 @@ The skin uses the "default labels" for every text and title on the page. This al
 
 ## A Note About Date and Time Formatting in Your Locale
 
-In version 0.9 of the skin I decided to move most of the date and time formats to [moment.js](https://momentjs.com/docs/#/parsing/string-format/) using JavaScript. [You can read my thoughts, comments and commits here.](https://github.com/poblabs/weewx-belchertown/issues/56) I feel that moment.js formats the date and time a lot more elegantly than Python. There are so many areas in this skin that use date and time that I've made the decision to let moment.js format these automatically based on your server's locale and timezone. 
+In version 0.9 of the skin most of the date and time formats were moved to [moment.js](https://momentjs.com/docs/#/parsing/string-format/) using JavaScript. [You can read my thoughts, comments and commits here.](https://github.com/poblabs/weewx-belchertown/issues/56) There are so many areas in this skin that use date and time that I've made the decision to let moment.js format these automatically based on your server's locale and timezone. 
 
 You can modify the moment.js string formats using the skin.conf Labels section and look for the moment.js section beneath. For a list of all string formats that moment.js can use, check https://momentjs.com/docs/#/parsing/string-format/
 
@@ -497,7 +497,7 @@ Explanation (this comes right from the moment.js documentation):
 * `mm` is the minute with a leading 0, like 08. If you don't want the leading 0, use `m`.
 
 ## Raspberry Pi Console
-Belchertown skin comes with a smaller website tailored for the Raspberry Pi 3.5" TFT screen. I personally use this as a second console, and it works great. When used with MQTT Websockets, the timeout is disabled by default so it's always connected. If there's a connection error, the Pi page will keep retrying to connect to the MQTT Websocket server. This means once you're setup you can set it and forget it. 
+Belchertown skin comes with a smaller website tailored for the Raspberry Pi 3.5" TFT screen. When used with MQTT Websockets, the timeout is disabled by default so it's always connected. If there's a connection error, the Pi page will keep retrying to connect to the MQTT Websocket server. This means once you're setup you can set it and forget it. 
 
 If you're interested in this type of setup, you'll need these items:
 * A Raspberry Pi. I'm using the [Raspberry Pi 3 B+](https://amzn.to/2MReZhz) model
