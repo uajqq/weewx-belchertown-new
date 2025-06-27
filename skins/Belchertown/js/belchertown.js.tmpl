@@ -633,7 +633,7 @@ var weewx_data = "";
 function update_weewx_data(data) {
     belchertown_debug("Updating weewx data");
     weewx_data = data;
-    
+
     #if $Extras.has_key("theme") and $Extras.theme == 'auto'
     // Auto theme if enabled
     autoTheme(data["almanac"]["sunset_hour"], data["almanac"]["sunset_minute"], data["almanac"]["sunrise_hour"], data["almanac"]["sunrise_minute"]);
@@ -697,7 +697,7 @@ function update_weewx_data(data) {
     jQuery(".moonset-value").html(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_set_epoch"]).toFixed(0)).format("$obs.label.time_sunrise"));
 
     // Moon icon, phase and illumination percent
-    jQuery(".moon-icon").html(moon_icon(data["almanac"]["moon"]["moon_index"]));        
+    jQuery(".moon-icon").html(moon_icon(data["almanac"]["moon"]["moon_index"]));
     jQuery(".moon-phase").html(titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
     jQuery(".moon-visible").html("<strong>" + data["almanac"]["moon"]["moon_fullness"] + "%</strong> $obs.label.moon_visible");
     #if $almanac.hasExtras
@@ -714,8 +714,8 @@ function update_weewx_data(data) {
 }
 
 //  function returns html for moon-icon according to moonphase value and currentTheme setting
-function moon_icon(moonphase){
-    
+function moon_icon(moonphase) {
+
     var moon_icon_dict = {
         "0": "<div class='wi wi-moon-new'></div>",
         "1": "<div class='wi wi-moon-waxing-crescent-3 $hemisphere'></div>",
@@ -726,12 +726,12 @@ function moon_icon(moonphase){
         "6": "<div class='wi wi-moon-third-quarter $hemisphere'></div>",
         "7": "<div class='wi wi-moon-waning-crescent-4 $hemisphere'></div>",
     }
-    
+
     var output = moon_icon_dict[moonphase];
     if (sessionStorage.getItem('currentTheme') === 'dark') {
         return output;
     } else {
-        return output.replace('-moon-','-moon-alt-');
+        return output.replace('-moon-', '-moon-alt-');
     }
 }
 
@@ -741,18 +741,18 @@ function ajaxforecast() {
     jQuery.when(
         // Get the iconlist - original source is // https://www.aerisweather.com/support/docs/api/reference/icon-list/
         jQuery.getJSON(get_relative_url() + '/images/aeris-icon-list.json', function(iconlist) {
-        icon_dict = iconlist;
-            }
+            icon_dict = iconlist;
+        }
         ),
         // Get the forecast
         jQuery.getJSON(get_relative_url() + "/json/forecast.json", function(forecast) {
-        forecast_data = forecast;
-            }
+            forecast_data = forecast;
+        }
         )
     ).then(function() {
         //  update forecast once both promises are fulfilled
         update_forecast_data(forecast_data);
-        }
+    }
     );
 }
 
@@ -1060,11 +1060,11 @@ function aeris_coded_alerts(data, full_observation = false) {
 function aeris_icon(data) {
     // https://www.aerisweather.com/support/docs/api/reference/icon-list/
     var icon_name = data.split(".")[0]; // Remove .png
-        icon_out = icon_dict[icon_name];
-        if ( icon_out === undefined ) {
-            icon_out ='unknown' 
-            }
-        return icon_out;
+    icon_out = icon_dict[icon_name];
+    if (icon_out === undefined) {
+        icon_out = 'unknown'
+    }
+    return icon_out;
 }
 
 function show_forcast_alert(data, forecast_provider) {
@@ -1168,7 +1168,7 @@ function update_forecast_data(data) {
         } catch (err) {
             // Returned "current" data does not have this value
         }
-        
+
         // Current observation text
         try {
             jQuery(".current-obs-text").html(aeris_coded_weather(data["current"][0]["response"]["ob"]["weatherPrimaryCoded"], true));
@@ -1176,7 +1176,7 @@ function update_forecast_data(data) {
             // Returned "current" data does not have this value
         }
 
-        
+
         // AQI
         if (data["aqi"][0]["success"] && !data["aqi"][0]["error"]) {
             jQuery(".wx-aqi").html(data["aqi"][0]["response"][0]["periods"][0]["aqi"]);
@@ -1468,44 +1468,44 @@ function update_forecast_data(data) {
             jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + forecast_subtitle);
         }
 
-//	End of new composite version of forecast code
-    
+        //	End of new composite version of forecast code
+
     #if $Extras.has_key("forecast_alert_enabled") and $Extras.forecast_alert_enabled == '1'
         // Show weather alert
         show_forcast_alert(data, forecast_provider);
     #end if
 
-    // WX icon in temperature box    
-    jQuery("#wxicon").attr("src", wxicon);
+        // WX icon in temperature box    
+        jQuery("#wxicon").attr("src", wxicon);
     }
 }
 
 #end if
 //  function to display selected forecast according to value of interval (1, 3 or 24); 0 hides all forecasts
 function forecast_select(interval) {
-        if (interval == 0) {
-            jQuery(".forecastrow").hide();
-        } else {
-            oldinterval = sessionStorage.getItem("forecastInterval");
-            if (interval != oldinterval) {
-                //  hide the old forecast
-                var forecast = document.getElementById((oldinterval + "hour-selected-forecast"));
-                var button = document.getElementById(("button" + oldinterval));
-                if (forecast != null) forecast.style.display = "none";
-                if (button != null) button.style.borderStyle = "hidden";
-                //  display the new forecast and store its interval value
-                forecast = document.getElementById((interval + "hour-selected-forecast"));
-                button = document.getElementById(("button" + interval));
-                if (forecast != null) forecast.style.display = "block";
-                if (button != null) button.style.borderStyle = "solid";
-                sessionStorage.setItem("forecastInterval", interval);
-            }
+    if (interval == 0) {
+        jQuery(".forecastrow").hide();
+    } else {
+        oldinterval = sessionStorage.getItem("forecastInterval");
+        if (interval != oldinterval) {
+            //  hide the old forecast
+            var forecast = document.getElementById((oldinterval + "hour-selected-forecast"));
+            var button = document.getElementById(("button" + oldinterval));
+            if (forecast != null) forecast.style.display = "none";
+            if (button != null) button.style.borderStyle = "hidden";
+            //  display the new forecast and store its interval value
+            forecast = document.getElementById((interval + "hour-selected-forecast"));
+            button = document.getElementById(("button" + interval));
+            if (forecast != null) forecast.style.display = "block";
+            if (button != null) button.style.borderStyle = "solid";
+            sessionStorage.setItem("forecastInterval", interval);
         }
     }
+}
 
 function forecast_default(interval) {
-        sessionStorage.setItem("defaultInterval", interval);
-    }
+    sessionStorage.setItem("defaultInterval", interval);
+}
 
 //  function adjusts daytime format for forecast_1hr & _3hr; assumes "ddd LT" format for daytime
 function forecast_time(i, interval, daytime) {
@@ -1539,7 +1539,7 @@ function ajaximages(section = false, reload_timer_interval_seconds = false) {
     // Update images within the specific section
     if (!section || section == "radar") {
         belchertown_debug("Updating radar image");
-    // Reload images
+        // Reload images
         if (document.querySelectorAll(".radar-map img").length > 0) {
             var radar_img = document.querySelectorAll(".radar-map img")[0].src;
             var new_radar_img = radar_img + "&t=" + Math.floor(Math.random() * 999999999);
@@ -1553,7 +1553,7 @@ function ajaximages(section = false, reload_timer_interval_seconds = false) {
                 jQuery(this).attr('src', function(i, val) {return val;});
             });
         }
-        } else if (!section || section != "radar") {
+    } else if (!section || section != "radar") {
         belchertown_debug("Updating " + section + " images");
         // Reload images
         jQuery('.' + section + ' img').each(function() {
@@ -1578,10 +1578,10 @@ var inactive_timestamp = "";
 // MQTT connect
 function connect() {
     if (reconnect_using_inactive_timestamp) {
-            updated = tzAdjustedMoment(inactive_timestamp).format("$obs.label.time_last_updated");
-        } else {
-            updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
-        }
+        updated = tzAdjustedMoment(inactive_timestamp).format("$obs.label.time_last_updated");
+    } else {
+        updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
+    }
     reported = "$obs.label.mqtt_websockets_connecting $obs.label.header_last_updated " + updated;
     jQuery(".updated").html(reported);
     jQuery(".onlineMarker").hide();
@@ -1749,7 +1749,7 @@ function update_current_wx(data) {
         refreshHooks();
     } catch (e) {
     }
-    
+
     #if $Extras.has_key('googleAnalyticsId')
     // Send a pageview
     gtag('config', '$Extras.googleAnalyticsId');
