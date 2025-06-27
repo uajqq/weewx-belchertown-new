@@ -2,8 +2,6 @@
 
 ## This is a fork of poblab's excellent Belchertown skin. His repo hasn't been maintained for quite a while now, so this fork will attempt to keep up with bug fixes and new features. Please bear with me!
 
-[![Latest Stable Version](https://img.shields.io/github/v/release/poblabs/weewx-belchertown.svg?style=flat-square)](https://github.com/poblabs/weewx-belchertown/releases) [![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg?style=flat-square&amp;logo=paypal&amp;colorA=aaaaaa)](https://obrienlabs.net/go/donate)
-
 This skin (or theme, or template) is for the [weewx weather software](http://weewx.com) and is modeled after [BelchertownWeather.com](https://belchertownweather.com).
 
 Features include:
