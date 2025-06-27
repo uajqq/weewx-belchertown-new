@@ -1,5 +1,6 @@
-This is the Belchertown skin for the weewx weather system.
+This is a fork of the Belchertown skin for the weewx weather system.
 Copyright 2018 Pat O'Brien
+Maintained since 2025 by uajqq
 
 Please view the README.md on GitHub for full configuration instructions. https://github.com/poblabs/weewx-belchertown
 
