@@ -3679,7 +3679,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             
             try:
                 query = archive.genSql(sql_lookup)
-            except:
+            except Exception as error:
                 raise Warning(
                     "SQL error in"
                     "sql_lookup"
