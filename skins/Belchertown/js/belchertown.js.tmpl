@@ -1421,13 +1421,13 @@ function update_forecast_data(data) {
 
             // Show the forecasts rows
             if (forecast_interval == "forecast_1hr") {
-                jQuery(".1hr_forecasts").html(output_html);
+                jQuery(".onehr_forecasts").html(output_html);
                 belchertown_debug("html_1hr: " + output_html);
             } else if (forecast_interval == "forecast_3hr") {
-                jQuery(".3hr_forecasts").html(output_html);
+                jQuery(".threehr_forecasts").html(output_html);
                 belchertown_debug("html_3hr: " + output_html);
             } else if (forecast_interval == "forecast_24hr") {
-                jQuery(".24hr_forecasts").html(output_html);
+                jQuery(".dayhr_forecasts").html(output_html);
                 belchertown_debug("html_24hr: " + output_html);
             }
             // Show the forecast_subtitle
