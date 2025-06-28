@@ -13,6 +13,7 @@ import calendar
 import datetime
 import json
 import locale
+import logging
 import os
 import os.path
 import sys
@@ -23,13 +24,12 @@ from math import asin, atan2, cos, degrees, pi, radians, sin, sqrt
 from re import match
 
 import configobj
-
 import weeutil.weeutil
 import weewx
 import weewx.reportengine
-import weewx.station
 import weewx.tags
 import weewx.units
+from weeutil.config import accumulateLeaves
 from weeutil.weeutil import (
     TimeSpan,
     archiveDaySpan,
@@ -49,45 +49,24 @@ from weewx.tags import TimespanBinder
 if sys.version_info[0] >= 3:
     from weeutil.config import search_up
 
-# Check weewx version. Many things like search_up, weeutil.weeutil.KeyDict
-# (label_dict) are from 3.9
-if weewx.__version__ < "3.9":
+if weewx.__version__ < "4":
     raise weewx.UnsupportedFeature(
-        "weewx 3.9 and newer is required, found %s" % weewx.__version__
+        "weewx 4 and newer is required, found %s" % weewx.__version__
     )
 
-if weewx.__version__ < "4":
+log = logging.getLogger(__name__)
 
-    def logmsg(level, msg):
-        syslog.syslog(level, "Belchertown Extension: %s" % msg)
 
-    def logdbg(msg):
-        logmsg(syslog.LOG_DEBUG, msg)
+def logdbg(msg):
+    log.debug(msg)
 
-    def loginf(msg):
-        logmsg(syslog.LOG_INFO, msg)
 
-    def logerr(msg):
-        logmsg(syslog.LOG_ERR, msg)
+def loginf(msg):
+    log.info(msg)
 
-    from weeutil.weeutil import accumulateLeaves
-    import syslog
-else:
-    # weewx 4.0+
-    from weeutil.config import accumulateLeaves
-    import weeutil.logger
-    import logging
 
-    log = logging.getLogger(__name__)
-
-    def logdbg(msg):
-        log.debug(msg)
-
-    def loginf(msg):
-        log.info(msg)
-
-    def logerr(msg):
-        log.error(msg)
+def logerr(msg):
+    log.error(msg)
 
 
 # Print version in syslog for easier troubleshooting
@@ -207,11 +186,6 @@ class getData(SearchList):
         """
         Build the data needed for the Belchertown skin
         """
-
-        global aqi
-        global aqi_category
-        global aqi_time
-        global aqi_location
 
         # Look for the debug flag which can be used to show more logging
         weewx.debug = int(self.generator.config_dict.get("debug", 0))
@@ -2185,8 +2159,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         formatter:        An instance of weewx.units.Formatter
         converter:        An instance of weewx.units.Converter
         search_list_objs: A list holding search list extensions
-        db_binder:        An instance of weewx.manager.DBBinder from which the
-                          data should be extracted
+        db_binder:        An instance of weewx.manager.DBBinder from which the data should be extracted
     """
 
     def run(self):
