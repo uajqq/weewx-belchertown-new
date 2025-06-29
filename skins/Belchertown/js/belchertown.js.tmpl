@@ -183,11 +183,18 @@ function new_gradient_temp(value, min, max) {
 
 // Change the color of the outTemp_F variable
 function get_outTemp_color(unit, outTemp, returnColor = false) {
-    outTemp = parseFloat(outTemp).toFixed(0); // Convert back to decimal literal
+    if (outTemp != null) {
+        outTemp = parseFloat(outTemp).toFixed(0); // Convert back to decimal literal
+    } else {
+        return // No temperature value provided
+    }
+
     if (unit == "degree_F") {
         var outTemp_color = new_gradient_temp(outTemp, 10, 120);
     } else if (unit == "degree_C") {
         var outTemp_color = new_gradient_temp(outTemp, -12, 49);
+    } else {
+        return // No unit provided
     }
 
     // Return the color value if requested, otherwise just set the div color
@@ -2724,6 +2731,9 @@ Highcharts.setOptions({
                             var color = options.series[0].color;
                         } else {
                             // Set color of the column based on the average temperature, or return default if not temperature
+                            if (seriesData[3] == null) {
+                                console.log("Requesting " + seriesData[0] + ". Value is " + seriesData[3])
+                            }
                             var color = get_outTemp_color(range_unit, seriesData[3], true);
                         }
                         newSeriesData.push({
