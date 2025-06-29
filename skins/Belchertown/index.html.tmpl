@@ -43,7 +43,7 @@
                 #end if
 
                 #if $Extras.has_key("beaufort_category") and $Extras.beaufort_category == '1'
-                // weewx >= 4.2 can convert to Beaufort directly, but to improve backwards compatibility, convert windSpeed to
+                // WeeWX >= 4.2 can convert to Beaufort directly, but to improve backwards compatibility, convert windSpeed to
                 // knots and then use Javascript function to convert to Beaufort
                 jQuery(".beaufort").html( beaufort_cat( kts_to_beaufort( "$current.windSpeed.knot.toString(addLabel=False)" ) ) );
                 #end if
@@ -84,8 +84,8 @@
                 if ( getURLvar("offline") && ( getURLvar("offline") == "true" || getURLvar("offline") == "1" ) ) {
                     belchertown_debug("MQTT: offline url var detected. Skipping MQTT connect.");
                 } else {
-                    connect(); // Begin mqtt after weewx initial load
-                    // If the Restart button is clicked, reconnect to mqtt and update weewx and forecast data
+                    connect(); // Begin mqtt after WeeWX initial load
+                    // If the Restart button is clicked, reconnect to mqtt and update WeeWX and forecast data
                     jQuery(document).on('click', '.restart-interval', function() { 
                         ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
                             update_weewx_data(weewx_data); // Initial call to update (date, daily high, low, etc)
@@ -95,7 +95,7 @@
                             ajaxforecast(); // Update forecast data
                             #end if
                             ajaximages(); // Update radar and home page hook "img src" if present
-                            connect(); // Restart mqtt after weewx data's re-loaded
+                            connect(); // Restart mqtt after WeeWX data's re-loaded
                             #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
                             showChart(homepage_graphgroup);
                             #end if
@@ -141,7 +141,7 @@
                 #if $Extras.has_key("show_last_updated_alert") and $Extras.show_last_updated_alert == '1'
                 // Check if we need to alert on old information - if time now, minus the last update is greater than the threshold, show an alert.
                 if ( ( Math.floor(new Date().getTime()/1000.0) - $Extras.last_updated_alert_threshold ) > $current.dateTime.raw ) {
-                    belchertown_debug("Last Updated Alert: The weewx report timestamp is "+$current.dateTime.raw+". The current timestamp is "+Math.floor(new Date().getTime()/1000.0)+". The threshold is "+$Extras.last_updated_alert_threshold+". Report timestamp is greater than threshold of current time, showing no update alert.");
+                    belchertown_debug("Last Updated Alert: The WeeWX report timestamp is "+$current.dateTime.raw+". The current timestamp is "+Math.floor(new Date().getTime()/1000.0)+". The threshold is "+$Extras.last_updated_alert_threshold+". Report timestamp is greater than threshold of current time, showing no update alert.");
                     last_updated_alert_text = "<i class='fa fa-exclamation-triangle' style='color:red;'></i> $obs.label.header_last_updated_alert";
                     jQuery(".last-updated-alert").html( last_updated_alert_text );
                     jQuery(".last-updated-alert").show();

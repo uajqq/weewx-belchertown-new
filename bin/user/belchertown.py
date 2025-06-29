@@ -908,7 +908,7 @@ class getData(SearchList):
         else:
             at_days_without_rain = (0, 0)
 
-        # This portion is right from the weewx sample
+        # This portion is right from the WeeWX sample
         # http://www.weewx.com/docs/customizing.htm
 
         all_stats = TimespanBinder(
@@ -2150,7 +2150,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
     Useful attributes (some inherited from ReportGenerator):
 
-        config_dict:      The weewx configuration dictionary
+        config_dict:      The WeeWX configuration dictionary
         skin_dict:        The dictionary for this skin
         gen_ts:           The generation time
         first_run:        Is this the first time the generator has been run?
@@ -2249,7 +2249,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             # Check if there are any user override on generation periods.
             # Takes the crontab approach. If the words hourly, daily, monthly,
             # yearly are present use them, otherwise use an integer interval if
-            # available.  Since weewx could be restarted, we'll lose our
+            # available.  Since WeeWX could be restarted, we'll lose our
             # end-timestamp to trigger off of for chart staleness.  So we have
             # to use the timestamp of the file to generate this. If the file
             # does not exist, we need to create it first.  Once created we use
@@ -2483,7 +2483,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         minstamp, maxstamp = archiveMonthSpan(monthstamp)
                     elif time_length == "year_specific":
                         # Get a date in the middle of the year to get the full
-                        # year epoch so weewx can find the year timespan.
+                        # year epoch so WeeWX can find the year timespan.
                         year_dt = datetime.datetime.strptime(
                             str(year_specific) + "-8-1", "%Y-%m-%d"
                         )
@@ -2782,7 +2782,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                                 obs_unit, "0"
                             )[2]
                         except:
-                            # Not a valid weewx schema name - maybe this is
+                            # Not a valid WeeWX schema name - maybe this is
                             # windRose or something?
                             obs_round = -1
                     output[chart_group][plotname]["series"][line_name][
@@ -3826,7 +3826,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 obs_group = weewx.units.obs_group_dict[obs_lookup]
                 obs_unit_from_target_unit = converter.group_unit_dict[obs_group]
             except:
-                # This observation doesn't exist within weewx schema so nothing
+                # This observation doesn't exist within WeeWX schema so nothing
                 # to convert, so set None type
                 obs_group = None
                 obs_unit_from_target_unit = None
@@ -3901,7 +3901,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
         # Special handling for the rain.
         if observation == "rainTotal":
-            # The weewx "rain" observation is really "bucket tips". This
+            # The WeeWX "rain" observation is really "bucket tips". This
             # special counter increments the bucket tips over timespan to
             # return rain total.
             rain_count = 0
@@ -3911,7 +3911,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 if rain is None or rain == "":
                     # rain = 0.0
                     # Do not keep adding None or empty results, so that
-                    # full-length charts (like weewx v4 archiveYearSpan) don't
+                    # full-length charts (like WeeWX v4 archiveYearSpan) don't
                     # have a line that continues past the last actual plot
                     obs_round_vt.append(rain)
                     continue
@@ -3986,7 +3986,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         self, time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, interval
     ):
         """
-        In weewx 4.5.1 xtypes.py was modified to not return any data points which didn't exist in the archive database.
+        In WeeWX 4.5.1 xtypes.py was modified to not return any data points which didn't exist in the archive database.
         This function adds the 'future' data points from the last timestamp in the list up until end_ts with None entries.
         This means that graphs still have the option of showing a full day or month or year on the x axis depending on the time_length specfied.
         """
@@ -4018,7 +4018,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
     def timespan_year_to_now(self, time_ts, grace=1, years_ago=0):
         """
-        In weewx 4 the get_series() for archiveYearSpan returns the full 365
+        In WeeWX 4 the get_series() for archiveYearSpan returns the full 365
         day chart.  if users do not want a full year (with empty data) and
         would rather a Jan 1 to "now", then they can use this custom timespan
 

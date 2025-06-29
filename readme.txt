@@ -1,4 +1,4 @@
-This is a fork of the Belchertown skin for the weewx weather system.
+This is a fork of the Belchertown skin for the WeeWX weather system.
 Copyright 2018 Pat O'Brien
 Maintained since 2025 by uajqq
 
@@ -29,7 +29,7 @@ Weather icons, the 8 day forecast and visibility all come from DarkSky's API.
 
 There are a number of options all set as a default within the skin.conf file. 
 It is recommended that any option you want to override to add it to the weewx.conf
-file. This way your changes do not get erased on skin or weewx upgrades. 
+file. This way your changes do not get erased on skin or WeeWX upgrades. 
 
 For example, to add a logo to your site, you would want to open your weewx.conf and
 find the Belchertown skin section. Add an [[[Extras]]] stanza and then the logo_image variable

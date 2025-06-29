@@ -1,4 +1,4 @@
-# Installer for Belchertown weewx skin
+# Installer for Belchertown WeeWX skin
 # Pat O'Brien, 2018
 
 import configobj

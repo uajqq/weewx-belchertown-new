@@ -1,4 +1,4 @@
-## celestial module for weewx skins
+## celestial module for WeeWX skins
 ## Copyright Tom Keffer, Matthew Wall
 ## See LICENSE.txt for your rights
 #errorCatcher Echo

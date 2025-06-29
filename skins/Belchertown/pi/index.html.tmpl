@@ -20,7 +20,7 @@
         var moment_locale = "$system_locale_js";
     moment.locale(moment_locale);
 
-    ajaxweewx(); // Initial call to load from weewx (date, daily high, low, etc)
+    ajaxweewx(); // Initial call to load from WeeWX (date, daily high, low, etc)
 
     #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
     // Load forecast
@@ -33,7 +33,7 @@
         rotateThis("$current.windDir.formatted");
 
         #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
-        connect(); // Begin mqtt after weewx initial load
+        connect(); // Begin mqtt after WeeWX initial load
 
         // Update the Last Updated timestamp with moment.js,
         updated = tzAdjustedMoment($current.dateTime.raw).format("$obs.label.time_last_updated");

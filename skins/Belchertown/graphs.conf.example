@@ -15,7 +15,7 @@
 # Each observation can be customized with built-in Highcharts "series" options. Popular ones are color, name and zIndex. For a list of Highcharts Series options refer to https://api.highcharts.com/highcharts/series 
 #
 # If a custom option broke your charts:
-# Undo your change and run wee_reports. You do not need to restart weewx if you make a graphs.conf change.
+# Undo your change and run wee_reports. You do not need to restart WeeWX if you make a graphs.conf change.
 # If that doesn't work, undo ALL changes and go back to the default graphs.conf.example configuration.
 # There is no guarantee that every customization option will work. 
 #

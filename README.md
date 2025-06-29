@@ -1,4 +1,4 @@
-# Belchertown weewx skin
+# Belchertown WeeWX skin
 
 ### This is a fork of [Pat O'Brien](https://github.com/poblabs)'s excellent Belchertown skin. His repo hasn't been maintained for quite a while now, so this fork will attempt to keep up with bug fixes and new features. Please bear with me!
 

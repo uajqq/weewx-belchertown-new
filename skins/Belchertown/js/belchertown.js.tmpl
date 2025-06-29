@@ -223,102 +223,6 @@ function get_aqi_color(aqi, returnColor = false) {
     }
 }
 
-function get_gauge_color(value, options) {
-    if (options.color1) {
-        // Failsafe in case value drops below the lowest color position user has set.
-        // Otherwise color is undefined when the value is below color1_position
-        var color = options.color1
-    }
-    if (options.color2) {
-        if (value >= options.color2_position) {
-            var color = options.color2
-        }
-    }
-    if (options.color3) {
-        if (value >= options.color3_position) {
-            var color = options.color3
-        }
-    }
-    if (options.color4) {
-        if (value >= options.color4_position) {
-            var color = options.color4
-        }
-    }
-    if (options.color5) {
-        if (value >= options.color5_position) {
-            var color = options.color5
-        }
-    }
-    if (options.color6) {
-        if (value >= options.color6_position) {
-            var color = options.color6
-        }
-    }
-    if (options.color7) {
-        if (value >= options.color7_position) {
-            var color = options.color7
-        }
-    }
-    return color
-}
-
-function get_gauge_label(value, options) {
-    if (options.color1) {
-        if (options.color1_label) {
-            var label = options.color1_label
-        }
-    }
-    if (options.color2) {
-        if (value >= options.color2_position) {
-            var label = null
-            if (options.color2_label) {
-                var label = options.color2_label
-            }
-        }
-    }
-    if (options.color3) {
-        if (value >= options.color3_position) {
-            var label = null
-            if (options.color3_label) {
-                var label = options.color3_label
-            }
-        }
-    }
-    if (options.color4) {
-        if (value >= options.color4_position) {
-            var label = null
-            if (options.color4_label) {
-                var label = options.color4_label
-            }
-        }
-    }
-    if (options.color5) {
-        if (value >= options.color5_position) {
-            var label = null
-            if (options.color5_label) {
-                var label = options.color5_label
-            }
-        }
-    }
-    if (options.color6) {
-        if (value >= options.color6_position) {
-            var label = null
-            if (options.color6_label) {
-                var label = options.color6_label
-            }
-        }
-    }
-    if (options.color7) {
-        if (value >= options.color7_position) {
-            var label = null
-            if (options.color7_label) {
-                var label = options.color7_label
-            }
-        }
-    }
-    return label
-}
-
 function kts_to_beaufort(windspeed) {
     // Given windspeed in knots, converts to Beaufort scale
     if (windspeed <= 1) {
@@ -591,13 +495,13 @@ async function ajaxweewx() {
     }
 }
 
-// Update weewx data elements
+// Update WeeWX data elements
 //var station_obs_array = "";
 var unit_rounding_array = "";
 var unit_label_array = "";
 var weewx_data = "";
 function update_weewx_data(data) {
-    belchertown_debug("Updating weewx data");
+    belchertown_debug("Updating WeeWX data");
     weewx_data = data;
 
     #if $Extras.has_key("theme") and $Extras.theme == 'auto'
@@ -1716,7 +1620,7 @@ function update_current_wx(data) {
     gtag('config', '$Extras.googleAnalyticsId');
     #end if
 
-    // This message is a weewx archive update. Update weewx data, forecast data and highcharts graphs
+    // This message is a WeeWX archive update. Update WeeWX data, forecast data and highcharts graphs
     if (data.hasOwnProperty("interval_minute")) {
             // Delays are recommended to allow the other skins to complete processing
             belchertown_debug("MQTT: MQTT message indicates this is an archive interval.");
@@ -2519,7 +2423,7 @@ Highcharts.setOptions({
                     }
                     // If user has set colors_enabled, change the color according to the value
                     if (options.series[0].colors_enabled) {
-                        options.series[0].data[1].color = get_gauge_color(options.series[0].data[1]["y"], options.series[0])
+                        options.series[0].data[1].color = new_gradient_temp(options.series[0].data[1]["y"], options.series[0].yAxis_min, options.series[0].yAxis_max)
                     }
                     options.plotOptions = {
                         solidgauge: {
@@ -2538,15 +2442,6 @@ Highcharts.setOptions({
                                 }
                             },
                         }
-                    }
-                    if (get_gauge_label(options.series[0].data[1]["y"], options.series[0])) {
-                        options.plotOptions.solidgauge.dataLabels.format = "<span style='text-align:center'>{y:.#f}</span><br><span style='font-size:14px;text-align:center'>" + get_gauge_label(options.series[0].data[1]["y"], options.series[0]) + '</span>'
-                        options.plotOptions.solidgauge.dataLabels.y = -25
-                    } else if (unit_label_array[observation_type] == null) {
-                        options.plotOptions.solidgauge.dataLabels.format = "<span style='text-align:center'>{y:.#f}</span>"
-                    } else {
-                        options.plotOptions.solidgauge.dataLabels.format = "<span style='text-align:center'>{y:.#f}</span><br><span style='font-size:20px;text-align:center'>" + unit_label_array[observation_type] + '</span>'
-                        options.plotOptions.solidgauge.dataLabels.y = -25
                     }
                     options.yAxis = {
                         min: 0,
