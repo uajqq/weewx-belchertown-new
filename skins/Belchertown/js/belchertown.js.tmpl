@@ -1758,9 +1758,8 @@ function update_current_wx(data) {
 
     // Beaufort
     #if $Extras.has_key("beaufort_category") and $Extras.beaufort_category == '1' and $Extras.beaufort_category_gusts != '1'
-    if (data.hasOwnProperty("beaufort_count")) {
-        jQuery(".beaufort").html(beaufort_cat(parseFloat(data["beaufort_count"])));
-        belchertown_debug("Wind speed: " + parseFloat(data["beaufort_count"]) + " Beaufort cat: " + beaufort_cat(parseFloat(data["beaufort_count"])))
+    if (data.hasOwnProperty("beaufort")) {
+        jQuery(".beaufort").html(beaufort_cat(parseFloat(data["beaufort"])));
         #end if
 
     // Wind Gust US
