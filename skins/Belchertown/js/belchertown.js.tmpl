@@ -1659,7 +1659,7 @@ function update_current_wx(data) {
     station_mqtt_data = Object.keys(data); // Turn data (mqtt message) into an object we can forEach
     // Get all span elements within the table. This is setup by Python initially
     jQuery('.station-observations').find("span").each(function() {
-        // The class name is the same as the Extras.station_observations name (weewx schema)
+        // The class name is the same as the Extras.station_observations name (WeeWX schema)
         thisElementClass = jQuery(this).attr("class")
         // Loop through each MQTT payload item
         station_mqtt_data.forEach(mqttdata => {

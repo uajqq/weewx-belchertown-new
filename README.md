@@ -2,7 +2,7 @@
 
 ### This is a fork of [Pat O'Brien](https://github.com/poblabs)'s excellent Belchertown skin. His repo hasn't been maintained for quite a while now, so this fork will attempt to keep up with bug fixes and new features. Please bear with me!
 
-This skin (or theme, or template) is for the [weewx weather software](http://weewx.com) and is modeled after [BelchertownWeather.com](https://belchertownweather.com).
+This skin (or theme, or template) is for the [WeeWX weather software](http://weewx.com) and is modeled after [BelchertownWeather.com](https://belchertownweather.com).
 
 Features include:
 * Real-time streaming updates on the front page of the webpage without neededing to reload the website. (weewx-mqtt extension required and an MQTT server with Websockets required.)

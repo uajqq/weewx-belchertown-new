@@ -51,7 +51,7 @@ if sys.version_info[0] >= 3:
 
 if weewx.__version__ < "4":
     raise weewx.UnsupportedFeature(
-        "weewx 4 and newer is required, found %s" % weewx.__version__
+        "WeeWX 4 and newer is required, found %s" % weewx.__version__
     )
 
 log = logging.getLogger(__name__)

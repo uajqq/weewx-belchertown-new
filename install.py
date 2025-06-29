@@ -128,7 +128,7 @@ extension_config = """
             #--- Social Options ---
             # facebook_enabled = 0
             # twitter_enabled = 0
-            # twitter_hashtags = "weewx #weather"
+            # twitter_hashtags = "WeeWX #weather"
             # social_share_html = ""
             
             #--- Kiosk Options ---
@@ -168,7 +168,7 @@ extension_config = """
                 #-- Twitter Social Share --
                 # twitter_text = "Check out my website: My Weather Website Weather Conditions"
                 # twitter_owner = "YourTwitterUsernameHere"
-                # twitter_hashtags = "weewx #weather"
+                # twitter_hashtags = "WeeWX #weather"
 
 """
 config_dict = configobj.ConfigObj(StringIO(extension_config))
