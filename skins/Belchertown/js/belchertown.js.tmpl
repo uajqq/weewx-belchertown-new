@@ -550,7 +550,7 @@ function update_weewx_data(data) {
         // Returned "current" data does not have this value
     }
 
-
+    // today
     jQuery(".dailystatshigh").html(data["day"]["outTemp"]["max"]);
     jQuery(".dailystatslow").html(data["day"]["outTemp"]["min"]);
     jQuery(".dailystatswindavg").html(data["day"]["wind"]["average"]);
@@ -558,6 +558,19 @@ function update_weewx_data(data) {
     jQuery(".dailystatsrain").html(data["day"]["rain"]["sum"]);
     jQuery(".dailystatsrainrate").html(data["day"]["rain"]["max"]);
     jQuery(".dailywindrun").html(data["day"]["wind"]["windrun"]);
+
+    // yesterday - TODO figure out how to get yesterday in data struct
+    try {
+        jQuery(".snapshot-records-yesterday-header").html(tzAdjustedMoment(data["yesterday"]["epoch"]).format('$obs.label.time_snapshot_records_yesterday_header'));
+    } catch (err) {
+        jQuery(".snapshot-records-yesterday-header").html("oops");
+    }
+    jQuery(".yesterdaystatshigh").html(data["yesterday"]["outTemp"]["max"]);
+    jQuery(".yesterdaystatslow").html(data["yesterday"]["outTemp"]["min"]);
+    jQuery(".yesterdaystatswindavg").html(data["yesterday"]["wind"]["average"]);
+    jQuery(".yesterdaystatswindmax").html(data["yesterday"]["wind"]["max"]);
+    jQuery(".yesterdaystatsrain").html(data["yesterday"]["rain"]["sum"]);
+    jQuery(".yesterdaystatsrainrate").html(data["yesterday"]["rain"]["max"]);
 
     // Month Snapshot Stats Section
     jQuery(".monthstatshigh").html(data["month"]["outTemp"]["max"]);

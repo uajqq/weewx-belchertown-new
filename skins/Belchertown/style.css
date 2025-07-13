@@ -1978,11 +1978,11 @@ table.celestial td.label {
 .earthquake-container {
   font-size: 18px;
   text-align: center;
-  min-height: 180px;
+  min-height: 120px;
 }
 
 .earthquake-container .earthquake-distance-outer {
-  min-height: 64px;
+  /* min-height: 64px; */
 }
 
 .snapshot-records-text,

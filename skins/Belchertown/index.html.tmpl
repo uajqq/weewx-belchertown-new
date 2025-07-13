@@ -475,18 +475,14 @@
                 
                 <!-- Start of third row -->
                 <div class="row eq-stats-row">            
-                    #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'
-                    <div class="col-sm-9 stn-quick-stats">
-                    #else
                     <div class="col-sm-12 stn-quick-stats">
-                    #end if
-                        
                         <!-- Today Snapshot Stats -->
                         <div class="row">
                             <div class="snapshot-records-text">
                                 $obs.label.weather_snapshots <a href="$relative_url/records">$obs.label.weather_snapshots_link</a>
                             </div>
                             
+                            <!-- today -->
                             <div class="col-sm-6 stn-quick-stats">
                                 <div class="stats-title">
                                     <span class="snapshot-records-today-header"></span><!-- JS and AJAX -->
@@ -507,8 +503,37 @@
                                 </table>
                             </div>
 
-                            <!-- This Month Snapshot Stats -->
+                            <!-- yesterday -->
                             <div class="col-sm-6 stn-quick-stats border-left">
+                                <div class="stats-title">
+                                    <span class="snapshot-records-yesterday-header"></span><!-- JS and AJAX -->
+                                </div>
+                                <table>
+                                    <tr>
+                                        <td><b>$obs.label.snapshot_high:</b></td>    <td><span class="yesterdaystatshigh">$yesterday.outTemp.max</span></td><!-- AJAX -->
+                                        <td><b>$obs.label.snapshot_low:</b></td>    <td><span class="yesterdaystatslow">$yesterday.outTemp.min</span></td><!-- AJAX -->
+                                    </tr>
+                                    <tr>
+                                        <td><b>$obs.label.snapshot_today_avg_wind:</b></td>    <td><span class="yesterdaystatswindavg">$yesterday.wind.avg</span></td><!-- AJAX -->
+                                        <td><b>$obs.label.snapshot_today_high_wind:</b></td>        <td><span class="yesterdaystatswindmax">$yesterday.wind.max</span></td><!-- AJAX -->                    
+                                    </tr>
+                                    <tr>
+                                        <td><b>$obs.label.snapshot_yesterday_rain:</b></td>    <td><span class="yesterdaystatsrain">$yesterday.rain.sum</span></td><!-- AJAX -->
+                                        <td><b>$obs.label.snapshot_today_rainrate:</b></td>    <td><span class="yesterdaystatsrainrate">$yesterday.rainRate.max</span></td><!-- AJAX -->
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- End of third row -->
+                
+                <!-- Start of fourth row -->
+                <div class="row eq-stats-row">            
+                    <div class="col-sm-12 stn-quick-stats">
+                        <div class="row">
+                            <!-- This Month Snapshot Stats -->
+                            <div class="col-sm-6 stn-quick-stats">
                                 <div class="stats-title">
                                     <span class="snapshot-records-month-header"></span><!-- JS and AJAX -->
                                 </div>
@@ -527,33 +552,42 @@
                                     </tr>
                                 </table>
                             </div>
-                        </div>
-                    </div>
-                    
-                    #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'
-                    <!-- Earthquake data -->
-                    <div class="col-sm-3 earthquake-container border-left">
-                        <div class="eq-title">$obs.label.earthquake_title</div>
-                        <div class="eq-region">
-                            <span class="earthquake-time"></span><!-- moment.js -->
-                            #if $earthquake_place != ''
-                            <br>
-                            <i class="fa fa-map-marker"></i> <a href="$earthquake_url" target="_blank">$earthquake_place</a>
-                            <div class="row earthquake-info">
-                                <div class="col-sm-6">
-                                    <i class="wi wi-earthquake"></i>$obs.label.earthquake_magnitude <span class="magnitude">$earthquake_magnitude</span>
+
+                            <!-- Earthquake data -->
+                            #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'
+                            <div class="col-sm-6 earthquake-container border-left">
+                                <div class="stats-title">$obs.label.earthquake_title</div>
+                                <div class="eq-region">
+                                    <span class="earthquake-time"></span><!-- moment.js -->
+                                    #if $earthquake_place != ''
+                                    <br>
+                                    <i class="fa fa-map-marker"></i> <a href="$earthquake_url" target="_blank">$earthquake_place</a>
+                                    <div class="row earthquake-info">
+                                        <div class="col-sm-6">
+                                            <i class="wi wi-earthquake"></i>$obs.label.earthquake_magnitude <span class="magnitude">$earthquake_magnitude</span>
+                                        </div>
+                                        <div class="col-sm-6 earthquake-distance-outer border-left">
+                                            <span class="earthquake-distance">$earthquake_distance_away $earthquake_distance_label $earthquake_bearing</span>
+                                        </div>
+                                    </div>
+                                    #end if
                                 </div>
-                                <div class="col-sm-6 earthquake-distance-outer border-left">
-                                    <span class="earthquake-distance">$earthquake_distance_away $earthquake_distance_label $earthquake_bearing</span>
-                                </div>
+                            </div>
+                            #else
+                            <!-- Earthquake not enabled -->
+                            <div class="col-sm-6 earthquake-container border-left">
+                                <div class="eq-title"><i class="fa fa-map-marker"></i></div>
                             </div>
                             #end if
                         </div>
                     </div>
-                    #end if
                 </div>
-                <!-- End of third row -->
-                
+                <!-- end of fourth row -->
+
+
+
+
+
                 #if os.path.exists("index_hook_after_snapshot.inc")
                 <!-- Start of index_hook_after_snapshot row -->
                 <div class="row index-hook-after-snapshot border-bottom">
@@ -563,7 +597,7 @@
                 #end if                          
                 
                 #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
-                <!-- Begin of fourth row - dynamic charts -->
+                <!-- Begin of fifth row - dynamic charts -->
                 <div class="row highcharts-row graph">
                     <div class="col-sm-12 wx-graph-front">
                         <span class="homepage-graphgroup-title">$graphpage_titles_dict[$Extras.highcharts_homepage_graphgroup]</span> <a href="$relative_url/graphs">$obs.label.homepage_graphs_link</a>
@@ -572,7 +606,7 @@
                     <div class="graph-outer row"></div><!-- JS populated -->
                     
                 </div>
-                <!-- End of fourth row -->
+                <!-- End of fifth row -->
                 #end if
                 
                 <div class="clear"></div>
