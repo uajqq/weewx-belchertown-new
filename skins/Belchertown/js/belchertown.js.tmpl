@@ -560,11 +560,6 @@ function update_weewx_data(data) {
     jQuery(".dailywindrun").html(data["day"]["wind"]["windrun"]);
 
     // yesterday - TODO figure out how to get yesterday in data struct
-    try {
-        jQuery(".snapshot-records-yesterday-header").html(tzAdjustedMoment(data["yesterday"]["epoch"]).format('$obs.label.time_snapshot_records_yesterday_header'));
-    } catch (err) {
-        jQuery(".snapshot-records-yesterday-header").html("oops");
-    }
     jQuery(".yesterdaystatshigh").html(data["yesterday"]["outTemp"]["max"]);
     jQuery(".yesterdaystatslow").html(data["yesterday"]["outTemp"]["min"]);
     jQuery(".yesterdaystatswindavg").html(data["yesterday"]["wind"]["average"]);
