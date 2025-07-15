@@ -26,7 +26,7 @@
         
         ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
             update_weewx_data(weewx_data); // Initial call to update (date, daily high, low, etc)
-            belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
+            // belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
             #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
             // Load forecast
             ajaxforecast(); // Initial call to load forecast data like 8 day outlook, weather icon and observation text
@@ -87,7 +87,7 @@
                     jQuery(document).on('click', '.restart-interval', function() { 
                         ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
                             update_weewx_data(weewx_data); // Initial call to update (date, daily high, low, etc)
-                            belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
+                            // belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
 
                             #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
                             ajaxforecast(); // Update forecast data

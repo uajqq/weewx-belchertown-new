@@ -509,6 +509,7 @@ var unit_label_array = "";
 var weewx_data = "";
 function update_weewx_data(data) {
     belchertown_debug("Updating WeeWX data");
+    belchertown_debug(data);
     weewx_data = data;
 
     #if $Extras.has_key("theme") and $Extras.theme == 'auto'
@@ -560,8 +561,8 @@ function update_weewx_data(data) {
     jQuery(".dailywindrun").html(data["day"]["wind"]["windrun"]);
 
     // yesterday - TODO figure out how to get yesterday in data struct
-    jQuery(".yesterdaystatshigh").html(data["yesterday"]["outTemp"]["max"]);
-    jQuery(".yesterdaystatslow").html(data["yesterday"]["outTemp"]["min"]);
+    jQuery(".yesterdaystatshigh").html(data["yesterday"]["temp"]["max"]);
+    jQuery(".yesterdaystatslow").html(data["yesterday"]["temp"]["min"]);
     jQuery(".yesterdaystatswindavg").html(data["yesterday"]["wind"]["average"]);
     jQuery(".yesterdaystatswindmax").html(data["yesterday"]["wind"]["max"]);
     jQuery(".yesterdaystatsrain").html(data["yesterday"]["rain"]["sum"]);
@@ -1341,13 +1342,13 @@ function update_forecast_data(data) {
             // Show the forecasts rows
             if (forecast_interval == "forecast_1hr") {
                 jQuery(".onehr_forecasts").html(output_html);
-                belchertown_debug("html_1hr: " + output_html);
+                // belchertown_debug("html_1hr: " + output_html);
             } else if (forecast_interval == "forecast_3hr") {
                 jQuery(".threehr_forecasts").html(output_html);
-                belchertown_debug("html_3hr: " + output_html);
+                // belchertown_debug("html_3hr: " + output_html);
             } else if (forecast_interval == "forecast_24hr") {
                 jQuery(".dayhr_forecasts").html(output_html);
-                belchertown_debug("html_24hr: " + output_html);
+                // belchertown_debug("html_24hr: " + output_html);
             }
             // Show the forecast_subtitle
             jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + forecast_subtitle);
@@ -2173,11 +2174,11 @@ Highcharts.setOptions({
                     options.chart.renderTo = renderTo;
                 }
 
-                belchertown_debug(options.chart.renderTo + ": building a " + type + " chart");
+                // belchertown_debug(options.chart.renderTo + ": building a " + type + " chart");
 
                 if (css_class) {
                     jQuery("#" + options.chart.renderTo).addClass(css_class);
-                    belchertown_debug(options.chart.renderTo + ": div id is " + options.chart.renderTo + " and adding CSS class: " + css_class);
+                    // belchertown_debug(options.chart.renderTo + ": div id is " + options.chart.renderTo + " and adding CSS class: " + css_class);
                 }
 
                 options.chart.type = type;
@@ -2194,7 +2195,7 @@ Highcharts.setOptions({
 
                 // If we have xAxis categories, reset xAxis and populate it from these options. Also need to reset tooltip since there's no datetime for moment.js to use.
                 if (xAxis_categories.length >= 1) {
-                    belchertown_debug(options.chart.renderTo + ": has " + xAxis_categories.length + " xAxis categories. Resetting xAxis and tooltips for grouping");
+                    // belchertown_debug(options.chart.renderTo + ": has " + xAxis_categories.length + " xAxis categories. Resetting xAxis and tooltips for grouping");
                     options.xAxis = {}
                     options.xAxis.categories = xAxis_categories;
                     options.tooltip = {}
@@ -2281,7 +2282,7 @@ Highcharts.setOptions({
                     // Run yAxis customizations
                     this_yAxis = s.yAxis;
 
-                    belchertown_debug(options.chart.renderTo + ": " + s.obsType + " is on yAxis " + this_yAxis);
+                    // belchertown_debug(options.chart.renderTo + ": " + s.obsType + " is on yAxis " + this_yAxis);
 
                     // Some charts may require a defined min/max on the yAxis
                     options.yAxis[this_yAxis].min = s.yAxis_min !== "undefined" ? s.yAxis_min : null;
@@ -2336,7 +2337,7 @@ Highcharts.setOptions({
 
                     // If this chart is a mirrored chart, make the yAxis labels non-negative
                     if (s.mirrored_value) {
-                        belchertown_debug(options.chart.renderTo + ": mirrored chart due to mirrored_value = true");
+                        // belchertown_debug(options.chart.renderTo + ": mirrored chart due to mirrored_value = true");
                         options.yAxis[s.yAxis].labels = {formatter: function() {return Math.abs(this.value);}}
                     }
 
@@ -2788,8 +2789,8 @@ Highcharts.setOptions({
                 var chart = new Highcharts.chart(options);
 
                 // If using debug, show a copy paste debug for use with jsfiddle
-                belchertown_debug(options);
-                belchertown_debug("Highcharts.chart('container', " + JSON.stringify(options) + ");");
+                // belchertown_debug(options);
+                // belchertown_debug("Highcharts.chart('container', " + JSON.stringify(options) + ");");
 
             });
 
