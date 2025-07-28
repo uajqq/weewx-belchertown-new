@@ -2409,7 +2409,10 @@ input:checked + .slider:before {
   tbody,
   th,
   td,
-  tr,
+  tr
+  { 
+		display: block; 
+	}
 
   /* Hide table headers (but not display: none;, for accessibility) */
   thead tr {
