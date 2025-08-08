@@ -229,6 +229,14 @@ files = [
         ],
     ),
     (
+        "skins/Belchertown/lang", 
+        [
+            "skins/Belchertown/lang/ca.conf",
+            "skins/Belchertown/lang/de.conf",
+            "skins/Belchertown/lang/it.conf"
+        ]
+    ),
+    (
         "skins/Belchertown/images",
         [
             "skins/Belchertown/images/clear-day.png",
