@@ -750,7 +750,7 @@ class getData(SearchList):
             )
             at_rainiest_month_sql = 'SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;'
             year_rain_data_sql = (
-                'SELECT dateTime, sum FROM archive_day_rain WHERE strftime("%%Y", datetime(dateTime, "unixepoch", "localtime")) = "%s" AND count > 0;'
+                'SELECT dateTime, sum FROM archive_day_rain WHERE strftime("%%Y", datetime(dateTime, "unixepoch", "localtime")) = "%s";'
                 % time.strftime("%Y", time.localtime(time.time()))
             )
             # The all stats from http://www.weewx.com/docs/customizing.htm
@@ -763,7 +763,7 @@ class getData(SearchList):
             )  # Why does this one require .format() but the other's don't?
             at_rainiest_month_sql = 'SELECT FROM_UNIXTIME( dateTime, "%%m" ) AS month, FROM_UNIXTIME( dateTime, "%%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;'
             year_rain_data_sql = (
-                'SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "%s" AND count > 0;'
+                'SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "%s";'
                 % time.strftime("%Y", time.localtime(time.time()))
             )
             # The all stats from http://www.weewx.com/docs/customizing.htm
