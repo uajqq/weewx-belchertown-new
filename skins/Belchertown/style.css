@@ -2409,7 +2409,8 @@ input:checked + .slider:before {
   tbody,
   th,
   td,
-  tr,
+  tr {
+  }
 
   /* Hide table headers (but not display: none;, for accessibility) */
   thead tr {
