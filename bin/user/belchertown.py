@@ -206,6 +206,10 @@ class getData(SearchList):
         belchertown_debug = self.generator.skin_dict["Extras"].get(
             "belchertown_debug", 0
         )
+        belchertown_debug = int(belchertown_debug)
+
+        if belchertown_debug > 0:
+            loginf("'belchertown_debug' set to %s" % belchertown_debug)
 
         # Find the right HTML ROOT
         if "HTML_ROOT" in self.generator.skin_dict:
@@ -1025,8 +1029,8 @@ class getData(SearchList):
                 ]
                 forecast_is_stale = False
 
-                def aeris_coded_weather(data):
-                    # https://www.aerisweather.com/support/docs/api/reference/weather-codes/
+                def xweather_coded_weather(data):
+                    # https://www.xweather.com/docs/weather-api/reference/weather-codes
                     output = ""
                     coverage_code = data.split(":")[0]
                     intensity_code = data.split(":")[1]
@@ -1114,8 +1118,8 @@ class getData(SearchList):
                     output += weather_dict[weather_code]
                     return output
 
-                def aeris_icon(data):
-                    # https://www.aerisweather.com/support/docs/api/reference/icon-list/
+                def xweather_icon(data):
+                    # https://www.xweather.com/docs/weather-api/reference/icon-list
                     iconlist_file_path = os.path.join(
                         self.generator.config_dict["WEEWX_ROOT"],
                         self.generator.skin_dict["SKIN_ROOT"],
@@ -1136,64 +1140,76 @@ class getData(SearchList):
                 forecast_lang = self.generator.skin_dict["Extras"][
                     "forecast_lang"
                 ].lower()
+
+                forecast_place = self.generator.skin_dict["Extras"]["forecast_place"]
+                if forecast_place:
+                    if belchertown_debug > 0:
+                        loginf("Forecast data using %s, instead of [Station] longitude/latitude" % forecast_place)
+                else:
+                    forecast_place = ("%s,%s" % (latitude, longitude))
+                if belchertown_debug > 0:
+                    loginf("'forecast_place' set to %s" % forecast_place)
+
+                forecast_current_conditions = self.generator.skin_dict["Extras"]["forecast_current_conditions"]
+                if forecast_current_conditions == "obs":
+                    if belchertown_debug > 0:
+                        loginf("Current conditions based on /observations endpoint")
+                elif forecast_current_conditions == "conds":
+                    if belchertown_debug > 0:
+                        loginf("Current conditions based on /conditions endpoint")
+                elif forecast_current_conditions == "obs-on-fail-conds":
+                    if belchertown_debug > 0:
+                        loginf("Current conditions based on /observations, if no data, use /conditions endpoint")
+                else: # W0t?
+                    loginf("Setting 'forecast_current_conditions' to 'obs' due to unknown value: %s" % forecast_current_conditions)
+                    forecast_current_conditions = "obs"
+
                 if (
                     self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"]
                     == "1"
-                ):
-                    forecast_current_url = (
-                        "https://api.aerisapi.com/observations/%s,%s?&format=json&filter=allstations&filter=metar&limit=1&client_id=%s&client_secret=%s"
-                        % (latitude, longitude, forecast_api_id, forecast_api_secret)
+                ): # filter on METAR
+                   forecast_current_obs_url = (
+                        "https://data.api.xweather.com/observations/%s?format=json&filter=metar&limit=1&client_id=%s&client_secret=%s"
+                        % (forecast_place, forecast_api_id, forecast_api_secret)
                     )
-                else:
-                    forecast_current_url = (
-                        "https://api.aerisapi.com/observations/%s,%s?&format=json&filter=allstations&limit=1&client_id=%s&client_secret=%s"
-                        % (latitude, longitude, forecast_api_id, forecast_api_secret)
+                else: # filter on All stations
+                    forecast_current_obs_url = (
+                        "https://data.api.xweather.com/observations/%s?format=json&filter=allstations&limit=1&client_id=%s&client_secret=%s"
+                        % (forecast_place, forecast_api_id, forecast_api_secret)
                     )
+                forecast_current_conds_url = (
+                        "https://data.api.xweather.com/conditions/%s?format=json&plimit=1&filter=1min&client_id=%s&client_secret=%s"
+                        % (forecast_place, forecast_api_id, forecast_api_secret)
+                )
                 forecast_24hr_url = (
-                    "https://api.aerisapi.com/forecasts/%s,%s?&format=json&filter=day&limit=7&client_id=%s&client_secret=%s"
-                    % (latitude, longitude, forecast_api_id, forecast_api_secret)
+                    "https://data.api.xweather.com/forecasts/%s?format=json&filter=day&limit=7&client_id=%s&client_secret=%s"
+                    % (forecast_place, forecast_api_id, forecast_api_secret)
                 )
                 forecast_3hr_url = (
-                    "https://api.aerisapi.com/forecasts/%s,%s?&format=json&filter=3hr&limit=8&client_id=%s&client_secret=%s"
-                    % (latitude, longitude, forecast_api_id, forecast_api_secret)
+                    "https://data.api.xweather.com/forecasts/%s?format=json&filter=3hr&limit=8&client_id=%s&client_secret=%s"
+                    % (forecast_place, forecast_api_id, forecast_api_secret)
                 )
                 forecast_1hr_url = (
-                    "https://api.aerisapi.com/forecasts/%s,%s?&format=json&filter=1hr&limit=16&client_id=%s&client_secret=%s"
-                    % (latitude, longitude, forecast_api_id, forecast_api_secret)
+                    "https://data.api.xweather.com/forecasts/%s?format=json&filter=1hr&limit=16&client_id=%s&client_secret=%s"
+                    % (forecast_place, forecast_api_id, forecast_api_secret)
                 )
                 aqi_url = (
-                    "https://api.aerisapi.com/airquality/closest?p=%s,%s&format=json&radius=50mi&limit=1&client_id=%s&client_secret=%s"
-                    % (latitude, longitude, forecast_api_id, forecast_api_secret)
+                    "https://data.api.xweather.com/airquality/%s?format=json&client_id=%s&client_secret=%s"
+                    % (forecast_place, forecast_api_id, forecast_api_secret)
                 )
                 if self.generator.skin_dict["Extras"]["forecast_alert_limit"]:
                     forecast_alert_limit = self.generator.skin_dict["Extras"][
                         "forecast_alert_limit"
                     ]
-                    forecast_alerts_url = (
-                        "https://api.aerisapi.com/alerts/%s,%s?&format=json&limit=%s&lang=%s&client_id=%s&client_secret=%s"
-                        % (
-                            latitude,
-                            longitude,
-                            forecast_alert_limit,
-                            forecast_lang,
-                            forecast_api_id,
-                            forecast_api_secret,
-                        )
-                    )
-                else:
-                    # Default to 1 alerts to show if the option is missing. Can go up to 10
-                    forecast_alerts_url = (
-                        "https://api.aerisapi.com/alerts/%s,%s?&format=json&limit=1&lang=%s&client_id=%s&client_secret=%s"
-                        % (
-                            latitude,
-                            longitude,
-                            forecast_lang,
-                            forecast_api_id,
-                            forecast_api_secret,
-                        )
-                    )
+                else: # Default to 1 alerts to show if the option is missing. Can go up to 10
+                    forecast_alert_limit = 1
 
-                # Determine if the file exists and get it's modified time, enhanced
+                forecast_alerts_url = (
+                    "https://data.api.xweather.com/alerts/%s?format=json&limit=%s&lang=%s&client_id=%s&client_secret=%s"
+                    % (forecast_place, forecast_alert_limit, forecast_lang, forecast_api_id, forecast_api_secret)
+                )
+
+                # Determine if the file exists and get its modified time, enhanced
                 # for 1 hr forecast to load close to the hour
                 if os.path.isfile(forecast_file):
                     if (int(time.time()) - int(os.path.getmtime(forecast_file))) > int(
@@ -1234,30 +1250,62 @@ class getData(SearchList):
                             response.close()
                         else:
                             # Current conditions
-                            req = Request(forecast_current_url, None, headers)
-                            response = urlopen(req)
-                            current_page = response.read()
-                            response.close()
+                            if forecast_current_conditions == "obs":
+                                req = Request(forecast_current_obs_url, None, headers)
+                                response = urlopen(req)
+                                current_page = response.read()
+                                response.close()
+                                if belchertown_debug > 1:
+                                    loginf("Obs URL: %s" % forecast_current_obs_url)
+                            elif forecast_current_conditions == "conds":
+                                req = Request(forecast_current_conds_url, None, headers)
+                                response = urlopen(req)
+                                current_page = response.read()
+                                response.close()
+                                if belchertown_debug > 1:
+                                    loginf("Conditions URL: %s" % forecast_current_conds_url)
+                            elif forecast_current_conditions == "obs-on-fail-conds":
+                                req = Request(forecast_current_obs_url, None, headers)
+                                response = urlopen(req)
+                                current_page = response.read()
+                                response.close()
+                                try: # Obs okay?
+                                    current_condition_data = data["current"][0]["response"]["ob"]
+                                except Exception: # Nope, try Conds
+                                    if belchertown_debug > 0:
+                                        loginf("No good Obs data, using Conds")
+                                    req = Request(forecast_current_conds_url, None, headers)
+                                    response = urlopen(req)
+                                    current_page = response.read()
+                                    response.close()
                             # 24hr forecast (was Forecast)
                             req = Request(forecast_24hr_url, None, headers)
                             response = urlopen(req)
                             forecast_24hr_page = response.read()
                             response.close()
+                            if belchertown_debug > 1:
+                                loginf("Forecast 24hr URL: %s" % forecast_24hr_url)
                             # 3hr forecast
                             req = Request(forecast_3hr_url, None, headers)
                             response = urlopen(req)
                             forecast_3hr_page = response.read()
                             response.close()
+                            if belchertown_debug > 1:
+                                loginf("Forecast 3hr URL: %s" % forecast_3hr_url)
                             # 1hr forecast
                             req = Request(forecast_1hr_url, None, headers)
                             response = urlopen(req)
                             forecast_1hr_page = response.read()
                             response.close()
+                            if belchertown_debug > 1:
+                                loginf("Forecast 1hr URL: %s" % forecast_1hr_url)
                             # AQI
                             req = Request(aqi_url, None, headers)
                             response = urlopen(req)
                             aqi_page = response.read()
                             response.close()
+                            if belchertown_debug > 1:
+                                loginf("AQI URL: %s" % aqi_url)
                             if (
                                 self.generator.skin_dict["Extras"][
                                     "forecast_alert_enabled"
@@ -1269,6 +1317,8 @@ class getData(SearchList):
                                 response = urlopen(req)
                                 alerts_page = response.read()
                                 response.close()
+                                if belchertown_debug > 1:
+                                    loginf("Alerts URL: %s" % forecast_alerts_url)
 
                             # Combine all into 1 file
                             if (
@@ -1405,12 +1455,15 @@ class getData(SearchList):
                 with open(forecast_file, "r") as read_file:
                     data = json.load(read_file)
 
+                # We prefer using an observation (actual) over conditions (an interpolation)
                 try:
-                    cloud_cover = "{}%".format(
-                        data["current"][0]["response"]["ob"]["sky"]
-                    )
+                    if forecast_current_conditions == "obs":
+                        current_condition_data = data["current"][0]["response"]["ob"]
+                    else: # "conds"
+                        current_condition_data = data["current"][0]["response"][0]["periods"][0]
+                    cloud_cover = "{}%".format(current_condition_data["sky"])
                 except Exception:
-                    loginf("No cloud cover data from Aeris weather")
+                    loginf("No cloud cover data from Xweather weather")
                     cloud_cover = ""
 
                 try:
@@ -1432,7 +1485,7 @@ class getData(SearchList):
                         aqi_location = ""
                 except Exception as error:
                     logerr(
-                        "Error getting AQI from Aeris weather. The error was: %s"
+                        "Error getting AQI from Xweather weather. The error was: %s"
                         % (error)
                     )
                     aqi = ""
@@ -1441,7 +1494,7 @@ class getData(SearchList):
                     aqi_location = ""
                     pass
 
-                # https://www.aerisweather.com/support/docs/api/reference/endpoints/airquality/
+                # https://www.xweather.com/docs/weather-api/endpoints/airquality
                 if aqi_category == "good":
                     aqi_category = label_dict["aqi_good"]
                 elif aqi_category == "moderate":
@@ -1457,37 +1510,25 @@ class getData(SearchList):
                 else:
                     aqi_category = label_dict["aqi_unknown"]
 
-                if (
-                    len(data["current"][0]["response"]) > 0
-                    and self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"]
-                    == "0"
-                ):
-                    # Non-metar responses do not contain these values. Set them to empty.
-                    current_obs_summary = ""
-                    current_obs_icon = ""
-                    visibility = "N/A"
-                    visibility_unit = ""
-                elif (
-                    len(data["current"][0]["response"]) > 0
-                    and self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"]
-                    == "1"
-                ):
-                    current_obs_summary = aeris_coded_weather(
-                        data["current"][0]["response"]["ob"]["weatherPrimaryCoded"]
+                # For forecasts/ endpoint and METAR != 0, no visibilty seems to be available
+                # (used Los Angeles as test case)
+                if len(data["current"][0]["response"]) > 0:
+                    current_obs_summary = xweather_coded_weather(
+                        current_condition_data["weatherPrimaryCoded"]
                     )
                     current_obs_icon = (
-                        aeris_icon(data["current"][0]["response"]["ob"]["icon"])
+                        xweather_icon(current_condition_data["icon"])
                         + ".png"
                     )
 
                     if forecast_units in ("si", "ca"):
                         if (
-                            data["current"][0]["response"]["ob"]["visibilityKM"]
+                            current_condition_data["visibilityKM"]
                             is not None
                         ):
                             visibility = locale.format_string(
                                 "%g",
-                                data["current"][0]["response"]["ob"]["visibilityKM"],
+                                current_condition_data["visibilityKM"],
                             )
                             visibility_unit = "km"
                         else:
@@ -1496,13 +1537,13 @@ class getData(SearchList):
                     else:
                         # us, uk2 and default to miles per hour
                         if (
-                            data["current"][0]["response"]["ob"]["visibilityMI"]
+                            current_condition_data["visibilityMI"]
                             is not None
                         ):
                             visibility = locale.format_string(
                                 "%g",
                                 float(
-                                    data["current"][0]["response"]["ob"]["visibilityMI"]
+                                    current_condition_data["visibilityMI"]
                                 ),
                             )
                             visibility_unit = "miles"
@@ -1510,9 +1551,7 @@ class getData(SearchList):
                             visibility = "N/A"
                             visibility_unit = ""
                 else:
-                    # If the user selected to not use METAR, then these
-                    # observations are null.  If there's no data in the ob array
-                    # then it's probably because of an error.
+                    # If there's no data in the ob array then it's probably because of an error.
                     # Example:
                     # "code": "warn_no_data",
                     # "description": "Valid request. No results available based on
@@ -1591,7 +1630,7 @@ class getData(SearchList):
                 )
             earthquake_is_stale = False
 
-            # Determine if the file exists and get it's modified time
+            # Determine if the file exists and get its modified time
             if os.path.isfile(earthquake_file):
                 if (int(time.time()) - int(os.path.getmtime(earthquake_file))) > int(
                     earthquake_stale_timer
