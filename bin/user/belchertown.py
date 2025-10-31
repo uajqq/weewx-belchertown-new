@@ -1015,6 +1015,7 @@ class getData(SearchList):
             ):
 
                 forecast_file = html_root + "/json/forecast.json"
+                current_conditions_file = html_root + "/json/current_conditions.json"
                 forecast_api_id = self.generator.skin_dict["Extras"]["forecast_api_id"]
                 forecast_api_secret = self.generator.skin_dict["Extras"][
                     "forecast_api_secret"
@@ -1027,7 +1028,11 @@ class getData(SearchList):
                 forecast_stale_timer = self.generator.skin_dict["Extras"][
                     "forecast_stale"
                 ]
+                current_conditions_stale_timer = self.generator.skin_dict["Extras"][
+                    "current_conditions_stale"
+                ]
                 forecast_is_stale = False
+                current_conditions_is_stale = False
 
                 def xweather_coded_weather(data):
                     # https://www.xweather.com/docs/weather-api/reference/weather-codes
@@ -1150,34 +1155,34 @@ class getData(SearchList):
                 if belchertown_debug > 0:
                     loginf("'forecast_place' set to %s" % forecast_place)
 
-                forecast_current_conditions = self.generator.skin_dict["Extras"]["forecast_current_conditions"]
-                if forecast_current_conditions == "obs":
+                current_conditions = self.generator.skin_dict["Extras"]["current_conditions"]
+                if current_conditions == "obs":
                     if belchertown_debug > 0:
                         loginf("Current conditions based on /observations endpoint")
-                elif forecast_current_conditions == "conds":
+                elif current_conditions == "conds":
                     if belchertown_debug > 0:
                         loginf("Current conditions based on /conditions endpoint")
-                elif forecast_current_conditions == "obs-on-fail-conds":
+                elif current_conditions == "obs-on-fail-conds":
                     if belchertown_debug > 0:
                         loginf("Current conditions based on /observations, if no data, use /conditions endpoint")
                 else: # W0t?
-                    loginf("Setting 'forecast_current_conditions' to 'obs' due to unknown value: %s" % forecast_current_conditions)
-                    forecast_current_conditions = "obs"
+                    loginf("Setting 'current_conditions' to 'obs' due to unknown value: %s" % current_conditions)
+                    current_conditions = "obs"
 
                 if (
                     self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"]
                     == "1"
                 ): # filter on METAR
-                   forecast_current_obs_url = (
+                   current_obs_url = (
                         "https://data.api.xweather.com/observations/%s?format=json&filter=metar&limit=1&client_id=%s&client_secret=%s"
                         % (forecast_place, forecast_api_id, forecast_api_secret)
                     )
                 else: # filter on All stations
-                    forecast_current_obs_url = (
+                    current_obs_url = (
                         "https://data.api.xweather.com/observations/%s?format=json&filter=allstations&limit=1&client_id=%s&client_secret=%s"
                         % (forecast_place, forecast_api_id, forecast_api_secret)
                     )
-                forecast_current_conds_url = (
+                current_conds_url = (
                         "https://data.api.xweather.com/conditions/%s?format=json&plimit=1&filter=1min&client_id=%s&client_secret=%s"
                         % (forecast_place, forecast_api_id, forecast_api_secret)
                 )
@@ -1209,7 +1214,7 @@ class getData(SearchList):
                     % (forecast_place, forecast_alert_limit, forecast_lang, forecast_api_id, forecast_api_secret)
                 )
 
-                # Determine if the file exists and get its modified time, enhanced
+                # Determine if the forecast file exists and get its modified time, enhanced
                 # for 1 hr forecast to load close to the hour
                 if os.path.isfile(forecast_file):
                     if (int(time.time()) - int(os.path.getmtime(forecast_file))) > int(
@@ -1226,6 +1231,23 @@ class getData(SearchList):
                 else:
                     # File doesn't exist, download a new copy
                     forecast_is_stale = True
+
+                # As above but for the Current Conditions file
+                if os.path.isfile(current_conditions_file):
+                    if (int(time.time()) - int(os.path.getmtime(current_conditions_file))) > int(
+                        current_conditions_stale_timer
+                    ):
+                        current_conditions_is_stale = True
+                    else:
+                        # catches repeated calls every archive interval (300secs)
+                        if (
+                            time.strftime("%M") < "05"
+                            and int(time.time()) - int(os.path.getmtime(forecast_file))
+                        ) > int(300):
+                            current_conditions_is_stale = True
+                else:
+                    # File doesn't exist, download a new copy
+                    current_conditions_is_stale = True
 
                 # File is stale, download a new copy
                 if forecast_is_stale:
@@ -1249,35 +1271,6 @@ class getData(SearchList):
                             forecast_file_result = response.read()
                             response.close()
                         else:
-                            # Current conditions
-                            if forecast_current_conditions == "obs":
-                                req = Request(forecast_current_obs_url, None, headers)
-                                response = urlopen(req)
-                                current_page = response.read()
-                                response.close()
-                                if belchertown_debug > 1:
-                                    loginf("Obs URL: %s" % forecast_current_obs_url)
-                            elif forecast_current_conditions == "conds":
-                                req = Request(forecast_current_conds_url, None, headers)
-                                response = urlopen(req)
-                                current_page = response.read()
-                                response.close()
-                                if belchertown_debug > 1:
-                                    loginf("Conditions URL: %s" % forecast_current_conds_url)
-                            elif forecast_current_conditions == "obs-on-fail-conds":
-                                req = Request(forecast_current_obs_url, None, headers)
-                                response = urlopen(req)
-                                current_page = response.read()
-                                response.close()
-                                try: # Obs okay?
-                                    current_condition_data = data["current"][0]["response"]["ob"]
-                                except Exception: # Nope, try Conds
-                                    if belchertown_debug > 0:
-                                        loginf("No good Obs data, using Conds")
-                                    req = Request(forecast_current_conds_url, None, headers)
-                                    response = urlopen(req)
-                                    current_page = response.read()
-                                    response.close()
                             # 24hr forecast (was Forecast)
                             req = Request(forecast_24hr_url, None, headers)
                             response = urlopen(req)
@@ -1331,7 +1324,6 @@ class getData(SearchList):
                                     forecast_file_result = json.dumps(
                                         {
                                             "timestamp": int(time.time()),
-                                            "current": [json.loads(current_page)],
                                             "forecast_24hr": [
                                                 json.loads(forecast_24hr_page)
                                             ],
@@ -1349,9 +1341,6 @@ class getData(SearchList):
                                     forecast_file_result = json.dumps(
                                         {
                                             "timestamp": int(time.time()),
-                                            "current": [
-                                                json.loads(current_page.decode("utf-8"))
-                                            ],
                                             "forecast_24hr": [
                                                 json.loads(
                                                     forecast_24hr_page.decode("utf-8")
@@ -1380,7 +1369,6 @@ class getData(SearchList):
                                     forecast_file_result = json.dumps(
                                         {
                                             "timestamp": int(time.time()),
-                                            "current": [json.loads(current_page)],
                                             "forecast_24hr": [
                                                 json.loads(forecast_24hr_page)
                                             ],
@@ -1397,9 +1385,6 @@ class getData(SearchList):
                                     forecast_file_result = json.dumps(
                                         {
                                             "timestamp": int(time.time()),
-                                            "current": [
-                                                json.loads(current_page.decode("utf-8"))
-                                            ],
                                             "forecast_24hr": [
                                                 json.loads(
                                                     forecast_24hr_page.decode("utf-8")
@@ -1451,20 +1436,173 @@ class getData(SearchList):
                             % (forecast_file, e)
                         )
 
-                # Process the forecast file
-                with open(forecast_file, "r") as read_file:
+                # File is stale, download a new copy
+                if current_conditions_is_stale:
+                    try:
+                        if sys.version_info[0] >= 3:
+                            from urllib.request import Request, urlopen
+                        else:
+                            # Python 2
+                            from urllib2 import Request, urlopen
+
+                        user_agent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3"
+                        headers = {"User-Agent": user_agent}
+                        if "current_conditions_dev_file" in self.generator.skin_dict["Extras"]:
+                            # Hidden option to use a pre-downloaded forecast file
+                            # rather than using API calls for no reason
+                            dev_forecast_file = self.generator.skin_dict["Extras"][
+                                "current_conditions_dev_file"
+                            ]
+                            req = Request(dev_forecast_file, None, headers)
+                            response = urlopen(req)
+                            forecast_file_result = response.read()
+                            response.close()
+                        else:
+                            # Current conditions
+                            if current_conditions == "obs":
+                                req = Request(current_obs_url, None, headers)
+                                response = urlopen(req)
+                                current_page = response.read()
+                                response.close()
+                                if belchertown_debug > 1:
+                                    loginf("Obs URL: %s" % current_obs_url)
+                            elif current_conditions == "conds":
+                                req = Request(current_conds_url, None, headers)
+                                response = urlopen(req)
+                                current_page = response.read()
+                                response.close()
+                                if belchertown_debug > 1:
+                                    loginf("Conditions URL: %s" % current_conds_url)
+                            else: # current_conditions == "obs-on-fail-conds":
+                                req = Request(current_obs_url, None, headers)
+                                response = urlopen(req)
+                                current_page = response.read()
+                                response.close()
+                                try: # Obs okay?
+                                    current_conditions_data = data["current"][0]["response"]["ob"]
+                                except Exception: # Nope, try Conds
+                                    if belchertown_debug > 0:
+                                        loginf("No good Obs data, using Conds")
+                                    req = Request(current_conds_url, None, headers)
+                                    response = urlopen(req)
+                                    current_page = response.read()
+                                    response.close()
+                            # Stash in a file
+                            if (
+                                self.generator.skin_dict["Extras"][
+                                    "forecast_alert_enabled"
+                                ]
+                                == "1"
+                            ):
+                                try:
+                                    forecast_file_result = json.dumps(
+                                        {
+                                            "timestamp": int(time.time()),
+                                            "current": [json.loads(current_page)],
+                                        }
+                                    )
+                                except:
+                                    forecast_file_result = json.dumps(
+                                        {
+                                            "timestamp": int(time.time()),
+                                            "current": [
+                                                json.loads(current_page.decode("utf-8"))
+                                            ],
+                                        }
+                                    )
+                            else:
+                                try:
+                                    forecast_file_result = json.dumps(
+                                        {
+                                            "timestamp": int(time.time()),
+                                            "current": [json.loads(current_page)],
+                                        }
+                                    )
+                                except:
+                                    forecast_file_result = json.dumps(
+                                        {
+                                            "timestamp": int(time.time()),
+                                            "current": [
+                                                json.loads(current_page.decode("utf-8"))
+                                            ],
+                                        }
+                                    )
+                    except Exception as error:
+                        if current_conditions == "obs":
+                            raise Warning(
+                                "Error downloading forecast Current Conditions data. "
+                                "Check the URL in your configuration and try again. "
+                                "You are trying to use URL: %s, and the error is: %s"
+                                % (current_obs_url, error)
+                            )
+                        elif current_conditions == "conds":
+                            raise Warning(
+                                "Error downloading forecast Current Conditions data. "
+                                "Check the URL in your configuration and try again. "
+                                "You are trying to use URL: %s, and the error is: %s"
+                                % (current_conds_url, error)
+                            )
+                        elif current_conditions == "obs-on-fail-conds": 
+                            raise Warning(
+                                "Error downloading forecast Current Conditions data. "
+                                "Check the URL in your configuration and try again. "
+                                "You are trying to use URL: %s, and the error is: %s"
+                                % (current_conds_url, error)
+                            )
+
+                    # Save forecast Current Conditions data to file. w+ creates the file if it doesn't
+                    # exist, and truncates the file and re-writes it everytime
+                    try:
+                        with open(current_conditions_file, "wb+") as file:
+                            try:
+                                # Python 2/3
+                                file.write(forecast_file_result.encode("utf-8"))
+                            except:
+                                # Catch errors caused by ASCII characters in Python2
+                                file.write(forecast_file_result)
+                            loginf("New forecast Current Conditions file downloaded to %s" % current_conditions_file)
+                    except FileNotFoundError as error:
+                        loginf(
+                            "Belchertown JSON folder does not exist. Usually this "
+                            "is an error that only occurs on the first run. If it "
+                            "is appearing repeatedly, check file permissions."
+                        )
+                    except IOError as e:
+                        raise Warning(
+                            "Error writing forecast Current Conditions info to %s. Reason: %s"
+                            % (current_conditions_file, e)
+                        )
+
+                # Read the forecast Current Conditions file
+                with open(current_conditions_file, "r") as read_file:
                     data = json.load(read_file)
 
                 # We prefer using an observation (actual) over conditions (an interpolation)
                 try:
-                    if forecast_current_conditions == "obs":
-                        current_condition_data = data["current"][0]["response"]["ob"]
-                    else: # "conds"
-                        current_condition_data = data["current"][0]["response"][0]["periods"][0]
-                    cloud_cover = "{}%".format(current_condition_data["sky"])
+                    if current_conditions == "obs":
+                        current_conditions_data_len = len(data["current"][0]["response"])
+                        current_conditions_data = data["current"][0]["response"]["ob"]
+                    elif current_conditions == "conds":
+                        current_conditions_data_len = len(data["current"][0]["response"])
+                        current_conditions_data = data["current"][0]["response"][0]["periods"][0]
+                    else: # current_conditions == "obs-on-fail-conds"
+                       try: # Obs
+                           current_conditions_data_len = len(data["current"][0]["response"])
+                           current_conditions_data = data["current"][0]["response"]["ob"]
+                       except Exception: # Conds
+                           if belchertown_debug > 0:
+                               loginf("No good Obs data, using Conds")
+                           current_conditions_data_len = len(data["current"][0]["response"])
+                           current_conditions_data = data["current"][0]["response"][0]["periods"][0]
+                    cloud_cover = "{}%".format(current_conditions_data["sky"])
                 except Exception:
                     loginf("No cloud cover data from Xweather weather")
                     cloud_cover = ""
+                    current_conditions_data_len = 0 # Not really but good enough for our Use Case below
+
+                # Process the forecast file and the Current Conditions data
+                with open(forecast_file, "r") as read_file:
+                    data = json.load(read_file)
 
                 try:
                     if len(data["aqi"][0]["response"]) > 0:
@@ -1512,23 +1650,23 @@ class getData(SearchList):
 
                 # For forecasts/ endpoint and METAR != 0, no visibilty seems to be available
                 # (used Los Angeles as test case)
-                if len(data["current"][0]["response"]) > 0:
+                if current_conditions_data_len > 0:
                     current_obs_summary = xweather_coded_weather(
-                        current_condition_data["weatherPrimaryCoded"]
+                        current_conditions_data["weatherPrimaryCoded"]
                     )
                     current_obs_icon = (
-                        xweather_icon(current_condition_data["icon"])
+                        xweather_icon(current_conditions_data["icon"])
                         + ".png"
                     )
 
                     if forecast_units in ("si", "ca"):
                         if (
-                            current_condition_data["visibilityKM"]
+                            current_conditions_data["visibilityKM"]
                             is not None
                         ):
                             visibility = locale.format_string(
                                 "%g",
-                                current_condition_data["visibilityKM"],
+                                current_conditions_data["visibilityKM"],
                             )
                             visibility_unit = "km"
                         else:
@@ -1537,13 +1675,13 @@ class getData(SearchList):
                     else:
                         # us, uk2 and default to miles per hour
                         if (
-                            current_condition_data["visibilityMI"]
+                            current_conditions_data["visibilityMI"]
                             is not None
                         ):
                             visibility = locale.format_string(
                                 "%g",
                                 float(
-                                    current_condition_data["visibilityMI"]
+                                    current_conditions_data["visibilityMI"]
                                 ),
                             )
                             visibility_unit = "miles"
@@ -1866,9 +2004,10 @@ class getData(SearchList):
                     current_record,
                 )
 
+            visibility_rounding = 2
             if obs == "visibility":
                 try:
-                    obs_output = str(visibility) + " " + str(visibility_unit)
+                    obs_output = str('{:.{precision}f}'.format(float(visibility), precision=visibility_rounding)) + " " + str(visibility_unit)
                 except:
                     raise Warning(
                         "Error adding visiblity to station observations table. "
@@ -1993,7 +2132,7 @@ class getData(SearchList):
 
             # Special handling items
             if visibility:
-                all_obs_rounding_json["visibility"] = "2"
+                all_obs_rounding_json["visibility"] = str(visibility_rounding)
                 all_obs_unit_labels_json["visibility"] = visibility_unit
             else:
                 all_obs_rounding_json["visibility"] = ""
