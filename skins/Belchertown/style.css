@@ -1489,7 +1489,7 @@ p.entry-meta {
 
   .forecast-menu {
     padding-left: 0px !important;
-  }  
+  }
 }
 
 /* Main */
@@ -1743,12 +1743,6 @@ p.entry-meta {
   text-align: center;
   padding: 0px !important;
 }
-
-/*
-.current_obs_top {
-  padding-top: 8px !important;
-}
-*/
 
 .current-obs-text {
   text-align: center;
