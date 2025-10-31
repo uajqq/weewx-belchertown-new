@@ -224,7 +224,7 @@
                                     </div>
                                     <div class="col-sm-6">
                                         #if $current.appTemp.has_data
-                                        <div class="feelslike">$obs.label.feels_like: $current.appTemp</div><!-- AJAX -->
+                                        <div class="feelslike">$obs.label.feels_like $current.appTemp</div><!-- AJAX -->
                                         #end if
                                         <div class="stn-high-low">
                                             <table class="stn-high-low-table">
@@ -386,9 +386,18 @@
 
                 <div class="row forecastrow">
                     <!-- Forecast -->
+                    #if $Extras.has_key("current_conditions_timestamp_enabled") and $Extras.current_conditions_timestamp_enabled == '1'
+                    <div class="col-lg-4 forecast-title">
+                    #else
                     <div class="col-lg-8 forecast-title">
+                    #end if
                         $obs.label.forecast_header <span class="forecast-subtitle"></span><!-- moment.js -->
                     </div>
+                    #if $Extras.has_key("current_conditions_timestamp_enabled") and $Extras.current_conditions_timestamp_enabled == '1'
+                    <div class="col-lg-4 current-conditions-title">
+                        $obs.label.current_conditions_last_updated&nbsp;<span class="current-conditions-subtitle"><span><!-- moment.js -->
+                    </div>
+                    #end if
                     <div class="col-lg-4 forecast-menu">
                         $obs.label.forecast_interval_caption <div class="forecast-button" onclick="forecast_select(1);" id="button1">1</div>
                         <div class="forecast-button" onclick="forecast_select(3);" id="button3">3</div>
@@ -418,7 +427,7 @@
                     #end if
                     <div id="24hour-selected-forecast" style="display: none;">
                         <!-- 24hour-Forecast -->
-                        <div class="col-lg-12 row dayhr_forecasts row-no-padding"></div><!-- JS -->
+                        <div class="col-lg-12 row day_forecasts row-no-padding"></div><!-- JS -->
                     </div>
                 </div>
                 #end if
