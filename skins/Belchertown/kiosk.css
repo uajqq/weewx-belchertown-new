@@ -41,8 +41,8 @@ html {
   min-height: 225px;
 }
 
-@media only screen and (max-width: 800px) {
-  .forecast-conditions {
-    min-height: 70px;
-  }
+.outtempunitlabelsuper {
+  top: -1em;
+  font-size: 50%;
+  margin-left: -0.2em;
 }
