@@ -615,10 +615,16 @@ function moon_icon(moonphase) {
 #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
 function ajaxforecast() {
     forecast_data = {};
+    current_conditions_data = {};
     jQuery.when(
         // Get the iconlist - original source is // https://www.aerisweather.com/support/docs/api/reference/icon-list/
         jQuery.getJSON(get_relative_url() + '/images/aeris-icon-list.json', function(iconlist) {
             icon_dict = iconlist;
+        }
+        ),
+        // Get the curent conditions
+        jQuery.getJSON(get_relative_url() + "/json/current_conditions.json", function(current_conditions) {
+            current_conditions_data = current_conditions;
         }
         ),
         // Get the forecast
@@ -627,7 +633,10 @@ function ajaxforecast() {
         }
         )
     ).then(function() {
-        //  update forecast once both promises are fulfilled
+        // Update forecast once the promises are fulfilled
+        update_current_conditions(current_conditions_data);
+
+        // Update forecast once the promises are fulfilled
         update_forecast_data(forecast_data);
     }
     );
@@ -1027,6 +1036,88 @@ function aeris_aqi_translate(data) {
     return data;
 }
 
+function update_current_conditions(data) {
+    forecast_provider = "$Extras.forecast_provider";
+    current_conditions = "$Extras.current_conditions";
+    belchertown_debug("Current Conditions: Provider is " + forecast_provider);
+    belchertown_debug("Current Conditions: Determination via " + current_conditions);
+    belchertown_debug("Current Conditions: Updating data");
+    belchertown_debug(data);
+
+    if (forecast_provider == "aeris") {
+        var current_conditions_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_current_conditions_last_updated');
+        var current_conditions_data = "";
+	var x=34;
+
+        if (current_conditions == "obs") {
+            if (data["current"][0]["response"]["ob"] !== undefined) {
+                current_conditions_data = data["current"][0]["response"]["ob"];
+            } else {
+                return false; // Returned "Obs" data does not have this value
+            }
+        } else if (current_conditions == "conds") {
+            if (data["current"][0]["response"][0]["periods"][0] !== undefined) {
+                current_conditions_data = data["current"][0]["response"][0]["periods"][0];
+            } else {
+                return false; // Returned "Conds" data does not have this value
+            }
+        } else { // current_conditions == "obs-on-fail-conds"
+            if (data["current"][0]["response"]["ob"] !== undefined) { // Obs
+                current_conditions_data = data["current"][0]["response"]["ob"];
+            } else if (data["current"][0]["response"][0]["periods"][0] !== undefined) { // Conds
+                current_conditions_data = data["current"][0]["response"][0]["periods"][0];
+            } else {
+                return false; // Returned "Obs" and "Conds" data does not have this value
+            }
+        }
+
+        try {
+            var wxicon = get_relative_url() + "/images/" + aeris_icon(current_conditions_data["icon"]) + ".png";
+        } catch (err) {
+            // Returned "current" data does not have this value
+        }
+
+        // Current observation text
+        try {
+            jQuery(".current-obs-text").html(aeris_coded_weather(current_conditions_data["weatherPrimaryCoded"], true));
+        } catch (err) {
+            // Returned "current" data does not have this value
+        }
+
+        // WX icon in temperature box
+        jQuery("#wxicon").attr("src", wxicon);
+
+        // Visibility text in station observation table
+        try {
+            if (("$Extras.forecast_units" == "si") || ("$Extras.forecast_units" == "ca")) {
+                // si and ca = kilometer
+                visibility = current_conditions_data["visibilityKM"];
+
+            } else {
+                // us and uk2 and default = miles
+                visibility = current_conditions_data["visibilityMI"];
+            }
+        } catch (err) {
+            // Returned "current" data does not have this value
+        }
+
+        try {
+            visibility_output = parseFloat(parseFloat(visibility)).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["visibility"], maximumFractionDigits: unit_rounding_array["visibility"]}) + " " + unit_label_array["visibility"];
+
+            jQuery(".station-observations .visibility").html(visibility_output);
+        } catch (err) {
+            // Visibility not in the station observation table or any of the unit arrays, so silently exit
+        }
+
+        // Show the current_conditions_subtitle
+        if ("$Extras.current_conditions_timestamp_enabled" == "1") {
+           jQuery(".current-conditions-subtitle").html(current_conditions_subtitle);
+        }
+    }
+
+    return true;
+}
+
 function update_forecast_data(data) {
     forecast_provider = "$Extras.forecast_provider";
     belchertown_debug("Forecast: Provider is " + forecast_provider);
@@ -1039,20 +1130,6 @@ function update_forecast_data(data) {
         return;
     } else if (forecast_provider == "aeris") {
         var forecast_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_forecast_last_updated');
-
-        try {
-            var wxicon = get_relative_url() + "/images/" + aeris_icon(data["current"][0]["response"]["ob"]["icon"]) + ".png";
-        } catch (err) {
-            // Returned "current" data does not have this value
-        }
-
-        // Current observation text
-        try {
-            jQuery(".current-obs-text").html(aeris_coded_weather(data["current"][0]["response"]["ob"]["weatherPrimaryCoded"], true));
-        } catch (err) {
-            // Returned "current" data does not have this value
-        }
-
 
         // AQI
         if (data["aqi"][0]["success"] && !data["aqi"][0]["error"]) {
@@ -1074,28 +1151,6 @@ function update_forecast_data(data) {
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
-        }
-
-        // Visibility text in station observation table
-        try {
-            if (("$Extras.forecast_units" == "si") || ("$Extras.forecast_units" == "ca")) {
-                // si and ca = kilometer
-                visibility = data["current"][0]["response"]["ob"]["visibilityKM"];
-
-            } else {
-                // us and uk2 and default = miles
-                visibility = data["current"][0]["response"]["ob"]["visibilityMI"];
-            }
-        } catch (err) {
-            // Returned "current" data does not have this value
-        }
-
-        try {
-            visibility_output = parseFloat(parseFloat(visibility)).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["visibility"], maximumFractionDigits: unit_rounding_array["visibility"]}) + " " + unit_label_array["visibility"];
-
-            jQuery(".station-observations .visibility").html(visibility_output);
-        } catch (err) {
-            // Visibility not in the station observation table or any of the unit arrays, so silently exit
         }
 
         //  start of new composite version of forecast code
@@ -1338,22 +1393,19 @@ function update_forecast_data(data) {
                 jQuery(".threehr_forecasts").html(output_html);
                 belchertown_debug("html_3hr: " + output_html);
             } else if (forecast_interval == "forecast_24hr") {
-                jQuery(".dayhr_forecasts").html(output_html);
+                jQuery(".day_forecasts").html(output_html);
                 belchertown_debug("html_24hr: " + output_html);
             }
             // Show the forecast_subtitle
             jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + forecast_subtitle);
         }
 
-        //	End of new composite version of forecast code
+        // End of new composite version of forecast code
 
         #if $Extras.has_key("forecast_alert_enabled") and $Extras.forecast_alert_enabled == '1'
         // Show weather alert
         show_forcast_alert(data, forecast_provider);
         #end if
-
-    // WX icon in temperature box    
-    jQuery("#wxicon").attr("src", wxicon);
     }
 }
 
@@ -1664,6 +1716,34 @@ function update_current_wx(data) {
 
     // Update the station observation box elements
     station_mqtt_data = Object.keys(data); // Turn data (mqtt message) into an object we can forEach
+
+    // If our rain payload is in cm, convert it as necessary to the desired UOM
+    try {
+        let conversionFactor = 1.0;
+        let rateFactor = 1.0;
+        if (unit_label_array["dayRain"].trim() == "in") {
+            conversionFactor = 1.0 / 2.54;
+        } else  if (unit_label_array["dayRain"].trim() == "mm") {
+            conversionFactor = 10;
+        } // # else we are assuming we want "cm" 
+        if (unit_label_array["rainRate"].trim() == "in/hr") {
+            rateFactor = 1.0 / 2.54;
+        } else  if (unit_label_array["rainRate"].trim() == "mm/hr") {
+            rateFactor = 10;
+        } // # else we are assuming we want "cm/hr" 
+
+        data["dayRain_cm"] = parseFloat(data["dayRain_cm"] * conversionFactor).toFixed(4);
+        data["hourRain_cm"] = parseFloat(data["hourRain_cm"] * conversionFactor).toFixed(4);
+        data["monthRain_cm"] = parseFloat(data["monthRain_cm"] * conversionFactor).toFixed(4);
+        data["rain24_cm"] = parseFloat(data["rain24_cm"] * conversionFactor).toFixed(4);
+        data["rainRate_cm_per_hour"] = parseFloat(data["rainRate_cm_per_hour"] * rateFactor).toPrecision(4);
+        data["rain_cm"] = parseFloat(data["rain_cm"] * conversionFactor).toFixed(4);
+        data["stormRain_cm"] = parseFloat(data["stormRain_cm"] * conversionFactor).toFixed(4);
+        data["yearRain_cm"] = parseFloat(data["yearRain_cm"] * conversionFactor).toFixed(4);
+    } catch (err) {
+        // Silent
+    }
+
     // Get all span elements within the table. This is setup by Python initially
     jQuery('.station-observations').find("span").each(function() {
         // The class name is the same as the Extras.station_observations name (WeeWX schema)
@@ -1718,12 +1798,12 @@ function update_current_wx(data) {
 
     // Apparent Temperature US
     if (data.hasOwnProperty("appTemp_F")) {
-        jQuery(".feelslike").html("$obs.label.feels_like: " + parseFloat(parseFloat(data["appTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " $unit.label.outTemp");
+        jQuery(".feelslike").html("$obs.label.feels_like " + parseFloat(parseFloat(data["appTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " $unit.label.outTemp");
     }
 
     // Apparent Temperature Metric
     if (data.hasOwnProperty("appTemp_C")) {
-        jQuery(".feelslike").html("$obs.label.feels_like: " + parseFloat(parseFloat(data["appTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " $unit.label.outTemp");
+        jQuery(".feelslike").html("$obs.label.feels_like " + parseFloat(parseFloat(data["appTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " $unit.label.outTemp");
     }
 
     // Wind
