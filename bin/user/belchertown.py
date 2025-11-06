@@ -406,6 +406,9 @@ class getData(SearchList):
         lon = self.generator.config_dict["Station"]["longitude"]
         radar_width = self.generator.skin_dict["Extras"]["radar_width"]
         radar_height = self.generator.skin_dict["Extras"]["radar_height"]
+        radar_rain = self.generator.skin_dict["Extras"]["radar_rain"]
+        radar_temp = self.generator.skin_dict["Extras"]["radar_temp"]
+        radar_wind = self.generator.skin_dict["Extras"]["radar_wind"]
         if "radar_zoom" in self.generator.skin_dict["Extras"]:
             zoom = self.generator.skin_dict["Extras"]["radar_zoom"]
         else:
@@ -433,9 +436,14 @@ class getData(SearchList):
                     zoom,
                 )
             else:
-                radar_html = '<iframe width="{}px" height="{}px" src="https://embed.windy.com/embed2.html?lat={}&lon={}&zoom={}&level=surface&overlay=radar&menu=&message=true&marker={}&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={}&detailLon={}&metricWind=&metricTemp=&radarRange=-1" frameborder="0"></iframe>'.format(
-                    radar_width, radar_height, lat, lon, zoom, marker, lat, lon
-                )
+                if marker == "true": # set detailLat / detailLon
+                    radar_html = '<iframe width="{}px" height="{}px" src="https://embed.windy.com/embed2.html?lat={}&lon={}&zoom={}&level=surface&overlay=radar&menu=&message=true&marker={}&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={}&detailLon={}&metricRain={}&metricWind={}&metricTemp={}&detailLat={}&detailLon={}&radarRange=-1" frameborder="0"></iframe>'.format(
+                        radar_width, radar_height, lat, lon, zoom, marker, lat, lon, radar_rain, radar_wind, radar_temp, lat, lon
+                    )
+                else: # marker == "False"
+                    radar_html = '<iframe width="{}px" height="{}px" src="https://embed.windy.com/embed2.html?lat={}&lon={}&zoom={}&level=surface&overlay=radar&menu=&message=true&marker={}&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={}&detailLon={}&metricRain={}&metricWind={}&metricTemp={}&radarRange=-1" frameborder="0"></iframe>'.format(
+                        radar_width, radar_height, lat, lon, zoom, marker, lat, lon, radar_rain, radar_wind, radar_temp
+                    )
         else:
             radar_html = self.generator.skin_dict["Extras"]["radar_html"]
 
