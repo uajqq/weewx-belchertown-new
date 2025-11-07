@@ -1,3 +1,26 @@
+1.5 November 7, 2025
+
+First new version release to New Belchertown -- much thanks to contributors! Many minor bug fixes, documentation updates, and coding changes.
+
+Notable new features courtesy of @pablos-here:
+- Ability to refresh "Current Conditions" portion of forecast more frequently if desired. These options can be set from weewx.conf or skin.conf.
+- More granular control over forecast location.
+- Ability to set units in the default Windy.com radar widget:
+
+Please note: support for WeeWx 3.9 and earlier has been dropped by this release!
+
+Notable bug fixes and tweaks since v1.4:
+- Fix for a Cheetah error with sunrise/sunset data
+- Fix for a crash that would disable the weatherRange chart on days with no data
+- Fix for potential octal/leading zero errors
+- Fix for language/locale files by @daudo
+- Fix for a crash when Beaufort category was set to display based on wind speed, not wind gust
+- Fix for Beaufort category not appearing upon initial page load by @pablos-here
+- Tweak that makes the weather records page more accurate when there are gaps in data
+- CSS / formatting improvements on different screen sizes by @pablos-here
+
+
+
 1.4 June 27, 2025
 
 Start of a new fork, since the old repo is no longer being actively maintained. I'll do my best to keep up with bug fixes and add a few new features! 
