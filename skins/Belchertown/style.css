@@ -1066,7 +1066,7 @@ p.entry-meta {
 .forecast-temp-graph {
   font-size: 20px;
   font-weight: 250;
-  height: 179px; /* 179 critical to align 1, 3 & 24hr forecasts */
+  height: 178px; /* 178 critical to align 1, 3 & 24hr forecasts */
 }
 
 .forecast-precip,

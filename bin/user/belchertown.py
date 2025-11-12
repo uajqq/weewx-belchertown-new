@@ -881,14 +881,19 @@ class getData(SearchList):
                 calendar.timegm(time.gmtime()),
             ]
 
+        epoch_prev = 0
         at_days_with_rain_total = 0
         at_days_without_rain_total = 0
         at_days_with_rain_output = {}
         at_days_without_rain_output = {}
         at_rain_query = wx_manager.genSql(
-            "SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE count > 0;"
+            "SELECT dateTime, ROUND( sum, 2 ), count FROM archive_day_rain;"
         )
         for row in at_rain_query:
+            if round((row[0]/86400)) - epoch_prev != 1 or row[2] == 0:
+                at_days_with_rain_total = 0            
+                at_days_without_rain_total = 0
+            epoch_prev = round((row[0]/86400))
             # Original MySQL way: CASE WHEN sum!=0 THEN @total+1 ELSE 0 END
             if row[1] != 0:
                 at_days_with_rain_total += 1
