@@ -75,9 +75,13 @@ loginf("version %s" % VERSION)
 
 # Define these as global so they can be used in both the search list extension
 # and custom graphs section
-aqi = "No Data"
+global aqi
+aqi = ""
+global aqi_category
 aqi_category = ""
+global aqi_time
 aqi_time = 0
+global aqi_location
 aqi_location = ""
 
 
