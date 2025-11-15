@@ -73,17 +73,6 @@ def logerr(msg):
 VERSION = "1.5"
 loginf("version %s" % VERSION)
 
-# Define these as global so they can be used in both the search list extension
-# and custom graphs section
-global aqi
-aqi = ""
-global aqi_category
-aqi_category = ""
-global aqi_time
-aqi_time = 0
-global aqi_location
-aqi_location = ""
-
 
 class getData(SearchList):
     """
@@ -1622,6 +1611,9 @@ class getData(SearchList):
                     data = json.load(read_file)
 
                 try:
+                    # define AQI as a global variable so it can be used for charting as well
+                    global aqi
+                    global aqi_category
                     if len(data["aqi"][0]["response"]) > 0:
                         aqi = data["aqi"][0]["response"][0]["periods"][0]["aqi"]
                         aqi_category = data["aqi"][0]["response"][0]["periods"][0][
@@ -1643,10 +1635,6 @@ class getData(SearchList):
                         "Error getting AQI from Xweather weather. The error was: %s"
                         % (error)
                     )
-                    aqi = ""
-                    aqi_category = ""
-                    aqi_time = 0
-                    aqi_location = ""
                     pass
 
                 # https://www.xweather.com/docs/weather-api/endpoints/airquality
@@ -3613,6 +3601,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             return data
 
         if observation == "aqiChart":
+            global aqi
             data = {"aqiChart": True, "obsdata": [{"y": aqi, "category": aqi_category}]}
             return data
 
