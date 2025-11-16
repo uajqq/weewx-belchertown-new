@@ -390,11 +390,7 @@ class getData(SearchList):
             )
             graph_page_buttons += " "  # Spacer between the button
 
-        # Set a default radar URL using station's lat/lon. Moved from skin.conf
-        # so we can get station lat/lon from weewx.conf. A lot of stations out
-        # there with Belchertown 0.1 through 0.7 are showing the visitor's
-        # location and not the proper station location because nobody edited
-        # the radar_html which did not have lat/lon set previously.
+        # Set a default radar URL using station's lat/lon
         lat = self.generator.config_dict["Station"]["latitude"]
         lon = self.generator.config_dict["Station"]["longitude"]
         radar_width = self.generator.skin_dict["Extras"]["radar_width"]
@@ -496,7 +492,6 @@ class getData(SearchList):
         converter = weewx.units.StdUnitConverters[target_unit]
 
         # Temperature Range Lookups
-
         # 1. The database query finds the result based off the total column.
         # 2. We need to convert the min, max to the site's requested unit.
         # 3. We need to recalculate the min/max range because the unit may have changed.
@@ -1179,7 +1174,7 @@ class getData(SearchList):
                     self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"]
                     == "1"
                 ): # filter on METAR
-                   current_obs_url = (
+                    current_obs_url = (
                         "https://data.api.xweather.com/observations/%s?format=json&filter=metar&limit=1&client_id=%s&client_secret=%s"
                         % (forecast_place, forecast_api_id, forecast_api_secret)
                     )
@@ -1592,14 +1587,14 @@ class getData(SearchList):
                         current_conditions_data_len = len(data["current"][0]["response"])
                         current_conditions_data = data["current"][0]["response"][0]["periods"][0]
                     else: # current_conditions == "obs-on-fail-conds"
-                       try: # Obs
-                           current_conditions_data_len = len(data["current"][0]["response"])
-                           current_conditions_data = data["current"][0]["response"]["ob"]
-                       except Exception: # Conds
-                           if belchertown_debug > 0:
-                               loginf("No good Obs data, using Conds")
-                           current_conditions_data_len = len(data["current"][0]["response"])
-                           current_conditions_data = data["current"][0]["response"][0]["periods"][0]
+                        try: # Obs
+                            current_conditions_data_len = len(data["current"][0]["response"])
+                            current_conditions_data = data["current"][0]["response"]["ob"]
+                        except Exception: # Conds
+                            if belchertown_debug > 0:
+                                loginf("No good Obs data, using Conds")
+                            current_conditions_data_len = len(data["current"][0]["response"])
+                            current_conditions_data = data["current"][0]["response"][0]["periods"][0]
                     cloud_cover = "{}%".format(current_conditions_data["sky"])
                 except Exception:
                     loginf("No cloud cover data from Xweather weather")
@@ -1611,7 +1606,8 @@ class getData(SearchList):
                     data = json.load(read_file)
 
                 try:
-                    # define AQI as a global variable so it can be used for charting as well
+                    # define AQI values as global so they can be used for charting as well
+                    # in class HighchartsJsonGenerator below
                     global aqi
                     global aqi_category
                     if len(data["aqi"][0]["response"]) > 0:

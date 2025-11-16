@@ -1927,7 +1927,8 @@ p.entry-meta {
 
 .wind-table .beaufort {
   padding-top: 8px;
-  font-size: 18px;
+  padding-bottom: 8px;
+  font-size: 16px;
 }
 
 .wx-pressure-trend {
