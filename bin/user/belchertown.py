@@ -1606,8 +1606,8 @@ class getData(SearchList):
                     data = json.load(read_file)
 
                 try:
-                    # define AQI values as global so they can be used for charting as well
-                    # in class HighchartsJsonGenerator below
+                    # define some AQI values as global so they can be used for charting as
+                    # well, in class HighchartsJsonGenerator below
                     global aqi
                     global aqi_category
                     if len(data["aqi"][0]["response"]) > 0:
@@ -1615,16 +1615,12 @@ class getData(SearchList):
                         aqi_category = data["aqi"][0]["response"][0]["periods"][0][
                             "category"
                         ]
-                        aqi_time = data["aqi"][0]["response"][0]["periods"][0][
-                            "timestamp"
-                        ]
                         aqi_location = data["aqi"][0]["response"][0]["place"][
                             "name"
                         ].title()
                     elif data["aqi"][0]["error"]["code"] == "warn_no_data":
                         aqi = "No Data"
                         aqi_category = ""
-                        aqi_time = 0
                         aqi_location = ""
                 except Exception as error:
                     logerr(
@@ -2155,11 +2151,11 @@ class getData(SearchList):
                 """
                 <div id="fb-root"></div>
                 <script>(function(d, s, id) {
-                  var js, fjs = d.getElementsByTagName(s)[0];
-                  if (d.getElementById(id)) return;
-                  js = d.createElement(s); js.id = id;
-                  js.src = "//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.5";
-                  fjs.parentNode.insertBefore(js, fjs);
+                var js, fjs = d.getElementsByTagName(s)[0];
+                if (d.getElementById(id)) return;
+                js = d.createElement(s); js.id = id;
+                js.src = "//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.5";
+                fjs.parentNode.insertBefore(js, fjs);
                 }(document, 'script', 'facebook-jssdk'));</script>
                 <div class="fb-like" data-href="%s" data-width="500px" data-layout="button_count" data-action="like" data-show-faces="false" data-share="true"></div>
             """
@@ -3598,6 +3594,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
         if observation == "aqiChart":
             global aqi
+            global aqi_category
             data = {"aqiChart": True, "obsdata": [{"y": aqi, "category": aqi_category}]}
             return data
 
