@@ -486,6 +486,7 @@ pre code {
 .dark .col-lg-11,
 .dark .col-lg-12,
 .dark .col-lg-2,
+.dark .col-lg-3,
 .dark .col-lg-4,
 .dark .col-lg-5,
 .dark .col-lg-6,
@@ -530,17 +531,9 @@ pre code {
 .dark .col-xs-9 {
   position: relative;
   min-height: 1px;
-  padding-right: 17px;
-  padding-left: 15px;
-}
-.dark .col-lg-3
-{
-  position: relative;
-  min-height: 1px;
   padding-right: 15px;
   padding-left: 15px;
 }
-
 .dark .col-xs-1,
 .dark .col-xs-10,
 .dark .col-xs-11,

@@ -449,7 +449,6 @@ button:hover,
 input:hover[type="button"],
 input:hover[type="reset"],
 input:hover[type="submit"],
-
 .button {
   display: inline-block;
 }
