@@ -6,9 +6,6 @@ as a crude "cron" to download necessary files.
 Pat O'Brien, August 19, 2018
 """
 
-from __future__ import print_function  # Python 2/3 compatibility
-from __future__ import with_statement
-
 import calendar
 import datetime
 import json
@@ -16,7 +13,6 @@ import locale
 import logging
 import os
 import os.path
-import sys
 import syslog
 import time
 from collections import OrderedDict
@@ -46,32 +42,16 @@ from weeutil.weeutil import (
 from weewx.cheetahgenerator import SearchList
 from weewx.tags import TimespanBinder
 
-if sys.version_info[0] >= 3:
-    from weeutil.config import search_up
-
-if weewx.__version__ < "4":
+if weewx.__version__ < "5":
     raise weewx.UnsupportedFeature(
-        "WeeWX 4 and newer is required, found %s" % weewx.__version__
+        "WeeWX 5 and newer is required, found {weewx.__version__}"
     )
 
 log = logging.getLogger(__name__)
 
-
-def logdbg(msg):
-    log.debug(msg)
-
-
-def loginf(msg):
-    log.info(msg)
-
-
-def logerr(msg):
-    log.error(msg)
-
-
 # Print version in syslog for easier troubleshooting
-VERSION = "1.5"
-loginf("version %s" % VERSION)
+VERSION = "1.6"
+log.info(f"version {VERSION}")
 
 
 class getData(SearchList):
@@ -142,6 +122,12 @@ class getData(SearchList):
         return compass_bearing
 
     def get_cardinal_direction(self, degree, return_only_labels=False):
+        """
+        Divides compass into 16 wedges, then use modular arithmetic to find direction.
+        Starts at -11.25 degrees since N spans from -11.25 to 11.25 degrees.
+        Uses int() to round down without requiring Math module.
+        """
+
         default_ordinate_names = [
             "N",
             "NNE",
@@ -170,9 +156,6 @@ class getData(SearchList):
         if return_only_labels:
             return ordinate_names
 
-        # Divide compass into 16 wedges, then use modular arithmetic to find direction
-        # First shift back by 11.25 degrees since N spans from -11.25 to 11.25 degrees
-        # Using int() to round down without requiring Math module
         return ordinate_names[int(((degree - 11.25) / 22.5) + 1) % 16]
 
     def get_extension_list(self, timespan, db_lookup):
@@ -202,7 +185,7 @@ class getData(SearchList):
         belchertown_debug = int(belchertown_debug)
 
         if belchertown_debug > 0:
-            loginf("'belchertown_debug' set to %s" % belchertown_debug)
+            log.info(f"'belchertown_debug' set to {belchertown_debug}")
 
         # Find the right HTML ROOT
         if "HTML_ROOT" in self.generator.skin_dict:
@@ -257,14 +240,10 @@ class getData(SearchList):
                     "belchertown_locale"
                 ].split(".")
                 if belchertown_debug:
-                    logerr(
-                        "Locale: Error using locale %s. "
-                        "This locale may not be installed on your system and you may see unexpected results. "
-                        "Belchertown skin JavaScript will try to use this locale. Full error: %s"
-                        % (
-                            self.generator.skin_dict["Extras"]["belchertown_locale"],
-                            error,
-                        )
+                    log.error(
+                        f"Locale: Error using locale {self.generator.skin_dict["Extras"]["belchertown_locale"]}. "
+                        f"This locale may not be installed on your system and you may see unexpected results. "
+                        f"Belchertown skin JavaScript will try to use this locale. Full error: %{error}"
                     )
 
         if system_locale is None:
@@ -413,42 +392,18 @@ class getData(SearchList):
         # Set default radar html code, and override with user-specified value
         if self.generator.skin_dict["Extras"].get("radar_html") == "":
             if self.generator.skin_dict["Extras"].get("aeris_map") == "1":
-                radar_html = '<img style="object-fit:cover;width:{}px;height:{}px" src="https://maps.aerisapi.com/{}_{}/flat,water-depth,counties:60,rivers,interstates:60,admin-cities,alerts-severe:50:blend(darken),radar:blend(darken)/{}x{}/{},{},{}/current.png" referrerpolicy="no-referrer"></img>'.format(
-                    radar_width,
-                    radar_height,
-                    self.generator.skin_dict["Extras"]["forecast_api_id"],
-                    self.generator.skin_dict["Extras"]["forecast_api_secret"],
-                    radar_width,
-                    radar_height,
-                    lat,
-                    lon,
-                    zoom,
-                )
+                radar_html = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{self.generator.skin_dict["Extras"]["forecast_api_id"]}_{self.generator.skin_dict["Extras"]["forecast_api_secret"]}/flat,water-depth,counties:60,rivers,interstates:60,admin-cities,alerts-severe:50:blend(darken),radar:blend(darken)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
             else:
-                if marker == "true": # set detailLat / detailLon
-                    radar_html = '<iframe width="{}px" height="{}px" src="https://embed.windy.com/embed2.html?lat={}&lon={}&zoom={}&level=surface&overlay=radar&menu=&message=true&marker={}&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={}&detailLon={}&metricRain={}&metricWind={}&metricTemp={}&detailLat={}&detailLon={}&radarRange=-1" frameborder="0"></iframe>'.format(
-                        radar_width, radar_height, lat, lon, zoom, marker, lat, lon, radar_rain, radar_wind, radar_temp, lat, lon
-                    )
-                else: # marker == "False"
-                    radar_html = '<iframe width="{}px" height="{}px" src="https://embed.windy.com/embed2.html?lat={}&lon={}&zoom={}&level=surface&overlay=radar&menu=&message=true&marker={}&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={}&detailLon={}&metricRain={}&metricWind={}&metricTemp={}&radarRange=-1" frameborder="0"></iframe>'.format(
-                        radar_width, radar_height, lat, lon, zoom, marker, lat, lon, radar_rain, radar_wind, radar_temp
-                    )
+                if marker == "true":  # set detailLat / detailLon
+                    radar_html = f'<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=true&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&detailLat={lat}&detailLon={lon}&radarRange=-1" frameborder="0"></iframe>'
+                else:  # marker == "False"
+                    radar_html = f'<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=false&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&radarRange=-1" frameborder="0"></iframe>'
         else:
             radar_html = self.generator.skin_dict["Extras"]["radar_html"]
 
         if self.generator.skin_dict["Extras"].get("radar_html_dark") == "":
             if self.generator.skin_dict["Extras"].get("aeris_map") == "1":
-                radar_html_dark = '<img style="object-fit:cover;width:{}px;height:{}px" src="https://maps.aerisapi.com/{}_{}/flat-dk,water-depth-dk,counties:60,rivers,interstates:60,admin-cities-dk,alerts-severe:50:blend(lighten),radar:blend(lighten)/{}x{}/{},{},{}/current.png" referrerpolicy="no-referrer"></img>'.format(
-                    radar_width,
-                    radar_height,
-                    self.generator.skin_dict["Extras"]["forecast_api_id"],
-                    self.generator.skin_dict["Extras"]["forecast_api_secret"],
-                    radar_width,
-                    radar_height,
-                    lat,
-                    lon,
-                    zoom,
-                )
+                radar_html_dark = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{self.generator.skin_dict['Extras']['forecast_api_id']}_{self.generator.skin_dict['Extras']['forecast_api_secret']}/flat-dk,water-depth-dk,counties:60,rivers,interstates:60,admin-cities-dk,alerts-severe:50:blend(lighten),radar:blend(lighten)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
             else:
                 radar_html_dark = "None"
         else:
@@ -462,11 +417,7 @@ class getData(SearchList):
             radar_height_kiosk = self.generator.skin_dict["Extras"][
                 "radar_height_kiosk"
             ]
-            radar_html_kiosk = '<iframe width="{}px" height="{}px" src="{}" frameborder="0"></iframe>'.format(
-                radar_width_kiosk,
-                radar_height_kiosk,
-                self.generator.skin_dict["Extras"]["radar_html_kiosk"],
-            )
+            radar_html_kiosk = f'<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{self.generator.skin_dict["Extras"]["radar_html_kiosk"]}" frameborder="0"></iframe>'
 
         # ==============================================================================
         # Build the all time stats.
@@ -476,11 +427,11 @@ class getData(SearchList):
 
         # Find the beginning of the current year
         now = datetime.datetime.now()
-        date_time = "01/01/%s 00:00:00" % now.year
+        date_time = f"01/01/{now.year} 00:00:00"
         pattern = "%m/%d/%Y %H:%M:%S"
         year_start_epoch = int(time.mktime(time.strptime(date_time, pattern)))
 
-        date_time = "%s/%s/%s 00:00:00" % (now.month, now.day, now.year)
+        date_time = f"{now.month}/{now.day}/{now.year} 00:00:00"
         today_start_epoch = int(time.mktime(time.strptime(date_time, pattern)))
 
         # Setup the converter
@@ -497,20 +448,16 @@ class getData(SearchList):
         # 3. We need to recalculate the min/max range because the unit may have changed.
 
         year_outTemp_max_range_query = wx_manager.getSql(
-            "SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime >= %s AND dateTime < %s AND min IS NOT NULL AND max IS NOT NULL ORDER BY total DESC LIMIT 1;"
-            % (year_start_epoch, today_start_epoch)
+            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime >= {year_start_epoch} AND dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total DESC LIMIT 1;"
         )
         year_outTemp_min_range_query = wx_manager.getSql(
-            "SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime >= %s AND dateTime < %s AND min IS NOT NULL AND max IS NOT NULL ORDER BY total ASC LIMIT 1;"
-            % (year_start_epoch, today_start_epoch)
+            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime >= {year_start_epoch} AND dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total ASC LIMIT 1;"
         )
         at_outTemp_max_range_query = wx_manager.getSql(
-            "SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime < %s AND min IS NOT NULL AND max IS NOT NULL ORDER BY total DESC LIMIT 1;"
-            % today_start_epoch
+            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total DESC LIMIT 1;"
         )
         at_outTemp_min_range_query = wx_manager.getSql(
-            "SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime < %s AND min IS NOT NULL AND max IS NOT NULL ORDER BY total ASC LIMIT 1;"
-            % today_start_epoch
+            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total ASC LIMIT 1;"
         )
 
         # Find the group_name for outTemp in database
@@ -704,8 +651,7 @@ class getData(SearchList):
 
         # Rainiest Day
         rainiest_day_query = wx_manager.getSql(
-            "SELECT dateTime, sum FROM archive_day_rain WHERE dateTime >= %s ORDER BY sum DESC LIMIT 1;"
-            % year_start_epoch
+            f"SELECT dateTime, sum FROM archive_day_rain WHERE dateTime >= {year_start_epoch} ORDER BY sum DESC LIMIT 1;"
         )
         if rainiest_day_query is not None:
             rainiest_day_tuple = (rainiest_day_query[1], rain_unit, "group_rain")
@@ -744,28 +690,17 @@ class getData(SearchList):
         ]
         driver = self.generator.config_dict["DatabaseTypes"][database_type]["driver"]
         if driver == "weedb.sqlite":
-            year_rainiest_month_sql = (
-                'SELECT strftime("%%m", datetime(dateTime, "unixepoch", "localtime")) as month, SUM( sum ) as total FROM archive_day_rain WHERE strftime("%%Y", datetime(dateTime, "unixepoch", "localtime")) = "%s" GROUP BY month ORDER BY total DESC LIMIT 1;'
-                % time.strftime("%Y", time.localtime(time.time()))
-            )
+            year_rainiest_month_sql = f'SELECT strftime("%%m", datetime(dateTime, "unixepoch", "localtime")) as month, SUM( sum ) as total FROM archive_day_rain WHERE strftime("%%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;'
             at_rainiest_month_sql = 'SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;'
-            year_rain_data_sql = (
-                'SELECT dateTime, sum FROM archive_day_rain WHERE strftime("%%Y", datetime(dateTime, "unixepoch", "localtime")) = "%s";'
-                % time.strftime("%Y", time.localtime(time.time()))
-            )
+            year_rain_data_sql = f'SELECT dateTime, sum FROM archive_day_rain WHERE strftime("%%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}";'
             # The all stats from http://www.weewx.com/docs/customizing.htm
             # doesn't seem to calculate "Total Rainfall for" all time stat
             # correctly.
             at_rain_highest_year_sql = 'SELECT strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;'
         elif driver == "weedb.mysql":
-            year_rainiest_month_sql = 'SELECT FROM_UNIXTIME( dateTime, "%%m" ) AS month, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{0}" GROUP BY month ORDER BY total DESC LIMIT 1;'.format(
-                time.strftime("%Y", time.localtime(time.time()))
-            )  # Why does this one require .format() but the other's don't?
+            year_rainiest_month_sql = f'SELECT FROM_UNIXTIME( dateTime, "%%m" ) AS month, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;'
             at_rainiest_month_sql = 'SELECT FROM_UNIXTIME( dateTime, "%%m" ) AS month, FROM_UNIXTIME( dateTime, "%%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;'
-            year_rain_data_sql = (
-                'SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "%s";'
-                % time.strftime("%Y", time.localtime(time.time()))
-            )
+            year_rain_data_sql = f'SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}";'
             # The all stats from http://www.weewx.com/docs/customizing.htm
             # doesn't seem to calculate "Total Rainfall for" all time stat
             # correctly.
@@ -878,10 +813,10 @@ class getData(SearchList):
             "SELECT dateTime, ROUND( sum, 2 ), count FROM archive_day_rain;"
         )
         for row in at_rain_query:
-            if round((row[0]/86400)) - epoch_prev != 1 or row[2] == 0:
-                at_days_with_rain_total = 0            
+            if round((row[0] / 86400)) - epoch_prev != 1 or row[2] == 0:
+                at_days_with_rain_total = 0
                 at_days_without_rain_total = 0
-            epoch_prev = round((row[0]/86400))
+            epoch_prev = round((row[0] / 86400))
             # Original MySQL way: CASE WHEN sum!=0 THEN @total+1 ELSE 0 END
             if row[1] != 0:
                 at_days_with_rain_total += 1
@@ -903,6 +838,7 @@ class getData(SearchList):
             )
         else:
             at_days_with_rain = (0, 0)
+
         if len(at_days_without_rain_output) > 0:
             at_days_without_rain = max(
                 zip(
@@ -955,14 +891,12 @@ class getData(SearchList):
 
             for y in years:
                 # Link to the year file
-                if os.path.exists(noaa_dir + "NOAA-%s.txt" % y):
+                if os.path.exists(noaa_dir + f"NOAA-{y}.txt"):
                     noaa_header_html += (
-                        '<a href="?yr=%s" class="noaa_rep_nav"><b>%s</b></a>:' % (y, y)
+                        f'<a href="?yr={y}" class="noaa_rep_nav"><b>{y}</b></a>:'
                     )
                 else:
-                    noaa_header_html += (
-                        '<span class="noaa_rep_nav"><b>%s</b></span>:' % y
-                    )
+                    noaa_header_html += f'<span class="noaa_rep_nav"><b>{y}</b></span>:'
 
                 # Loop through all 12 months and find if the file exists.  If
                 # the file doesn't exist, just show the month name in the
@@ -973,14 +907,11 @@ class getData(SearchList):
                         i, "02"
                     )  # Pad the number with a 0 since the NOAA files use 2 digit month
                     month_abbr = calendar.month_abbr[i]
-                    if os.path.exists(noaa_dir + "NOAA-%s-%s.txt" % (y, month_num)):
-                        noaa_header_html += (
-                            ' <a href="?yr=%s&amp;mo=%s" class="noaa_rep_nav"><b>%s</b></a>'
-                            % (y, month_num, month_abbr)
-                        )
+                    if os.path.exists(noaa_dir + f"NOAA-{y}-{month_num}.txt"):
+                        noaa_header_html += f' <a href="?yr={y}&amp;mo={month_num}" class="noaa_rep_nav"><b>{month_abbr}</b></a>'
                     else:
                         noaa_header_html += (
-                            ' <span class="noaa_rep_nav"><b>%s</b></span>' % month_abbr
+                            f' <span class="noaa_rep_nav"><b>{month_abbr}</b></span>'
                         )
 
                 # Row build complete, push next row to new line
@@ -993,12 +924,10 @@ class getData(SearchList):
             now = datetime.datetime.now()
             current_year = str(now.year)
             current_month = str(format(now.month, "02"))
-            if os.path.exists(
-                noaa_dir + "NOAA-%s-%s.txt" % (current_year, current_month)
-            ):
-                default_noaa_file = "NOAA-%s-%s.txt" % (current_year, current_month)
+            if os.path.exists(noaa_dir + f"NOAA-{current_year}-{current_month}.txt"):
+                default_noaa_file = f"NOAA-{current_year}-{current_month}.txt"
             else:
-                default_noaa_file = "NOAA-%s.txt" % current_year
+                default_noaa_file = f"NOAA-{current_year}.txt"
         except:
             # There's an error - I've seen this on first run and the NOAA
             # folder is not created yet. Skip this section.
@@ -1138,7 +1067,7 @@ class getData(SearchList):
                             icon_dict = json.load(dict)
                         return icon_dict[icon_name]
                     else:
-                        logerr(
+                        log.error(
                             "aeris-icon-list.json is missing in " + iconlist_file_path
                         )
                         return "unknown"
@@ -1150,70 +1079,54 @@ class getData(SearchList):
                 forecast_place = self.generator.skin_dict["Extras"]["forecast_place"]
                 if forecast_place:
                     if belchertown_debug > 0:
-                        loginf("Forecast data using %s, instead of [Station] longitude/latitude" % forecast_place)
+                        log.info(
+                            f"Forecast data using {forecast_place}, instead of [Station] longitude/latitude"
+                        )
                 else:
-                    forecast_place = ("%s,%s" % (latitude, longitude))
+                    forecast_place = f"{latitude},{longitude}"
                 if belchertown_debug > 0:
-                    loginf("'forecast_place' set to %s" % forecast_place)
+                    log.info(f"'forecast_place' set to {forecast_place}")
 
-                current_conditions = self.generator.skin_dict["Extras"]["current_conditions"]
+                current_conditions = self.generator.skin_dict["Extras"][
+                    "current_conditions"
+                ]
                 if current_conditions == "obs":
                     if belchertown_debug > 0:
-                        loginf("Current conditions based on /observations endpoint")
+                        log.info("Current conditions based on /observations endpoint")
                 elif current_conditions == "conds":
                     if belchertown_debug > 0:
-                        loginf("Current conditions based on /conditions endpoint")
+                        log.info("Current conditions based on /conditions endpoint")
                 elif current_conditions == "obs-on-fail-conds":
                     if belchertown_debug > 0:
-                        loginf("Current conditions based on /observations, if no data, use /conditions endpoint")
-                else: # W0t?
-                    loginf("Setting 'current_conditions' to 'obs' due to unknown value: %s" % current_conditions)
+                        log.info(
+                            "Current conditions based on /observations, if no data, use /conditions endpoint"
+                        )
+                else:  # W0t?
+                    log.info(
+                        f"Setting 'current_conditions' to 'obs' due to unknown value: {current_conditions}"
+                    )
                     current_conditions = "obs"
 
                 if (
                     self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"]
                     == "1"
-                ): # filter on METAR
-                    current_obs_url = (
-                        "https://data.api.xweather.com/observations/%s?format=json&filter=metar&limit=1&client_id=%s&client_secret=%s"
-                        % (forecast_place, forecast_api_id, forecast_api_secret)
-                    )
-                else: # filter on All stations
-                    current_obs_url = (
-                        "https://data.api.xweather.com/observations/%s?format=json&filter=allstations&limit=1&client_id=%s&client_secret=%s"
-                        % (forecast_place, forecast_api_id, forecast_api_secret)
-                    )
-                current_conds_url = (
-                        "https://data.api.xweather.com/conditions/%s?format=json&plimit=1&filter=1min&client_id=%s&client_secret=%s"
-                        % (forecast_place, forecast_api_id, forecast_api_secret)
-                )
-                forecast_24hr_url = (
-                    "https://data.api.xweather.com/forecasts/%s?format=json&filter=day&limit=7&client_id=%s&client_secret=%s"
-                    % (forecast_place, forecast_api_id, forecast_api_secret)
-                )
-                forecast_3hr_url = (
-                    "https://data.api.xweather.com/forecasts/%s?format=json&filter=3hr&limit=8&client_id=%s&client_secret=%s"
-                    % (forecast_place, forecast_api_id, forecast_api_secret)
-                )
-                forecast_1hr_url = (
-                    "https://data.api.xweather.com/forecasts/%s?format=json&filter=1hr&limit=16&client_id=%s&client_secret=%s"
-                    % (forecast_place, forecast_api_id, forecast_api_secret)
-                )
-                aqi_url = (
-                    "https://data.api.xweather.com/airquality/%s?format=json&client_id=%s&client_secret=%s"
-                    % (forecast_place, forecast_api_id, forecast_api_secret)
-                )
+                ):  # filter on METAR
+                    current_obs_url = f"https://data.api.xweather.com/observations/{forecast_place}?format=json&filter=metar&limit=1&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+                else:  # filter on All stations
+                    current_obs_url = f"https://data.api.xweather.com/observations/{forecast_place}?format=json&filter=allstations&limit=1&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+                current_conds_url = f"https://data.api.xweather.com/conditions/{forecast_place}?format=json&plimit=1&filter=1min&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+                forecast_24hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=day&limit=7&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+                forecast_3hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=3hr&limit=8&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+                forecast_1hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=1hr&limit=16&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+                aqi_url = f"https://data.api.xweather.com/airquality/{forecast_place}?format=json&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                 if self.generator.skin_dict["Extras"]["forecast_alert_limit"]:
                     forecast_alert_limit = self.generator.skin_dict["Extras"][
                         "forecast_alert_limit"
                     ]
-                else: # Default to 1 alerts to show if the option is missing. Can go up to 10
+                else:  # Default to 1 alerts to show if the option is missing. Can go up to 10
                     forecast_alert_limit = 1
 
-                forecast_alerts_url = (
-                    "https://data.api.xweather.com/alerts/%s?format=json&limit=%s&lang=%s&client_id=%s&client_secret=%s"
-                    % (forecast_place, forecast_alert_limit, forecast_lang, forecast_api_id, forecast_api_secret)
-                )
+                forecast_alerts_url = f"https://data.api.xweather.com/alerts/{forecast_place}?format=json&limit={forecast_alert_limit}&lang={forecast_lang}&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
 
                 # Determine if the forecast file exists and get its modified time, enhanced
                 # for 1 hr forecast to load close to the hour
@@ -1235,9 +1148,10 @@ class getData(SearchList):
 
                 # As above but for the Current Conditions file
                 if os.path.isfile(current_conditions_file):
-                    if (int(time.time()) - int(os.path.getmtime(current_conditions_file))) > int(
-                        current_conditions_stale_timer
-                    ):
+                    if (
+                        int(time.time())
+                        - int(os.path.getmtime(current_conditions_file))
+                    ) > int(current_conditions_stale_timer):
                         current_conditions_is_stale = True
                     else:
                         # catches repeated calls every archive interval (300secs)
@@ -1253,11 +1167,7 @@ class getData(SearchList):
                 # File is stale, download a new copy
                 if forecast_is_stale:
                     try:
-                        if sys.version_info[0] >= 3:
-                            from urllib.request import Request, urlopen
-                        else:
-                            # Python 2
-                            from urllib2 import Request, urlopen
+                        from urllib.request import Request, urlopen
 
                         user_agent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3"
                         headers = {"User-Agent": user_agent}
@@ -1278,28 +1188,28 @@ class getData(SearchList):
                             forecast_24hr_page = response.read()
                             response.close()
                             if belchertown_debug > 1:
-                                loginf("Forecast 24hr URL: %s" % forecast_24hr_url)
+                                log.info(f"Forecast 24hr URL: {forecast_24hr_url}")
                             # 3hr forecast
                             req = Request(forecast_3hr_url, None, headers)
                             response = urlopen(req)
                             forecast_3hr_page = response.read()
                             response.close()
                             if belchertown_debug > 1:
-                                loginf("Forecast 3hr URL: %s" % forecast_3hr_url)
+                                log.info(f"Forecast 3hr URL: {forecast_3hr_url}")
                             # 1hr forecast
                             req = Request(forecast_1hr_url, None, headers)
                             response = urlopen(req)
                             forecast_1hr_page = response.read()
                             response.close()
                             if belchertown_debug > 1:
-                                loginf("Forecast 1hr URL: %s" % forecast_1hr_url)
+                                log.info(f"Forecast 1hr URL: {forecast_1hr_url}")
                             # AQI
                             req = Request(aqi_url, None, headers)
                             response = urlopen(req)
                             aqi_page = response.read()
                             response.close()
                             if belchertown_debug > 1:
-                                loginf("AQI URL: %s" % aqi_url)
+                                log.info(f"AQI URL: {aqi_url}")
                             if (
                                 self.generator.skin_dict["Extras"][
                                     "forecast_alert_enabled"
@@ -1312,7 +1222,7 @@ class getData(SearchList):
                                 alerts_page = response.read()
                                 response.close()
                                 if belchertown_debug > 1:
-                                    loginf("Alerts URL: %s" % forecast_alerts_url)
+                                    log.info(f"Alerts URL: {forecast_alerts_url}")
 
                             # Combine all into 1 file
                             if (
@@ -1408,47 +1318,40 @@ class getData(SearchList):
                                     )
                     except Exception as error:
                         raise Warning(
-                            "Error downloading forecast data. "
-                            "Check the URL in your configuration and try again. "
-                            "You are trying to use URL: %s, and the error is: %s"
-                            % (forecast_24hr_url, error)
+                            f"Error downloading forecast data. "
+                            f"Check the URL in your configuration and try again. "
+                            f"You are trying to use URL: {forecast_24hr_url}, "
+                            f"and the error is: {error}"
                         )
 
                     # Save forecast data to file. w+ creates the file if it doesn't
                     # exist, and truncates the file and re-writes it everytime
                     try:
                         with open(forecast_file, "wb+") as file:
-                            try:
-                                # Python 2/3
-                                file.write(forecast_file_result.encode("utf-8"))
-                            except:
-                                # Catch errors caused by ASCII characters in Python2
-                                file.write(forecast_file_result)
-                            loginf("New forecast file downloaded to %s" % forecast_file)
+                            file.write(forecast_file_result.encode("utf-8"))
+                            log.info(f"New forecast file downloaded to {forecast_file}")
                     except FileNotFoundError as error:
-                        loginf(
+                        log.info(
                             "Belchertown JSON folder does not exist. Usually this "
                             "is an error that only occurs on the first run. If it "
                             "is appearing repeatedly, check file permissions."
                         )
-                    except IOError as e:
+                    except IOError as error:
                         raise Warning(
-                            "Error writing forecast info to %s. Reason: %s"
-                            % (forecast_file, e)
+                            f"Error writing forecast info to {forecast_file}. Reason: {error}"
                         )
 
                 # File is stale, download a new copy
                 if current_conditions_is_stale:
                     try:
-                        if sys.version_info[0] >= 3:
-                            from urllib.request import Request, urlopen
-                        else:
-                            # Python 2
-                            from urllib2 import Request, urlopen
+                        from urllib.request import Request, urlopen
 
                         user_agent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3"
                         headers = {"User-Agent": user_agent}
-                        if "current_conditions_dev_file" in self.generator.skin_dict["Extras"]:
+                        if (
+                            "current_conditions_dev_file"
+                            in self.generator.skin_dict["Extras"]
+                        ):
                             # Hidden option to use a pre-downloaded forecast file
                             # rather than using API calls for no reason
                             dev_forecast_file = self.generator.skin_dict["Extras"][
@@ -1466,24 +1369,26 @@ class getData(SearchList):
                                 current_page = response.read()
                                 response.close()
                                 if belchertown_debug > 1:
-                                    loginf("Obs URL: %s" % current_obs_url)
+                                    log.info(f"Obs URL: {current_obs_url}")
                             elif current_conditions == "conds":
                                 req = Request(current_conds_url, None, headers)
                                 response = urlopen(req)
                                 current_page = response.read()
                                 response.close()
                                 if belchertown_debug > 1:
-                                    loginf("Conditions URL: %s" % current_conds_url)
-                            else: # current_conditions == "obs-on-fail-conds":
+                                    log.info(f"Conditions URL: {current_conds_url}")
+                            else:  # current_conditions == "obs-on-fail-conds":
                                 req = Request(current_obs_url, None, headers)
                                 response = urlopen(req)
                                 current_page = response.read()
                                 response.close()
-                                try: # Obs okay?
-                                    current_conditions_data = data["current"][0]["response"]["ob"]
-                                except Exception: # Nope, try Conds
+                                try:  # Obs okay?
+                                    current_conditions_data = data["current"][0][
+                                        "response"
+                                    ]["ob"]
+                                except Exception:  # Nope, try Conds
                                     if belchertown_debug > 0:
-                                        loginf("No good Obs data, using Conds")
+                                        log.info("No good Obs data, using Conds")
                                     req = Request(current_conds_url, None, headers)
                                     response = urlopen(req)
                                     current_page = response.read()
@@ -1531,47 +1436,44 @@ class getData(SearchList):
                     except Exception as error:
                         if current_conditions == "obs":
                             raise Warning(
-                                "Error downloading forecast Current Conditions data. "
-                                "Check the URL in your configuration and try again. "
-                                "You are trying to use URL: %s, and the error is: %s"
-                                % (current_obs_url, error)
+                                f"Error downloading forecast Current Conditions data. "
+                                f"Check the URL in your configuration and try again. "
+                                f"You are trying to use URL: {current_obs_url}, "
+                                f"and the error is: {error}"
                             )
                         elif current_conditions == "conds":
                             raise Warning(
-                                "Error downloading forecast Current Conditions data. "
-                                "Check the URL in your configuration and try again. "
-                                "You are trying to use URL: %s, and the error is: %s"
-                                % (current_conds_url, error)
+                                f"Error downloading forecast Current Conditions data. "
+                                f"Check the URL in your configuration and try again. "
+                                f"You are trying to use URL: {current_conds_url}, "
+                                f"and the error is: {error}"
                             )
-                        elif current_conditions == "obs-on-fail-conds": 
+                        elif current_conditions == "obs-on-fail-conds":
                             raise Warning(
-                                "Error downloading forecast Current Conditions data. "
-                                "Check the URL in your configuration and try again. "
-                                "You are trying to use URL: %s, and the error is: %s"
-                                % (current_conds_url, error)
+                                f"Error downloading forecast Current Conditions data. "
+                                f"Check the URL in your configuration and try again. "
+                                f"You are trying to use URL: {current_conds_url}, "
+                                f"and the error is: {error}"
                             )
 
                     # Save forecast Current Conditions data to file. w+ creates the file if it doesn't
                     # exist, and truncates the file and re-writes it everytime
                     try:
                         with open(current_conditions_file, "wb+") as file:
-                            try:
-                                # Python 2/3
-                                file.write(forecast_file_result.encode("utf-8"))
-                            except:
-                                # Catch errors caused by ASCII characters in Python2
-                                file.write(forecast_file_result)
-                            loginf("New forecast Current Conditions file downloaded to %s" % current_conditions_file)
+                            file.write(forecast_file_result.encode("utf-8"))
+                            log.info(
+                                f"New forecast Current Conditions file downloaded to {current_conditions_file}"
+                            )
                     except FileNotFoundError as error:
-                        loginf(
+                        log.info(
                             "Belchertown JSON folder does not exist. Usually this "
                             "is an error that only occurs on the first run. If it "
                             "is appearing repeatedly, check file permissions."
                         )
-                    except IOError as e:
+                    except IOError as error:
                         raise Warning(
-                            "Error writing forecast Current Conditions info to %s. Reason: %s"
-                            % (current_conditions_file, e)
+                            f"Error writing forecast Current Conditions info to "
+                            f"{current_conditions_file}. Reason: {error}"
                         )
 
                 # Read the forecast Current Conditions file
@@ -1581,25 +1483,41 @@ class getData(SearchList):
                 # We prefer using an observation (actual) over conditions (an interpolation)
                 try:
                     if current_conditions == "obs":
-                        current_conditions_data_len = len(data["current"][0]["response"])
+                        current_conditions_data_len = len(
+                            data["current"][0]["response"]
+                        )
                         current_conditions_data = data["current"][0]["response"]["ob"]
                     elif current_conditions == "conds":
-                        current_conditions_data_len = len(data["current"][0]["response"])
-                        current_conditions_data = data["current"][0]["response"][0]["periods"][0]
-                    else: # current_conditions == "obs-on-fail-conds"
-                        try: # Obs
-                            current_conditions_data_len = len(data["current"][0]["response"])
-                            current_conditions_data = data["current"][0]["response"]["ob"]
-                        except Exception: # Conds
+                        current_conditions_data_len = len(
+                            data["current"][0]["response"]
+                        )
+                        current_conditions_data = data["current"][0]["response"][0][
+                            "periods"
+                        ][0]
+                    else:  # current_conditions == "obs-on-fail-conds"
+                        try:  # Obs
+                            current_conditions_data_len = len(
+                                data["current"][0]["response"]
+                            )
+                            current_conditions_data = data["current"][0]["response"][
+                                "ob"
+                            ]
+                        except Exception:  # Conds
                             if belchertown_debug > 0:
-                                loginf("No good Obs data, using Conds")
-                            current_conditions_data_len = len(data["current"][0]["response"])
-                            current_conditions_data = data["current"][0]["response"][0]["periods"][0]
-                    cloud_cover = "{}%".format(current_conditions_data["sky"])
+                                log.info("No good Obs data, using Conds")
+                            current_conditions_data_len = len(
+                                data["current"][0]["response"]
+                            )
+                            current_conditions_data = data["current"][0]["response"][0][
+                                "periods"
+                            ][0]
+                    cloud_cover = f"{current_conditions_data["sky"]}"
                 except Exception:
-                    loginf("No cloud cover data from Xweather weather")
+                    log.info("No cloud cover data from Xweather weather")
                     cloud_cover = ""
-                    current_conditions_data_len = 0 # Not really but good enough for our Use Case below
+                    current_conditions_data_len = (
+                        0  # Not really but good enough for our Use Case below
+                    )
 
                 # Process the forecast file and the Current Conditions data
                 with open(forecast_file, "r") as read_file:
@@ -1623,9 +1541,8 @@ class getData(SearchList):
                         aqi_category = ""
                         aqi_location = ""
                 except Exception as error:
-                    logerr(
-                        "Error getting AQI from Xweather weather. The error was: %s"
-                        % (error)
+                    log.error(
+                        f"Error getting AQI from Xweather weather. The error was: {error}"
                     )
                     pass
 
@@ -1652,15 +1569,11 @@ class getData(SearchList):
                         current_conditions_data["weatherPrimaryCoded"]
                     )
                     current_obs_icon = (
-                        xweather_icon(current_conditions_data["icon"])
-                        + ".png"
+                        xweather_icon(current_conditions_data["icon"]) + ".png"
                     )
 
                     if forecast_units in ("si", "ca"):
-                        if (
-                            current_conditions_data["visibilityKM"]
-                            is not None
-                        ):
+                        if current_conditions_data["visibilityKM"] is not None:
                             visibility = locale.format_string(
                                 "%g",
                                 current_conditions_data["visibilityKM"],
@@ -1671,15 +1584,10 @@ class getData(SearchList):
                             visibility_unit = ""
                     else:
                         # us, uk2 and default to miles per hour
-                        if (
-                            current_conditions_data["visibilityMI"]
-                            is not None
-                        ):
+                        if current_conditions_data["visibilityMI"] is not None:
                             visibility = locale.format_string(
                                 "%g",
-                                float(
-                                    current_conditions_data["visibilityMI"]
-                                ),
+                                float(current_conditions_data["visibilityMI"]),
                             )
                             visibility_unit = "miles"
                         else:
@@ -1707,7 +1615,7 @@ class getData(SearchList):
             visibility = "N/A"
             visibility_unit = ""
             cloud_cover = ""
-            logerr("Aeris/Xweather error: %s" % error)
+            log.error(f"Aeris/Xweather error: {error}")
 
         # ==============================================================================
         # Earthquake Data
@@ -1734,15 +1642,9 @@ class getData(SearchList):
             # Sample URL from Belchertown Weather:
             # http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat=42.223&lon=-72.374&maxradiuskm=1000&format=geojson&nodata=204&minmag=2
             if self.generator.skin_dict["Extras"]["earthquake_server"] == "USGS":
-                earthquake_url = (
-                    "http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat=%s&lon=%s&maxradiuskm=%s&format=geojson&nodata=204&minmag=2"
-                    % (latitude, longitude, earthquake_maxradiuskm)
-                )
+                earthquake_url = f"http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat={latitude}&lon={longitude}&maxradiuskm={earthquake_maxradiuskm}&format=geojson&nodata=204&minmag=2"
             elif self.generator.skin_dict["Extras"]["earthquake_server"] == "GeoNet":
-                earthquake_url = (
-                    "https://api.geonet.org.nz/quake?MMI=%s"
-                    % self.generator.skin_dict["Extras"]["geonet_mmi"]
-                )
+                earthquake_url = f"https://api.geonet.org.nz/quake?MMI={self.generator.skin_dict["Extras"]["geonet_mmi"]}"
             elif self.generator.skin_dict["Extras"]["earthquake_server"] == "ReNaSS":
                 # Calculate min/max latitude and min/max longitude from radius and station location. https://stackoverflow.com/a/23118314
                 lat = float(latitude)
@@ -1759,10 +1661,8 @@ class getData(SearchList):
                 minLong = long - deltaLong
                 maxLong = long + deltaLong
 
-                earthquake_url = (
-                    "https://api.franceseisme.fr/fdsnws/event/1/query?eventtype=earthquake&minmagnitude=2&minlatitude=%.2f&minlongitude=%.2f&maxlatitude=%.2f&maxlongitude=%.2f&format=json&limit=1&orderby=time"
-                    % (minLat, minLong, maxLat, maxLong)
-                )
+                earthquake_url = f"https://api.franceseisme.fr/fdsnws/event/1/query?eventtype=earthquake&minmagnitude=2&minlatitude={minLat:.2f}&minlongitude={minLong:.2f}&maxlatitude={maxLat:.2f}&maxlongitude={maxLong:.2f}&format=json&limit=1&orderby=time"
+
             earthquake_is_stale = False
 
             # Determine if the file exists and get its modified time
@@ -1779,11 +1679,7 @@ class getData(SearchList):
             if earthquake_is_stale:
                 # Download new earthquake data
                 try:
-                    if sys.version_info[0] >= 3:
-                        from urllib.request import Request, urlopen
-                    else:
-                        # Python 2
-                        from urllib2 import Request, urlopen
+                    from urllib.request import Request, urlopen
 
                     user_agent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3"
                     headers = {"User-Agent": user_agent}
@@ -1792,20 +1688,20 @@ class getData(SearchList):
                     page = response.read()
                     response.close()
                     if weewx.debug:
-                        logdbg(
+                        log.debug(
                             "Downloading earthquake data using urllib2 was successful"
                         )
                 except Exception as forecast_error:
                     if weewx.debug:
-                        logdbg(
-                            "Error downloading earthquake data with urllib2, reverting to curl and subprocess. "
-                            "Full error: %s" % forecast_error
+                        log.debug(
+                            f"Error downloading earthquake data with urllib2, reverting to curl and subprocess. "
+                            f"Full error: {forecast_error}"
                         )
                     # Nested try - only execute if the urllib2 method fails
                     try:
                         import subprocess
 
-                        command = 'curl -L --silent "%s"' % earthquake_url
+                        command = f'curl -L --silent "{earthquake_url}"'
                         p = subprocess.Popen(
                             command,
                             shell=True,
@@ -1814,15 +1710,14 @@ class getData(SearchList):
                         )
                         page = p.communicate()[0]
                         if weewx.debug:
-                            logdbg(
+                            log.debug(
                                 "Downloading earthquake data with curl was successful."
                             )
                     except Exception as error:
                         raise Warning(
-                            "Error downloading earthquake data using urllib2 and subprocess curl. "
-                            "Your software may need to be updated, or the URL is incorrect. "
-                            "You are trying to use URL: %s, and the error is: %s"
-                            % (earthquake_url, error)
+                            f"Error downloading earthquake data using urllib2 and subprocess curl. "
+                            f"Your software may need to be updated, or the URL is incorrect. "
+                            f"You are trying to use URL: {earthquake_url}, and the error is: {error}"
                         )
 
                 # Save earthquake data to file. w+ creates the file if it
@@ -1831,17 +1726,15 @@ class getData(SearchList):
                 try:
                     with open(earthquake_file, "wb+") as file:
                         try:
-                            # Python 2/3
                             file.write(page.encode("utf-8"))
                         except:
-                            # Catch errors caused by ASCII characters in Python2
+                            # Catch errors caused by ASCII characters
                             file.write(page)
                         if weewx.debug:
-                            logdbg("Earthquake data saved to %s" % earthquake_file)
-                except IOError as e:
+                            log.debug(f"Earthquake data saved to {earthquake_file}")
+                except IOError as error:
                     raise Warning(
-                        "Error writing earthquake data to %s. Reason: %s"
-                        % (earthquake_file, e)
+                        f"Error writing earthquake data to {earthquake_file}. Reason: {error}"
                     )
 
             # Process the earthquake file
@@ -2001,10 +1894,9 @@ class getData(SearchList):
                     current_record,
                 )
 
-            visibility_rounding = 2
             if obs == "visibility":
                 try:
-                    obs_output = str('{:.{precision}f}'.format(float(visibility), precision=visibility_rounding)) + " " + str(visibility_unit)
+                    obs_output = f"{float(visibility):.2f} {visibility_unit}"
                 except:
                     raise Warning(
                         "Error adding visiblity to station observations table. "
@@ -2024,14 +1916,11 @@ class getData(SearchList):
                 dayRain_sum = getattr(obs_binder, "sum")
                 # Need to use dayRain for class name since that is weewx-mqtt
                 # payload's name
-                obs_rain_output = "<span class='dayRain'>%s</span><!-- AJAX -->" % str(
-                    dayRain_sum
+                obs_rain_output = (
+                    f"<span class='dayRain'>{dayRain_sum}</span><!-- AJAX -->"
                 )
                 obs_rain_output += "&nbsp;<span class='border-left'>&nbsp;</span>"
-                obs_rain_output += (
-                    "<span class='rainRate'>%s</span><!-- AJAX -->"
-                    % str(getattr(current, "rainRate"))
-                )
+                obs_rain_output += f"<span class='rainRate'>{getattr(current, "rainRate")}</span><!-- AJAX -->"
 
                 # Empty field for the JSON "current" output
                 obs_output = ""
@@ -2053,16 +1942,15 @@ class getData(SearchList):
             # Build the HTML for the front page
             station_obs_html += "<tr>"
             station_obs_html += (
-                "<td class='station-observations-label'>%s</td>" % label_dict[obs]
+                f"<td class='station-observations-label'>{label_dict[obs]}</td>"
             )
             station_obs_html += "<td>"
             if obs == "rainWithRainRate":
                 # Add special rain + rainRate one liner
                 station_obs_html += obs_rain_output
             else:
-                station_obs_html += "<span class=%s>%s</span><!-- AJAX -->" % (
-                    obs,
-                    obs_output,
+                station_obs_html += (
+                    f"<span class={obs}>{obs_output}</span><!-- AJAX -->"
                 )
             if obs in ("barometer", "pressure", "altimeter"):
                 # Append the trend arrow to the pressure observation. Need this
@@ -2129,7 +2017,7 @@ class getData(SearchList):
 
             # Special handling items
             if visibility:
-                all_obs_rounding_json["visibility"] = str(visibility_rounding)
+                all_obs_rounding_json["visibility"] = "2"
                 all_obs_unit_labels_json["visibility"] = visibility_unit
             else:
                 all_obs_rounding_json["visibility"] = ""
@@ -2807,13 +2695,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         except KeyError:
                             syslog.syslog(
                                 syslog.LOG_ERR,
-                                "HighchartsJsonGenerator: aggregate interval required for aggregate type %s"
-                                % aggregate_type,
+                                f"HighchartsJsonGenerator: aggregate interval required for aggregate type {aggregate_type}",
                             )
                             syslog.syslog(
                                 syslog.LOG_ERR,
-                                "HighchartsJsonGenerator: line type %s skipped"
-                                % observation_type,
+                                f"HighchartsJsonGenerator: line type {observation_type} skipped",
                             )
                             continue
 
@@ -2934,11 +2820,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                                 ]["decimals"]
                             )
                         except (ValueError, TypeError):
-                            logerr(
-                                "cannot use numberFormat decimals %s for rounding"
-                                % self.chart_dict[chart_group][plotname][line_name][
-                                    "numberFormat"
-                                ]["decimals"]
+                            log.error(
+                                f"cannot use numberFormat decimals {self.chart_dict[chart_group][plotname][line_name]["numberFormat"]["decimals"]} for rounding"
                             )
                     if obs_round is None:
                         # Add rounding from weewx.conf/skin.conf so Highcharts can use it
@@ -2996,7 +2879,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     wind_rose_color = {}
                     for x in range(7):
                         wind_rose_color[x] = line_options.get(
-                            ("beauford%s" % x), get_rainbow_color(x, 0, 6)
+                            f"beauford{x}", get_rainbow_color(x, 0, 6)
                         )
 
                     # Build series data
@@ -3400,13 +3283,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 group_5_speedRange = "5"
                 group_6_speedRange = "6+"
 
-            group_0_name = "%s %s" % (group_0_speedRange, windSpeed_unit_label)
-            group_1_name = "%s %s" % (group_1_speedRange, windSpeed_unit_label)
-            group_2_name = "%s %s" % (group_2_speedRange, windSpeed_unit_label)
-            group_3_name = "%s %s" % (group_3_speedRange, windSpeed_unit_label)
-            group_4_name = "%s %s" % (group_4_speedRange, windSpeed_unit_label)
-            group_5_name = "%s %s" % (group_5_speedRange, windSpeed_unit_label)
-            group_6_name = "%s %s" % (group_6_speedRange, windSpeed_unit_label)
+            group_0_name = f"{group_0_speedRange} {windSpeed_unit_label}"
+            group_1_name = f"{group_1_speedRange} {windSpeed_unit_label}"
+            group_2_name = f"{group_2_speedRange} {windSpeed_unit_label}"
+            group_3_name = f"{group_3_speedRange} {windSpeed_unit_label}"
+            group_4_name = f"{group_4_speedRange} {windSpeed_unit_label}"
+            group_5_name = f"{group_5_speedRange} {windSpeed_unit_label}"
+            group_6_name = f"{group_6_speedRange} {windSpeed_unit_label}"
 
             group_0 = {
                 "name": group_0_name,
@@ -3505,10 +3388,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_type,
                     aggregate_interval,
                 )
-            except Exception as e:
+            except Exception as error:
                 raise Warning(
-                    "Error trying to use database binding %s to graph observation %s. "
-                    "Error was: %s." % (binding, obs_lookup, e)
+                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error was: {error}."
                 )
 
             self.insert_null_value_timestamps_to_end_ts(
@@ -3532,10 +3415,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_type,
                     aggregate_interval,
                 )
-            except Exception as e:
+            except Exception as error:
                 raise Warning(
-                    "Error trying to use database binding %s to graph observation %s. "
-                    "Error was: %s." % (binding, obs_lookup, e)
+                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error was: {error}."
                 )
 
             self.insert_null_value_timestamps_to_end_ts(
@@ -3559,10 +3442,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_type,
                     aggregate_interval,
                 )
-            except Exception as e:
+            except Exception as error:
                 raise Warning(
-                    "Error trying to use database binding %s to graph observation %s. "
-                    "Error was: %s." % (binding, obs_lookup, e)
+                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error was: {error}."
                 )
 
             self.insert_null_value_timestamps_to_end_ts(
@@ -3606,13 +3489,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
             # Set aggregate interval based on timespan and make sure it is
             # between 5 minutes and 1 day
-            logging.debug("Start time is %s and end time is %s" % (start_ts, end_ts))
+            logging.debug(f"Start time is {start_ts} and end time is {end_ts}")
             aggregate_interval = (end_ts - start_ts) / 360
             if aggregate_interval < 300:
                 aggregate_interval = 300
             elif aggregate_interval > 86400:
                 aggregate_interval = 86400
-            logging.debug("Interval is: %s" % aggregate_interval)
+            logging.debug(f"Interval is: {aggregate_interval}")
 
             aggregate_type = "max"
             # Get min values
@@ -3625,10 +3508,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_type,
                     aggregate_interval,
                 )
-            except Exception as e:
+            except Exception as error:
                 raise Warning(
-                    "Error trying to use database binding %s to graph observation %s. "
-                    "Error was: %s." % (binding, obs_lookup, e)
+                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error was: {error}."
                 )
 
             self.insert_null_value_timestamps_to_end_ts(
@@ -3652,10 +3535,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_type,
                     aggregate_interval,
                 )
-            except Exception as e:
+            except Exception as error:
                 raise Warning(
-                    "Error trying to use database binding %s to graph observation %s. "
-                    "Error was: %s." % (binding, obs_lookup, e)
+                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error was: {error}."
                 )
 
             self.insert_null_value_timestamps_to_end_ts(
@@ -3781,106 +3664,56 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         # Avg(sum) requires a subquery with the correct group by clause
                         if average_type is not None and average_type == "sum":
                             sql_lookup = (
-                                "SELECT dt1 AS {0}, "
-                                "AVG(obs1) AS obs "
-                                'FROM (SELECT strftime("{1}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, sum(sum) AS obs1 '
-                                "FROM archive_day_{2} WHERE dateTime >= {3} AND dateTime < {4} "
-                                'GROUP BY strftime({5}, datetime(dateTime, "unixepoch", "localtime"))) '
-                                "GROUP BY {0}{6};".format(
-                                    xAxis_groupby,
-                                    strformat,
-                                    obs_lookup,
-                                    start_ts,
-                                    end_ts,
-                                    subqry_groupby,
-                                    order_sql,
-                                )
+                                f"SELECT dt1 AS {xAxis_groupby}, "
+                                f"AVG(obs1) AS obs "
+                                f'FROM (SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, sum(sum) AS obs1 '
+                                f"FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                                f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
+                                f"GROUP BY {xAxis_groupby}{order_sql,};"
                             )
                         # avg cases with an average_type
                         elif average_type is not None:
                             sql_lookup = (
-                                'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, '
-                                "{2}({3}) AS obs "
-                                "FROM archive_day_{4}  WHERE dateTime >= {5} AND dateTime < {6} "
-                                "GROUP BY {1}{7};".format(
-                                    strformat,
-                                    xAxis_groupby,
-                                    aggregate_type,
-                                    average_type,
-                                    obs_lookup,
-                                    start_ts,
-                                    end_ts,
-                                    order_sql,
-                                )
+                                f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS {xAxis_groupby}, '
+                                f"{aggregate_type}({average_type}) AS obs "
+                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                                f"GROUP BY {xAxis_groupby}{order_sql};"
                             )
                         # remaining avg cases without an average_type use weighted average
                         else:
                             sql_lookup = (
-                                'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, '
-                                "SUM(wsum)/SUM(sumtime) AS obs "
-                                "FROM archive_day_{2}  WHERE dateTime >= {3} AND dateTime < {4} "
-                                "GROUP BY {1}{5};".format(
-                                    strformat,
-                                    xAxis_groupby,
-                                    obs_lookup,
-                                    start_ts,
-                                    end_ts,
-                                    order_sql,
-                                )
+                                f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS {xAxis_groupby}, '
+                                f"SUM(wsum)/SUM(sumtime) AS obs "
+                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                                f"GROUP BY {xAxis_groupby}{order_sql};"
                             )
                     # other aggregate_type cases use direct interrogation of daily summary
                     else:
                         sql_lookup = (
-                            'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) AS {1}, '
-                            "{2}({2}) AS obs "
-                            "FROM archive_day_{3}  "
-                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
-                                strformat,
-                                xAxis_groupby,
-                                aggregate_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql,
-                            )
+                            f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS {xAxis_groupby}, '
+                            f"{aggregate_type}({aggregate_type}) AS obs "
+                            f"FROM archive_day_{obs_lookup}  "
+                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
                         )
                 else:
                     # archive access with no average_type
                     if average_type is None:
                         sql_lookup = (
-                            'SELECT strftime("{0}", datetime(dateTime, "unixepoch", "localtime")) as {1}, '
-                            "IFNULL({2}({3}),0) AS obs, dateTime FROM archive "
-                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
-                                strformat,
-                                xAxis_groupby,
-                                aggregate_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql,
-                            )
+                            f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) as {xAxis_groupby}, '
+                            f"IFNULL({aggregate_type}({obs_lookup}),0) AS obs, dateTime FROM archive "
+                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
                         )
 
                     # average_type requiring a subquery
                     else:
                         sql_lookup = (
-                            "SELECT dt1 AS {0}, "
-                            "{1}(obs1) AS obs "
-                            'FROM (SELECT strftime("{2}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, '
-                            "IFNULL({3}({4}),0) AS obs1 "
-                            "FROM archive WHERE dateTime >= {5} AND dateTime < {6} "
-                            'GROUP BY strftime({7}, datetime(dateTime, "unixepoch", "localtime"))) '
-                            "GROUP BY {0}{8};".format(
-                                xAxis_groupby,
-                                aggregate_type,
-                                strformat,
-                                average_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                subqry_groupby,
-                                order_sql,
-                            )
+                            f"SELECT dt1 AS {xAxis_groupby}, "
+                            f"{aggregate_type}(obs1) AS obs "
+                            f'FROM (SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, '
+                            f"IFNULL({average_type}({obs_lookup}),0) AS obs1 "
+                            f"FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                            f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
+                            f"GROUP BY {xAxis_groupby}{order_sql};"
                         )
 
             elif driver == "weedb.mysql":
@@ -3896,106 +3729,56 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         # Avg(sum) requires a subquery with the correct group by clause
                         if average_type is not None and average_type == "sum":
                             sql_lookup = (
-                                "SELECT dt1 AS {0}, "
-                                "AVG(obs1) AS obs "
-                                'FROM (SELECT FROM_UNIXTIME( dateTime, "%{1}" ) AS dt1, sum(sum) AS obs1 '
-                                "FROM archive_day_{2} WHERE dateTime >= {3} AND dateTime < {4} "
-                                'GROUP BY strftime({5}, datetime(dateTime, "unixepoch", "localtime"))) '
-                                "GROUP BY {0}{6};".format(
-                                    xAxis_groupby,
-                                    strformat,
-                                    obs_lookup,
-                                    start_ts,
-                                    end_ts,
-                                    subqry_groupby,
-                                    order_sql,
-                                )
+                                f"SELECT dt1 AS {xAxis_groupby}, "
+                                f"AVG(obs1) AS obs "
+                                f'FROM (SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS dt1, sum(sum) AS obs1 '
+                                f"FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                                f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
+                                f"GROUP BY {xAxis_groupby}{order_sql};"
                             )
                         # avg cases with an average_type
                         elif average_type is not None:
                             sql_lookup = (
-                                'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, '
-                                "{2}({3}) AS obs "
-                                "FROM archive_day_{4}  WHERE dateTime >= {5} AND dateTime < {6} "
-                                "GROUP BY {1}{7};".format(
-                                    strformat,
-                                    xAxis_groupby,
-                                    aggregate_type,
-                                    average_type,
-                                    obs_lookup,
-                                    start_ts,
-                                    end_ts,
-                                    order_sql,
-                                )
+                                f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS {xAxis_groupby}, '
+                                f"{aggregate_type}({average_type}) AS obs "
+                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                                f"GROUP BY {xAxis_groupby}{order_sql};"
                             )
                         # remaining avg cases without an average_type use weighted average
                         else:
                             sql_lookup = (
-                                'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, '
-                                "SUM(wsum)/SUM(sumtime) AS obs "
-                                "FROM archive_day_{2}  WHERE dateTime >= {3} AND dateTime < {4} "
-                                "GROUP BY {1}{5};".format(
-                                    strformat,
-                                    xAxis_groupby,
-                                    obs_lookup,
-                                    start_ts,
-                                    end_ts,
-                                    order_sql,
-                                )
+                                f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS {xAxis_groupby}, '
+                                f"SUM(wsum)/SUM(sumtime) AS obs "
+                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                                f"GROUP BY {xAxis_groupby}{order_sql};"
                             )
                     # other aggregate_type cases use direct interrogation of daily summary
                     else:
                         sql_lookup = (
-                            'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) AS {1}, '
-                            "{2}({2}) AS obs "
-                            "FROM archive_day_{3}  "
-                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
-                                strformat,
-                                xAxis_groupby,
-                                aggregate_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql,
-                            )
+                            f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS {xAxis_groupby}, '
+                            f"{aggregate_type}({aggregate_type}) AS obs "
+                            f"FROM archive_day_{obs_lookup}  "
+                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
                         )
                 else:
                     # archive access with no average_type
                     if average_type is None:
                         sql_lookup = (
-                            'SELECT FROM_UNIXTIME( dateTime, "%{0}" ) as {1}, '
-                            "IFNULL({2}({3}),0) AS obs, dateTime FROM archive "
-                            "WHERE dateTime >= {4} AND dateTime < {5} GROUP BY {1}{6};".format(
-                                strformat,
-                                xAxis_groupby,
-                                aggregate_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                order_sql,
-                            )
+                            f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) as {xAxis_groupby}, '
+                            f"IFNULL({aggregate_type}({obs_lookup}),0) AS obs, dateTime FROM archive "
+                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
                         )
 
                     # average_type requiring a subquery
                     else:
                         sql_lookup = (
-                            "SELECT dt1 AS {0}, "
-                            "{1}(obs1) AS obs "
-                            'FROM (SELECT FROM_UNIXTIME( dateTime, "%{2}" ) AS dt1, '
-                            "IFNULL({3}({4}),0) AS obs1 "
-                            "FROM archive WHERE dateTime >= {5} AND dateTime < {6} "
-                            'GROUP BY strftime({7}, datetime(dateTime, "unixepoch", "localtime"))) '
-                            "GROUP BY {0}{8};".format(
-                                xAxis_groupby,
-                                aggregate_type,
-                                strformat,
-                                average_type,
-                                obs_lookup,
-                                start_ts,
-                                end_ts,
-                                subqry_groupby,
-                                order_sql,
-                            )
+                            f"SELECT dt1 AS {xAxis_groupby}, "
+                            f"{aggregate_type}(obs1) AS obs "
+                            f'FROM (SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS dt1, '
+                            f"IFNULL({average_type}({obs_lookup}),0) AS obs1 "
+                            f"FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
+                            f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
+                            f"GROUP BY {xAxis_groupby}{order_sql};"
                         )
 
             # Setup values for the converter
@@ -4013,7 +3796,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             try:
                 query = archive.genSql(sql_lookup)
             except Exception as error:
-                raise Warning("SQL error in" "sql_lookup" "The error is: %s" % (error))
+                raise Warning(f"SQL error in" "sql_lookup" "The error is: {error}")
 
             for row in query:
                 xAxis_labels.append(row[0])
@@ -4055,10 +3838,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_type,
                 aggregate_interval,
             )
-        except Exception as e:
+        except Exception as error:
             raise Warning(
-                "Error trying to use database binding %s to graph observation %s. Error was: %s."
-                % (binding, obs_lookup, e)
+                f"Error trying to use database binding {binding} to graph observation {obs_lookup}. Error was: {error}."
             )
 
         self.insert_null_value_timestamps_to_end_ts(
@@ -4066,9 +3848,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         )
 
         if special_target_unit:
-            logdbg(
-                "unit_group=%s source_unit=%s special_target_unit=%s"
-                % (obs_vt[2], obs_vt[1], special_target_unit)
+            log.debug(
+                f"unit_group={obs_vt[2]} source_unit={obs_vt[1]} special_target_unit={special_target_unit}"
             )
             obs_vt = weewx.units.Converter({obs_vt[2]: special_target_unit}).convert(
                 obs_vt
@@ -4115,13 +3896,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     else:
                         usage_round = int(obs_round) + 1
                 except ValueError:
-                    loginf(
-                        "Observation %s is using unit %s that returns %s for StringFormat, rather than float point decimal format value - using 0 as rounding"
-                        % (
-                            observation,
-                            obs_vt[1],
-                            self.skin_dict["Units"]["StringFormats"].get(obs_vt[1]),
-                        )
+                    log.info(
+                        f"Observation {observation} is using unit {obs_vt[1]} "
+                        f"that returns {self.skin_dict["Units"]["StringFormats"].get(obs_vt[1])} "
+                        f"for StringFormat, rather than float point decimal format value - using 0 as rounding"
                     )
                     usage_round = 0
 
