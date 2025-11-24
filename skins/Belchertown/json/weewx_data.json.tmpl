@@ -49,6 +49,7 @@
   #end if
   #set $sun_altitude = locale.format_string( "%.1f&deg;", $almanac.sun.alt )  
 #end if
+
 {
     "site": "$station.location",
     "station_url": "$station.station_url",
@@ -233,7 +234,6 @@
             "maxtime": "$day.rainRate.maxtime"
         }
     },
-    
     "week": {
         "outTemp": {
             "max": "$week.outTemp.max",
@@ -310,9 +310,8 @@
             "sum": "$week.rain.sum",
             "max": "$week.rainRate.max",
             "maxtime": "$week.rainRate.maxtime"
-        } 
+        }
     },
-    
     "month": {
         "outTemp": {
             "max": "$month.outTemp.max",
@@ -391,7 +390,6 @@
             "maxtime": "$month.rainRate.maxtime"
         }
     },
-    
     "year": {
         "outTemp": {
             "max": "$year.outTemp.max",
