@@ -3,13 +3,7 @@
 
 import configobj
 from setup import ExtensionInstaller
-
-try:
-    # Python 2
-    from StringIO import StringIO
-except ImportError:
-    # Python 3
-    from io import StringIO
+from io import StringIO
 
 # -------- extension info -----------
 
@@ -47,99 +41,133 @@ extension_config = """
 [StdReport]
 
     [[Belchertown]]
-        skin = Belchertown
-        HTML_ROOT = belchertown
-        enable = true 
+        skin = "Belchertown"
+        HTML_ROOT = "belchertown"
+        enable = "true" 
 
         [[[Extras]]]
 
-            # For help refer to the docs at https://github.com/poblabs/weewx-belchertown
+            # For help refer to the docs at https://github.com/uajqq/weewx-belchertown-new
             # and consult skin.conf for the configurable elements and their hierarchy
 
-            #--- General Options ---
-            # belchertown_debug = 0
-            # belchertown_locale = "auto"
-            # theme = light
+            #---General Site Defaults---
+            # belchertown_debug    = 0
+            # belchertown_locale   = "auto"
+            # theme                = "light"
             # theme_toggle_enabled = 1
-            # logo_image = ""
-            # logo_image_dark = ""
-            # site_title = "My Weather Website"
-            # station_observations = "barometer","dewpoint","outHumidity","rainWithRainRate"
-            # beaufort_category = 0
-            # manifest_name = "My Weather Website"
-            # manifest_short_name = "MWW"
-            # aeris_map = 0
-            # radar_html = ''   #  (default seems to center on your lat/lon)
-            # radar_html_dark = None
-            # radar_zoom = 8
-            # radar_marker = 0
+            # site_title           = "My Weather Website"
+            # logo_image           = ""
+            # logo_image_dark      = ""
+            # radar_html           = ""
+            # radar_html_dark      = ""
+            # radar_width          = 650
+            # radar_height         = 360
+
+            #---Forecast unit of measures---
+            # radar_rain     = "default" # default, mm, in
+            # radar_temp     = "default" # default, C,  F
+            # radar_wind     = "default" # default, kt, m/s, km/h, mph, bft
+            # aeris_map      = 0
             # almanac_extras = 1
-            # highcharts_enabled = 1
-            # graph_page_show_all_button = 1
-            # graph_page_default_graphgroup = "day"
-            # highcharts_homepage_graphgroup = "day"
-            # highcharts_decimal = "auto"
-            # highcharts_thousands = "auto"
-            # googleAnalyticsId = ""
-            # pi_kiosk_bold = "false"
-            # pi_theme = "auto"
-            # webpage_autorefresh = 0
-            # reload_hook_images = 0
-            # reload_images_radar = 300
-            # reload_images_hook_asi = -1
-            # reload_images_hook_af = -1
-            # reload_images_hook_as = -1
-            # reload_images_hook_ac = -1
-            # show_last_updated_alert = 0
-            # last_updated_alert_threshold = 1800
 
-            #--- MQTT Websockets (for Real Time Streaming) Options ---
-            # mqtt_websockets_enabled = 0
-            # mqtt_websockets_host = ""
-            # mqtt_websockets_port = 8080
-            # mqtt_websockets_ssl	= 0
-            # mqtt_websockets_topic = ""
+            #---Station Observations---
+            # station_observations = "barometer", "dewpoint", "outHumidity", "rainWithRainRate"
+
+            #---Manifest Settings for Mobile Phones---
+            # manifest_name       = "My Weather Website"
+            # manifest_short_name = "MWW"
+
+            #---Highcharts settings---
+            # highcharts_enabled             = 1
+            # graph_page_show_all_button     = 1
+            # graph_page_default_graphgroup  = "day"
+            # highcharts_homepage_graphgroup = "homepage"
+            # highcharts_decimal             = "auto"
+            # highcharts_thousands           = "auto"
+
+            #---MQTT Websockets defaults---
+            # mqtt_websockets_enabled         = 0
+            # mqtt_websockets_host            = ""
+            # mqtt_websockets_port            = 1883
+            # mqtt_websockets_ssl             = 0
+            # mqtt_websockets_topic           = ""
+            # mqtt_websockets_username        = ""
+            # mqtt_websockets_password        = ""
             # disconnect_live_website_visitor = 1800000
+            # show_last_updated_alert         = 0
+            # last_updated_alert_threshold    = 1800
+            # webpage_autorefresh             = 0
 
-            #--- Forecast Options ---
-            # forecast_enabled = 0
-            # forecast_provider = "aeris"
-            # forecast_api_id = ""
-            # forecast_api_secret = ""
-            # forecast_units = "us"
-            # forecast_lang = "en"
-            # forecast_stale = 3540
-            # forecast_aeris_use_metar = 1
+            #---Image Reload Section---
+            # reload_hook_images     = 0
+            # reload_images_radar    = 300
+            # reload_images_hook_asi = -1
+            # reload_images_hook_af  = -1
+            # reload_images_hook_as  = -1
+            # reload_images_hook_ac  = -1
+
+            #---Forecast defaults---
+            # forecast_enabled        = 0
+            # forecast_provider       = "aeris"
+            # forecast_api_id         = ""
+            # forecast_api_secret     = ""
+            # forecast_units          = "us"
             # forecast_interval_hours = 24
-            # forecast_alert_enabled = 0
-            # forecast_alert_limit = 1
+
+            # forecast_lang                     = "en"
+            # forecast_stale                    = 3540 # 59 minutes
+            # current_conditions_stale          = 3540 # 59 minutes
+            # forecast_aeris_use_metar          = 1
+            # forecast_alert_enabled            = 0
+            # forecast_alert_limit              = 1
             # forecast_show_daily_forecast_link = 0
-            # forecast_daily_forecast_link = ""
-            # aqi_enabled = 0
+            # forecast_daily_forecast_link      = ""
+            # forecast_show_humidity_dewpoint   = 0
+            # forecast_place = ""
+            # current_conditions = "obs"
+            # current_conditions_timestamp_enabled = 0
+
+            #---Air Quality Index (AQI) defaults---
+            # aqi_enabled          = 0
             # aqi_location_enabled = 0
 
-            #--- Earthquake Options ---
-            # earthquake_enabled = 0
-            # earthquake_maxradiuskm = 1000
-            # earthquake_stale = 10740
-            # earthquake_server = USGS
-            # geonet_mmi = 4
+            #---Show Beaufort wind scale category under wind table---
+            # beaufort_category       = 0
+            # beaufort_category_gusts = 0
 
-            #--- Social Options ---
-            # facebook_enabled = 0
-            # twitter_enabled = 0
-            # twitter_hashtags = "WeeWX #weather"
+            #---Earthquake defaults---
+            # earthquake_enabled     = 0
+            # earthquake_maxradiuskm = 1000
+            # earthquake_stale       = 10740
+            # earthquake_server      = USGS
+            # geonet_mmi             = 4
+
+            #---Social Share Button Defaults. Define the text below under Labels---
+            # facebook_enabled  = 0
+            # twitter_enabled   = 0
             # social_share_html = ""
-            
-            #--- Kiosk Options ---
-            # radar_html_kiosk = ""
-            # radar_width_kiosk = 490
-            # radar_height_kiosk = 362
-            # mqtt_websockets_host_kiosk = ""
-            # mqtt_websockets_port_kiosk = ""
-            # mqtt_websockets_ssl_kiosk = ""
+
+            #---Google Analytics---
+            # googleAnalyticsId = ""
+
+            # This is the display of the Pi Kiosk which is in the /pi folder
+            # pi_kiosk_bold = "false"
+            # pi_theme      = "auto"
+
+            # This is the display of the kiosk page which is kiosk.html
+            # radar_html_kiosk              = ""
+            # radar_width_kiosk             = 490
+            # radar_height_kiosk            = 362
+            # mqtt_websockets_host_kiosk    = ""
+            # mqtt_websockets_port_kiosk    = ""
+            # mqtt_websockets_ssl_kiosk     = ""
             # forecast_interval_hours_kiosk = 24
-            # aqi_enabled_kiosk = 0
+            # aqi_enabled_kiosk             = 0
+
+            # Display a Back To Top Button
+            # back_to_top_button_enabled  = 0
+            # back_to_top_button_position = 0
+            # back_to_top_button_opacity  = 0.8
 
             #-------------------------------------------------------------
             #---
@@ -150,24 +178,24 @@ extension_config = """
             #--- please ignore the following 'unused' variable
             #---
             #-------------------------------------------------------------
-            work_around_ConfigObj_limitations = true
+            work_around_ConfigObj_limitations = "true"
 
             # [[[[Generic]]]]
                 #-- Footer information --
-                # footer_copyright_text = "My Weather Website"
+                # footer_copyright_text  = "My Weather Website"
                 # footer_disclaimer_text = "Never make important decisions based on info from this website."
 
                 #-- Default page headers --
-                # home_page_header = "My Station Weather Conditions"
-                # graphs_page_header = "Weather Observation Graphs"
+                # home_page_header    = "My Station Weather Conditions"
+                # graphs_page_header  = "Weather Observation Graphs"
                 # reports_page_header = "Weather Observation Reports"
                 # records_page_header = "Weather Observation Records"
-                # about_page_header = "About This Site"
-                # powered_by = 'Observations are powered by a <a href="/about" target="_blank">Personal Weather Station</a>'
+                # about_page_header   = "About This Site"
+                # powered_by          = 'Observations are powered by a <a href="/about" target="_blank">Personal Weather Station</a>'
 
                 #-- Twitter Social Share --
-                # twitter_text = "Check out my website: My Weather Website Weather Conditions"
-                # twitter_owner = "YourTwitterUsernameHere"
+                # twitter_text     = "Check out my website: My Weather Website Weather Conditions"
+                # twitter_owner    = "YourTwitterUsernameHere"
                 # twitter_hashtags = "WeeWX #weather"
 
 """
@@ -229,12 +257,12 @@ files = [
         ],
     ),
     (
-        "skins/Belchertown/lang", 
+        "skins/Belchertown/lang",
         [
             "skins/Belchertown/lang/ca.conf",
             "skins/Belchertown/lang/de.conf",
-            "skins/Belchertown/lang/it.conf"
-        ]
+            "skins/Belchertown/lang/it.conf",
+        ],
     ),
     (
         "skins/Belchertown/images",
