@@ -180,23 +180,24 @@ extension_config = """
             #-------------------------------------------------------------
             work_around_ConfigObj_limitations = "true"
 
-            # [[[[Generic]]]]
-                #-- Footer information --
-                # footer_copyright_text  = "My Weather Website"
-                # footer_disclaimer_text = "Never make important decisions based on info from this website."
+            # [[[Labels]]]
+                # [[[[Generic]]]]
+                    #-- Footer information --
+                    # footer_copyright_text  = "My Weather Website"
+                    # footer_disclaimer_text = "Never make important decisions based on info from this website."
 
-                #-- Default page headers --
-                # home_page_header    = "My Station Weather Conditions"
-                # graphs_page_header  = "Weather Observation Graphs"
-                # reports_page_header = "Weather Observation Reports"
-                # records_page_header = "Weather Observation Records"
-                # about_page_header   = "About This Site"
-                # powered_by          = 'Observations are powered by a <a href="/about" target="_blank">Personal Weather Station</a>'
+                    #-- Default page headers --
+                    # home_page_header    = "My Station Weather Conditions"
+                    # graphs_page_header  = "Weather Observation Graphs"
+                    # reports_page_header = "Weather Observation Reports"
+                    # records_page_header = "Weather Observation Records"
+                    # about_page_header   = "About This Site"
+                    # powered_by          = 'Observations are powered by a <a href="/about" target="_blank">Personal Weather Station</a>'
 
-                #-- Twitter Social Share --
-                # twitter_text     = "Check out my website: My Weather Website Weather Conditions"
-                # twitter_owner    = "YourTwitterUsernameHere"
-                # twitter_hashtags = "WeeWX #weather"
+                    #-- Twitter Social Share --
+                    # twitter_text     = "Check out my website: My Weather Website Weather Conditions"
+                    # twitter_owner    = "YourTwitterUsernameHere"
+                    # twitter_hashtags = "WeeWX #weather"
 
 """
 config_dict = configobj.ConfigObj(StringIO(extension_config))
