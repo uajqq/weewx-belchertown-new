@@ -18,16 +18,16 @@
         jQuery("#year-outtemp-min-ts").text(tzAdjustedMoment($year.outTemp.mintime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-outtemp-min-ts").text(tzAdjustedMoment($alltime.outTemp.mintime.raw).format("$obs.label.time_records_page_full_date"));
 
-        #if $year.appTemp.has_data
+        // #if $year.appTemp.has_data
         jQuery("#year-apptemp-max-ts").text(tzAdjustedMoment($year.appTemp.maxtime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#year-apptemp-min-ts").text(tzAdjustedMoment($year.appTemp.mintime.raw).format("$obs.label.time_records_page_full_date"));
-        #end if
-            #if $alltime.appTemp.has_data
+        // #end if
+        // #if $alltime.appTemp.has_data
         jQuery("#at-apptemp-max-ts").text(tzAdjustedMoment($alltime.appTemp.maxtime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-apptemp-min-ts").text(tzAdjustedMoment($alltime.appTemp.mintime.raw).format("$obs.label.time_records_page_full_date"));
-        #end if
-            
-            jQuery("#year-heatindex-max-ts").text(tzAdjustedMoment($year.heatindex.maxtime.raw).format("$obs.label.time_records_page_full_date"));
+        // #end if
+
+        jQuery("#year-heatindex-max-ts").text(tzAdjustedMoment($year.heatindex.maxtime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-heatindex-max-ts").text(tzAdjustedMoment($alltime.heatindex.maxtime.raw).format("$obs.label.time_records_page_full_date"));
 
         jQuery("#year-windchill-min-ts").text(tzAdjustedMoment($year.windchill.mintime.raw).format("$obs.label.time_records_page_full_date"));
@@ -42,14 +42,14 @@
         jQuery("#year-windGust-max-ts").text(tzAdjustedMoment($year.windGust.maxtime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-windGust-max-ts").text(tzAdjustedMoment($alltime.windGust.maxtime.raw).format("$obs.label.time_records_page_full_date"));
 
-        #if $year.windrun.has_data
+        // #if $year.windrun.has_data
         jQuery("#year-windrun-max-ts").text(tzAdjustedMoment($year.windrun.maxsumtime.raw).format("$obs.label.time_records_page_month_day_year"));
-        #end if
-            #if $alltime.windrun.has_data
+        // #end if
+        // #if $alltime.windrun.has_data
         jQuery("#at-windrun-max-ts").text(tzAdjustedMoment($alltime.windrun.maxsumtime.raw).format("$obs.label.time_records_page_month_day_year"));
-        #end if
-            
-            jQuery("#year-rainiest-day-ts").text(tzAdjustedMoment($rainiest_day[0]).format("$obs.label.time_records_page_month_day_year"));
+        // #end if
+
+        jQuery("#year-rainiest-day-ts").text(tzAdjustedMoment($rainiest_day[0]).format("$obs.label.time_records_page_month_day_year"));
         jQuery("#at-rainiest-day-ts").text(tzAdjustedMoment($at_rainiest_day[0]).format("$obs.label.time_records_page_month_day_year"));
 
         jQuery("#year-rainRate-max-ts").text(tzAdjustedMoment($year.rainRate.maxtime.raw).format("$obs.label.time_records_page_full_date"));
@@ -73,17 +73,17 @@
         jQuery("#year-barometer-min-ts").text(tzAdjustedMoment($year.barometer.mintime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-barometer-min-ts").text(tzAdjustedMoment($alltime.barometer.mintime.raw).format("$obs.label.time_records_page_full_date"));
 
-        #if $year.radiation.has_data
+        // #if $year.radiation.has_data
         jQuery("#year-radiation-max-ts").text(tzAdjustedMoment($year.radiation.maxtime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-radiation-max-ts").text(tzAdjustedMoment($alltime.radiation.maxtime.raw).format("$obs.label.time_records_page_full_date"));
-        #end if
-            
-            #if $year.UV.has_data
+        // #end if
+
+        // #if $year.UV.has_data
         jQuery("#year-uv-max-ts").text(tzAdjustedMoment($year.UV.maxtime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-uv-max-ts").text(tzAdjustedMoment($alltime.UV.maxtime.raw).format("$obs.label.time_records_page_full_date"));
-        #end if
-            
-            jQuery("#year-days-with-rainfall-ts").text(tzAdjustedMoment($year_days_with_rain[1]).format("$obs.label.time_records_page_month_day_year"));
+        // #end if
+
+        jQuery("#year-days-with-rainfall-ts").text(tzAdjustedMoment($year_days_with_rain[1]).format("$obs.label.time_records_page_month_day_year"));
         // Take the number of days ($at_days_with_rain[0]) - 1 and multiply by 86400 (seconds in a day) to get total seconds. Then subtract from the end epoch to give you the epoch "days ago"
         // Removed the year with ", YYYY, or "/YYYY" or ".YYYY" or "-YYYY"
         if ($at_days_with_rain[1] > 0) {

@@ -13,26 +13,26 @@
 
 <script type="text/javascript">
     var finalRotation;
-    #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
+    //#if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
     var mqttMsg;
     var mqttclient = "website" + Math.floor(Math.random() * 999999999);
-    #end if
-        var moment_locale = "$system_locale_js";
+    //#end if
+    var moment_locale = "$system_locale_js";
     moment.locale(moment_locale);
 
     ajaxweewx(); // Initial call to load from WeeWX (date, daily high, low, etc)
 
-    #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
+    // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
     // Load forecast
     ajaxforecast(); // Initial call to load forecast data like 8 day outlook, weather icon and observation text
-    #end if
-        
-        jQuery(document).ready(function() {
+    // #end if
+
+    jQuery(document).ready(function() {
         get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
 
         rotateThis("$current.windDir.formatted");
 
-        #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
+        // #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
         connect(); // Begin mqtt after WeeWX initial load
 
         // Update the Last Updated timestamp with moment.js,
@@ -40,8 +40,8 @@
         updated_text = "$obs.label.header_last_updated " + updated;
         jQuery(".updated").html(updated_text);
 
-        #end if
-        });
+        // #end if
+    });
 
 </script>
 
