@@ -1317,12 +1317,7 @@ class getData(SearchList):
                                         }
                                     )
                     except Exception as error:
-                        raise Warning(
-                            f"Error downloading forecast data. "
-                            f"Check the URL in your configuration and try again. "
-                            f"You are trying to use URL: {forecast_24hr_url}, "
-                            f"and the error is: {error}"
-                        )
+                        raise Warning(f"Error downloading forecast data: {error}")
 
                     # Save forecast data to file. w+ creates the file if it doesn't
                     # exist, and truncates the file and re-writes it everytime
@@ -1528,22 +1523,32 @@ class getData(SearchList):
                     # well, in class HighchartsJsonGenerator below
                     global aqi
                     global aqi_category
-                    if len(data["aqi"][0]["response"]) > 0:
-                        aqi = data["aqi"][0]["response"][0]["periods"][0]["aqi"]
-                        aqi_category = data["aqi"][0]["response"][0]["periods"][0][
-                            "category"
-                        ]
-                        aqi_location = data["aqi"][0]["response"][0]["place"][
-                            "name"
-                        ].title()
-                    elif data["aqi"][0]["error"]["code"] == "warn_no_data":
+                    if data["aqi"][0]["response"]:
+                        if data["aqi"][0]["error"]:
+                            log.error(f"AQI error: {data["aqi"][0]["error"]["code"]}")
+                            aqi = "No Data"
+                            aqi_category = ""
+                            aqi_location = ""
+                        else:
+                            aqi = data["aqi"][0]["response"][0]["periods"][0]["aqi"]
+                            aqi_category = data["aqi"][0]["response"][0]["periods"][0][
+                                "category"
+                            ]
+                            aqi_location = data["aqi"][0]["response"][0]["place"][
+                                "name"
+                            ].title()
+                    else:
+                        log.error(f"No AQI data received. Check configuration.")
                         aqi = "No Data"
                         aqi_category = ""
                         aqi_location = ""
                 except Exception as error:
                     log.error(
-                        f"Error getting AQI from Xweather weather. The error was: {error}"
+                        f"Error getting AQI from Xweather weather. The error was: {error}."
                     )
+                    aqi = "No Data"
+                    aqi_category = ""
+                    aqi_location = ""
                     pass
 
                 # https://www.xweather.com/docs/weather-api/endpoints/airquality
