@@ -7,7 +7,7 @@ from io import StringIO
 
 # -------- extension info -----------
 
-VERSION = "1.5"
+VERSION = "1.6"
 NAME = "Belchertown"
 DESCRIPTION = "A clean modern skin with real time streaming updates and interactive charts. Modeled after BelchertownWeather.com"
 AUTHOR = "Pat OBrien, maintained by uajqq"
