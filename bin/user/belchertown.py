@@ -936,6 +936,12 @@ class getData(SearchList):
         # ==============================================================================
         # Forecast Data
         # ==============================================================================
+        # Ensure AQI variables are always defined to avoid NameError when forecast is disabled or fails
+        # aqi and aqi_category are global so they can be used by Highcharts
+        global aqi, aqi_category
+        aqi = "No Data"
+        aqi_category = ""
+        aqi_location = ""
 
         try:
             if (
@@ -1519,16 +1525,11 @@ class getData(SearchList):
                     data = json.load(read_file)
 
                 try:
-                    # define some AQI values as global so they can be used for charting as
-                    # well, in class HighchartsJsonGenerator below
-                    global aqi
-                    global aqi_category
                     if data["aqi"][0]["response"]:
                         if data["aqi"][0]["error"]:
-                            log.error(f"AQI error: {data["aqi"][0]["error"]["code"]}")
-                            aqi = "No Data"
-                            aqi_category = ""
-                            aqi_location = ""
+                            log.error(
+                                f"Error getting AQI from Xweather weather. The error was: {data['aqi'][0]['error']}"
+                            )
                         else:
                             aqi = data["aqi"][0]["response"][0]["periods"][0]["aqi"]
                             aqi_category = data["aqi"][0]["response"][0]["periods"][0][
@@ -1537,18 +1538,10 @@ class getData(SearchList):
                             aqi_location = data["aqi"][0]["response"][0]["place"][
                                 "name"
                             ].title()
-                    else:
-                        log.error(f"No AQI data received. Check configuration.")
-                        aqi = "No Data"
-                        aqi_category = ""
-                        aqi_location = ""
                 except Exception as error:
                     log.error(
                         f"Error getting AQI from Xweather weather. The error was: {error}."
                     )
-                    aqi = "No Data"
-                    aqi_category = ""
-                    aqi_location = ""
                     pass
 
                 # https://www.xweather.com/docs/weather-api/endpoints/airquality
