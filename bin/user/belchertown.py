@@ -12,7 +12,6 @@ import json
 import locale
 import logging
 import os
-import os.path
 import syslog
 import time
 from collections import OrderedDict
@@ -69,7 +68,7 @@ class getData(SearchList):
         function named radians which converts from degrees to radians.
         """
 
-        if not isinstance((pointA, pointB), tuple):
+        if not isinstance(pointA, tuple) or not isinstance(pointB, tuple):
             raise TypeError("Only tuples are supported as arguments")
         lat1 = pointA[0]
         lon1 = pointA[1]
@@ -241,9 +240,9 @@ class getData(SearchList):
                 ].split(".")
                 if belchertown_debug:
                     log.error(
-                        f"Locale: Error using locale {self.generator.skin_dict["Extras"]["belchertown_locale"]}. "
+                        f"Locale: Error using locale {self.generator.skin_dict['Extras']['belchertown_locale']}. "
                         f"This locale may not be installed on your system and you may see unexpected results. "
-                        f"Belchertown skin JavaScript will try to use this locale. Full error: %{error}"
+                        f"Python could not set the requested locale, but Belchertown skin JavaScript will attempt to use the provided locale string. Full error: {error}"
                     )
 
         if system_locale is None:
@@ -1918,7 +1917,7 @@ class getData(SearchList):
                     f"<span class='dayRain'>{dayRain_sum}</span><!-- AJAX -->"
                 )
                 obs_rain_output += "&nbsp;<span class='border-left'>&nbsp;</span>"
-                obs_rain_output += f"<span class='rainRate'>{getattr(current, "rainRate")}</span><!-- AJAX -->"
+                obs_rain_output += f"<span class='rainRate'>{getattr(current, 'rainRate')}</span><!-- AJAX -->"
 
                 # Empty field for the JSON "current" output
                 obs_output = ""
@@ -1927,6 +1926,7 @@ class getData(SearchList):
             elif obs == "aqi":
                 obs_output = aqi
             else:
+                # Only call getattr for observations not handled above
                 obs_output = getattr(current, obs)
                 if "?" in str(obs_output):
                     # Try to catch those invalid observations, like 'uv' needs
