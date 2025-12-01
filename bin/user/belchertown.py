@@ -652,34 +652,34 @@ class getData(SearchList):
         current_year = str(now.year)
         if driver == "weedb.sqlite":
             year_rainiest_month_sql = """
-                SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) AS month, SUM(sum) AS total
+                SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, SUM(sum) AS total
                 FROM archive_day_rain
                 WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = ?
                 GROUP BY month ORDER BY total DESC LIMIT 1;
             """
             at_rainiest_month_sql = """
-                SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) AS month, strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) AS year, SUM(sum) AS total
+                SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
                 FROM archive_day_rain
                 GROUP BY month, year ORDER BY total DESC LIMIT 1;
             """
             year_rain_data_sql = """
                 SELECT dateTime, sum FROM archive_day_rain
-                WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = ?;
+                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?;
             """
             at_rain_highest_year_sql = """
-                SELECT strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) AS year,SUM(sum) AS total
+                SELECT strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
                 FROM archive_day_rain
                 GROUP BY year ORDER BY total DESC LIMIT 1;
             """
         elif driver == "weedb.mysql":
             year_rainiest_month_sql = """
-                SELECT FROM_UNIXTIME(dateTime, "%m") AS month, ROUND(SUM(sum), 2) AS total
+                SELECT FROM_UNIXTIME(dateTime, '%m') AS month, ROUND(SUM(sum), 2) AS total
                 FROM archive_day_rain
-                WHERE year(FROM_UNIXTIME(dateTime)) = ?
+                WHERE YEAR(FROM_UNIXTIME(dateTime)) = ?
                 GROUP BY month ORDER BY total DESC LIMIT 1;
             """
             at_rainiest_month_sql = """
-                SELECT FROM_UNIXTIME(dateTime, "%m") AS month, FROM_UNIXTIME(dateTime, "%Y") AS year, ROUND(SUM(sum), 2) AS total
+                SELECT FROM_UNIXTIME(dateTime, '%m') AS month, FROM_UNIXTIME(dateTime, '%Y') AS year, ROUND(SUM(sum), 2) AS total
                 FROM archive_day_rain
                 GROUP BY month, year ORDER BY total DESC LIMIT 1;
             """
@@ -688,7 +688,7 @@ class getData(SearchList):
                 WHERE year(FROM_UNIXTIME(dateTime)) = ?;
             """
             at_rain_highest_year_sql = """
-                SELECT FROM_UNIXTIME(dateTime, "%Y") AS year,ROUND(SUM(sum), 2) AS total
+                SELECT FROM_UNIXTIME(dateTime, '%Y') AS year, ROUND(SUM(sum), 2) AS total
                 FROM archive_day_rain
                 GROUP BY year ORDER BY total DESC LIMIT 1;
             """
