@@ -398,12 +398,10 @@ class getData(SearchList):
 
         # Find the beginning of the current year
         now = datetime.datetime.now()
-        date_time = f"01/01/{now.year} 00:00:00"
-        pattern = "%m/%d/%Y %H:%M:%S"
-        year_start_epoch = int(time.mktime(time.strptime(date_time, pattern)))
-
-        date_time = f"{now.month}/{now.day}/{now.year} 00:00:00"
-        today_start_epoch = int(time.mktime(time.strptime(date_time, pattern)))
+        year_start_epoch = int(datetime.datetime(now.year, 1, 1, 0, 0).timestamp())
+        today_start_epoch = int(
+            datetime.datetime(now.year, now.month, now.day, 0, 0).timestamp()
+        )
 
         # Setup the converter
         # Get the target unit nickname (something like 'US' or 'METRIC'):
@@ -414,21 +412,24 @@ class getData(SearchList):
         converter = weewx.units.StdUnitConverters[target_unit]
 
         # Temperature Range Lookups
-        # 1. The database query finds the result based off the total column.
-        # 2. We need to convert the min, max to the site's requested unit.
-        # 3. We need to recalculate the min/max range because the unit may have changed.
-
+        # Use parameterized queries for safety and clarity
+        temp_range_sql = """
+            SELECT dateTime, (max - min) as total, min, max
+            FROM archive_day_outTemp
+            WHERE dateTime >= ? AND dateTime < ? AND min IS NOT NULL AND max IS NOT NULL
+            ORDER BY total {order} LIMIT 1;
+        """
         year_outTemp_max_range_query = wx_manager.getSql(
-            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime >= {year_start_epoch} AND dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total DESC LIMIT 1;"
+            temp_range_sql.format(order="DESC"), (year_start_epoch, today_start_epoch)
         )
         year_outTemp_min_range_query = wx_manager.getSql(
-            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime >= {year_start_epoch} AND dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total ASC LIMIT 1;"
+            temp_range_sql.format(order="ASC"), (year_start_epoch, today_start_epoch)
         )
         at_outTemp_max_range_query = wx_manager.getSql(
-            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total DESC LIMIT 1;"
+            temp_range_sql.format(order="DESC"), (0, today_start_epoch)
         )
         at_outTemp_min_range_query = wx_manager.getSql(
-            f"SELECT dateTime, ROUND( (max - min), 1 ) as total, ROUND( min, 1 ) as min, ROUND( max, 1 ) as max FROM archive_day_outTemp WHERE dateTime < {today_start_epoch} AND min IS NOT NULL AND max IS NOT NULL ORDER BY total ASC LIMIT 1;"
+            temp_range_sql.format(order="ASC"), (0, today_start_epoch)
         )
 
         # Find the group_name for outTemp in database
@@ -608,10 +609,11 @@ class getData(SearchList):
         # Find the number of decimals to round the result based on the skin.conf
         rain_round = skin_dict["Units"]["StringFormats"].get(skin_rain_unit, "%.2f")
 
-        # Rainiest Day
-        rainiest_day_query = wx_manager.getSql(
-            f"SELECT dateTime, sum FROM archive_day_rain WHERE dateTime >= {year_start_epoch} ORDER BY sum DESC LIMIT 1;"
-        )
+        rainiest_day_sql = """
+            SELECT dateTime, sum FROM archive_day_rain
+            WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
+        """
+        rainiest_day_query = wx_manager.getSql(rainiest_day_sql, (year_start_epoch,))
         if rainiest_day_query is not None:
             rainiest_day_tuple = (rainiest_day_query[1], rain_unit, "group_rain")
             rainiest_day_converted = (
@@ -627,10 +629,11 @@ class getData(SearchList):
                 locale.format_string("%.2f", 0),
             ]
 
-        # All Time Rainiest Day
-        at_rainiest_day_query = wx_manager.getSql(
-            "SELECT dateTime, sum FROM archive_day_rain ORDER BY sum DESC LIMIT 1"
-        )
+        at_rainiest_day_sql = """
+            SELECT dateTime, sum FROM archive_day_rain
+            ORDER BY sum DESC LIMIT 1;
+        """
+        at_rainiest_day_query = wx_manager.getSql(at_rainiest_day_sql)
         at_rainiest_day_tuple = (at_rainiest_day_query[1], rain_unit, "group_rain")
         at_rainiest_day_converted = (
             rain_round % converter.convert(at_rainiest_day_tuple)[0]
@@ -646,25 +649,54 @@ class getData(SearchList):
         database = config_dict["DataBindings"][data_binding]["database"]
         database_type = config_dict["Databases"][database]["database_type"]
         driver = config_dict["DatabaseTypes"][database_type]["driver"]
+        current_year = str(now.year)
         if driver == "weedb.sqlite":
-            year_rainiest_month_sql = f"""SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, SUM( sum ) as total FROM archive_day_rain WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;"""
-            at_rainiest_month_sql = """SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"""
-            year_rain_data_sql = f"""SELECT dateTime, sum FROM archive_day_rain WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}";"""
-            # The all stats from http://www.weewx.com/docs/customizing.htm
-            # doesn't seem to calculate "Total Rainfall for" all time stat
-            # correctly.
-            at_rain_highest_year_sql = """SELECT strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"""
+            year_rainiest_month_sql = """
+                SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) AS month, SUM(sum) AS total
+                FROM archive_day_rain
+                WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = ?
+                GROUP BY month ORDER BY total DESC LIMIT 1;
+            """
+            at_rainiest_month_sql = """
+                SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) AS month, strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) AS year, SUM(sum) AS total
+                FROM archive_day_rain
+                GROUP BY month, year ORDER BY total DESC LIMIT 1;
+            """
+            year_rain_data_sql = """
+                SELECT dateTime, sum FROM archive_day_rain
+                WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = ?;
+            """
+            at_rain_highest_year_sql = """
+                SELECT strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) AS year,SUM(sum) AS total
+                FROM archive_day_rain
+                GROUP BY year ORDER BY total DESC LIMIT 1;
+            """
         elif driver == "weedb.mysql":
-            year_rainiest_month_sql = f"""SELECT FROM_UNIXTIME( dateTime, "%m" ) AS month, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;"""
-            at_rainiest_month_sql = """SELECT FROM_UNIXTIME( dateTime, "%m" ) AS month, FROM_UNIXTIME( dateTime, "%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"""
-            year_rain_data_sql = f"""SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}";"""
-            # The all stats from http://www.weewx.com/docs/customizing.htm
-            # doesn't seem to calculate "Total Rainfall for" all time stat
-            # correctly.
-            at_rain_highest_year_sql = """SELECT FROM_UNIXTIME( dateTime, "%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"""
+            year_rainiest_month_sql = """
+                SELECT FROM_UNIXTIME(dateTime, "%m") AS month, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_rain
+                WHERE year(FROM_UNIXTIME(dateTime)) = ?
+                GROUP BY month ORDER BY total DESC LIMIT 1;
+            """
+            at_rainiest_month_sql = """
+                SELECT FROM_UNIXTIME(dateTime, "%m") AS month, FROM_UNIXTIME(dateTime, "%Y") AS year, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_rain
+                GROUP BY month, year ORDER BY total DESC LIMIT 1;
+            """
+            year_rain_data_sql = """
+                SELECT dateTime, ROUND(sum, 2) FROM archive_day_rain
+                WHERE year(FROM_UNIXTIME(dateTime)) = ?;
+            """
+            at_rain_highest_year_sql = """
+                SELECT FROM_UNIXTIME(dateTime, "%Y") AS year,ROUND(SUM(sum), 2) AS total
+                FROM archive_day_rain
+                GROUP BY year ORDER BY total DESC LIMIT 1;
+            """
 
         # Rainiest month
-        year_rainiest_month_query = wx_manager.getSql(year_rainiest_month_sql)
+        year_rainiest_month_query = wx_manager.getSql(
+            year_rainiest_month_sql, (current_year,)
+        )
         if year_rainiest_month_query is not None:
             year_rainiest_month_tuple = (
                 year_rainiest_month_query[1],
@@ -698,6 +730,7 @@ class getData(SearchList):
 
         # All time rainiest year
         at_rain_highest_year_query = wx_manager.getSql(at_rain_highest_year_sql)
+        print(at_rain_highest_year_query)
         at_rain_highest_year_tuple = (
             at_rain_highest_year_query[1],
             rain_unit,
@@ -712,25 +745,20 @@ class getData(SearchList):
         ]
 
         # Consecutive days with/without rainfall
-        # dateTime needs to be epoch. Conversion done in the template using #echo
         year_days_with_rain_total = 0
         year_days_without_rain_total = 0
         year_days_with_rain_output = {}
         year_days_without_rain_output = {}
-        year_rain_query = wx_manager.genSql(year_rain_data_sql)
+        year_rain_query = wx_manager.genSql(year_rain_data_sql, (current_year,))
         for row in year_rain_query:
-            # Original MySQL way: CASE WHEN sum!=0 THEN @total+1 ELSE 0 END
             if row[1] != 0:
                 year_days_with_rain_total += 1
             else:
                 year_days_with_rain_total = 0
-
-            # Original MySQL way: CASE WHEN sum=0 THEN @total+1 ELSE 0 END
             if row[1] == 0:
                 year_days_without_rain_total += 1
             else:
                 year_days_without_rain_total = 0
-
             year_days_with_rain_output[row[0]] = year_days_with_rain_total
             year_days_without_rain_output[row[0]] = year_days_without_rain_total
 
@@ -1433,7 +1461,7 @@ class getData(SearchList):
                             current_conditions_data = data["current"][0]["response"][0][
                                 "periods"
                             ][0]
-                    cloud_cover = f"{current_conditions_data["sky"]}"
+                    cloud_cover = f"""{current_conditions_data["sky"]}"""
                 except Exception:
                     log.info("No cloud cover data from Xweather weather")
                     cloud_cover = ""
@@ -1449,7 +1477,7 @@ class getData(SearchList):
                     if data["aqi"][0]["response"]:
                         if data["aqi"][0]["error"]:
                             log.error(
-                                f"Error getting AQI from Xweather weather. The error was: {data['aqi'][0]['error']}"
+                                f"""Error getting AQI from Xweather weather. The error was: {data["aqi"][0]["error"]}"""
                             )
                         else:
                             aqi = data["aqi"][0]["response"][0]["periods"][0]["aqi"]
