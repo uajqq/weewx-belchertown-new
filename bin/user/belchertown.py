@@ -1586,7 +1586,7 @@ class getData(SearchList):
                 earthquake_url = f"http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat={latitude}&lon={longitude}&maxradiuskm={earthquake_maxradiuskm}&format=geojson&nodata=204&minmag=2"
             elif extras_dict["earthquake_server"] == "GeoNet":
                 earthquake_url = (
-                    f"https://api.geonet.org.nz/quake?MMI={extras_dict["geonet_mmi"]}"
+                    f"""https://api.geonet.org.nz/quake?MMI={extras_dict["geonet_mmi"]}"""
                 )
             elif extras_dict["earthquake_server"] == "ReNaSS":
                 # Calculate min/max latitude and min/max longitude from radius and station location. https://stackoverflow.com/a/23118314
@@ -2737,7 +2737,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             )
                         except (ValueError, TypeError):
                             log.error(
-                                f"cannot use numberFormat decimals {self.chart_dict[chart_group][plotname][line_name]["numberFormat"]["decimals"]} for rounding"
+                                f"""cannot use numberFormat decimals {self.chart_dict[chart_group][plotname][line_name]["numberFormat"]["decimals"]} for rounding"""
                             )
                     if obs_round is None:
                         # Add rounding from weewx.conf/skin.conf so Highcharts can use it
@@ -3623,8 +3623,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 except ValueError:
                     log.info(
                         f"Observation {observation} is using unit {obs_vt[1]} "
-                        f"that returns {skin_dict["Units"]["StringFormats"].get(obs_vt[1])} "
-                        f"for StringFormat, rather than float point decimal format value - using 0 as rounding"
+                        f"""that returns {skin_dict["Units"]["StringFormats"].get(obs_vt[1])} """
+                        "for StringFormat, rather than float point decimal format value - using 0 as rounding"
                     )
                     usage_round = 0
 
