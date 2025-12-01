@@ -365,18 +365,18 @@ class getData(SearchList):
         # Set default radar html code, and override with user-specified value
         if extras_dict.get("radar_html") == "":
             if extras_dict.get("aeris_map") == "1":
-                radar_html = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat,water-depth,counties:60,rivers,interstates:60,admin-cities,alerts-severe:50:blend(darken),radar:blend(darken)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
+                radar_html = f"""<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat,water-depth,counties:60,rivers,interstates:60,admin-cities,alerts-severe:50:blend(darken),radar:blend(darken)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>"""
             else:
                 if marker == "true":  # set detailLat / detailLon
-                    radar_html = f'<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=true&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&detailLat={lat}&detailLon={lon}&radarRange=-1" frameborder="0"></iframe>'
+                    radar_html = f"""<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=true&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&detailLat={lat}&detailLon={lon}&radarRange=-1" frameborder="0"></iframe>"""
                 else:  # marker == "False"
-                    radar_html = f'<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=false&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&radarRange=-1" frameborder="0"></iframe>'
+                    radar_html = f"""<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=false&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&radarRange=-1" frameborder="0"></iframe>"""
         else:
             radar_html = extras_dict["radar_html"]
 
         if extras_dict.get("radar_html_dark") == "":
             if extras_dict.get("aeris_map") == "1":
-                radar_html_dark = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat-dk,water-depth-dk,counties:60,rivers,interstates:60,admin-cities-dk,alerts-severe:50:blend(lighten),radar:blend(lighten)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
+                radar_html_dark = f"""<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat-dk,water-depth-dk,counties:60,rivers,interstates:60,admin-cities-dk,alerts-severe:50:blend(lighten),radar:blend(lighten)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>"""
             else:
                 radar_html_dark = "None"
         else:
@@ -388,7 +388,7 @@ class getData(SearchList):
         else:
             radar_width_kiosk = extras_dict["radar_width_kiosk"]
             radar_height_kiosk = extras_dict["radar_height_kiosk"]
-            radar_html_kiosk = f'<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{skin_dict['Extras']['radar_html_kiosk']}" frameborder="0"></iframe>'
+            radar_html_kiosk = f"""<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{skin_dict["Extras"]["radar_html_kiosk"]}" frameborder="0"></iframe>"""
 
         # ==============================================================================
         # Build the all time stats.
@@ -647,21 +647,21 @@ class getData(SearchList):
         database_type = config_dict["Databases"][database]["database_type"]
         driver = config_dict["DatabaseTypes"][database_type]["driver"]
         if driver == "weedb.sqlite":
-            year_rainiest_month_sql = f"SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) as month, SUM( sum ) as total FROM archive_day_rain WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = '{time.strftime('%Y', time.localtime(time.time()))}' GROUP BY month ORDER BY total DESC LIMIT 1;"
-            at_rainiest_month_sql = "SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) as month, strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"
-            year_rain_data_sql = f"SELECT dateTime, sum FROM archive_day_rain WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = '{time.strftime('%Y', time.localtime(time.time()))}';"
+            year_rainiest_month_sql = f"""SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, SUM( sum ) as total FROM archive_day_rain WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;"""
+            at_rainiest_month_sql = """SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"""
+            year_rain_data_sql = f"""SELECT dateTime, sum FROM archive_day_rain WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}";"""
             # The all stats from http://www.weewx.com/docs/customizing.htm
             # doesn't seem to calculate "Total Rainfall for" all time stat
             # correctly.
-            at_rain_highest_year_sql = "SELECT strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"
+            at_rain_highest_year_sql = """SELECT strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"""
         elif driver == "weedb.mysql":
-            year_rainiest_month_sql = f"SELECT FROM_UNIXTIME( dateTime, '%m' ) AS month, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = '{time.strftime('%Y', time.localtime(time.time()))}' GROUP BY month ORDER BY total DESC LIMIT 1;"
-            at_rainiest_month_sql = "SELECT FROM_UNIXTIME( dateTime, '%m' ) AS month, FROM_UNIXTIME( dateTime, '%Y' ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"
-            year_rain_data_sql = f"SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = '{time.strftime('%Y', time.localtime(time.time()))}';"
+            year_rainiest_month_sql = f"""SELECT FROM_UNIXTIME( dateTime, "%m" ) AS month, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;"""
+            at_rainiest_month_sql = """SELECT FROM_UNIXTIME( dateTime, "%m" ) AS month, FROM_UNIXTIME( dateTime, "%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"""
+            year_rain_data_sql = f"""SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}";"""
             # The all stats from http://www.weewx.com/docs/customizing.htm
             # doesn't seem to calculate "Total Rainfall for" all time stat
             # correctly.
-            at_rain_highest_year_sql = "SELECT FROM_UNIXTIME( dateTime, '%Y' ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"
+            at_rain_highest_year_sql = """SELECT FROM_UNIXTIME( dateTime, "%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"""
 
         # Rainiest month
         year_rainiest_month_query = wx_manager.getSql(year_rainiest_month_sql)
@@ -849,10 +849,12 @@ class getData(SearchList):
                 # Link to the year file
                 if os.path.exists(noaa_dir + f"NOAA-{y}.txt"):
                     noaa_header_html += (
-                        f'<a href="?yr={y}" class="noaa_rep_nav"><b>{y}</b></a>:'
+                        f"""<a href="?yr={y}" class="noaa_rep_nav"><b>{y}</b></a>:"""
                     )
                 else:
-                    noaa_header_html += f'<span class="noaa_rep_nav"><b>{y}</b></span>:'
+                    noaa_header_html += (
+                        f"""<span class="noaa_rep_nav"><b>{y}</b></span>:"""
+                    )
 
                 # Loop through all 12 months and find if the file exists.  If
                 # the file doesn't exist, just show the month name in the
@@ -864,11 +866,9 @@ class getData(SearchList):
                     )  # Pad the number with a 0 since the NOAA files use 2 digit month
                     month_abbr = calendar.month_abbr[i]
                     if os.path.exists(noaa_dir + f"NOAA-{y}-{month_num}.txt"):
-                        noaa_header_html += f' <a href="?yr={y}&amp;mo={month_num}" class="noaa_rep_nav"><b>{month_abbr}</b></a>'
+                        noaa_header_html += f""" <a href="?yr={y}&amp;mo={month_num}" class="noaa_rep_nav"><b>{month_abbr}</b></a>"""
                     else:
-                        noaa_header_html += (
-                            f' <span class="noaa_rep_nav"><b>{month_abbr}</b></span>'
-                        )
+                        noaa_header_html += f""" <span class="noaa_rep_nav"><b>{month_abbr}</b></span>"""
 
                 # Row build complete, push next row to new line
                 noaa_header_html += "<br>"
@@ -906,8 +906,8 @@ class getData(SearchList):
                 or "forecast_dev_file" in extras_dict
             ):
 
-                forecast_file = html_root + "/json/forecast.json"
-                current_conditions_file = html_root + "/json/current_conditions.json"
+                forecast_file = f"{html_root}/json/forecast.json"
+                current_conditions_file = f"{html_root}/json/current_conditions.json"
                 forecast_api_id = extras_dict["forecast_api_id"]
                 forecast_api_secret = extras_dict["forecast_api_secret"]
                 forecast_units = extras_dict["forecast_units"].lower()
@@ -1022,7 +1022,7 @@ class getData(SearchList):
                         return icon_dict[icon_name]
                     else:
                         log.error(
-                            "aeris-icon-list.json is missing in " + iconlist_file_path
+                            f"aeris-icon-list.json is missing in {iconlist_file_path}"
                         )
                         return "unknown"
 
@@ -1037,7 +1037,7 @@ class getData(SearchList):
                 else:
                     forecast_place = f"{latitude},{longitude}"
                 if belchertown_debug > 0:
-                    log.info(f"'forecast_place' set to {forecast_place}")
+                    log.info(f"forecast_place set to {forecast_place}")
 
                 current_conditions = extras_dict["current_conditions"]
                 if current_conditions == "obs":
@@ -1053,7 +1053,7 @@ class getData(SearchList):
                         )
                 else:  # W0t?
                     log.info(
-                        f"Setting 'current_conditions' to 'obs' due to unknown value: {current_conditions}"
+                        f"Setting current_conditions to obs due to unknown value: {current_conditions}"
                     )
                     current_conditions = "obs"
 
@@ -1252,7 +1252,7 @@ class getData(SearchList):
                                         }
                                     )
                     except Exception as error:
-                        raise Warning(f"Error downloading forecast data: {error}")
+                        log.error(f"Error downloading forecast data: {error}")
 
                     # Save forecast data to file. w+ creates the file if it doesn't
                     # exist, and truncates the file and re-writes it everytime
@@ -1267,7 +1267,7 @@ class getData(SearchList):
                             "is appearing repeatedly, check file permissions."
                         )
                     except IOError as error:
-                        raise Warning(
+                        log.error(
                             f"Error writing forecast info to {forecast_file}. Reason: {error}"
                         )
 
@@ -1357,21 +1357,21 @@ class getData(SearchList):
                                     )
                     except Exception as error:
                         if current_conditions == "obs":
-                            raise Warning(
+                            log.error(
                                 f"Error downloading forecast Current Conditions data. "
                                 f"Check the URL in your configuration and try again. "
                                 f"You are trying to use URL: {current_obs_url}, "
                                 f"and the error is: {error}"
                             )
                         elif current_conditions == "conds":
-                            raise Warning(
+                            log.error(
                                 f"Error downloading forecast Current Conditions data. "
                                 f"Check the URL in your configuration and try again. "
                                 f"You are trying to use URL: {current_conds_url}, "
                                 f"and the error is: {error}"
                             )
                         elif current_conditions == "obs-on-fail-conds":
-                            raise Warning(
+                            log.error(
                                 f"Error downloading forecast Current Conditions data. "
                                 f"Check the URL in your configuration and try again. "
                                 f"You are trying to use URL: {current_conds_url}, "
@@ -1393,7 +1393,7 @@ class getData(SearchList):
                             "is appearing repeatedly, check file permissions."
                         )
                     except IOError as error:
-                        raise Warning(
+                        log.error(
                             f"Error writing forecast Current Conditions info to "
                             f"{current_conditions_file}. Reason: {error}"
                         )
@@ -1629,7 +1629,7 @@ class getData(SearchList):
                                 "Downloading earthquake data with curl was successful."
                             )
                     except Exception as error:
-                        raise Warning(
+                        log.error(
                             f"Error downloading earthquake data using urllib2 and subprocess curl. "
                             f"Your software may need to be updated, or the URL is incorrect. "
                             f"You are trying to use URL: {earthquake_url}, and the error is: {error}"
@@ -1648,7 +1648,7 @@ class getData(SearchList):
                         if weewx.debug:
                             log.debug(f"Earthquake data saved to {earthquake_file}")
                 except IOError as error:
-                    raise Warning(
+                    log.error(
                         f"Error writing earthquake data to {earthquake_file}. Reason: {error}"
                     )
 
@@ -1805,7 +1805,7 @@ class getData(SearchList):
                 try:
                     obs_output = f"{float(visibility):.2f} {visibility_unit}"
                 except:
-                    raise Warning(
+                    log.error(
                         "Error adding visiblity to station observations table. "
                         "Check that you have forecast data, or remove visibility from your station_observations Extras option."
                     )
@@ -2513,7 +2513,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         minstamp = line_options.get("timespan_start", None)
                         maxstamp = line_options.get("timespan_stop", None)
                         if minstamp is None or maxstamp is None:
-                            raise Warning(
+                            log.error(
                                 "Error trying to create timespan_specific graph. "
                                 "You are missing either timespan_start or timespan_stop options."
                             )
@@ -3067,7 +3067,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if weatherRange_obs_lookup is not None:
                 obs_lookup = weatherRange_obs_lookup
             else:
-                raise Warning(
+                log.error(
                     "Error trying to create the weather range graph. "
                     "You are missing the range_type configuration item."
                 )
@@ -3088,7 +3088,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_interval,
                 )
             except Exception as error:
-                raise Warning(
+                log.error(
                     f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
                     f"Error was: {error}."
                 )
@@ -3115,7 +3115,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_interval,
                 )
             except Exception as error:
-                raise Warning(
+                log.error(
                     f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
                     f"Error was: {error}."
                 )
@@ -3142,7 +3142,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_interval,
                 )
             except Exception as error:
-                raise Warning(
+                log.error(
                     f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
                     f"Error was: {error}."
                 )
@@ -3208,7 +3208,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_interval,
                 )
             except Exception as error:
-                raise Warning(
+                log.error(
                     f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
                     f"Error was: {error}."
                 )
@@ -3235,7 +3235,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     aggregate_interval,
                 )
             except Exception as error:
-                raise Warning(
+                log.error(
                     f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
                     f"Error was: {error}."
                 )
@@ -3495,7 +3495,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             try:
                 query = archive.genSql(sql_lookup)
             except Exception as error:
-                raise Warning(f"SQL error in sql_lookup. The error is: {error}")
+                log.error(f"SQL error in sql_lookup. The error is: {error}")
 
             for row in query:
                 xAxis_labels.append(row[0])
@@ -3538,7 +3538,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
         except Exception as error:
-            raise Warning(
+            log.error(
                 f"Error trying to use database binding {binding} to graph observation {obs_lookup}. Error was: {error}."
             )
 
