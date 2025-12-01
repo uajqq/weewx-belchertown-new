@@ -43,7 +43,7 @@ from weewx.tags import TimespanBinder
 
 if weewx.__version__ < "5":
     raise weewx.UnsupportedFeature(
-        "WeeWX 5 and newer is required, found {weewx.__version__}"
+        f"WeeWX 5 and newer is required, found {weewx.__version__}"
     )
 
 log = logging.getLogger(__name__)
@@ -70,132 +70,118 @@ class getData(SearchList):
 
         if not isinstance(pointA, tuple) or not isinstance(pointB, tuple):
             raise TypeError("Only tuples are supported as arguments")
-        lat1 = pointA[0]
-        lon1 = pointA[1]
-        lat2 = pointB[0]
-        lon2 = pointB[1]
-        # convert decimal degrees to radians
-        lat1r, lon1r, lat2r, lon2r = map(radians, [lat1, lon1, lat2, lon2])
-        # Haversine formula
+
+        lat1r = radians(pointA[0])
+        lon1r = radians(pointA[1])
+        lat2r = radians(pointB[0])
+        lon2r = radians(pointB[1])
+
+        # Haversine formula (minimized repeated trig calls)
         dlat = lat2r - lat1r
         dlon = lon2r - lon1r
-        a = sin(dlat / 2) ** 2 + cos(lat1r) * cos(lat2r) * sin(dlon / 2) ** 2
+        sin_dlat_2 = sin(dlat * 0.5)
+        sin_dlon_2 = sin(dlon * 0.5)
+        a = sin_dlat_2 * sin_dlat_2 + cos(lat1r) * cos(lat2r) * sin_dlon_2 * sin_dlon_2
         c = 2 * asin(sqrt(a))
-        # Radius of earth in kilometers is 6371. Use 3956 for miles
-        if distance_unit == "km":
-            r = 6371
-        else:
-            # Assume mile
-            r = 3956
-        bearing = self.get_gps_bearing(pointA, pointB)
-        # Returns distance as object 0 and bearing as object 1
-        return [(c * r), self.get_cardinal_direction(bearing), bearing]
 
-    def get_gps_bearing(self, pointA, pointB):
-        """
-        https://gist.github.com/jeromer/2005586
-        Calculates the bearing between two points.
-        :Parameters:
-            - pointA: The tuple representing the latitude/longitude for the
-                first point. Latitude and longitude must be in decimal degrees
-            - pointB: The tuple representing the latitude/longitude for the
-                second point. Latitude and longitude must be in decimal degrees
-        :Returns:
-            The bearing in degrees
-        :Returns Type:
-            float
-        """
-        if not isinstance((pointA, pointB), tuple):
-            raise TypeError("Only tuples are supported as arguments")
-        lat1 = radians(pointA[0])
-        lat2 = radians(pointB[0])
-        diffLong = radians(pointB[1] - pointA[1])
-        x = sin(diffLong) * cos(lat2)
-        y = cos(lat1) * sin(lat2) - (sin(lat1) * cos(lat2) * cos(diffLong))
-        initial_bearing = atan2(x, y)
+        # Radius of earth: kilometers or miles
+        r = 6371 if distance_unit == "km" else 3956
+
+        # Inline bearing calculation to avoid extra function call
+        x = sin(dlon) * cos(lat2r)
+        y = cos(lat1r) * sin(lat2r) - sin(lat1r) * cos(lat2r) * cos(dlon)
+        initial_bearing = degrees(atan2(x, y))
         # Now we have the initial bearing but math.atan2 return values
         # from -180 to + 180 degrees which is not what we want for a compass bearing
         # The solution is to normalize the initial bearing as shown below
-        initial_bearing = degrees(initial_bearing)
-        compass_bearing = (initial_bearing + 360) % 360
-        return compass_bearing
+        bearing = (initial_bearing + 360) % 360
+
+        # Returns distance (index 0), cardinal (index 1), raw bearing (index 2)
+        return [(c * r), self.get_cardinal_direction(bearing), bearing]
 
     def get_cardinal_direction(self, degree, return_only_labels=False):
         """
-        Divides compass into 16 wedges, then use modular arithmetic to find direction.
-        Starts at -11.25 degrees since N spans from -11.25 to 11.25 degrees.
-        Uses int() to round down without requiring Math module.
+        Divides compass into 16 wedges and returns direction label.
         """
-
-        default_ordinate_names = [
-            "N",
-            "NNE",
-            "NE",
-            "ENE",
-            "E",
-            "ESE",
-            "SE",
-            "SSE",
-            "S",
-            "SSW",
-            "SW",
-            "WSW",
-            "W",
-            "WNW",
-            "NW",
-            "NNW",
-        ]
-        try:
-            ordinate_names = weeutil.weeutil.option_as_list(
-                self.generator.skin_dict["Units"]["Ordinates"]["directions"]
-            )
-        except KeyError:
-            ordinate_names = default_ordinate_names
-
+        skin_dict = self.generator.skin_dict
+        ordinate_names = (
+            skin_dict.get("Units", {}).get("Ordinates", {}).get("directions", None)
+        )
+        if ordinate_names is not None:
+            if isinstance(ordinate_names, list):
+                names = ordinate_names
+            else:
+                names = weeutil.weeutil.option_as_list(ordinate_names)
+        else:
+            names = [
+                "N",
+                "NNE",
+                "NE",
+                "ENE",
+                "E",
+                "ESE",
+                "SE",
+                "SSE",
+                "S",
+                "SSW",
+                "SW",
+                "WSW",
+                "W",
+                "WNW",
+                "NW",
+                "NNW",
+            ]
         if return_only_labels:
-            return ordinate_names
-
-        return ordinate_names[int(((degree - 11.25) / 22.5) + 1) % 16]
+            return names
+        # Avoid unnecessary computation if degree is not a number
+        try:
+            idx = int(((float(degree) - 11.25) / 22.5) + 1) % 16
+            return names[idx]
+        except Exception:
+            return names[0]
 
     def get_extension_list(self, timespan, db_lookup):
         """
         Build the data needed for the Belchertown skin
         """
+        # Cache frequently accessed objects
+        config_dict = self.generator.config_dict
+        skin_dict = self.generator.skin_dict
+        extras_dict = self.generator.skin_dict["Extras"]
+        db_binder = self.generator.db_binder
+        converter = self.generator.converter
+        formatter = self.generator.formatter
 
         # Look for the debug flag which can be used to show more logging
-        weewx.debug = int(self.generator.config_dict.get("debug", 0))
+        weewx.debug = int(config_dict.get("debug", 0))
 
         # Setup label dict for text and titles
         try:
-            d = self.generator.skin_dict["Labels"]["Generic"]
+            d = skin_dict["Labels"]["Generic"]
         except KeyError:
             d = {}
         label_dict = weeutil.weeutil.KeyDict(d)
 
         # Setup database manager
-        binding = self.generator.config_dict["StdReport"].get(
-            "data_binding", "wx_binding"
-        )
-        manager = self.generator.db_binder.get_manager(binding)
+        binding = config_dict["StdReport"].get("data_binding", "wx_binding")
+        manager = db_binder.get_manager(binding)
 
-        belchertown_debug = self.generator.skin_dict["Extras"].get(
-            "belchertown_debug", 0
-        )
-        belchertown_debug = int(belchertown_debug)
+        belchertown_debug = int(extras_dict.get("belchertown_debug", 0))
 
         if belchertown_debug > 0:
             log.info(f"'belchertown_debug' set to {belchertown_debug}")
 
         # Find the right HTML ROOT
-        if "HTML_ROOT" in self.generator.skin_dict:
+        weewx_root = config_dict["WEEWX_ROOT"]
+        if "HTML_ROOT" in skin_dict:
             html_root = os.path.join(
-                self.generator.config_dict["WEEWX_ROOT"],
-                self.generator.skin_dict["HTML_ROOT"],
+                weewx_root,
+                skin_dict["HTML_ROOT"],
             )
         else:
             html_root = os.path.join(
-                self.generator.config_dict["WEEWX_ROOT"],
-                self.generator.config_dict["StdReport"]["HTML_ROOT"],
+                weewx_root,
+                config_dict["StdReport"]["HTML_ROOT"],
             )
 
         # Setup UTC offset hours for moment.js in index.html
@@ -206,9 +192,7 @@ class getData(SearchList):
         ) / 60
 
         try:
-            moment_js_tz = self.generator.skin_dict["Units"]["TimeZone"].get(
-                "time_zone"
-            )
+            moment_js_tz = skin_dict["Units"]["TimeZone"].get("time_zone")
         except KeyError:
             moment_js_tz = ""
 
@@ -221,7 +205,8 @@ class getData(SearchList):
 
         # If theme locale is auto, get the system locale for use with
         # moment.js, and the system decimal for use with highcharts
-        if self.generator.skin_dict["Extras"]["belchertown_locale"] == "auto":
+        belchertown_locale = extras_dict["belchertown_locale"]
+        if belchertown_locale == "auto":
             system_locale, locale_encoding = locale.getdefaultlocale()
         else:
             try:
@@ -229,18 +214,16 @@ class getData(SearchList):
                 # format. Example: "en_US.UTF-8", or "de_DE.UTF-8"
                 locale.setlocale(
                     locale.LC_ALL,
-                    self.generator.skin_dict["Extras"]["belchertown_locale"],
+                    belchertown_locale,
                 )
                 system_locale, locale_encoding = locale.getlocale()
             except Exception as error:
                 # The system can't find the locale requested, so just set the
                 # variables anyways for JavaScript's use.
-                system_locale, locale_encoding = self.generator.skin_dict["Extras"][
-                    "belchertown_locale"
-                ].split(".")
+                system_locale, locale_encoding = belchertown_locale.split(".")
                 if belchertown_debug:
                     log.error(
-                        f"Locale: Error using locale {self.generator.skin_dict['Extras']['belchertown_locale']}. "
+                        f"Locale: Error using locale {belchertown_locale}. "
                         f"This locale may not be installed on your system and you may see unexpected results. "
                         f"Python could not set the requested locale, but Belchertown skin JavaScript will attempt to use the provided locale string. Full error: {error}"
                     )
@@ -260,26 +243,25 @@ class getData(SearchList):
         except:
             system_locale_js = "en-US"  # Error finding locale, set to en-US
 
-        highcharts_decimal = self.generator.skin_dict["Extras"].get(
-            "highcharts_decimal", None
-        )
+        # Cache locale conversion for highcharts settings
+        locale_conv = locale.localeconv()
+
+        highcharts_decimal = extras_dict.get("highcharts_decimal", None)
         # Change the Highcharts decimal to the locale if the option is missing
         # or on auto mode, otherwise use whats defined in Extras
         if highcharts_decimal is None or highcharts_decimal == "auto":
             try:
-                highcharts_decimal = locale.localeconv()["decimal_point"]
+                highcharts_decimal = locale_conv["decimal_point"]
             except:
                 # Locale not found, default back to a period
                 highcharts_decimal = "."
 
-        highcharts_thousands = self.generator.skin_dict["Extras"].get(
-            "highcharts_thousands", None
-        )
+        highcharts_thousands = extras_dict.get("highcharts_thousands", None)
         # Change the Highcharts thousands separator to the locale if the option
         # is missing or on auto mode, otherwise use whats defined in Extras
         if highcharts_thousands is None or highcharts_thousands == "auto":
             try:
-                highcharts_thousands = locale.localeconv()["thousands_sep"]
+                highcharts_thousands = locale_conv["thousands_sep"]
             except:
                 # Locale not found, default back to a comma
                 highcharts_thousands = ","
@@ -287,7 +269,7 @@ class getData(SearchList):
         # Get the archive interval for the highcharts gapsize
         try:
             archive_interval_ms = (
-                int(self.generator.config_dict["StdArchive"]["archive_interval"]) * 1000
+                int(config_dict["StdArchive"]["archive_interval"]) * 1000
             )
         except KeyError:
             archive_interval_ms = (
@@ -304,18 +286,13 @@ class getData(SearchList):
         # ('week', ['chart1', 'chart5', 'chart6', 'chart2', 'chart3', 'chart4']),
         # ('month', ['this_is_chart1', 'chart2_is_here', 'chart3', 'windSpeed_and_windDir', 'chart5', 'chart6', 'chart7']),
         # ('year', ['chart1', 'chart2', 'chart3', 'chart4', 'chart5'])])
-        chart_config_path = os.path.join(
-            self.generator.config_dict["WEEWX_ROOT"],
-            self.generator.skin_dict["SKIN_ROOT"],
-            self.generator.skin_dict.get("skin", ""),
-            "graphs.conf",
+        skin_root_path = os.path.join(
+            weewx_root,
+            skin_dict["SKIN_ROOT"],
+            skin_dict.get("skin", ""),
         )
-        default_chart_config_path = os.path.join(
-            self.generator.config_dict["WEEWX_ROOT"],
-            self.generator.skin_dict["SKIN_ROOT"],
-            self.generator.skin_dict.get("skin", ""),
-            "graphs.conf.example",
-        )
+        chart_config_path = os.path.join(skin_root_path, "graphs.conf")
+        default_chart_config_path = os.path.join(skin_root_path, "graphs.conf.example")
         if os.path.exists(chart_config_path):
             chart_dict = configobj.ConfigObj(chart_config_path, file_error=True)
         else:
@@ -369,54 +346,49 @@ class getData(SearchList):
             graph_page_buttons += " "  # Spacer between the button
 
         # Set a default radar URL using station's lat/lon
-        lat = self.generator.config_dict["Station"]["latitude"]
-        lon = self.generator.config_dict["Station"]["longitude"]
-        radar_width = self.generator.skin_dict["Extras"]["radar_width"]
-        radar_height = self.generator.skin_dict["Extras"]["radar_height"]
-        radar_rain = self.generator.skin_dict["Extras"]["radar_rain"]
-        radar_temp = self.generator.skin_dict["Extras"]["radar_temp"]
-        radar_wind = self.generator.skin_dict["Extras"]["radar_wind"]
-        if "radar_zoom" in self.generator.skin_dict["Extras"]:
-            zoom = self.generator.skin_dict["Extras"]["radar_zoom"]
+        lat = config_dict["Station"]["latitude"]
+        lon = config_dict["Station"]["longitude"]
+        radar_width = extras_dict["radar_width"]
+        radar_height = extras_dict["radar_height"]
+        radar_rain = extras_dict["radar_rain"]
+        radar_temp = extras_dict["radar_temp"]
+        radar_wind = extras_dict["radar_wind"]
+        if "radar_zoom" in extras_dict:
+            zoom = extras_dict["radar_zoom"]
         else:
             zoom = "8"
-        if (
-            "radar_marker" in self.generator.skin_dict["Extras"]
-            and self.generator.skin_dict["Extras"]["radar_marker"] == "1"
-        ):
+        if "radar_marker" in extras_dict and extras_dict["radar_marker"] == "1":
             marker = "true"
         else:
             marker = ""
 
         # Set default radar html code, and override with user-specified value
-        if self.generator.skin_dict["Extras"].get("radar_html") == "":
-            if self.generator.skin_dict["Extras"].get("aeris_map") == "1":
-                radar_html = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{self.generator.skin_dict["Extras"]["forecast_api_id"]}_{self.generator.skin_dict["Extras"]["forecast_api_secret"]}/flat,water-depth,counties:60,rivers,interstates:60,admin-cities,alerts-severe:50:blend(darken),radar:blend(darken)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
+        if extras_dict.get("radar_html") == "":
+            if extras_dict.get("aeris_map") == "1":
+                radar_html = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat,water-depth,counties:60,rivers,interstates:60,admin-cities,alerts-severe:50:blend(darken),radar:blend(darken)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
             else:
                 if marker == "true":  # set detailLat / detailLon
                     radar_html = f'<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=true&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&detailLat={lat}&detailLon={lon}&radarRange=-1" frameborder="0"></iframe>'
                 else:  # marker == "False"
                     radar_html = f'<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=false&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&radarRange=-1" frameborder="0"></iframe>'
         else:
-            radar_html = self.generator.skin_dict["Extras"]["radar_html"]
+            radar_html = extras_dict["radar_html"]
 
-        if self.generator.skin_dict["Extras"].get("radar_html_dark") == "":
-            if self.generator.skin_dict["Extras"].get("aeris_map") == "1":
-                radar_html_dark = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{self.generator.skin_dict['Extras']['forecast_api_id']}_{self.generator.skin_dict['Extras']['forecast_api_secret']}/flat-dk,water-depth-dk,counties:60,rivers,interstates:60,admin-cities-dk,alerts-severe:50:blend(lighten),radar:blend(lighten)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
+        if extras_dict.get("radar_html_dark") == "":
+            if extras_dict.get("aeris_map") == "1":
+                radar_html_dark = f'<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat-dk,water-depth-dk,counties:60,rivers,interstates:60,admin-cities-dk,alerts-severe:50:blend(lighten),radar:blend(lighten)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>'
             else:
                 radar_html_dark = "None"
         else:
-            radar_html_dark = self.generator.skin_dict["Extras"]["radar_html_dark"]
+            radar_html_dark = extras_dict["radar_html_dark"]
 
         # If the kiosk radar is different then the homepage one.
-        if self.generator.skin_dict["Extras"].get("radar_html_kiosk") == "":
+        if extras_dict.get("radar_html_kiosk") == "":
             radar_html_kiosk = radar_html
         else:
-            radar_width_kiosk = self.generator.skin_dict["Extras"]["radar_width_kiosk"]
-            radar_height_kiosk = self.generator.skin_dict["Extras"][
-                "radar_height_kiosk"
-            ]
-            radar_html_kiosk = f'<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{self.generator.skin_dict["Extras"]["radar_html_kiosk"]}" frameborder="0"></iframe>'
+            radar_width_kiosk = extras_dict["radar_width_kiosk"]
+            radar_height_kiosk = extras_dict["radar_height_kiosk"]
+            radar_html_kiosk = f'<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{skin_dict['Extras']['radar_html_kiosk']}" frameborder="0"></iframe>'
 
         # ==============================================================================
         # Build the all time stats.
@@ -435,7 +407,7 @@ class getData(SearchList):
 
         # Setup the converter
         # Get the target unit nickname (something like 'US' or 'METRIC'):
-        target_unit_nickname = self.generator.config_dict["StdConvert"]["target_unit"]
+        target_unit_nickname = config_dict["StdConvert"]["target_unit"]
         # Get the target unit: weewx.US, weewx.METRIC, weewx.METRICWX
         target_unit = weewx.units.unit_constants[target_unit_nickname.upper()]
         # Bind to the appropriate standard converter units
@@ -463,12 +435,10 @@ class getData(SearchList):
         outTemp_unit = converter.group_unit_dict["group_temperature"]
 
         # Find the group_name for outTemp from the skin.conf
-        skin_outTemp_unit = self.generator.converter.group_unit_dict[
-            "group_temperature"
-        ]
+        skin_outTemp_unit = converter.group_unit_dict["group_temperature"]
 
         # Find the number of decimals to round to based on the skin.conf
-        outTemp_round = self.generator.skin_dict["Units"]["StringFormats"].get(
+        outTemp_round = skin_dict["Units"]["StringFormats"].get(
             skin_outTemp_unit, "%.1f"
         )
 
@@ -481,8 +451,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_max_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_max_range_max_tuple)[0]
+                outTemp_round % converter.convert(year_outTemp_max_range_max_tuple)[0]
             )
             # Min temperature for this day
             year_outTemp_max_range_min_tuple = (
@@ -491,8 +460,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_max_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_max_range_min_tuple)[0]
+                outTemp_round % converter.convert(year_outTemp_max_range_min_tuple)[0]
             )
             # Largest Daily Temperature Range total
             year_outTemp_max_range_total = outTemp_round % (
@@ -522,8 +490,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_min_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_min_range_max_tuple)[0]
+                outTemp_round % converter.convert(year_outTemp_min_range_max_tuple)[0]
             )
             # Min temperature for this day
             year_outTemp_min_range_min_tuple = (
@@ -532,8 +499,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_min_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_min_range_min_tuple)[0]
+                outTemp_round % converter.convert(year_outTemp_min_range_min_tuple)[0]
             )
             # Smallest Daily Temperature Range total
             year_outTemp_min_range_total = outTemp_round % (
@@ -563,8 +529,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_max_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_max_range_max_tuple)[0]
+                outTemp_round % converter.convert(at_outTemp_max_range_max_tuple)[0]
             )
             # Min temperature for this day
             at_outTemp_max_range_min_tuple = (
@@ -573,8 +538,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_max_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_max_range_min_tuple)[0]
+                outTemp_round % converter.convert(at_outTemp_max_range_min_tuple)[0]
             )
             # Largest Daily Temperature Range total
             at_outTemp_max_range_total = outTemp_round % (
@@ -604,8 +568,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_min_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_min_range_max_tuple)[0]
+                outTemp_round % converter.convert(at_outTemp_min_range_max_tuple)[0]
             )
             # Min temperature for this day
             at_outTemp_min_range_min_tuple = (
@@ -614,8 +577,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_min_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_min_range_min_tuple)[0]
+                outTemp_round % converter.convert(at_outTemp_min_range_min_tuple)[0]
             )
             # Smallest Daily Temperature Range total
             at_outTemp_min_range_total = outTemp_round % (
@@ -641,12 +603,10 @@ class getData(SearchList):
         rain_unit = converter.group_unit_dict["group_rain"]
 
         # Find the group_name for rain in the skin.conf
-        skin_rain_unit = self.generator.converter.group_unit_dict["group_rain"]
+        skin_rain_unit = converter.group_unit_dict["group_rain"]
 
         # Find the number of decimals to round the result based on the skin.conf
-        rain_round = self.generator.skin_dict["Units"]["StringFormats"].get(
-            skin_rain_unit, "%.2f"
-        )
+        rain_round = skin_dict["Units"]["StringFormats"].get(skin_rain_unit, "%.2f")
 
         # Rainiest Day
         rainiest_day_query = wx_manager.getSql(
@@ -655,7 +615,7 @@ class getData(SearchList):
         if rainiest_day_query is not None:
             rainiest_day_tuple = (rainiest_day_query[1], rain_unit, "group_rain")
             rainiest_day_converted = (
-                rain_round % self.generator.converter.convert(rainiest_day_tuple)[0]
+                rain_round % converter.convert(rainiest_day_tuple)[0]
             )
             rainiest_day = [
                 rainiest_day_query[0],
@@ -673,7 +633,7 @@ class getData(SearchList):
         )
         at_rainiest_day_tuple = (at_rainiest_day_query[1], rain_unit, "group_rain")
         at_rainiest_day_converted = (
-            rain_round % self.generator.converter.convert(at_rainiest_day_tuple)[0]
+            rain_round % converter.convert(at_rainiest_day_tuple)[0]
         )
         at_rainiest_day = [
             at_rainiest_day_query[0],
@@ -682,28 +642,26 @@ class getData(SearchList):
 
         # Find what kind of database we're working with and specify the
         # correctly tailored SQL Query for each type of database
-        data_binding = self.generator.config_dict["StdArchive"]["data_binding"]
-        database = self.generator.config_dict["DataBindings"][data_binding]["database"]
-        database_type = self.generator.config_dict["Databases"][database][
-            "database_type"
-        ]
-        driver = self.generator.config_dict["DatabaseTypes"][database_type]["driver"]
+        data_binding = config_dict["StdArchive"]["data_binding"]
+        database = config_dict["DataBindings"][data_binding]["database"]
+        database_type = config_dict["Databases"][database]["database_type"]
+        driver = config_dict["DatabaseTypes"][database_type]["driver"]
         if driver == "weedb.sqlite":
-            year_rainiest_month_sql = f'SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, SUM( sum ) as total FROM archive_day_rain WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;'
-            at_rainiest_month_sql = 'SELECT strftime("%m", datetime(dateTime, "unixepoch", "localtime")) as month, strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;'
-            year_rain_data_sql = f'SELECT dateTime, sum FROM archive_day_rain WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = "{time.strftime("%Y", time.localtime(time.time()))}";'
+            year_rainiest_month_sql = f"SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) as month, SUM( sum ) as total FROM archive_day_rain WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = '{time.strftime('%Y', time.localtime(time.time()))}' GROUP BY month ORDER BY total DESC LIMIT 1;"
+            at_rainiest_month_sql = "SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) as month, strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"
+            year_rain_data_sql = f"SELECT dateTime, sum FROM archive_day_rain WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = '{time.strftime('%Y', time.localtime(time.time()))}';"
             # The all stats from http://www.weewx.com/docs/customizing.htm
             # doesn't seem to calculate "Total Rainfall for" all time stat
             # correctly.
-            at_rain_highest_year_sql = 'SELECT strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;'
+            at_rain_highest_year_sql = "SELECT strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) as year, SUM( sum ) as total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"
         elif driver == "weedb.mysql":
-            year_rainiest_month_sql = f'SELECT FROM_UNIXTIME( dateTime, "%m" ) AS month, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}" GROUP BY month ORDER BY total DESC LIMIT 1;'
-            at_rainiest_month_sql = 'SELECT FROM_UNIXTIME( dateTime, "%m" ) AS month, FROM_UNIXTIME( dateTime, "%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;'
-            year_rain_data_sql = f'SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = "{time.strftime("%Y", time.localtime(time.time()))}";'
+            year_rainiest_month_sql = f"SELECT FROM_UNIXTIME( dateTime, '%m' ) AS month, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = '{time.strftime('%Y', time.localtime(time.time()))}' GROUP BY month ORDER BY total DESC LIMIT 1;"
+            at_rainiest_month_sql = "SELECT FROM_UNIXTIME( dateTime, '%m' ) AS month, FROM_UNIXTIME( dateTime, '%Y' ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY month, year ORDER BY total DESC LIMIT 1;"
+            year_rain_data_sql = f"SELECT dateTime, ROUND( sum, 2 ) FROM archive_day_rain WHERE year( FROM_UNIXTIME( dateTime ) ) = '{time.strftime('%Y', time.localtime(time.time()))}';"
             # The all stats from http://www.weewx.com/docs/customizing.htm
             # doesn't seem to calculate "Total Rainfall for" all time stat
             # correctly.
-            at_rain_highest_year_sql = 'SELECT FROM_UNIXTIME( dateTime, "%Y" ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;'
+            at_rain_highest_year_sql = "SELECT FROM_UNIXTIME( dateTime, '%Y' ) AS year, ROUND( SUM( sum ), 2 ) AS total FROM archive_day_rain GROUP BY year ORDER BY total DESC LIMIT 1;"
 
         # Rainiest month
         year_rainiest_month_query = wx_manager.getSql(year_rainiest_month_sql)
@@ -714,8 +672,7 @@ class getData(SearchList):
                 "group_rain",
             )
             year_rainiest_month_converted = (
-                rain_round
-                % self.generator.converter.convert(year_rainiest_month_tuple)[0]
+                rain_round % converter.convert(year_rainiest_month_tuple)[0]
             )
             year_rainiest_month_name = calendar.month_name[
                 int(year_rainiest_month_query[0])
@@ -731,7 +688,7 @@ class getData(SearchList):
         at_rainiest_month_query = wx_manager.getSql(at_rainiest_month_sql)
         at_rainiest_month_tuple = (at_rainiest_month_query[2], rain_unit, "group_rain")
         at_rainiest_month_converted = (
-            rain_round % self.generator.converter.convert(at_rainiest_month_tuple)[0]
+            rain_round % converter.convert(at_rainiest_month_tuple)[0]
         )
         at_rainiest_month_name = calendar.month_name[int(at_rainiest_month_query[0])]
         at_rainiest_month = [
@@ -747,7 +704,7 @@ class getData(SearchList):
             "group_rain",
         )
         at_rain_highest_year_converted = (
-            rain_round % self.generator.converter.convert(at_rain_highest_year_tuple)[0]
+            rain_round % converter.convert(at_rain_highest_year_tuple)[0]
         )
         at_rain_highest_year = [
             at_rain_highest_year_query[0],
@@ -855,7 +812,7 @@ class getData(SearchList):
             timespan,
             db_lookup,
             formatter=self.generator.formatter,
-            converter=self.generator.converter,
+            converter=converter,
             skin_dict=self.generator.skin_dict,
         )
 
@@ -944,28 +901,20 @@ class getData(SearchList):
 
         try:
             if (
-                self.generator.skin_dict["Extras"]["forecast_enabled"] == "1"
-                and self.generator.skin_dict["Extras"]["forecast_api_id"] != ""
-                or "forecast_dev_file" in self.generator.skin_dict["Extras"]
+                extras_dict["forecast_enabled"] == "1"
+                and extras_dict["forecast_api_id"] != ""
+                or "forecast_dev_file" in extras_dict
             ):
 
                 forecast_file = html_root + "/json/forecast.json"
                 current_conditions_file = html_root + "/json/current_conditions.json"
-                forecast_api_id = self.generator.skin_dict["Extras"]["forecast_api_id"]
-                forecast_api_secret = self.generator.skin_dict["Extras"][
-                    "forecast_api_secret"
-                ]
-                forecast_units = self.generator.skin_dict["Extras"][
-                    "forecast_units"
-                ].lower()
-                latitude = self.generator.config_dict["Station"]["latitude"]
-                longitude = self.generator.config_dict["Station"]["longitude"]
-                forecast_stale_timer = self.generator.skin_dict["Extras"][
-                    "forecast_stale"
-                ]
-                current_conditions_stale_timer = self.generator.skin_dict["Extras"][
-                    "current_conditions_stale"
-                ]
+                forecast_api_id = extras_dict["forecast_api_id"]
+                forecast_api_secret = extras_dict["forecast_api_secret"]
+                forecast_units = extras_dict["forecast_units"].lower()
+                latitude = config_dict["Station"]["latitude"]
+                longitude = config_dict["Station"]["longitude"]
+                forecast_stale_timer = extras_dict["forecast_stale"]
+                current_conditions_stale_timer = extras_dict["current_conditions_stale"]
                 forecast_is_stale = False
                 current_conditions_is_stale = False
 
@@ -1061,9 +1010,9 @@ class getData(SearchList):
                 def xweather_icon(data):
                     # https://www.xweather.com/docs/weather-api/reference/icon-list
                     iconlist_file_path = os.path.join(
-                        self.generator.config_dict["WEEWX_ROOT"],
-                        self.generator.skin_dict["SKIN_ROOT"],
-                        self.generator.skin_dict.get("skin", ""),
+                        config_dict["WEEWX_ROOT"],
+                        skin_dict["SKIN_ROOT"],
+                        skin_dict.get("skin", ""),
                         "images/aeris-icon-list.json",
                     )
                     if os.path.exists(iconlist_file_path):
@@ -1077,11 +1026,9 @@ class getData(SearchList):
                         )
                         return "unknown"
 
-                forecast_lang = self.generator.skin_dict["Extras"][
-                    "forecast_lang"
-                ].lower()
+                forecast_lang = extras_dict["forecast_lang"].lower()
 
-                forecast_place = self.generator.skin_dict["Extras"]["forecast_place"]
+                forecast_place = extras_dict["forecast_place"]
                 if forecast_place:
                     if belchertown_debug > 0:
                         log.info(
@@ -1092,9 +1039,7 @@ class getData(SearchList):
                 if belchertown_debug > 0:
                     log.info(f"'forecast_place' set to {forecast_place}")
 
-                current_conditions = self.generator.skin_dict["Extras"][
-                    "current_conditions"
-                ]
+                current_conditions = extras_dict["current_conditions"]
                 if current_conditions == "obs":
                     if belchertown_debug > 0:
                         log.info("Current conditions based on /observations endpoint")
@@ -1112,22 +1057,19 @@ class getData(SearchList):
                     )
                     current_conditions = "obs"
 
-                if (
-                    self.generator.skin_dict["Extras"]["forecast_aeris_use_metar"]
-                    == "1"
-                ):  # filter on METAR
+                if extras_dict["forecast_aeris_use_metar"] == "1":  # filter on METAR
                     current_obs_url = f"https://data.api.xweather.com/observations/{forecast_place}?format=json&filter=metar&limit=1&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                 else:  # filter on All stations
                     current_obs_url = f"https://data.api.xweather.com/observations/{forecast_place}?format=json&filter=allstations&limit=1&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+
                 current_conds_url = f"https://data.api.xweather.com/conditions/{forecast_place}?format=json&plimit=1&filter=1min&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                 forecast_24hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=day&limit=7&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                 forecast_3hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=3hr&limit=8&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                 forecast_1hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=1hr&limit=16&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                 aqi_url = f"https://data.api.xweather.com/airquality/{forecast_place}?format=json&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
-                if self.generator.skin_dict["Extras"]["forecast_alert_limit"]:
-                    forecast_alert_limit = self.generator.skin_dict["Extras"][
-                        "forecast_alert_limit"
-                    ]
+
+                if extras_dict["forecast_alert_limit"]:
+                    forecast_alert_limit = extras_dict["forecast_alert_limit"]
                 else:  # Default to 1 alerts to show if the option is missing. Can go up to 10
                     forecast_alert_limit = 1
 
@@ -1176,12 +1118,10 @@ class getData(SearchList):
 
                         user_agent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3"
                         headers = {"User-Agent": user_agent}
-                        if "forecast_dev_file" in self.generator.skin_dict["Extras"]:
+                        if "forecast_dev_file" in extras_dict:
                             # Hidden option to use a pre-downloaded forecast file
                             # rather than using API calls for no reason
-                            dev_forecast_file = self.generator.skin_dict["Extras"][
-                                "forecast_dev_file"
-                            ]
+                            dev_forecast_file = extras_dict["forecast_dev_file"]
                             req = Request(dev_forecast_file, None, headers)
                             response = urlopen(req)
                             forecast_file_result = response.read()
@@ -1215,12 +1155,7 @@ class getData(SearchList):
                             response.close()
                             if belchertown_debug > 1:
                                 log.info(f"AQI URL: {aqi_url}")
-                            if (
-                                self.generator.skin_dict["Extras"][
-                                    "forecast_alert_enabled"
-                                ]
-                                == "1"
-                            ):
+                            if extras_dict["forecast_alert_enabled"] == "1":
                                 # Alerts
                                 req = Request(forecast_alerts_url, None, headers)
                                 response = urlopen(req)
@@ -1230,12 +1165,7 @@ class getData(SearchList):
                                     log.info(f"Alerts URL: {forecast_alerts_url}")
 
                             # Combine all into 1 file
-                            if (
-                                self.generator.skin_dict["Extras"][
-                                    "forecast_alert_enabled"
-                                ]
-                                == "1"
-                            ):
+                            if extras_dict["forecast_alert_enabled"] == "1":
                                 try:
                                     forecast_file_result = json.dumps(
                                         {
@@ -1348,13 +1278,10 @@ class getData(SearchList):
 
                         user_agent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3"
                         headers = {"User-Agent": user_agent}
-                        if (
-                            "current_conditions_dev_file"
-                            in self.generator.skin_dict["Extras"]
-                        ):
+                        if "current_conditions_dev_file" in extras_dict:
                             # Hidden option to use a pre-downloaded forecast file
                             # rather than using API calls for no reason
-                            dev_forecast_file = self.generator.skin_dict["Extras"][
+                            dev_forecast_file = extras_dict[
                                 "current_conditions_dev_file"
                             ]
                             req = Request(dev_forecast_file, None, headers)
@@ -1394,12 +1321,7 @@ class getData(SearchList):
                                     current_page = response.read()
                                     response.close()
                             # Stash in a file
-                            if (
-                                self.generator.skin_dict["Extras"][
-                                    "forecast_alert_enabled"
-                                ]
-                                == "1"
-                            ):
+                            if extras_dict["forecast_alert_enabled"] == "1":
                                 try:
                                     forecast_file_result = json.dumps(
                                         {
@@ -1619,30 +1541,26 @@ class getData(SearchList):
         # ==============================================================================
 
         # Only process if Earthquake data is enabled
-        if self.generator.skin_dict["Extras"]["earthquake_enabled"] == "1":
+        if extras_dict["earthquake_enabled"] == "1":
             earthquake_file = html_root + "/json/earthquake.json"
-            earthquake_stale_timer = self.generator.skin_dict["Extras"][
-                "earthquake_stale"
-            ]
-            latitude = self.generator.config_dict["Station"]["latitude"]
-            longitude = self.generator.config_dict["Station"]["longitude"]
-            distance_unit = self.generator.converter.group_unit_dict["group_distance"]
-            eq_distance_label = self.generator.skin_dict["Units"]["Labels"].get(
-                distance_unit, ""
-            )
-            eq_distance_round = self.generator.skin_dict["Units"]["StringFormats"].get(
+            earthquake_stale_timer = extras_dict["earthquake_stale"]
+            latitude = config_dict["Station"]["latitude"]
+            longitude = config_dict["Station"]["longitude"]
+            distance_unit = converter.group_unit_dict["group_distance"]
+            eq_distance_label = skin_dict["Units"]["Labels"].get(distance_unit, "")
+            eq_distance_round = skin_dict["Units"]["StringFormats"].get(
                 distance_unit, "%.1f"
             )
-            earthquake_maxradiuskm = self.generator.skin_dict["Extras"][
-                "earthquake_maxradiuskm"
-            ]
+            earthquake_maxradiuskm = extras_dict["earthquake_maxradiuskm"]
             # Sample URL from Belchertown Weather:
             # http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat=42.223&lon=-72.374&maxradiuskm=1000&format=geojson&nodata=204&minmag=2
-            if self.generator.skin_dict["Extras"]["earthquake_server"] == "USGS":
+            if extras_dict["earthquake_server"] == "USGS":
                 earthquake_url = f"http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat={latitude}&lon={longitude}&maxradiuskm={earthquake_maxradiuskm}&format=geojson&nodata=204&minmag=2"
-            elif self.generator.skin_dict["Extras"]["earthquake_server"] == "GeoNet":
-                earthquake_url = f"https://api.geonet.org.nz/quake?MMI={self.generator.skin_dict["Extras"]["geonet_mmi"]}"
-            elif self.generator.skin_dict["Extras"]["earthquake_server"] == "ReNaSS":
+            elif extras_dict["earthquake_server"] == "GeoNet":
+                earthquake_url = (
+                    f"https://api.geonet.org.nz/quake?MMI={extras_dict["geonet_mmi"]}"
+                )
+            elif extras_dict["earthquake_server"] == "ReNaSS":
                 # Calculate min/max latitude and min/max longitude from radius and station location. https://stackoverflow.com/a/23118314
                 lat = float(latitude)
                 long = float(longitude)
@@ -1742,7 +1660,7 @@ class getData(SearchList):
                     eqdata = ""
 
             try:
-                if self.generator.skin_dict["Extras"]["earthquake_server"] == "USGS":
+                if extras_dict["earthquake_server"] == "USGS":
                     eqtime = eqdata["features"][0]["properties"]["time"] / 1000
                     equrl = eqdata["features"][0]["properties"]["url"]
                     if distance_unit == "km":
@@ -1763,9 +1681,7 @@ class getData(SearchList):
                     eqmag = locale.format_string(
                         "%g", float(eqdata["features"][0]["properties"]["mag"])
                     )
-                elif (
-                    self.generator.skin_dict["Extras"]["earthquake_server"] == "ReNaSS"
-                ):
+                elif extras_dict["earthquake_server"] == "ReNaSS":
                     eqtime = eqdata["features"][0]["properties"]["time"]
                     # convert time to UNIX format
                     eqtime = datetime.datetime.strptime(eqtime, "%Y-%m-%dT%H:%M:%S.%fZ")
@@ -1783,9 +1699,7 @@ class getData(SearchList):
                             "en"
                         ]
                     eqmag = format(eqdata["features"][0]["properties"]["mag"], ".1f")
-                elif (
-                    self.generator.skin_dict["Extras"]["earthquake_server"] == "GeoNet"
-                ):
+                elif extras_dict["earthquake_server"] == "GeoNet":
                     eqtime = eqdata["features"][0]["properties"]["time"]
                     # convert time to UNIX format
                     eqtime = datetime.datetime.strptime(eqtime, "%Y-%m-%dT%H:%M:%S.%fZ")
@@ -1850,9 +1764,7 @@ class getData(SearchList):
         station_obs_binding = None
         station_obs_json = OrderedDict()
         station_obs_html = ""
-        station_observations = self.generator.skin_dict["Extras"][
-            "station_observations"
-        ]
+        station_observations = extras_dict["station_observations"]
         # Check if this is a list. If not then we have 1 item, so force it into a list
         if isinstance(station_observations, list) is False:
             station_observations = station_observations.split()
@@ -1862,8 +1774,8 @@ class getData(SearchList):
             db_lookup,
             station_obs_binding,
             current_stamp,
-            self.generator.formatter,
-            self.generator.converter,
+            formatter,
+            converter,
             None,
             current_record,
         )
@@ -1876,17 +1788,15 @@ class getData(SearchList):
                 ]  # Thanks https://stackoverflow.com/a/40811994/1177153
                 obs = obs.split("(")[0]
             if station_obs_binding is not None:
-                obs_binding_manager = self.generator.db_binder.get_manager(
-                    station_obs_binding
-                )
+                obs_binding_manager = db_binder.get_manager(station_obs_binding)
                 current_stamp = obs_binding_manager.lastGoodStamp()
                 current_record = obs_binding_manager.getRecord(current_stamp)
                 current = weewx.tags.CurrentObj(
                     db_lookup,
                     station_obs_binding,
                     current_stamp,
-                    self.generator.formatter,
-                    self.generator.converter,
+                    formatter,
+                    converter,
                     None,
                     current_record,
                 )
@@ -1907,8 +1817,8 @@ class getData(SearchList):
                     db_lookup,
                     None,
                     "day",
-                    self.generator.formatter,
-                    self.generator.converter,
+                    formatter,
+                    converter,
                 )
                 dayRain_sum = getattr(obs_binder, "sum")
                 # Need to use dayRain for class name since that is weewx-mqtt
@@ -1959,8 +1869,8 @@ class getData(SearchList):
                     db_lookup,
                     None,
                     current_stamp,
-                    self.generator.formatter,
-                    self.generator.converter,
+                    formatter,
+                    converter,
                 )
                 obs_trend = getattr(trend, obs)
                 station_obs_html += (
@@ -1988,29 +1898,23 @@ class getData(SearchList):
             try:
                 # Find the unit from group (like group_temperature = degree_F)
                 obs_group = weewx.units.obs_group_dict[obs]
-                obs_unit = self.generator.converter.group_unit_dict[obs_group]
+                obs_unit = converter.group_unit_dict[obs_group]
             except:
                 # Something's wrong. Continue this loop to ignore this group
                 # (like group_dust or something non-standard)
                 continue
             try:
                 # Find the number of decimals to round to based on group name
-                obs_round = self.generator.skin_dict["Units"]["StringFormats"].get(
-                    obs_unit, "0"
-                )[2]
+                obs_round = skin_dict["Units"]["StringFormats"].get(obs_unit, "0")[2]
             except:
-                obs_round = self.generator.skin_dict["Units"]["StringFormats"].get(
-                    obs_unit, "0"
-                )
+                obs_round = skin_dict["Units"]["StringFormats"].get(obs_unit, "0")
             # Add to the rounding array
             if obs not in all_obs_rounding_json:
                 all_obs_rounding_json[obs] = str(obs_round)
             # Get the unit's label
             # Add to label array and strip whitespace if possible
             if obs not in all_obs_unit_labels_json:
-                obs_unit_label = weewx.units.get_label_string(
-                    self.generator.formatter, self.generator.converter, obs
-                )
+                obs_unit_label = weewx.units.get_label_string(formatter, converter, obs)
                 all_obs_unit_labels_json[obs] = obs_unit_label
 
             # Special handling items
@@ -2025,9 +1929,9 @@ class getData(SearchList):
         # Social Share
         # ==============================================================================
 
-        facebook_enabled = self.generator.skin_dict["Extras"]["facebook_enabled"]
-        twitter_enabled = self.generator.skin_dict["Extras"]["twitter_enabled"]
-        social_share_html = self.generator.skin_dict["Extras"]["social_share_html"]
+        facebook_enabled = extras_dict["facebook_enabled"]
+        twitter_enabled = extras_dict["twitter_enabled"]
+        social_share_html = extras_dict["social_share_html"]
         twitter_text = label_dict["twitter_text"]
         twitter_owner = label_dict["twitter_owner"]
         twitter_hashtags = label_dict["twitter_hashtags"]
@@ -2084,33 +1988,19 @@ class getData(SearchList):
         # MQTT settings for Kiosk page
         # ==============================================================================
 
-        if self.generator.skin_dict["Extras"]["mqtt_websockets_host_kiosk"] != "":
-            if self.generator.skin_dict["Extras"]["mqtt_websockets_port_kiosk"] != "":
-                mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
-                    "mqtt_websockets_port_kiosk"
-                ]
+        if extras_dict["mqtt_websockets_host_kiosk"] != "":
+            if extras_dict["mqtt_websockets_port_kiosk"] != "":
+                mqtt_websockets_port_kiosk = extras_dict["mqtt_websockets_port_kiosk"]
             else:
-                mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
-                    "mqtt_websockets_port"
-                ]
-            if self.generator.skin_dict["Extras"]["mqtt_websockets_ssl_kiosk"] != "":
-                mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"][
-                    "mqtt_websockets_ssl_kiosk"
-                ]
+                mqtt_websockets_port_kiosk = extras_dict["mqtt_websockets_port"]
+            if extras_dict["mqtt_websockets_ssl_kiosk"] != "":
+                mqtt_websockets_ssl_kiosk = extras_dict["mqtt_websockets_ssl_kiosk"]
             else:
-                mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"][
-                    "mqtt_websockets_ssl"
-                ]
+                mqtt_websockets_ssl_kiosk = extras_dict["mqtt_websockets_ssl"]
         else:
-            mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
-                "mqtt_websockets_host"
-            ]
-            mqtt_websockets_port_kiosk = self.generator.skin_dict["Extras"][
-                "mqtt_websockets_port"
-            ]
-            mqtt_websockets_ssl_kiosk = self.generator.skin_dict["Extras"][
-                "mqtt_websockets_ssl"
-            ]
+            mqtt_websockets_port_kiosk = extras_dict["mqtt_websockets_host"]
+            mqtt_websockets_port_kiosk = extras_dict["mqtt_websockets_port"]
+            mqtt_websockets_ssl_kiosk = extras_dict["mqtt_websockets_ssl"]
 
         # Include custom.css if it exists in the HTML_ROOT folder
         custom_css_file = html_root + "/custom.css"
@@ -2975,6 +2865,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         interval of time
         """
 
+        # Cache frequently accessed attributes
+        skin_dict = self.skin_dict
+        converter = self.converter
+        config_dict = self.config_dict
+
         if observation == "windRose":
             # Special Belchertown wind rose with Highcharts aggregator Wind
             # speeds are split into the first 7 beaufort groups.
@@ -2988,36 +2883,35 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if aggregate_interval:
                 aggregate_interval = None
 
-            # Get windDir observations.
-            obs_lookup = "windDir"
-            (time_start_vt, time_stop_vt, windDir_vt) = weewx.xtypes.get_series(
-                obs_lookup,
-                TimeSpan(start_ts, end_ts),
-                archive,
-                aggregate_type,
-                aggregate_interval,
-            )
-            # windDir_vt = self.converter.convert(windDir_vt)
-            # usage_round = int(self.skin_dict['Units']['StringFormats'].get(windDir_vt[2], "0f")[-2])
-            usage_round = 0  # Force round to 0 decimal
-            windDir_round_vt = [self.round_none(x, usage_round) for x in windDir_vt[0]]
-            # windDir_round_vt = [0.0 if v is None else v for v in windDir_round_vt]
+            # Get windDir and windSpeed observations
+            timespan = TimeSpan(start_ts, end_ts)
 
-            # Get windSpeed observations.
-            obs_lookup = "windSpeed"
-            (time_start_vt, time_stop_vt, windSpeed_vt) = weewx.xtypes.get_series(
-                obs_lookup,
-                TimeSpan(start_ts, end_ts),
+            (time_start_vt, time_stop_vt, windDir_vt) = weewx.xtypes.get_series(
+                "windDir",
+                timespan,
                 archive,
                 aggregate_type,
                 aggregate_interval,
             )
-            windSpeed_vt = self.converter.convert(windSpeed_vt)
+            # Round to 0 decimal places for wind direction
+            windDir_round_vt = [
+                round(x) if x is not None else None for x in windDir_vt[0]
+            ]
+
+            (time_start_vt, time_stop_vt, windSpeed_vt) = weewx.xtypes.get_series(
+                "windSpeed",
+                timespan,
+                archive,
+                aggregate_type,
+                aggregate_interval,
+            )
+            windSpeed_vt = converter.convert(windSpeed_vt)
             usage_round = int(
-                self.skin_dict["Units"]["StringFormats"].get(windSpeed_vt[2], "2f")[-2]
+                skin_dict["Units"]["StringFormats"].get(windSpeed_vt[2], "2f")[-2]
             )
             windSpeed_round_vt = [
-                self.round_none(x, usage_round) for x in windSpeed_vt[0]
+                round(x, usage_round) if x is not None else None
+                for x in windSpeed_vt[0]
             ]
 
             # Exit if the vectors are None
@@ -3027,335 +2921,142 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
             # Get the unit label from the skin dict for speed.
             windSpeed_unit = windSpeed_vt[1]
-            windSpeed_unit_label = self.skin_dict["Units"]["Labels"][windSpeed_unit]
+            windSpeed_unit_label = skin_dict["Units"]["Labels"][windSpeed_unit]
 
-            # Merge the two outputs so we have a consistent data set to filter on
-            merged = zip(windDir_round_vt, windSpeed_round_vt)
+            # Initialize wind speed groups more efficiently
+            wind_groups = [{"dir": [], "speed": []} for _ in range(7)]
 
-            # Sort by beaufort wind speeds
-            (
-                group_0_windDir,
-                group_0_windSpeed,
-                group_1_windDir,
-                group_1_windSpeed,
-                group_2_windDir,
-                group_2_windSpeed,
-                group_3_windDir,
-                group_3_windSpeed,
-                group_4_windDir,
-                group_4_windSpeed,
-                group_5_windDir,
-                group_5_windSpeed,
-                group_6_windDir,
-                group_6_windSpeed,
-            ) = ([] for i in range(14))
-            for windData in merged:
-                if windData[0] is not None and windData[1] is not None:
-                    if windSpeed_unit in ("mile_per_hour", "mile_per_hour2"):
-                        if windData[1] < 1:
-                            group_0_windDir.append(windData[0])
-                            group_0_windSpeed.append(windData[1])
-                        elif 1 <= windData[1] <= 3:
-                            group_1_windDir.append(windData[0])
-                            group_1_windSpeed.append(windData[1])
-                        elif 4 <= windData[1] <= 7:
-                            group_2_windDir.append(windData[0])
-                            group_2_windSpeed.append(windData[1])
-                        elif 8 <= windData[1] <= 12:
-                            group_3_windDir.append(windData[0])
-                            group_3_windSpeed.append(windData[1])
-                        elif 13 <= windData[1] <= 18:
-                            group_4_windDir.append(windData[0])
-                            group_4_windSpeed.append(windData[1])
-                        elif 19 <= windData[1] <= 24:
-                            group_5_windDir.append(windData[0])
-                            group_5_windSpeed.append(windData[1])
-                        elif windData[1] >= 25:
-                            group_6_windDir.append(windData[0])
-                            group_6_windSpeed.append(windData[1])
-                    elif windSpeed_unit in ("km_per_hour", "km_per_hour2"):
-                        if windData[1] < 2:
-                            group_0_windDir.append(windData[0])
-                            group_0_windSpeed.append(windData[1])
-                        elif 2 <= windData[1] <= 5:
-                            group_1_windDir.append(windData[0])
-                            group_1_windSpeed.append(windData[1])
-                        elif 6 <= windData[1] <= 11:
-                            group_2_windDir.append(windData[0])
-                            group_2_windSpeed.append(windData[1])
-                        elif 12 <= windData[1] <= 19:
-                            group_3_windDir.append(windData[0])
-                            group_3_windSpeed.append(windData[1])
-                        elif 20 <= windData[1] <= 28:
-                            group_4_windDir.append(windData[0])
-                            group_4_windSpeed.append(windData[1])
-                        elif 29 <= windData[1] <= 38:
-                            group_5_windDir.append(windData[0])
-                            group_5_windSpeed.append(windData[1])
-                        elif windData[1] >= 39:
-                            group_6_windDir.append(windData[0])
-                            group_6_windSpeed.append(windData[1])
-                    elif windSpeed_unit in ("meter_per_second", "meter_per_second2"):
-                        if windData[1] < 0.5:
-                            group_0_windDir.append(windData[0])
-                            group_0_windSpeed.append(windData[1])
-                        elif 0.5 <= windData[1] <= 1.5:
-                            group_1_windDir.append(windData[0])
-                            group_1_windSpeed.append(windData[1])
-                        elif 1.6 <= windData[1] <= 3.3:
-                            group_2_windDir.append(windData[0])
-                            group_2_windSpeed.append(windData[1])
-                        elif 3.4 <= windData[1] <= 5.5:
-                            group_3_windDir.append(windData[0])
-                            group_3_windSpeed.append(windData[1])
-                        elif 5.6 <= windData[1] <= 7.9:
-                            group_4_windDir.append(windData[0])
-                            group_4_windSpeed.append(windData[1])
-                        elif 8 <= windData[1] <= 10.7:
-                            group_5_windDir.append(windData[0])
-                            group_5_windSpeed.append(windData[1])
-                        elif windData[1] >= 10.8:
-                            group_6_windDir.append(windData[0])
-                            group_6_windSpeed.append(windData[1])
-                    elif windSpeed_unit in ("knot", "knot2"):
-                        if windData[1] < 1:
-                            group_0_windDir.append(windData[0])
-                            group_0_windSpeed.append(windData[1])
-                        elif 1 <= windData[1] <= 3:
-                            group_1_windDir.append(windData[0])
-                            group_1_windSpeed.append(windData[1])
-                        elif 4 <= windData[1] <= 6:
-                            group_2_windDir.append(windData[0])
-                            group_2_windSpeed.append(windData[1])
-                        elif 7 <= windData[1] <= 10:
-                            group_3_windDir.append(windData[0])
-                            group_3_windSpeed.append(windData[1])
-                        elif 11 <= windData[1] <= 16:
-                            group_4_windDir.append(windData[0])
-                            group_4_windSpeed.append(windData[1])
-                        elif 17 <= windData[1] <= 21:
-                            group_5_windDir.append(windData[0])
-                            group_5_windSpeed.append(windData[1])
-                        elif windData[1] >= 22:
-                            group_6_windDir.append(windData[0])
-                            group_6_windSpeed.append(windData[1])
-                    elif windSpeed_unit == "beaufort":
-                        if windData[1] <= 1:
-                            group_0_windDir.append(windData[0])
-                            group_0_windSpeed.append(windData[1])
-                        elif windData[1] == 2:
-                            group_1_windDir.append(windData[0])
-                            group_1_windSpeed.append(windData[1])
-                        elif windData[1] == 3:
-                            group_2_windDir.append(windData[0])
-                            group_2_windSpeed.append(windData[1])
-                        elif windData[1] == 4:
-                            group_3_windDir.append(windData[0])
-                            group_3_windSpeed.append(windData[1])
-                        elif windData[1] == 5:
-                            group_4_windDir.append(windData[0])
-                            group_4_windSpeed.append(windData[1])
-                        elif windData[1] == 6:
-                            group_5_windDir.append(windData[0])
-                            group_5_windSpeed.append(windData[1])
-                        elif windData[1] >= 7:
-                            group_6_windDir.append(windData[0])
-                            group_6_windSpeed.append(windData[1])
+            # Define beaufort scale thresholds for different units (more efficient than nested ifs)
+            beaufort_thresholds = {
+                ("mile_per_hour", "mile_per_hour2"): [1, 4, 8, 13, 19, 25],
+                ("km_per_hour", "km_per_hour2"): [2, 6, 12, 20, 29, 39],
+                ("meter_per_second", "meter_per_second2"): [
+                    0.5,
+                    1.6,
+                    3.4,
+                    5.6,
+                    8,
+                    10.8,
+                ],
+                ("knot", "knot2"): [1, 4, 7, 11, 17, 22],
+                "beaufort": [2, 3, 4, 5, 6, 7],
+            }
 
-            # Get the windRose data
-            group_0_series_data = self.create_windrose_data(
-                group_0_windDir, group_0_windSpeed
-            )
-            group_1_series_data = self.create_windrose_data(
-                group_1_windDir, group_1_windSpeed
-            )
-            group_2_series_data = self.create_windrose_data(
-                group_2_windDir, group_2_windSpeed
-            )
-            group_3_series_data = self.create_windrose_data(
-                group_3_windDir, group_3_windSpeed
-            )
-            group_4_series_data = self.create_windrose_data(
-                group_4_windDir, group_4_windSpeed
-            )
-            group_5_series_data = self.create_windrose_data(
-                group_5_windDir, group_5_windSpeed
-            )
-            group_6_series_data = self.create_windrose_data(
-                group_6_windDir, group_6_windSpeed
-            )
+            # Find matching threshold set
+            thresholds = None
+            for units, thresh in beaufort_thresholds.items():
+                if isinstance(units, tuple) and windSpeed_unit in units:
+                    thresholds = thresh
+                    break
+                elif windSpeed_unit == units:
+                    thresholds = thresh
+                    break
 
-            # Group all together to get wind frequency percentages
-            wind_sum = sum(
-                group_0_series_data
-                + group_1_series_data
-                + group_2_series_data
-                + group_3_series_data
-                + group_4_series_data
-                + group_5_series_data
-                + group_6_series_data
-            )
+            if thresholds is None:
+                thresholds = [1, 4, 8, 13, 19, 25]  # Default to mph
+
+            # Process wind data efficiently
+            for windDir, windSpeed in zip(windDir_round_vt, windSpeed_round_vt):
+                if windDir is not None and windSpeed is not None:
+                    # Determine group index based on thresholds
+                    group_idx = 6  # Default to highest group
+                    for i, threshold in enumerate(thresholds):
+                        if windSpeed < threshold:
+                            group_idx = i
+                            break
+
+                    wind_groups[group_idx]["dir"].append(windDir)
+                    wind_groups[group_idx]["speed"].append(windSpeed)
+
+            # Get the windRose data for all groups
+            series_data = [
+                self.create_windrose_data(g["dir"], g["speed"]) for g in wind_groups
+            ]
+
+            # Calculate wind frequency percentages
+            wind_sum = sum(sum(data) for data in series_data)
             if wind_sum > 0:
-                y = 0
-                while y < len(group_0_series_data):
-                    group_0_series_data[y] = round(
-                        group_0_series_data[y] / wind_sum * 100
-                    )
-                    y += 1
-                y = 0
-                while y < len(group_1_series_data):
-                    group_1_series_data[y] = round(
-                        group_1_series_data[y] / wind_sum * 100
-                    )
-                    y += 1
-                y = 0
-                while y < len(group_2_series_data):
-                    group_2_series_data[y] = round(
-                        group_2_series_data[y] / wind_sum * 100
-                    )
-                    y += 1
-                y = 0
-                while y < len(group_3_series_data):
-                    group_3_series_data[y] = round(
-                        group_3_series_data[y] / wind_sum * 100
-                    )
-                    y += 1
-                y = 0
-                while y < len(group_4_series_data):
-                    group_4_series_data[y] = round(
-                        group_4_series_data[y] / wind_sum * 100
-                    )
-                    y += 1
-                y = 0
-                while y < len(group_5_series_data):
-                    group_5_series_data[y] = round(
-                        group_5_series_data[y] / wind_sum * 100
-                    )
-                    y += 1
-                y = 0
-                while y < len(group_6_series_data):
-                    group_6_series_data[y] = round(
-                        group_6_series_data[y] / wind_sum * 100
-                    )
-                    y += 1
+                series_data = [
+                    [round(val / wind_sum * 100) for val in data]
+                    for data in series_data
+                ]
 
-            # Setup the labels based on unit
-            if windSpeed_unit in ("mile_per_hour", "mile_per_hour2"):
-                group_0_speedRange = "< 1"
-                group_1_speedRange = "1-3"
-                group_2_speedRange = "4-7"
-                group_3_speedRange = "8-12"
-                group_4_speedRange = "13-18"
-                group_5_speedRange = "19-24"
-                group_6_speedRange = "25+"
-            elif windSpeed_unit in ("km_per_hour", "km_per_hour2"):
-                group_0_speedRange = "< 2"
-                group_1_speedRange = "2-5"
-                group_2_speedRange = "6-11"
-                group_3_speedRange = "12-19"
-                group_4_speedRange = "20-28"
-                group_5_speedRange = "29-38"
-                group_6_speedRange = "39+"
-            elif windSpeed_unit in ("meter_per_second", "meter_per_second2"):
-                group_0_speedRange = "< 0.5"
-                group_1_speedRange = "0.5-1.5"
-                group_2_speedRange = "1.6-3.3"
-                group_3_speedRange = "3.4-5.5"
-                group_4_speedRange = "5.5-7.9"
-                group_5_speedRange = "8-10.7"
-                group_6_speedRange = "10.8+"
-            elif windSpeed_unit in ("knot", "knot2"):
-                group_0_speedRange = "< 1"
-                group_1_speedRange = "1-3"
-                group_2_speedRange = "4-6"
-                group_3_speedRange = "7-10"
-                group_4_speedRange = "11-16"
-                group_5_speedRange = "17-21"
-                group_6_speedRange = "22+"
-            elif windSpeed_unit == "beaufort":
-                group_0_speedRange = "0"
-                group_1_speedRange = "1"
-                group_2_speedRange = "2"
-                group_3_speedRange = "3"
-                group_4_speedRange = "4"
-                group_5_speedRange = "5"
-                group_6_speedRange = "6+"
-
-            group_0_name = f"{group_0_speedRange} {windSpeed_unit_label}"
-            group_1_name = f"{group_1_speedRange} {windSpeed_unit_label}"
-            group_2_name = f"{group_2_speedRange} {windSpeed_unit_label}"
-            group_3_name = f"{group_3_speedRange} {windSpeed_unit_label}"
-            group_4_name = f"{group_4_speedRange} {windSpeed_unit_label}"
-            group_5_name = f"{group_5_speedRange} {windSpeed_unit_label}"
-            group_6_name = f"{group_6_speedRange} {windSpeed_unit_label}"
-
-            group_0 = {
-                "name": group_0_name,
-                "type": "column",
-                "color": wind_rose_color[0],
-                "zIndex": 106,
-                "stacking": "normal",
-                "fillOpacity": 0.75,
-                "data": group_0_series_data,
-            }
-            group_1 = {
-                "name": group_1_name,
-                "type": "column",
-                "color": wind_rose_color[1],
-                "zIndex": 105,
-                "stacking": "normal",
-                "fillOpacity": 0.75,
-                "data": group_1_series_data,
-            }
-            group_2 = {
-                "name": group_2_name,
-                "type": "column",
-                "color": wind_rose_color[2],
-                "zIndex": 104,
-                "stacking": "normal",
-                "fillOpacity": 0.75,
-                "data": group_2_series_data,
-            }
-            group_3 = {
-                "name": group_3_name,
-                "type": "column",
-                "color": wind_rose_color[3],
-                "zIndex": 103,
-                "stacking": "normal",
-                "fillOpacity": 0.75,
-                "data": group_3_series_data,
-            }
-            group_4 = {
-                "name": group_4_name,
-                "type": "column",
-                "color": wind_rose_color[4],
-                "zIndex": 102,
-                "stacking": "normal",
-                "fillOpacity": 0.75,
-                "data": group_4_series_data,
-            }
-            group_5 = {
-                "name": group_5_name,
-                "type": "column",
-                "color": wind_rose_color[5],
-                "zIndex": 101,
-                "stacking": "normal",
-                "fillOpacity": 0.75,
-                "data": group_5_series_data,
-            }
-            group_6 = {
-                "name": group_6_name,
-                "type": "column",
-                "color": wind_rose_color[6],
-                "zIndex": 100,
-                "stacking": "normal",
-                "fillOpacity": 0.75,
-                "data": group_6_series_data,
+            # Setup the labels based on unit (using dictionary for efficiency)
+            speed_range_labels = {
+                ("mile_per_hour", "mile_per_hour2"): [
+                    "< 1",
+                    "1-3",
+                    "4-7",
+                    "8-12",
+                    "13-18",
+                    "19-24",
+                    "25+",
+                ],
+                ("km_per_hour", "km_per_hour2"): [
+                    "< 2",
+                    "2-5",
+                    "6-11",
+                    "12-19",
+                    "20-28",
+                    "29-38",
+                    "39+",
+                ],
+                ("meter_per_second", "meter_per_second2"): [
+                    "< 0.5",
+                    "0.5-1.5",
+                    "1.6-3.3",
+                    "3.4-5.5",
+                    "5.5-7.9",
+                    "8-10.7",
+                    "10.8+",
+                ],
+                ("knot", "knot2"): [
+                    "< 1",
+                    "1-3",
+                    "4-6",
+                    "7-10",
+                    "11-16",
+                    "17-21",
+                    "22+",
+                ],
+                "beaufort": ["0", "1", "2", "3", "4", "5", "6+"],
             }
 
-            # Append everything into a list and return right away, do not
-            # process rest of function
-            series = [group_0, group_1, group_2, group_3, group_4, group_5, group_6]
+            # Find matching labels
+            labels = None
+            for units, lbls in speed_range_labels.items():
+                if isinstance(units, tuple) and windSpeed_unit in units:
+                    labels = lbls
+                    break
+                elif windSpeed_unit == units:
+                    labels = lbls
+                    break
+
+            if labels is None:
+                labels = [
+                    "< 1",
+                    "1-3",
+                    "4-7",
+                    "8-12",
+                    "13-18",
+                    "19-24",
+                    "25+",
+                ]  # Default to mph
+
+            # Build series data efficiently using list comprehension
+            series = [
+                {
+                    "name": f"{labels[i]} {windSpeed_unit_label}",
+                    "type": "column",
+                    "color": wind_rose_color[i],
+                    "zIndex": 106 - i,
+                    "stacking": "normal",
+                    "fillOpacity": 0.75,
+                    "data": series_data[i],
+                }
+                for i in range(7)
+            ]
+
             return series
 
         # Special Belchertown Weather Range (radial)
@@ -3401,7 +3102,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            min_obs_vt = self.converter.convert(obs_vt)
+            min_obs_vt = converter.convert(obs_vt)
 
             # Get max values
             aggregate_type = "max"
@@ -3428,7 +3129,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            max_obs_vt = self.converter.convert(obs_vt)
+            max_obs_vt = converter.convert(obs_vt)
 
             # Get avg values
             aggregate_type = "avg"
@@ -3455,10 +3156,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            avg_obs_vt = self.converter.convert(obs_vt)
+            avg_obs_vt = converter.convert(obs_vt)
 
             obs_unit = avg_obs_vt[1]
-            obs_unit_label = self.skin_dict["Units"]["Labels"].get(obs_unit, "")
+            obs_unit_label = skin_dict["Units"]["Labels"].get(obs_unit, "")
 
             # Convert to millis and zip all together
             time_ms = [float(x) * 1000 for x in time_start_vt[0]]
@@ -3521,7 +3222,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            min_obs_vt = self.converter.convert(obs_vt)
+            min_obs_vt = converter.convert(obs_vt)
 
             # Get max values
             obs_lookup = "windGust"
@@ -3548,10 +3249,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            max_obs_vt = self.converter.convert(obs_vt)
+            max_obs_vt = converter.convert(obs_vt)
 
             obs_unit = max_obs_vt[1]
-            obs_unit_label = self.skin_dict["Units"]["Labels"].get(obs_unit, "")
+            obs_unit_label = skin_dict["Units"]["Labels"].get(obs_unit, "")
 
             # Convert to millis and zip all together
             time_ms = [float(x) * 1000 for x in time_start_vt[0]]
@@ -3591,10 +3292,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             obs_label = "Rainfall"
 
         if xAxis_groupby or len(xAxis_categories) >= 1:
-            # Setup the converter - for some reason self.converter doesn't work
+            # Setup the converter - for some reason converter doesn't work
             # for the group_unit_dict in this section Get the target unit
             # nickname (something like 'US' or 'METRIC'):
-            target_unit_nickname = self.config_dict["StdConvert"]["target_unit"]
+            target_unit_nickname = config_dict["StdConvert"]["target_unit"]
             # Get the target unit: weewx.US, weewx.METRIC, weewx.METRICWX
             target_unit = weewx.units.unit_constants[target_unit_nickname.upper()]
             # Bind to the appropriate standard converter units
@@ -3602,10 +3303,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
             # Find what kind of database we're working with and specify the
             # correctly tailored SQL Query for each type of database
-            data_binding = self.config_dict["StdArchive"]["data_binding"]
-            database = self.config_dict["DataBindings"][data_binding]["database"]
-            database_type = self.config_dict["Databases"][database]["database_type"]
-            driver = self.config_dict["DatabaseTypes"][database_type]["driver"]
+            data_binding = config_dict["StdArchive"]["data_binding"]
+            database = config_dict["DataBindings"][data_binding]["database"]
+            database_type = config_dict["Databases"][database]["database_type"]
+            driver = config_dict["DatabaseTypes"][database_type]["driver"]
             xAxis_labels = []
             obsvalues = []
 
@@ -3794,7 +3495,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             try:
                 query = archive.genSql(sql_lookup)
             except Exception as error:
-                raise Warning(f"SQL error in" "sql_lookup" "The error is: {error}")
+                raise Warning(f"SQL error in sql_lookup. The error is: {error}")
 
             for row in query:
                 xAxis_labels.append(row[0])
@@ -3802,7 +3503,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 if special_target_unit:
                     row_converted = weewx.units.convert(row_tuple, special_target_unit)
                 else:
-                    row_converted = self.converter.convert(row_tuple)
+                    row_converted = converter.convert(row_tuple)
                 obsvalues.append(row_converted[0])
 
             # If the values are to be mirrored, we need to make them negative
@@ -3853,7 +3554,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 obs_vt
             )
         else:
-            obs_vt = self.converter.convert(obs_vt)
+            obs_vt = converter.convert(obs_vt)
 
         # Special handling for the rain.
         if observation == "rainTotal":
@@ -3878,7 +3579,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             # Barometer for finer detail
             if observation == "barometer":
                 usage_round = int(
-                    self.skin_dict["Units"]["StringFormats"].get(obs_vt[1], "1f")[-2]
+                    skin_dict["Units"]["StringFormats"].get(obs_vt[1], "1f")[-2]
                 )
                 obs_round_vt = [
                     round(x, usage_round) if x is not None else None for x in obs_vt[0]
@@ -3887,16 +3588,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 try:
                     if obs_round is None:
                         usage_round = int(
-                            self.skin_dict["Units"]["StringFormats"].get(
-                                obs_vt[1], "2f"
-                            )[-2]
+                            skin_dict["Units"]["StringFormats"].get(obs_vt[1], "2f")[-2]
                         )
                     else:
                         usage_round = int(obs_round) + 1
                 except ValueError:
                     log.info(
                         f"Observation {observation} is using unit {obs_vt[1]} "
-                        f"that returns {self.skin_dict["Units"]["StringFormats"].get(obs_vt[1])} "
+                        f"that returns {skin_dict["Units"]["StringFormats"].get(obs_vt[1])} "
                         f"for StringFormat, rather than float point decimal format value - using 0 as rounding"
                     )
                     usage_round = 0
