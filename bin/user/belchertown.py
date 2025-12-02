@@ -839,7 +839,7 @@ class getData(SearchList):
             timespan,
             db_lookup,
             formatter=self.generator.formatter,
-            converter=converter,
+            converter=self.generator.converter,
             skin_dict=self.generator.skin_dict,
         )
 
