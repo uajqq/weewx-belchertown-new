@@ -654,7 +654,7 @@ class getData(SearchList):
             year_rainiest_month_sql = """
                 SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, SUM(sum) AS total
                 FROM archive_day_rain
-                WHERE strftime("%Y", datetime(dateTime, "unixepoch", "localtime")) = ?
+                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?
                 GROUP BY month ORDER BY total DESC LIMIT 1;
             """
             at_rainiest_month_sql = """
@@ -673,13 +673,13 @@ class getData(SearchList):
             """
         elif driver == "weedb.mysql":
             year_rainiest_month_sql = """
-                SELECT FROM_UNIXTIME(dateTime, '%m') AS month, ROUND(SUM(sum), 2) AS total
+                SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, ROUND(SUM(sum), 2) AS total
                 FROM archive_day_rain
                 WHERE YEAR(FROM_UNIXTIME(dateTime)) = ?
                 GROUP BY month ORDER BY total DESC LIMIT 1;
             """
             at_rainiest_month_sql = """
-                SELECT FROM_UNIXTIME(dateTime, '%m') AS month, FROM_UNIXTIME(dateTime, '%Y') AS year, ROUND(SUM(sum), 2) AS total
+                SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
                 FROM archive_day_rain
                 GROUP BY month, year ORDER BY total DESC LIMIT 1;
             """
@@ -688,7 +688,7 @@ class getData(SearchList):
                 WHERE year(FROM_UNIXTIME(dateTime)) = ?;
             """
             at_rain_highest_year_sql = """
-                SELECT FROM_UNIXTIME(dateTime, '%Y') AS year, ROUND(SUM(sum), 2) AS total
+                SELECT FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
                 FROM archive_day_rain
                 GROUP BY year ORDER BY total DESC LIMIT 1;
             """
@@ -730,7 +730,6 @@ class getData(SearchList):
 
         # All time rainiest year
         at_rain_highest_year_query = wx_manager.getSql(at_rain_highest_year_sql)
-        print(at_rain_highest_year_query)
         at_rain_highest_year_tuple = (
             at_rain_highest_year_query[1],
             rain_unit,
