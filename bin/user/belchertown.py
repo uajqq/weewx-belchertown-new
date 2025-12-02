@@ -223,8 +223,8 @@ class getData(SearchList):
                 system_locale, locale_encoding = belchertown_locale.split(".")
                 if belchertown_debug:
                     log.error(
-                        f"Locale: Error using locale {belchertown_locale}. "
-                        f"This locale may not be installed on your system and you may see unexpected results. "
+                        f"Error using locale {belchertown_locale}. "
+                        "This locale may not be installed on your system and you may see unexpected results. "
                         f"Python could not set the requested locale, but Belchertown skin JavaScript will attempt to use the provided locale string. Full error: {error}"
                     )
 
@@ -1385,22 +1385,22 @@ class getData(SearchList):
                     except Exception as error:
                         if current_conditions == "obs":
                             log.error(
-                                f"Error downloading forecast Current Conditions data. "
-                                f"Check the URL in your configuration and try again. "
+                                "Error downloading forecast Current Conditions data. "
+                                "Check the URL in your configuration and try again. "
                                 f"You are trying to use URL: {current_obs_url}, "
                                 f"and the error is: {error}"
                             )
                         elif current_conditions == "conds":
                             log.error(
-                                f"Error downloading forecast Current Conditions data. "
-                                f"Check the URL in your configuration and try again. "
+                                "Error downloading forecast Current Conditions data. "
+                                "Check the URL in your configuration and try again. "
                                 f"You are trying to use URL: {current_conds_url}, "
                                 f"and the error is: {error}"
                             )
                         elif current_conditions == "obs-on-fail-conds":
                             log.error(
-                                f"Error downloading forecast Current Conditions data. "
-                                f"Check the URL in your configuration and try again. "
+                                "Error downloading forecast Current Conditions data. "
+                                "Check the URL in your configuration and try again. "
                                 f"You are trying to use URL: {current_conds_url}, "
                                 f"and the error is: {error}"
                             )
@@ -1421,7 +1421,7 @@ class getData(SearchList):
                         )
                     except IOError as error:
                         log.error(
-                            f"Error writing forecast Current Conditions info to "
+                            "Error writing forecast Current Conditions info to "
                             f"{current_conditions_file}. Reason: {error}"
                         )
 
@@ -3389,58 +3389,59 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     if aggregate_type == "avg":
                         # Avg(sum) requires a subquery with the correct group by clause
                         if average_type is not None and average_type == "sum":
-                            sql_lookup = (
-                                f"SELECT dt1 AS {xAxis_groupby}, "
-                                f"AVG(obs1) AS obs "
-                                f'FROM (SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, sum(sum) AS obs1 '
-                                f"FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                                f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
-                                f"GROUP BY {xAxis_groupby}{order_sql,};"
-                            )
+                            sql_lookup = f"""
+                                SELECT dt1 AS {xAxis_groupby}, 
+                                AVG(obs1) AS obs 
+                                FROM (SELECT strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')) AS dt1, SUM(sum) AS obs1 
+                                FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                                GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) 
+                                GROUP BY dt1{order_sql};
+                            """
                         # avg cases with an average_type
                         elif average_type is not None:
-                            sql_lookup = (
-                                f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS {xAxis_groupby}, '
-                                f"{aggregate_type}({average_type}) AS obs "
-                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                                f"GROUP BY {xAxis_groupby}{order_sql};"
-                            )
+                            sql_lookup = f"""
+                                SELECT strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')) AS {xAxis_groupby}, 
+                                {aggregate_type}({average_type}) AS obs 
+                                FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                                GROUP BY strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')){order_sql};
+                            """
                         # remaining avg cases without an average_type use weighted average
                         else:
-                            sql_lookup = (
-                                f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS {xAxis_groupby}, '
-                                f"SUM(wsum)/SUM(sumtime) AS obs "
-                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                                f"GROUP BY {xAxis_groupby}{order_sql};"
-                            )
+                            sql_lookup = f"""
+                                SELECT strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')) AS {xAxis_groupby}, 
+                                SUM(wsum)/SUM(sumtime) AS obs 
+                                FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                                GROUP BY strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')){order_sql};
+                            """
                     # other aggregate_type cases use direct interrogation of daily summary
                     else:
-                        sql_lookup = (
-                            f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS {xAxis_groupby}, '
-                            f"{aggregate_type}({aggregate_type}) AS obs "
-                            f"FROM archive_day_{obs_lookup}  "
-                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
-                        )
+                        sql_lookup = f"""
+                            SELECT strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')) AS {xAxis_groupby}, 
+                            {aggregate_type}({aggregate_type}) AS obs 
+                            FROM archive_day_{obs_lookup} 
+                            WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')){order_sql};
+                        """
                 else:
                     # archive access with no average_type
                     if average_type is None:
-                        sql_lookup = (
-                            f'SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) as {xAxis_groupby}, '
-                            f"IFNULL({aggregate_type}({obs_lookup}),0) AS obs, dateTime FROM archive "
-                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
-                        )
+                        sql_lookup = f"""
+                            SELECT strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')) AS {xAxis_groupby}, 
+                            IFNULL({aggregate_type}({obs_lookup}),0) AS obs 
+                            FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                            GROUP BY strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')){order_sql};
+                        """
 
                     # average_type requiring a subquery
                     else:
-                        sql_lookup = (
-                            f"SELECT dt1 AS {xAxis_groupby}, "
-                            f"{aggregate_type}(obs1) AS obs "
-                            f'FROM (SELECT strftime("{strformat}", datetime(dateTime, "unixepoch", "localtime")) AS dt1, '
-                            f"IFNULL({average_type}({obs_lookup}),0) AS obs1 "
-                            f"FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                            f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
-                            f"GROUP BY {xAxis_groupby}{order_sql};"
-                        )
+                        sql_lookup = f"""
+                            SELECT dt1 AS {xAxis_groupby}, 
+                            {aggregate_type}(obs1) AS obs 
+                            FROM (SELECT strftime('{strformat}', datetime(dateTime, 'unixepoch', 'localtime')) AS dt1, 
+                            IFNULL({average_type}({obs_lookup}),0) AS obs1 
+                            FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                            GROUP BY strftime({subqry_groupby}, datetime(dateTime, 'unixepoch', 'localtime'))) 
+                            GROUP BY dt1{order_sql};
+                        """
 
             elif driver == "weedb.mysql":
                 # Use daily summaries where possible - MUST BE FOR WHOLE DAYS determined by start and stop times otherwise use archive
@@ -3454,58 +3455,59 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     if aggregate_type == "avg":
                         # Avg(sum) requires a subquery with the correct group by clause
                         if average_type is not None and average_type == "sum":
-                            sql_lookup = (
-                                f"SELECT dt1 AS {xAxis_groupby}, "
-                                f"AVG(obs1) AS obs "
-                                f'FROM (SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS dt1, sum(sum) AS obs1 '
-                                f"FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                                f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
-                                f"GROUP BY {xAxis_groupby}{order_sql};"
-                            )
+                            sql_lookup = f"""
+                                SELECT dt1 AS {xAxis_groupby}, 
+                                AVG(obs1) AS obs 
+                                FROM (SELECT FROM_UNIXTIME(dateTime, '%{strformat}') AS dt1, SUM(sum) AS obs1 
+                                FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                                GROUP BY FROM_UNIXTIME(dateTime, '{subqry_groupby.strip("%")}') ) AS subq 
+                                GROUP BY dt1{order_sql};
+                            """
                         # avg cases with an average_type
                         elif average_type is not None:
-                            sql_lookup = (
-                                f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS {xAxis_groupby}, '
-                                f"{aggregate_type}({average_type}) AS obs "
-                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                                f"GROUP BY {xAxis_groupby}{order_sql};"
-                            )
+                            sql_lookup = f"""
+                                SELECT FROM_UNIXTIME(dateTime, '%{strformat}') AS {xAxis_groupby}, 
+                                {aggregate_type}({average_type}) AS obs 
+                                FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                                GROUP BY FROM_UNIXTIME(dateTime, '%{strformat}'){order_sql};
+                            """
                         # remaining avg cases without an average_type use weighted average
                         else:
-                            sql_lookup = (
-                                f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS {xAxis_groupby}, '
-                                f"SUM(wsum)/SUM(sumtime) AS obs "
-                                f"FROM archive_day_{obs_lookup}  WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                                f"GROUP BY {xAxis_groupby}{order_sql};"
-                            )
+                            sql_lookup = f"""
+                                SELECT FROM_UNIXTIME(dateTime, '%{strformat}') AS {xAxis_groupby}, 
+                                SUM(wsum)/SUM(sumtime) AS obs 
+                                FROM archive_day_{obs_lookup} WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                                GROUP BY FROM_UNIXTIME(dateTime, '%{strformat}'){order_sql};
+                            """
                     # other aggregate_type cases use direct interrogation of daily summary
                     else:
-                        sql_lookup = (
-                            f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS {xAxis_groupby}, '
-                            f"{aggregate_type}({aggregate_type}) AS obs "
-                            f"FROM archive_day_{obs_lookup}  "
-                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
-                        )
+                        sql_lookup = f"""
+                            SELECT FROM_UNIXTIME(dateTime, '%{strformat}') AS {xAxis_groupby}, 
+                            {aggregate_type}({aggregate_type}) AS obs 
+                            FROM archive_day_{obs_lookup} 
+                            WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY FROM_UNIXTIME(dateTime, '%{strformat}'){order_sql};
+                        """
                 else:
                     # archive access with no average_type
                     if average_type is None:
-                        sql_lookup = (
-                            f'SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) as {xAxis_groupby}, '
-                            f"IFNULL({aggregate_type}({obs_lookup}),0) AS obs, dateTime FROM archive "
-                            f"WHERE dateTime >= {start_ts} AND dateTime < {end_ts} GROUP BY {xAxis_groupby}{order_sql};"
-                        )
+                        sql_lookup = f"""
+                            SELECT FROM_UNIXTIME(dateTime, '%{strformat}') AS {xAxis_groupby}, 
+                            IFNULL({aggregate_type}({obs_lookup}),0) AS obs 
+                            FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                            GROUP BY FROM_UNIXTIME(dateTime, '%{strformat}'){order_sql};
+                        """
 
                     # average_type requiring a subquery
                     else:
-                        sql_lookup = (
-                            f"SELECT dt1 AS {xAxis_groupby}, "
-                            f"{aggregate_type}(obs1) AS obs "
-                            f'FROM (SELECT FROM_UNIXTIME( dateTime, "%{strformat}" ) AS dt1, '
-                            f"IFNULL({average_type}({obs_lookup}),0) AS obs1 "
-                            f"FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} "
-                            f'GROUP BY strftime({subqry_groupby}, datetime(dateTime, "unixepoch", "localtime"))) '
-                            f"GROUP BY {xAxis_groupby}{order_sql};"
-                        )
+                        sql_lookup = f"""
+                            SELECT dt1 AS {xAxis_groupby}, 
+                            {aggregate_type}(obs1) AS obs 
+                            FROM (SELECT FROM_UNIXTIME(dateTime, '%{strformat}') AS dt1, 
+                            IFNULL({average_type}({obs_lookup}),0) AS obs1 
+                            FROM archive WHERE dateTime >= {start_ts} AND dateTime < {end_ts} 
+                            GROUP BY FROM_UNIXTIME(dateTime, '{subqry_groupby.strip("%")}')) AS subq 
+                            GROUP BY dt1{order_sql};
+                        """
 
             # Setup values for the converter
             try:
