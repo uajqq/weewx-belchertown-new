@@ -434,7 +434,9 @@ class getData(SearchList):
         outTemp_unit = converter.group_unit_dict["group_temperature"]
 
         # Find the group_name for outTemp from the skin.conf
-        skin_outTemp_unit = self.generator.converter.group_unit_dict["group_temperature"]
+        skin_outTemp_unit = self.generator.converter.group_unit_dict[
+            "group_temperature"
+        ]
 
         # Find the number of decimals to round to based on the skin.conf
         outTemp_round = skin_dict["Units"]["StringFormats"].get(
@@ -450,7 +452,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_max_range_max = (
-                outTemp_round % self.generator.converter.convert(year_outTemp_max_range_max_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(year_outTemp_max_range_max_tuple)[0]
             )
             # Min temperature for this day
             year_outTemp_max_range_min_tuple = (
@@ -459,7 +462,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_max_range_min = (
-                outTemp_round % self.generator.converter.convert(year_outTemp_max_range_min_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(year_outTemp_max_range_min_tuple)[0]
             )
             # Largest Daily Temperature Range total
             year_outTemp_max_range_total = outTemp_round % (
@@ -571,7 +575,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_min_range_max = (
-                outTemp_round % self.generator.converter.convert(at_outTemp_min_range_max_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(at_outTemp_min_range_max_tuple)[0]
             )
             # Min temperature for this day
             at_outTemp_min_range_min_tuple = (

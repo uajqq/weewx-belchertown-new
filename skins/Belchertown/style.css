@@ -2033,14 +2033,14 @@ p.entry-meta {
 }
 
 .sun-moon-modal {
-	display: inline-block;
-	font-size: 20px;
+  display: inline-block;
+  font-size: 20px;
 }
 
 .daylight-change {
-	width: 100%;
-	text-align: center;
-	font-size: 15px;
+  width: 100%;
+  text-align: center;
+  font-size: 15px;
   display: block;
 }
 
