@@ -149,8 +149,6 @@ class getData(SearchList):
         skin_dict = self.generator.skin_dict
         extras_dict = self.generator.skin_dict["Extras"]
         db_binder = self.generator.db_binder
-        converter = self.generator.converter
-        formatter = self.generator.formatter
 
         # Look for the debug flag which can be used to show more logging
         weewx.debug = int(config_dict.get("debug", 0))
@@ -436,7 +434,7 @@ class getData(SearchList):
         outTemp_unit = converter.group_unit_dict["group_temperature"]
 
         # Find the group_name for outTemp from the skin.conf
-        skin_outTemp_unit = converter.group_unit_dict["group_temperature"]
+        skin_outTemp_unit = self.generator.converter.group_unit_dict["group_temperature"]
 
         # Find the number of decimals to round to based on the skin.conf
         outTemp_round = skin_dict["Units"]["StringFormats"].get(
@@ -452,7 +450,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_max_range_max = (
-                outTemp_round % converter.convert(year_outTemp_max_range_max_tuple)[0]
+                outTemp_round % self.generator.converter.convert(year_outTemp_max_range_max_tuple)[0]
             )
             # Min temperature for this day
             year_outTemp_max_range_min_tuple = (
@@ -461,7 +459,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_max_range_min = (
-                outTemp_round % converter.convert(year_outTemp_max_range_min_tuple)[0]
+                outTemp_round % self.generator.converter.convert(year_outTemp_max_range_min_tuple)[0]
             )
             # Largest Daily Temperature Range total
             year_outTemp_max_range_total = outTemp_round % (
@@ -491,7 +489,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_min_range_max = (
-                outTemp_round % converter.convert(year_outTemp_min_range_max_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(year_outTemp_min_range_max_tuple)[0]
             )
             # Min temperature for this day
             year_outTemp_min_range_min_tuple = (
@@ -500,7 +499,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             year_outTemp_min_range_min = (
-                outTemp_round % converter.convert(year_outTemp_min_range_min_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(year_outTemp_min_range_min_tuple)[0]
             )
             # Smallest Daily Temperature Range total
             year_outTemp_min_range_total = outTemp_round % (
@@ -530,7 +530,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_max_range_max = (
-                outTemp_round % converter.convert(at_outTemp_max_range_max_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(at_outTemp_max_range_max_tuple)[0]
             )
             # Min temperature for this day
             at_outTemp_max_range_min_tuple = (
@@ -539,7 +540,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_max_range_min = (
-                outTemp_round % converter.convert(at_outTemp_max_range_min_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(at_outTemp_max_range_min_tuple)[0]
             )
             # Largest Daily Temperature Range total
             at_outTemp_max_range_total = outTemp_round % (
@@ -569,7 +571,7 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_min_range_max = (
-                outTemp_round % converter.convert(at_outTemp_min_range_max_tuple)[0]
+                outTemp_round % self.generator.converter.convert(at_outTemp_min_range_max_tuple)[0]
             )
             # Min temperature for this day
             at_outTemp_min_range_min_tuple = (
@@ -578,7 +580,8 @@ class getData(SearchList):
                 "group_temperature",
             )
             at_outTemp_min_range_min = (
-                outTemp_round % converter.convert(at_outTemp_min_range_min_tuple)[0]
+                outTemp_round
+                % self.generator.converter.convert(at_outTemp_min_range_min_tuple)[0]
             )
             # Smallest Daily Temperature Range total
             at_outTemp_min_range_total = outTemp_round % (
@@ -604,7 +607,7 @@ class getData(SearchList):
         rain_unit = converter.group_unit_dict["group_rain"]
 
         # Find the group_name for rain in the skin.conf
-        skin_rain_unit = converter.group_unit_dict["group_rain"]
+        skin_rain_unit = self.generator.converter.group_unit_dict["group_rain"]
 
         # Find the number of decimals to round the result based on the skin.conf
         rain_round = skin_dict["Units"]["StringFormats"].get(skin_rain_unit, "%.2f")
@@ -617,7 +620,7 @@ class getData(SearchList):
         if rainiest_day_query is not None:
             rainiest_day_tuple = (rainiest_day_query[1], rain_unit, "group_rain")
             rainiest_day_converted = (
-                rain_round % converter.convert(rainiest_day_tuple)[0]
+                rain_round % self.generator.converter.convert(rainiest_day_tuple)[0]
             )
             rainiest_day = [
                 rainiest_day_query[0],
@@ -636,7 +639,7 @@ class getData(SearchList):
         at_rainiest_day_query = wx_manager.getSql(at_rainiest_day_sql)
         at_rainiest_day_tuple = (at_rainiest_day_query[1], rain_unit, "group_rain")
         at_rainiest_day_converted = (
-            rain_round % converter.convert(at_rainiest_day_tuple)[0]
+            rain_round % self.generator.converter.convert(at_rainiest_day_tuple)[0]
         )
         at_rainiest_day = [
             at_rainiest_day_query[0],
@@ -704,7 +707,8 @@ class getData(SearchList):
                 "group_rain",
             )
             year_rainiest_month_converted = (
-                rain_round % converter.convert(year_rainiest_month_tuple)[0]
+                rain_round
+                % self.generator.converter.convert(year_rainiest_month_tuple)[0]
             )
             year_rainiest_month_name = calendar.month_name[
                 int(year_rainiest_month_query[0])
@@ -720,7 +724,7 @@ class getData(SearchList):
         at_rainiest_month_query = wx_manager.getSql(at_rainiest_month_sql)
         at_rainiest_month_tuple = (at_rainiest_month_query[2], rain_unit, "group_rain")
         at_rainiest_month_converted = (
-            rain_round % converter.convert(at_rainiest_month_tuple)[0]
+            rain_round % self.generator.converter.convert(at_rainiest_month_tuple)[0]
         )
         at_rainiest_month_name = calendar.month_name[int(at_rainiest_month_query[0])]
         at_rainiest_month = [
@@ -736,7 +740,7 @@ class getData(SearchList):
             "group_rain",
         )
         at_rain_highest_year_converted = (
-            rain_round % converter.convert(at_rain_highest_year_tuple)[0]
+            rain_round % self.generator.converter.convert(at_rain_highest_year_tuple)[0]
         )
         at_rain_highest_year = [
             at_rain_highest_year_query[0],
@@ -1573,7 +1577,7 @@ class getData(SearchList):
             earthquake_stale_timer = extras_dict["earthquake_stale"]
             latitude = config_dict["Station"]["latitude"]
             longitude = config_dict["Station"]["longitude"]
-            distance_unit = converter.group_unit_dict["group_distance"]
+            distance_unit = self.generator.converter.group_unit_dict["group_distance"]
             eq_distance_label = skin_dict["Units"]["Labels"].get(distance_unit, "")
             eq_distance_round = skin_dict["Units"]["StringFormats"].get(
                 distance_unit, "%.1f"
@@ -1584,9 +1588,7 @@ class getData(SearchList):
             if extras_dict["earthquake_server"] == "USGS":
                 earthquake_url = f"http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat={latitude}&lon={longitude}&maxradiuskm={earthquake_maxradiuskm}&format=geojson&nodata=204&minmag=2"
             elif extras_dict["earthquake_server"] == "GeoNet":
-                earthquake_url = (
-                    f"""https://api.geonet.org.nz/quake?MMI={extras_dict["geonet_mmi"]}"""
-                )
+                earthquake_url = f"""https://api.geonet.org.nz/quake?MMI={extras_dict["geonet_mmi"]}"""
             elif extras_dict["earthquake_server"] == "ReNaSS":
                 # Calculate min/max latitude and min/max longitude from radius and station location. https://stackoverflow.com/a/23118314
                 lat = float(latitude)
@@ -1925,7 +1927,7 @@ class getData(SearchList):
             try:
                 # Find the unit from group (like group_temperature = degree_F)
                 obs_group = weewx.units.obs_group_dict[obs]
-                obs_unit = converter.group_unit_dict[obs_group]
+                obs_unit = self.generator.converter.group_unit_dict[obs_group]
             except:
                 # Something's wrong. Continue this loop to ignore this group
                 # (like group_dust or something non-standard)
@@ -1941,7 +1943,9 @@ class getData(SearchList):
             # Get the unit's label
             # Add to label array and strip whitespace if possible
             if obs not in all_obs_unit_labels_json:
-                obs_unit_label = weewx.units.get_label_string(formatter, converter, obs)
+                obs_unit_label = weewx.units.get_label_string(
+                    self.generator.formatter, self.generator.converter, obs
+                )
                 all_obs_unit_labels_json[obs] = obs_unit_label
 
             # Special handling items
@@ -2932,7 +2936,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_type,
                 aggregate_interval,
             )
-            windSpeed_vt = converter.convert(windSpeed_vt)
+            windSpeed_vt = self.converter.convert(windSpeed_vt)
             usage_round = int(
                 skin_dict["Units"]["StringFormats"].get(windSpeed_vt[2], "2f")[-2]
             )
@@ -3129,7 +3133,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            min_obs_vt = converter.convert(obs_vt)
+            min_obs_vt = self.converter.convert(obs_vt)
 
             # Get max values
             aggregate_type = "max"
@@ -3156,7 +3160,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            max_obs_vt = converter.convert(obs_vt)
+            max_obs_vt = self.converter.convert(obs_vt)
 
             # Get avg values
             aggregate_type = "avg"
@@ -3183,7 +3187,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            avg_obs_vt = converter.convert(obs_vt)
+            avg_obs_vt = self.converter.convert(obs_vt)
 
             obs_unit = avg_obs_vt[1]
             obs_unit_label = skin_dict["Units"]["Labels"].get(obs_unit, "")
@@ -3249,7 +3253,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            min_obs_vt = converter.convert(obs_vt)
+            min_obs_vt = self.converter.convert(obs_vt)
 
             # Get max values
             obs_lookup = "windGust"
@@ -3276,7 +3280,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
 
-            max_obs_vt = converter.convert(obs_vt)
+            max_obs_vt = self.converter.convert(obs_vt)
 
             obs_unit = max_obs_vt[1]
             obs_unit_label = skin_dict["Units"]["Labels"].get(obs_unit, "")
@@ -3532,7 +3536,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 if special_target_unit:
                     row_converted = weewx.units.convert(row_tuple, special_target_unit)
                 else:
-                    row_converted = converter.convert(row_tuple)
+                    row_converted = self.converter.convert(row_tuple)
                 obsvalues.append(row_converted[0])
 
             # If the values are to be mirrored, we need to make them negative
@@ -3583,7 +3587,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 obs_vt
             )
         else:
-            obs_vt = converter.convert(obs_vt)
+            obs_vt = self.converter.convert(obs_vt)
 
         # Special handling for the rain.
         if observation == "rainTotal":
