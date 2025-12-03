@@ -1801,8 +1801,8 @@ class getData(SearchList):
             db_lookup,
             station_obs_binding,
             current_stamp,
-            formatter,
-            converter,
+            self.generator.formatter,
+            self.generator.converter,
             None,
             current_record,
         )
@@ -1822,8 +1822,8 @@ class getData(SearchList):
                     db_lookup,
                     station_obs_binding,
                     current_stamp,
-                    formatter,
-                    converter,
+                    self.generator.formatter,
+                    self.generator.converter,
                     None,
                     current_record,
                 )
@@ -1844,8 +1844,8 @@ class getData(SearchList):
                     db_lookup,
                     None,
                     "day",
-                    formatter,
-                    converter,
+                    self.generator.formatter,
+                    self.generator.converter,
                 )
                 dayRain_sum = getattr(obs_binder, "sum")
                 # Need to use dayRain for class name since that is weewx-mqtt
@@ -1896,8 +1896,8 @@ class getData(SearchList):
                     db_lookup,
                     None,
                     current_stamp,
-                    formatter,
-                    converter,
+                    self.generator.formatter,
+                    self.generator.converter,
                 )
                 obs_trend = getattr(trend, obs)
                 station_obs_html += (
