@@ -220,6 +220,7 @@ files = [
             "skins/Belchertown/kiosk.html.tmpl",
             "skins/Belchertown/kiosk.css",
             "skins/Belchertown/celestial.inc",
+            "skins/Belchertown/daylight.inc",
             "skins/Belchertown/graphs.conf.example",
             "skins/Belchertown/page-header.inc",
             "skins/Belchertown/manifest.json.tmpl",
