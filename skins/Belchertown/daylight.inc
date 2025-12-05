@@ -27,9 +27,17 @@
       #set $seconds_text = $obs.label.second[0] if ( int($delta) == 1 ) else $obs.label.second[1]
       #set $amt_str = "%s%d %s" % (str(int($delta) // 60) + ' ' + $minutes_text + ' ' if ($delta // 60) > 0 else '', $delta % 60 if ($delta // 60) > 0 else $delta, $seconds_text)
       #if $difference > 0
-        #set $delta_str = "%s %s" % ( $amt_str, $obs.label.daylight_increase )
+        #if $obs.label.daylight_increase != "daylight_increase"
+          #set $delta_str = "%s %s" % ( $amt_str, $obs.label.daylight_increase )
+        #else
+          #set $delta_str = "%s %s" % ( $amt_str, $obs.label.more_than_yesterday.split(' ', 1)[0] )
+        #end if
       #else
-        #set $delta_str = "%s %s" % ( $amt_str, $obs.label.daylight_decrease )
+        #if $obs.label.daylight_decrease != "daylight_decrease"
+          #set $delta_str = "%s %s" % ( $amt_str, $obs.label.daylight_decrease )
+        #else
+          #set $delta_str = "%s %s" % ( $amt_str, $obs.label.less_than_yesterday.split(' ', 1)[0] )
+        #end if
       #end if
       #set $daylight_str = "%s %s %s" % ( $daylight_str, ": ", $delta_str )
     #end if
