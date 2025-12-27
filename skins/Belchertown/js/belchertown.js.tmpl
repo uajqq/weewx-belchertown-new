@@ -50,6 +50,54 @@ var graphpage_content = $graphpage_content;
 //  declare icon_dict as global variable
 var icon_dict = {};
 
+// ---- Pirate Weather helpers (Dark Sky icons) ----
+const DS_ICON_TO_W34 = {
+  'clear-day': 'clear-day',
+  'clear-night': 'clear-night',
+  'partly-cloudy-day': 'partly-cloudy-day',
+  'partly-cloudy-night': 'partly-cloudy-night',
+  'cloudy': 'cloudy',
+  'rain': 'rain',
+  'sleet': 'sleet',
+  'snow': 'snow',
+  'wind': 'wind',
+  'fog': 'fog',
+  'hail': 'hail',
+  'thunderstorm': 'thunderstorm',
+  'tornado': 'tornado'
+};
+
+/*
+ Resolve an icon name to the Weather34 icon base (without .png).
+ - Aeris: input like "xx.png" -> look up in icon_dict
+ - Pirate Weather: Dark Sky-style names -> DS_ICON_TO_W34 map
+ */
+
+function resolveIconForProvider(iconRaw, provider) {
+  const raw = String(iconRaw || '');
+  const normalized = raw.trim();
+
+  if (provider === 'aeris') {
+    try {
+      // Aeris sometimes returns "partly_cloudy.png" or similar with dot + extension
+      const iconName = normalized.split('.')[0]; // remove extension
+      const mapped = icon_dict[iconName];
+      return mapped || 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  } else if (provider === 'pirateweather') {
+    // Pirate Weather uses Dark Sky–style identifiers like "partly-cloudy-day"
+    const key = normalized.toLowerCase(); // DS mapping is lowercase keys
+    const mapped = DS_ICON_TO_W34[key];
+    return mapped || 'unknown';
+  } else {
+    // Optional: catch-all for other providers (if you have a default)
+    const key = normalized.toLowerCase();
+    return DS_ICON_TO_W34[key] || 'unknown';
+  }
+}
+
 function belchertown_debug(message) {
     if (belchertown_debug_config > 0) {
         console.log(message);
@@ -621,33 +669,71 @@ function moon_icon(moonphase) {
 }
 
 // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
+/*
 function ajaxforecast() {
     forecast_data = {};
     current_conditions_data = {};
     jQuery.when(
-        // Get the iconlist - original source is // https://www.aerisweather.com/support/docs/api/reference/icon-list/
-        jQuery.getJSON(get_relative_url() + '/images/aeris-icon-list.json', function(iconlist) {
-            icon_dict = iconlist;
-        }
-        ),
-        // Get the curent conditions
-        jQuery.getJSON(get_relative_url() + "/json/current_conditions.json", function(current_conditions) {
-            current_conditions_data = current_conditions;
-        }
-        ),
-        // Get the forecast
-        jQuery.getJSON(get_relative_url() + "/json/forecast.json", function(forecast) {
-            forecast_data = forecast;
-        }
-        )
-    ).then(function() {
-        // Update forecast once the promises are fulfilled
-        update_current_conditions(current_conditions_data);
+      // Get the iconlist - original source is // https://www.aerisweather.com/support/docs/api/reference/icon-list/
+      jQuery.getJSON(get_relative_url() + '/images/aeris-icon-list.json', function(iconlist) {
+        icon_dict = iconlist;
+      }),
+      // Get the curent conditions
+      jQuery.getJSON(get_relative_url() + "/json/current_conditions.json", function(current_conditions) {
+        current_conditions_data = current_conditions;
+      }),
+      // Get the forecast
+      jQuery.getJSON(get_relative_url() + "/json/forecast.json", function(forecast) {
+        forecast_data = forecast;
+      })
+    )
+    .then(function() {
+      // Update forecast once the promises are fulfilled
+      update_current_conditions(current_conditions_data);
+      // Update forecast once the promises are fulfilled
+      update_forecast_data(forecast_data);
+    });
+}
+*/
 
-        // Update forecast once the promises are fulfilled
-        update_forecast_data(forecast_data);
-    }
-    );
+function ajaxforecast() {
+  forecast_data = {};
+  current_conditions_data = {};
+
+  const provider = "$Extras.forecast_provider";
+
+  const pCurrent = jQuery.getJSON(get_relative_url() + "/json/current_conditions.json", function(current_conditions) {
+    current_conditions_data = current_conditions;
+  });
+
+  const pForecast = jQuery.getJSON(get_relative_url() + "/json/forecast.json", function(forecast) {
+    forecast_data = forecast;
+  });
+
+  let promises;
+  if (provider === "aeris") {
+    const pIconMap = jQuery
+      .getJSON(get_relative_url() + "/images/aeris-icon-list.json", function(iconlist) {
+        icon_dict = iconlist;
+      })
+      .fail(function(err) {
+        console.error("Aeris icon list failed to load:", err);
+        icon_dict = {};
+      });
+
+    promises = [pIconMap, pCurrent, pForecast]; // Aeris needs all three
+  } else {
+    promises = [pCurrent, pForecast]; // Pirate Weather: no Aeris icon map dependency
+  }
+
+  jQuery.when.apply(jQuery, promises)
+    .then(function() {
+      update_current_conditions(current_conditions_data);
+      update_forecast_data(forecast_data);
+    })
+       .fail(function(err) {
+      console.error("Forecast fetch failed:", err);
+    });
 }
 
 function aeris_coded_weather(data, full_observation = false) {
@@ -1123,6 +1209,46 @@ function update_current_conditions(data) {
         }
     }
 
+    else if (forecast_provider == "pirateweather") {
+      
+      // data shape: { timestamp, current: [ {summary, icon, visibility, cloudCover, ...} ] }
+      try {
+        const cc = (data["current"] && data["current"][0]) ? data["current"][0] : {};
+        // Icon: map Dark Sky icon to Weather34 and set PNG path
+        const w34icon = resolveIconForProvider(cc["icon"] || "unknown", "pirateweather");
+        const wxicon = get_relative_url() + "/images/" + w34icon + ".png";
+        jQuery("#wxicon").attr("src", wxicon);
+
+        // Current observation text: use PW 'summary'
+        try {
+          jQuery(".current-obs-text").html(cc["summary"] || "");
+        } catch (err) { /* silent */ }
+
+        //      // Visibility text in station observation table
+        try {
+          // Backend wrote units appropriately; we only format here.
+          const visibility = cc["visibility"]; // numeric or null
+          const visibility_output = (visibility != null)
+            ? parseFloat(parseFloat(visibility)).toLocaleString(
+                "$system_locale_js",
+                { minimumFractionDigits: unit_rounding_array["visibility"],
+                  maximumFractionDigits: unit_rounding_array["visibility"] }
+              ) + " " + unit_label_array["visibility"]
+            : "N/A";
+          jQuery(".station-observations .visibility").html(visibility_output);
+        } catch (err) { /* silent */ }
+
+        // Timestamp subtitle (optional)
+        if ("$Extras.current_conditions_timestamp_enabled" == "1") {
+          // Use our current_conditions.json timestamp as the "last updated"
+          const ts = data["timestamp"];
+          const current_subtitle = tzAdjustedMoment(ts).format('$obs.label.time_current_conditions_last_updated');
+          jQuery(".current-conditions-subtitle").html(current_subtitle);
+        }
+      } catch (error) {
+        // If anything fails, leave defaults
+      }
+    }
     return true;
 }
 
@@ -1414,6 +1540,209 @@ function update_forecast_data(data) {
         // Show weather alert
         show_forcast_alert(data, forecast_provider);
         // #end if
+    }
+
+
+    else if (forecast_provider == "pirateweather") {
+      // PW shape: current, hourly[], daily[], alerts[]
+      try {
+        const daily = Array.isArray(data["daily"]) ? data["daily"] : [];
+        const hourly = Array.isArray(data["hourly"]) ? data["hourly"] : [];
+
+        // --- Helper: pick 3-hourly points aligned to local 3h boundaries ---
+        function pickThreeHourlyAligned(hourlyArray) {
+          if (!Array.isArray(hourlyArray) || hourlyArray.length === 0) return [];
+
+          // Find the first index that lands on a local 3-hour boundary (HH % 3 === 0)
+          let startIdx = 0;
+          for (let i = 0; i < hourlyArray.length; i++) {
+            const hh = tzAdjustedMoment(hourlyArray[i]["time"]).format("H"); // 0..23, local time
+            if (parseInt(hh, 10) % 3 === 0) { startIdx = i; break; }
+          }
+
+          // Now take every 3rd item from that start
+          const out = [];
+          for (let i = startIdx; i < hourlyArray.length; i += 3) {
+            out.push(hourlyArray[i]);
+          }
+          return out;
+        }
+
+        // ---- Limit the number of daily tiles to 7 ----
+        // Pirate Weather often returns "today" + next 7 days (8 total).
+        // To match Aeris' 7 tiles, skip today and take the next 7 days.
+        const MAX_TILES = 7;
+        // If you want to keep "today + next 6", set START_INDEX = 0 instead.
+        const START_INDEX = 0; // 1 = skip "today", 0 = include "today"
+        const daysToRender = daily.slice(START_INDEX, START_INDEX + MAX_TILES);
+
+        // Subtitle: last updated (use generated_at if present)
+        const lastUpdated = (data["generated_at"])
+          ? tzAdjustedMoment(data["generated_at"]).format('$obs.label.time_forecast_last_updated')
+          : tzAdjustedMoment(Date.now()/1000).format('$obs.label.time_forecast_last_updated');
+        jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + lastUpdated);
+
+        // Build a simple daily forecast row
+        let html24 = "";
+        for (let i = 0; i < daysToRender.length; i++) {
+          const d = daysToRender[i];
+          const dayMoment = tzAdjustedMoment(d["time"]).format("$obs.label.time_forecast_date");
+          const iconBase = resolveIconForProvider(d["icon"] || "unknown", "pirateweather");
+          const image_url = get_relative_url() + "/images/" + iconBase + ".png";
+          const condition_text = d["summary"] || "";
+          const maxTemp = d["temperatureHigh"];
+          const minTemp = d["temperatureLow"];
+          const humidity = (d["humidity"] != null) ? d["humidity"] * 100 : null; // PW humidity is fraction 0..1
+          const dewPoint = d["dewPoint"];
+          const snow_depth = 0;  // DS doesn’t expose a simple daily snow depth field; skip unless you add it
+          const snow_unit = "";  // no unit for now
+          const precip = (d["precipProbability"] != null) ? d["precipProbability"] * 100 : 0;
+
+          // Card markup consistent with Aeris layout
+          html24 += '<div class="col-sm-1-5 forecast-day forecast-24hour ' + (i === 0 ? 'forecast-today' : 'border-left') + '">';
+          html24 += '<div class="weekday">' + dayMoment + '</div>';
+          html24 +=   '<div class="forecast-conditions">';
+          html24 +=     '<img id="icon" src="' + image_url + '"><br>';
+          html24 +=     '<span class="forecast-condition-text">' + condition_text + '</span>';
+          html24 +=   '</div>';
+          if (maxTemp != null && minTemp != null) {
+            html24 +=   '<span class="forecast-high">' + parseFloat(maxTemp).toFixed(0) + '°</span> ';
+            html24 +=   '<span class="forecast-low">'  + parseFloat(minTemp).toFixed(0) + '°</span>';
+          }
+          html24 +=   '<br>';
+          html24 +=   '<div class="forecast-precip">';
+          if (humidity != null) {
+            // if you want humidity shown, mirror Extras.forecast_show_humidity_dewpoint
+            html24 += '<i class="wi wi-humidity rain-precip"></i> <span>' + parseFloat(humidity).toFixed(0) + '%</span> ';
+          } else if (dewPoint != null) {
+            html24 += '<i class="wi wi-raindrops rain-precip"></i> <span>' + parseFloat(dewPoint).toFixed(0) + '°</span> ';
+          }
+          if (precip > 0) {
+            html24 += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(precip).toFixed(0) + '%</span>';
+          } else {
+            html24 += '<i class="wi wi-raindrop wi-rotate-45 rain-no-precip"></i> <span>0%</span>';
+          }
+          html24 +=   '</div>';
+          // wind block
+          if (d["windSpeed"] != null) {
+            html24 += '<div class="forecast-wind">';
+            html24 +=   '<i class="wi wi-strong-wind"></i> <span>' + parseFloat(d["windSpeed"]).toFixed(0) + '</span>';
+                     html24 += '</div>';
+          }
+          html24 += '</div>';
+        }
+
+        // --- Build an hourly strip ---
+        let htmlHr = "";
+        for (let i = 0; i < hourly.length; i++) {
+          const h = hourly[i];
+          const ts = tzAdjustedMoment(h["time"]).format("$obs.label.time_forecast_time"); // DS epoch seconds
+          const iconBase = resolveIconForProvider(h["icon"] || "unknown", "pirateweather");
+          const image_url = get_relative_url() + "/images/" + iconBase + ".png";
+          const temp = h["temperature"];
+          const humidity = (h["humidity"] != null) ? h["humidity"] * 100 : null; // DS gives fraction 0..1
+          const dewPoint = h["dewPoint"];  
+          const precip = (h["precipProbability"] != null) ? h["precipProbability"] * 100 : 0;
+
+          htmlHr += '<div class="col-sm-1-5 forecast-day forecast-3hour ' + (i === 0 ? 'forecast-today' : 'border-left') + '">';
+          htmlHr += '<span id="weekday">' + ts + '</span><br>';
+          htmlHr += '<div class="forecast-conditions">';
+          htmlHr += '<img id="icon" src="' + image_url + '"><br>';
+          htmlHr += '<span class="forecast-condition-text">' + (h["summary"] || "") + '</span>';
+          htmlHr += '</div>';
+
+          if (temp != null) {
+            htmlHr += '<span class="forecast-high">' + parseFloat(temp).toFixed(0) + '°</span>';
+          }
+          htmlHr += '<br>';
+
+          htmlHr += '<div class="forecast-precip">';
+          if (humidity != null) {
+            htmlHr += '<i class="wi wi-humidity rain-precip"></i> <span>' + parseFloat(humidity).toFixed(0) + '%</span> ';
+          } else if (dewPoint != null) {
+            htmlHr += '<i class="wi wi-raindrops rain-precip"></i> <span>' + parseFloat(dewPoint).toFixed(0) + '°</span> ';
+          }
+          if (precip > 0) {
+            htmlHr += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(precip).toFixed(0) + '%</span>';
+          } else {
+            htmlHr += '<i class="wi wi-raindrop wi-rotate-45 rain-no-precip"></i> <span>0%</span>';
+          }
+          htmlHr += '</div>';
+
+          if (h["windSpeed"] != null) {
+            htmlHr += '<div class="forecast-wind">';
+            htmlHr += '<i class="wi wi-strong-wind"></i> <span>' + parseFloat(h["windSpeed"]).toFixed(0) + '</span>';
+            htmlHr += '</div>';
+          }
+          htmlHr += '</div>';
+        }
+
+        // --- Build the 3-hour contracted strip from PW hourly ---
+        const hourly3 = pickThreeHourlyAligned(hourly);
+        let html3Hr = "";
+        for (let i = 0; i < hourly3.length; i++) {
+          const h = hourly3[i];
+          const rawLabel = tzAdjustedMoment(h["time"]).format('$obs.label.time_forecast_time');
+          const ts = forecast_time(i, "forecast_3hr", rawLabel);
+          const iconBase = resolveIconForProvider(h["icon"] ?? "unknown", "pirateweather");
+          const image_url = get_relative_url() + "/images/" + iconBase + ".png";
+
+          const temp      = h["temperature"];
+          const humidity  = (h["humidity"] != null) ? h["humidity"] * 100 : null; // PW humidity 0..1
+          const dewPoint  = h["dewPoint"];
+          const precip    = (h["precipProbability"] != null) ? h["precipProbability"] * 100 : 0;
+          const windSpeed = h["windSpeed"];
+
+          html3Hr += '<div class="col-sm-1-5 forecast-day forecast-3hour ' + (i === 0 ? 'forecast-today' : 'border-left') + '">';
+          html3Hr += '<span id="weekday">' + ts + '</span><br>';
+          html3Hr += '<div class="forecast-conditions">';
+          html3Hr += '<img id="icon" src="' + image_url + '"><br>';
+          html3Hr += '<span class="forecast-condition-text">' + (h["summary"] ?? "") + '</span>';
+          html3Hr += '</div>';
+
+          if (temp != null) {
+            html3Hr += '<span class="forecast-high">' + parseFloat(temp).toFixed(0) + '°</span>';
+          }
+          html3Hr += '<br>';
+
+          // Precip / humidity / dewpoint block (keeps your styling logic)
+          html3Hr += '<div class="forecast-precip">';
+          if (humidity != null) {
+            html3Hr += '<i class="wi wi-humidity rain-precip"></i> <span>' + parseFloat(humidity).toFixed(0) + '%</span> ';
+          } else if (dewPoint != null) {
+            html3Hr += '<i class="wi wi-raindrops rain-precip"></i> <span>' + parseFloat(dewPoint).toFixed(0) + '°</span> ';
+          }
+          if (precip > 0) {
+            html3Hr += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(precip).toFixed(0) + '%</span>';
+          } else {
+            html3Hr += '<i class="wi wi-raindrop wi-rotate-45 rain-no-precip"></i> <span>0%</span>';
+          }
+          html3Hr += '</div>';
+
+          if (windSpeed != null) {
+            html3Hr += '<div class="forecast-wind">';
+            html3Hr += '<i class="wi wi-strong-wind"></i> <span>' + parseFloat(windSpeed).toFixed(0) + '</span>';
+            html3Hr += '</div>';
+          }
+
+          html3Hr += '</div>'; // end tile
+        }
+
+        // Render 1‑hour strip
+        jQuery(".onehr_forecasts").html(htmlHr);
+
+        // Render 3‑hour contracted strip
+        jQuery(".threehr_forecasts").html(html3Hr);
+
+        // Show daily row (unchanged)
+        jQuery(".day_forecasts").html(html24);
+
+        // Alerts (optional)
+        show_forcast_alert(data, "darksky"); // your helper supports "darksky" branch
+
+      } catch (e) {
+        console.error("Pirate Weather forecast render error:", e);
+      }
     }
 }
 
