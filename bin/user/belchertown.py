@@ -51,7 +51,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-VERSION = "1.7beta1-new-belchertown"
+VERSION = "1.7beta2-new-belchertown"
 log.info(f"version {VERSION}")
 
 # Default timeout for all HTTP requests (seconds)
@@ -80,95 +80,62 @@ def _http_get_json(url, timeout=DEFAULT_HTTP_TIMEOUT):
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _extract_fields(source, fields):
+    """Extract specified fields from a source dictionary."""
+    return {field: source.get(field) for field in fields}
+
+
 def _pw_transform_to_belch(pw):
     """Map Dark Sky-style JSON from Pirate Weather to the compact structure
     this skin uses: current, hourly[], daily[], alerts[].
     """
-    out = {}
-    cur = pw.get("currently") or {}
-    out["current"] = {
-        "summary": cur.get("summary"),
-        "icon": cur.get("icon"),
-        "temperature": cur.get("temperature"),
-        "apparentTemperature": cur.get("apparentTemperature"),
-        "windSpeed": cur.get("windSpeed"),
-        "windGust": cur.get("windGust"),
-        "windBearing": cur.get("windBearing"),
-        "humidity": cur.get("humidity"),
-        "pressure": cur.get("pressure"),
-        "visibility": cur.get("visibility"),
-        "dewPoint": cur.get("dewPoint"),
-        "precipIntensity": cur.get("precipIntensity"),
-        "precipProbability": cur.get("precipProbability"),
-        "cloudCover": cur.get("cloudCover"),
-        "uvIndex": cur.get("uvIndex"),
-        "time": cur.get("time"),  # epoch seconds
+    CURRENT_FIELDS = [
+        "summary", "icon", "temperature", "apparentTemperature", "windSpeed",
+        "windGust", "windBearing", "humidity", "pressure", "visibility",
+        "dewPoint", "precipIntensity", "precipProbability", "cloudCover",
+        "uvIndex", "time"
+    ]
+    HOURLY_FIELDS = [
+        "time", "summary", "icon", "temperature", "apparentTemperature",
+        "windSpeed", "windGust", "windBearing", "precipIntensity",
+        "precipProbability", "cloudCover", "uvIndex"
+    ]
+    DAILY_FIELDS = [
+        "time", "summary", "icon", "temperatureHigh", "temperatureLow",
+        "windSpeed", "windGust", "windBearing", "precipIntensity",
+        "precipProbability", "cloudCover", "uvIndex"
+    ]
+    ALERT_FIELDS = ["title", "expires", "description", "severity", "uri"]
+
+    current_data = pw.get("currently") or {}
+    hourly_list = (pw.get("hourly") or {}).get("data", [])
+    daily_list = (pw.get("daily") or {}).get("data", [])
+    alerts_list = pw.get("alerts") or []
+
+    return {
+        "current": _extract_fields(current_data, CURRENT_FIELDS),
+        "hourly": [_extract_fields(h, HOURLY_FIELDS) for h in hourly_list],
+        "daily": [_extract_fields(d, DAILY_FIELDS) for d in daily_list],
+        "alerts": [_extract_fields(a, ALERT_FIELDS) for a in alerts_list],
+        "provider": "pirateweather",
+        "generated_at": int(time.time()),
     }
-    hourly = (pw.get("hourly") or {}).get("data", [])
-    out["hourly"] = [
-        {
-            "time": h.get("time"),
-            "summary": h.get("summary"),
-            "icon": h.get("icon"),
-            "temperature": h.get("temperature"),
-            "apparentTemperature": h.get("apparentTemperature"),
-            "windSpeed": h.get("windSpeed"),
-            "windGust": h.get("windGust"),
-            "windBearing": h.get("windBearing"),
-            "precipIntensity": h.get("precipIntensity"),
-            "precipProbability": h.get("precipProbability"),
-            "cloudCover": h.get("cloudCover"),
-            "uvIndex": h.get("uvIndex"),
-        }
-        for h in hourly
-    ]
-    daily = (pw.get("daily") or {}).get("data", [])
-    out["daily"] = [
-        {
-            "time": d.get("time"),
-            "summary": d.get("summary"),
-            "icon": d.get("icon"),
-            "temperatureHigh": d.get("temperatureHigh"),
-            "temperatureLow": d.get("temperatureLow"),
-            "windSpeed": d.get("windSpeed"),
-            "windGust": d.get("windGust"),
-            "windBearing": d.get("windBearing"),
-            "precipIntensity": d.get("precipIntensity"),
-            "precipProbability": d.get("precipProbability"),
-            "cloudCover": d.get("cloudCover"),
-            "uvIndex": d.get("uvIndex"),
-        }
-        for d in daily
-    ]
-    alerts = pw.get("alerts") or []
-    out["alerts"] = [
-        {
-            "title": a.get("title"),
-            "expires": a.get("expires"),
-            "description": a.get("description"),
-            "severity": a.get("severity"),
-            "uri": a.get("uri"),
-        }
-        for a in alerts
-    ]
-    out["provider"] = "pirateweather"
-    out["generated_at"] = int(time.time())
-    return out
 
 
 def _parse_aeris_json(obj):
     """Robustly parse JSON whether it's str or bytes."""
     try:
         return json.loads(obj)
-    except Exception:
-        try:
-            if isinstance(obj, (bytes, bytearray)):
-                return json.loads(obj.decode("utf-8"))
-            # last resort: try decoding with replacement to avoid UnicodeDecodeError
-            return json.loads(obj.decode("utf-8", "replace"))
-        except Exception as e:
-            log.error(f"Error parsing forecast JSON: {e}")
-            return {}
+    except (ValueError, TypeError):
+        pass
+    
+    try:
+        if isinstance(obj, (bytes, bytearray)):
+            return json.loads(obj.decode("utf-8"))
+        return json.loads(obj.decode("utf-8", "replace"))
+    except Exception as e:
+        log.error(f"Error parsing forecast JSON: {e}")
+        return {}
 
 
 class getData(SearchList):
@@ -219,42 +186,102 @@ class getData(SearchList):
         """
         Divides compass into 16 wedges and returns direction label.
         """
+        DEFAULT_DIRECTIONS = [
+            "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+        ]
+        
         skin_dict = self.generator.skin_dict
         ordinate_names = (
             skin_dict.get("Units", {}).get("Ordinates", {}).get("directions", None)
         )
+        
         if ordinate_names is not None:
-            if isinstance(ordinate_names, list):
-                names = ordinate_names
-            else:
-                names = weeutil.weeutil.option_as_list(ordinate_names)
+            names = (
+                ordinate_names if isinstance(ordinate_names, list)
+                else weeutil.weeutil.option_as_list(ordinate_names)
+            )
         else:
-            names = [
-                "N",
-                "NNE",
-                "NE",
-                "ENE",
-                "E",
-                "ESE",
-                "SE",
-                "SSE",
-                "S",
-                "SSW",
-                "SW",
-                "WSW",
-                "W",
-                "WNW",
-                "NW",
-                "NNW",
-            ]
+            names = DEFAULT_DIRECTIONS
+            
         if return_only_labels:
             return names
-        # Avoid unnecessary computation if degree is not a number
+            
         try:
             idx = int(((float(degree) - 11.25) / 22.5) + 1) % 16
             return names[idx]
-        except Exception:
+        except (ValueError, TypeError):
             return names[0]
+
+    def _get_radar_html(self, extras_dict, lat, lon, zoom, width, height,
+                        rain, wind, temp, marker):
+        """Generate radar HTML based on provider configuration."""
+        custom = extras_dict.get("radar_html", "")
+        if custom:
+            return custom
+        
+        if extras_dict.get("aeris_map") == "1":
+            return self._build_aeris_radar(
+                extras_dict, width, height, lat, lon, zoom, dark=False
+            )
+        return self._build_windy_radar(
+            width, height, lat, lon, zoom, rain, wind, temp, marker == "true"
+        )
+
+    def _get_radar_html_dark(self, extras_dict, lat, lon, zoom, width, height):
+        """Generate dark mode radar HTML based on provider configuration."""
+        custom = extras_dict.get("radar_html_dark", "")
+        if custom:
+            return custom
+        
+        if extras_dict.get("aeris_map") == "1":
+            return self._build_aeris_radar(
+                extras_dict, width, height, lat, lon, zoom, dark=True
+            )
+        return "None"
+
+    def _get_radar_html_kiosk(self, extras_dict, skin_dict):
+        """Generate kiosk mode radar HTML."""
+        width = extras_dict.get("radar_width_kiosk", "")
+        height = extras_dict.get("radar_height_kiosk", "")
+        src = skin_dict.get("Extras", {}).get("radar_html_kiosk", "")
+        return f'<iframe width="{width}px" height="{height}px" src="{src}" frameborder="0"></iframe>'
+
+    def _build_aeris_radar(self, extras_dict, width, height, lat, lon, zoom, dark=False):
+        """Build Aeris API radar embed HTML."""
+        theme = "flat-dk" if dark else "flat"
+        blend = "lighten" if dark else "darken"
+        city_suffix = "-dk" if dark else ""
+        water_suffix = "-dk" if dark else ""
+        
+        return (
+            f'<img style="object-fit:cover;width:{width}px;height:{height}px" '
+            f'src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}'
+            f'_{extras_dict["forecast_api_secret"]}/{theme},water-depth{water_suffix},'
+            f'counties:60,rivers,interstates:60,admin-cities{city_suffix},'
+            f'alerts-severe:50:blend({blend}),radar:blend({blend})/'
+            f'{width}x{height}/{lat},{lon},{zoom}/current.png" '
+            f'referrerpolicy="no-referrer"></img>'
+        )
+
+    def _build_windy_radar(self, width, height, lat, lon, zoom, rain, wind, temp, marker):
+        """Build Windy.com embedded radar HTML."""
+        marker_str = "true" if marker else "false"
+        return (
+            f'<iframe width="{width}px" height="{height}px" '
+            f'src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}'
+            f'&zoom={zoom}&level=surface&overlay=radar&menu=&message=true'
+            f'&marker={marker_str}&calendar=&pressure=&type=map'
+            f'&location=coordinates&detail=&detailLat={lat}&detailLon={lon}'
+            f'&metricRain={rain}&metricWind={wind}&metricTemp={temp}'
+            f'&radarRange=-1" frameborder="0"></iframe>'
+        )
+
+    def _convert_temperature(self, value, from_unit, formatter):
+        """Convert temperature value and format for display."""
+        conversion_tuple = (value, from_unit, "group_temperature")
+        converted = self.generator.converter.convert(conversion_tuple)[0]
+        return formatter % converted
 
     def get_extension_list(self, timespan, db_lookup):
         """
@@ -448,42 +475,28 @@ class getData(SearchList):
         radar_rain = extras_dict["radar_rain"]
         radar_temp = extras_dict["radar_temp"]
         radar_wind = extras_dict["radar_wind"]
-        if "radar_zoom" in extras_dict:
-            zoom = extras_dict["radar_zoom"]
-        else:
-            zoom = "8"
-        if "radar_marker" in extras_dict and extras_dict["radar_marker"] == "1":
-            marker = "true"
-        else:
-            marker = ""
+        zoom = extras_dict.get("radar_zoom", "8")
+        marker = "true" if (
+            "radar_marker" in extras_dict and extras_dict["radar_marker"] == "1"
+        ) else ""
 
-        # Set default radar html code, and override with user-specified value
-        if extras_dict.get("radar_html") == "":
-            if extras_dict.get("aeris_map") == "1":
-                radar_html = f"""<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat,water-depth,counties:60,rivers,interstates:60,admin-cities,alerts-severe:50:blend(darken),radar:blend(darken)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>"""
-            else:
-                if marker == "true":  # set detailLat / detailLon
-                    radar_html = f"""<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=true&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&detailLat={lat}&detailLon={lon}&radarRange=-1" frameborder="0"></iframe>"""
-                else:  # marker == "False"
-                    radar_html = f"""<iframe width="{radar_width}px" height="{radar_height}px" src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}&zoom={zoom}&level=surface&overlay=radar&menu=&message=true&marker=false&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat={lat}&detailLon={lon}&metricRain={radar_rain}&metricWind={radar_wind}&metricTemp={radar_temp}&radarRange=-1" frameborder="0"></iframe>"""
-        else:
-            radar_html = extras_dict["radar_html"]
+        radar_html = self._get_radar_html(
+            extras_dict, lat, lon, zoom, radar_width, radar_height,
+            radar_rain, radar_wind, radar_temp, marker
+        )
+        radar_html_dark = self._get_radar_html_dark(
+            extras_dict, lat, lon, zoom, radar_width, radar_height
+        )
+        radar_html_kiosk = (
+            self._get_radar_html_kiosk(extras_dict, skin_dict)
+            if extras_dict.get("radar_html_kiosk") != ""
+            else radar_html
+        )
 
-        if extras_dict.get("radar_html_dark") == "":
-            if extras_dict.get("aeris_map") == "1":
-                radar_html_dark = f"""<img style="object-fit:cover;width:{radar_width}px;height:{radar_height}px" src="https://maps.aerisapi.com/{extras_dict["forecast_api_id"]}_{extras_dict["forecast_api_secret"]}/flat-dk,water-depth-dk,counties:60,rivers,interstates:60,admin-cities-dk,alerts-severe:50:blend(lighten),radar:blend(lighten)/{radar_width}x{radar_height}/{lat},{lon},{zoom}/current.png" referrerpolicy="no-referrer"></img>"""
-            else:
-                radar_html_dark = "None"
-        else:
-            radar_html_dark = extras_dict["radar_html_dark"]
-
-        # If the kiosk radar is different then the homepage one.
-        if extras_dict.get("radar_html_kiosk") == "":
-            radar_html_kiosk = radar_html
-        else:
+        if extras_dict.get("radar_html_kiosk") != "":
             radar_width_kiosk = extras_dict["radar_width_kiosk"]
             radar_height_kiosk = extras_dict["radar_height_kiosk"]
-            radar_html_kiosk = f"""<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{skin_dict["Extras"]["radar_html_kiosk"]}" frameborder="0"></iframe>"""
+            radar_html_kiosk = f'<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{skin_dict["Extras"]["radar_html_kiosk"]}" frameborder="0"></iframe>'
 
         # ==============================================================================
         # Build the all time stats.
@@ -514,6 +527,7 @@ class getData(SearchList):
             WHERE dateTime >= ? AND dateTime < ? AND min IS NOT NULL AND max IS NOT NULL
             ORDER BY total {order} LIMIT 1;
         """
+        
         year_outTemp_max_range_query = wx_manager.getSql(
             temp_range_sql.format(order="DESC"), (year_start_epoch, today_start_epoch)
         )
@@ -541,37 +555,19 @@ class getData(SearchList):
         )
 
         # Largest Daily Temperature Range Conversions
-        # Max temperature for this day
         if year_outTemp_max_range_query is not None:
-            year_outTemp_max_range_max_tuple = (
-                year_outTemp_max_range_query[3],
-                outTemp_unit,
-                "group_temperature",
+            max_val = self._convert_temperature(
+                year_outTemp_max_range_query[3], outTemp_unit, outTemp_round
             )
-            year_outTemp_max_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_max_range_max_tuple)[0]
+            min_val = self._convert_temperature(
+                year_outTemp_max_range_query[2], outTemp_unit, outTemp_round
             )
-            # Min temperature for this day
-            year_outTemp_max_range_min_tuple = (
-                year_outTemp_max_range_query[2],
-                outTemp_unit,
-                "group_temperature",
-            )
-            year_outTemp_max_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_max_range_min_tuple)[0]
-            )
-            # Largest Daily Temperature Range total
-            year_outTemp_max_range_total = outTemp_round % (
-                float(year_outTemp_max_range_max) - float(year_outTemp_max_range_min)
-            )
-            # Replace the SQL Query output with the converted values
+            total = outTemp_round % (float(max_val) - float(min_val))
             year_outTemp_range_max = [
                 year_outTemp_max_range_query[0],
-                locale.format_string("%g", float(year_outTemp_max_range_total)),
-                locale.format_string("%g", float(year_outTemp_max_range_min)),
-                locale.format_string("%g", float(year_outTemp_max_range_max)),
+                locale.format_string("%g", float(total)),
+                locale.format_string("%g", float(min_val)),
+                locale.format_string("%g", float(max_val)),
             ]
         else:
             year_outTemp_range_max = [
@@ -581,38 +577,19 @@ class getData(SearchList):
                 locale.format_string("%.1f", 0),
             ]
 
-        # Smallest Daily Temperature Range Conversions
-        # Max temperature for this day
         if year_outTemp_min_range_query is not None:
-            year_outTemp_min_range_max_tuple = (
-                year_outTemp_min_range_query[3],
-                outTemp_unit,
-                "group_temperature",
+            max_val = self._convert_temperature(
+                year_outTemp_min_range_query[3], outTemp_unit, outTemp_round
             )
-            year_outTemp_min_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_min_range_max_tuple)[0]
+            min_val = self._convert_temperature(
+                year_outTemp_min_range_query[2], outTemp_unit, outTemp_round
             )
-            # Min temperature for this day
-            year_outTemp_min_range_min_tuple = (
-                year_outTemp_min_range_query[2],
-                outTemp_unit,
-                "group_temperature",
-            )
-            year_outTemp_min_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(year_outTemp_min_range_min_tuple)[0]
-            )
-            # Smallest Daily Temperature Range total
-            year_outTemp_min_range_total = outTemp_round % (
-                float(year_outTemp_min_range_max) - float(year_outTemp_min_range_min)
-            )
-            # Replace the SQL Query output with the converted values
+            total = outTemp_round % (float(max_val) - float(min_val))
             year_outTemp_range_min = [
                 year_outTemp_min_range_query[0],
-                locale.format_string("%g", float(year_outTemp_min_range_total)),
-                locale.format_string("%g", float(year_outTemp_min_range_min)),
-                locale.format_string("%g", float(year_outTemp_min_range_max)),
+                locale.format_string("%g", float(total)),
+                locale.format_string("%g", float(min_val)),
+                locale.format_string("%g", float(max_val)),
             ]
         else:
             year_outTemp_range_min = [
@@ -622,38 +599,19 @@ class getData(SearchList):
                 locale.format_string("%.1f", 0),
             ]
 
-        # All Time - Largest Daily Temperature Range Conversions
-        # Max temperature
         if at_outTemp_max_range_query is not None:
-            at_outTemp_max_range_max_tuple = (
-                at_outTemp_max_range_query[3],
-                outTemp_unit,
-                "group_temperature",
+            max_val = self._convert_temperature(
+                at_outTemp_max_range_query[3], outTemp_unit, outTemp_round
             )
-            at_outTemp_max_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_max_range_max_tuple)[0]
+            min_val = self._convert_temperature(
+                at_outTemp_max_range_query[2], outTemp_unit, outTemp_round
             )
-            # Min temperature for this day
-            at_outTemp_max_range_min_tuple = (
-                at_outTemp_max_range_query[2],
-                outTemp_unit,
-                "group_temperature",
-            )
-            at_outTemp_max_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_max_range_min_tuple)[0]
-            )
-            # Largest Daily Temperature Range total
-            at_outTemp_max_range_total = outTemp_round % (
-                float(at_outTemp_max_range_max) - float(at_outTemp_max_range_min)
-            )
-            # Replace the SQL Query output with the converted values
+            total = outTemp_round % (float(max_val) - float(min_val))
             at_outTemp_range_max = [
                 at_outTemp_max_range_query[0],
-                locale.format_string("%g", float(at_outTemp_max_range_total)),
-                locale.format_string("%g", float(at_outTemp_max_range_min)),
-                locale.format_string("%g", float(at_outTemp_max_range_max)),
+                locale.format_string("%g", float(total)),
+                locale.format_string("%g", float(min_val)),
+                locale.format_string("%g", float(max_val)),
             ]
         else:
             at_outTemp_range_max = [
