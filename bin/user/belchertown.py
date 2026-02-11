@@ -1610,7 +1610,7 @@ class getData(SearchList):
                                     "name"
                                 ].title()
                                 aqi_time = data["aqi"][0]["response"][0]["periods"][0][
-                                    "time"
+                                    "timestamp"
                                 ]
                     except Exception as e:
                         log.error(
