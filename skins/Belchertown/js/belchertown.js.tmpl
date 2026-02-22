@@ -1830,50 +1830,58 @@ var inactive_timestamp = "";
 
 // MQTT connect
 function connect() {
+    belchertown_debug("MQTT: [" + new Date().toISOString() + "] Starting connection sequence");
     if (reconnect_using_inactive_timestamp) {
         updated = tzAdjustedMoment(inactive_timestamp).format("$obs.label.time_last_updated");
+        belchertown_debug("MQTT: Reconnecting using inactive timestamp: " + inactive_timestamp);
     } else {
         updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
+        belchertown_debug("MQTT: Initial connection attempt");
     }
     reported = "$obs.label.mqtt_websockets_connecting $obs.label.header_last_updated " + updated;
     jQuery(".updated").html(reported);
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").hide();
     jQuery(".loadingMarker").show();
+    belchertown_debug("MQTT: UI markers updated for connection state");
 
     // #if $Extras.has_key("mqtt_websockets_host_kiosk") and $Extras.mqtt_websockets_host_kiosk != ""
     if (pageName == "kiosk.html") {
         // #if $Extras.has_key("mqtt_websockets_ssl_kiosk") and $Extras.mqtt_websockets_ssl_kiosk == '1'
-        belchertown_debug("MQTT: Connecting to MQTT Websockets: $Extras.mqtt_websockets_host_kiosk $mqtt_websockets_port_kiosk (SSL Enabled)");
+        belchertown_debug("MQTT: [Kiosk Mode] Connecting to: $Extras.mqtt_websockets_host_kiosk:$mqtt_websockets_port_kiosk (SSL: Enabled)");
         var useSSL = true;
         // #else
-        belchertown_debug("MQTT: Connecting to MQTT Websockets: $Extras.mqtt_websockets_host_kiosk $mqtt_websockets_port_kiosk (SSL Disabled)");
+        belchertown_debug("MQTT: [Kiosk Mode] Connecting to: $Extras.mqtt_websockets_host_kiosk:$mqtt_websockets_port_kiosk (SSL: Disabled)");
         var useSSL = false;
         // #end if
+        belchertown_debug("MQTT: Creating Paho MQTT client for kiosk page");
         client = new Paho.Client("$Extras.mqtt_websockets_host_kiosk", $mqtt_websockets_port_kiosk, mqttclient);
     }
     else {
         // #if $Extras.has_key("mqtt_websockets_ssl") and $Extras.mqtt_websockets_ssl == '1'
-        belchertown_debug("MQTT: Connecting to MQTT Websockets: $Extras.mqtt_websockets_host $Extras.mqtt_websockets_port (SSL Enabled)");
+        belchertown_debug("MQTT: [Standard Mode] Connecting to: $Extras.mqtt_websockets_host:$Extras.mqtt_websockets_port (SSL: Enabled)");
         var useSSL = true;
         // #else
-        belchertown_debug("MQTT: Connecting to MQTT Websockets: $Extras.mqtt_websockets_host $Extras.mqtt_websockets_port (SSL Disabled)");
+        belchertown_debug("MQTT: [Standard Mode] Connecting to: $Extras.mqtt_websockets_host:$Extras.mqtt_websockets_port (SSL: Disabled)");
         var useSSL = false;
         // #end if
+        belchertown_debug("MQTT: Creating Paho MQTT client for standard page");
         client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, mqttclient);
     }
     // #else
     // #if $Extras.has_key("mqtt_websockets_ssl") and $Extras.mqtt_websockets_ssl == '1'
-    belchertown_debug("MQTT: Connecting to MQTT Websockets: $Extras.mqtt_websockets_host $Extras.mqtt_websockets_port (SSL Enabled)");
+    belchertown_debug("MQTT: [Fallback] Connecting to: $Extras.mqtt_websockets_host:$Extras.mqtt_websockets_port (SSL: Enabled)");
     var useSSL = true;
     // #else
-    belchertown_debug("MQTT: Connecting to MQTT Websockets: $Extras.mqtt_websockets_host $Extras.mqtt_websockets_port (SSL Disabled)");
+    belchertown_debug("MQTT: [Fallback] Connecting to: $Extras.mqtt_websockets_host:$Extras.mqtt_websockets_port (SSL: Disabled)");
     var useSSL = false;
     // #end if
+    belchertown_debug("MQTT: Creating Paho MQTT client (fallback configuration)");
     client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, mqttclient);
     // #end if
     client.onConnectionLost = onConnectionLost;
     client.onMessageArrived = onMessageArrived;
+    belchertown_debug("MQTT: Event handlers registered (onConnectionLost, onMessageArrived)");
     var options = {
         useSSL: useSSL,
         // #if $Extras.has_key("mqtt_websockets_username") and $Extras.has_key("mqtt_websockets_password") and $Extras.mqtt_websockets_username != "" and $Extras.mqtt_websockets_password != ""
@@ -1890,17 +1898,25 @@ function connect() {
         onSuccess: onConnect,
         onFailure: onFailure
     }
+    belchertown_debug("MQTT: Connection options configured - MQTT Version: 4, Auto-reconnect: enabled, mqttVersionExplicit: false");
+    // #if $Extras.has_key("mqtt_websockets_username") and $Extras.has_key("mqtt_websockets_password") and $Extras.mqtt_websockets_username != "" and $Extras.mqtt_websockets_password != ""
+    belchertown_debug("MQTT: Authentication credentials configured");
+    // #end if
+    belchertown_debug("MQTT: [" + new Date().toISOString() + "] Initiating connection to broker");
     client.connect(options);
 }
 
 // MQTT connect callback
 function onConnect() {
     mqttConnected = true;
-    belchertown_debug("MQTT: MQTT Connected. Subscribing.");
+    belchertown_debug("MQTT: [" + new Date().toISOString() + "] Successfully connected to broker");
+    belchertown_debug("MQTT: Client state is now CONNECTED");
     if (reconnect_using_inactive_timestamp) {
         updated = tzAdjustedMoment(inactive_timestamp).format("$obs.label.time_last_updated");
+        belchertown_debug("MQTT: Reconnection successful after inactivity");
     } else {
         updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
+        belchertown_debug("MQTT: Initial connection successful");
     }
     if (pageName == "pi") {
         reported = "$obs.label.mqtt_websockets_waiting_pi $obs.label.header_last_updated " + updated;
@@ -1911,15 +1927,18 @@ function onConnect() {
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").hide();
     jQuery(".loadingMarker").show();
+    belchertown_debug("MQTT: Subscribing to topic: $Extras.mqtt_websockets_topic");
     client.subscribe("$Extras.mqtt_websockets_topic");
+    belchertown_debug("MQTT: Topic subscription request sent");
     // #if $Extras.has_key("disconnect_live_website_visitor") and $Extras.disconnect_live_website_visitor != '0'
     if (getURLvar("stayconnected") && (getURLvar("stayconnected") == "true" || getURLvar("stayconnected") == "1")) {
-        belchertown_debug("MQTT: stayconnected URL var found: ignoring disconnect_live_website_visitor value");
+        belchertown_debug("MQTT: URL parameter 'stayconnected' detected - inactivity timeout disabled");
     } else {
         if (pageName == "pi" || pageName == "kiosk.html") {
-            belchertown_debug("MQTT: ignoring disconnect_live_website_visitor value for page: " + pageName);
+            belchertown_debug("MQTT: Page type '" + pageName + "' detected - inactivity timeout disabled");
         }
         else {
+            belchertown_debug("MQTT: Inactivity timeout set to $Extras.disconnect_live_website_visitor ms");
             var activityTimeout = setTimeout(inactive, $Extras.disconnect_live_website_visitor); // Stop automatic ajax refresh
         }
     }
@@ -1929,28 +1948,35 @@ function onConnect() {
 // MQTT Failure
 function onFailure() {
     mqttConnected = false;
+    var d = new Date();
+    epoch = parseFloat((d / 1000)).toFixed(0); // Convert millis to seconds
+    var timestamp = new Date().toISOString();
+    belchertown_debug("MQTT: [" + timestamp + "] Connection FAILED");
+    belchertown_debug("MQTT: Client state is now DISCONNECTED (failure)");
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").show();
     jQuery(".loadingMarker").hide();
-    var d = new Date();
-    epoch = parseFloat((d / 1000)).toFixed(0); // Convert millis to seconds
     if (client.isConnected()) {
         updated = tzAdjustedMoment(epoch).format("$obs.label.time_last_updated");
     } else {
         updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
     }
     jQuery(".updated").html("$obs.label.mqtt_websockets_failed $obs.label.header_last_updated " + updated);
-    console.log("MQTT: " + tzAdjustedMoment(epoch).format() + ": Cannot connect to MQTT broker");
+    console.error("MQTT: " + timestamp + " - Connection Failed - Unable to connect to MQTT broker");
+    belchertown_debug("MQTT: UI markers updated for failure state");
 }
 
 // MQTT connection lost
 function onConnectionLost(responseObject) {
     mqttConnected = false;
+    var d = new Date();
+    epoch = parseFloat((d / 1000)).toFixed(0);  // Convert millis to seconds
+    var timestamp = new Date().toISOString();
+    belchertown_debug("MQTT: [" + timestamp + "] Connection LOST");
+    belchertown_debug("MQTT: Client state is now DISCONNECTED (lost)");
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").show();
     jQuery(".loadingMarker").hide();
-    var d = new Date();
-    epoch = parseFloat((d / 1000)).toFixed(0);  // Convert millis to seconds
     if (client.isConnected()) {
         updated = tzAdjustedMoment(epoch).format("$obs.label.time_last_updated");
     } else {
@@ -1958,13 +1984,22 @@ function onConnectionLost(responseObject) {
     }
     jQuery(".updated").html("$obs.label.mqtt_websockets_lost $obs.label.header_last_updated " + updated);
     if (responseObject.errorCode !== 0) {
-        console.log("MQTT: " + tzAdjustedMoment(epoch).format() + ": mqtt Connection Lost: " + responseObject.errorMessage);
+        var errorMsg = "Error Code: " + responseObject.errorCode + " - " + (responseObject.errorMessage || "Unknown error");
+        console.error("MQTT: " + timestamp + " - Connection Lost: " + errorMsg);
+        belchertown_debug("MQTT: Error details - " + errorMsg);
+    } else {
+        console.error("MQTT: " + timestamp + " - Connection Lost (graceful disconnect)");
+        belchertown_debug("MQTT: Connection lost (normal/graceful)");
     }
+    belchertown_debug("MQTT: UI markers updated for disconnected state");
 }
 
 function inactive() {
+    var timestamp = new Date().toISOString();
+    belchertown_debug("MQTT: [" + timestamp + "] Inactivity timeout triggered - initiating disconnect");
+    belchertown_debug("MQTT: Total messages received during session: " + mqtt_message_count);
     client.disconnect(); // Disconnect mqtt
-    belchertown_debug("MQTT: Inactive timer expired. MQTT Disconnected");
+    belchertown_debug("MQTT: Client disconnect command issued");
     jQuery(".onlineMarker").hide(); // Hide online beacon
     jQuery(".offlineMarker").show(); // Show offline beacon
     jQuery(".loadingMarker").hide(); // Hide loading beacon
@@ -1974,14 +2009,24 @@ function inactive() {
     jQuery(".updated").html("$obs.label.mqtt_websockets_stopped $obs.label.header_last_updated " + updated + " <button type='button' class='btn btn-primary restart-interval'>$obs.label.mqtt_websockets_continue</button>");
     reconnect_using_inactive_timestamp = true; // Set a flag to use the inactive timestamp in case we reconnect we have the latest last updated time
     inactive_timestamp = epoch; // Store this timestamp in case we reconnect
+    belchertown_debug("MQTT: Inactive mode activated - awaiting user interaction to resume");
 }
 
 var mqtt_payload = "";
+var mqtt_message_count = 0;
 // New message from mqtt, process it
 function onMessageArrived(message) {
-    belchertown_debug("MQTT: " + message.payloadString);
-    update_current_wx(message.payloadString);
-    mqtt_payload = jQuery.parseJSON(message.payloadString);
+    mqtt_message_count++;
+    var payload_size = message.payloadString.length;
+    belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message received - Size: " + payload_size + " bytes, Topic: " + message.destinationName);
+    try {
+        update_current_wx(message.payloadString);
+        mqtt_payload = jQuery.parseJSON(message.payloadString);
+        belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message processed successfully");
+    } catch (e) {
+        console.error("MQTT: [Msg #" + mqtt_message_count + "] Error processing message: " + e.message);
+        belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Processing error: " + e.toString());
+    }
 }
 
 function refreshHooks() {
@@ -2006,7 +2051,8 @@ function update_current_wx(data) {
     // This message is a WeeWX archive update. Update WeeWX data, forecast data and highcharts graphs
     if (data.hasOwnProperty("interval_minute")) {
         // Delays are recommended to allow the other skins to complete processing
-        belchertown_debug("MQTT: MQTT message indicates this is an archive interval.");
+        belchertown_debug("MQTT: Archive interval detected - updating charts and data");
+        belchertown_debug("MQTT: Archive interval: " + data.interval_minute + " minutes");
         if (pageName == "pi" || pageName == "kiosk.html") {
             belchertown_debug("Skipping chart update for page " + pageName + ", no charts to be updated.");
         }
