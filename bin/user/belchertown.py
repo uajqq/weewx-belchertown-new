@@ -12,7 +12,6 @@ import json
 import locale
 import logging
 import os
-import syslog
 import time
 from urllib.request import Request, urlopen
 import urllib.error
@@ -381,7 +380,7 @@ class getData(SearchList):
             system_locale_js = system_locale.replace(
                 "_", "-"
             )  # Python's locale is underscore. JS uses dashes.
-        except:
+        except Exception:
             system_locale_js = "en-US"  # Error finding locale, set to en-US
 
         # Cache locale conversion for highcharts settings
@@ -984,7 +983,7 @@ class getData(SearchList):
                 default_noaa_file = f"NOAA-{current_year}-{current_month}.txt"
             else:
                 default_noaa_file = f"NOAA-{current_year}.txt"
-        except:
+        except Exception:
             # There's an error - I've seen this on first run and the NOAA
             # folder is not created yet. Skip this section.
             pass
@@ -1414,7 +1413,7 @@ class getData(SearchList):
                                 log.info(
                                     f"New forecast file downloaded to {forecast_file}"
                                 )
-                        except FileNotFoundError as e:
+                        except FileNotFoundError:
                             log.info(
                                 "Belchertown JSON folder does not exist. Usually this "
                                 "is an error that only occurs on the first run. If it "
@@ -1532,7 +1531,7 @@ class getData(SearchList):
                                 log.info(
                                     f"New forecast Current Conditions file downloaded to {current_conditions_file}"
                                 )
-                        except FileNotFoundError as e:
+                        except FileNotFoundError:
                             log.info(
                                 "Belchertown JSON folder does not exist. Usually this "
                                 "is an error that only occurs on the first run. If it "
@@ -1794,7 +1793,7 @@ class getData(SearchList):
                     with open(earthquake_file, "wb+") as file:
                         try:
                             file.write(page.encode("utf-8"))
-                        except:
+                        except Exception:
                             # Catch errors caused by ASCII characters
                             file.write(page)
                         if weewx.debug:
@@ -1808,7 +1807,7 @@ class getData(SearchList):
             with open(earthquake_file, "r") as read_file:
                 try:
                     eqdata = json.load(read_file)
-                except:
+                except Exception:
                     eqdata = ""
 
             try:
@@ -1828,7 +1827,7 @@ class getData(SearchList):
                             eqplace = (
                                 str(eqdist_miles) + " miles" + eqmatched.group("rest")
                             )
-                        except:
+                        except Exception:
                             eqplace = eqdata["features"][0]["properties"]["place"]
                     eqmag = locale.format_string(
                         "%g", float(eqdata["features"][0]["properties"]["mag"])
@@ -1885,7 +1884,7 @@ class getData(SearchList):
                 )
                 eqbearing = eqdistance_bearing[1]
                 eqbearing_raw = eqdistance_bearing[2]
-            except:
+            except Exception:
                 # No earthquake data
                 eqtime = label_dict["earthquake_no_data"]
                 equrl = ""
@@ -1956,7 +1955,7 @@ class getData(SearchList):
             if obs == "visibility":
                 try:
                     obs_output = f"{float(visibility):.2f} {visibility_unit}"
-                except:
+                except Exception:
                     log.error(
                         "Error adding visiblity to station observations table. "
                         "Check that you have forecast data, or remove visibility from your station_observations Extras option."
@@ -2051,14 +2050,14 @@ class getData(SearchList):
                 # Find the unit from group (like group_temperature = degree_F)
                 obs_group = weewx.units.obs_group_dict[obs]
                 obs_unit = self.generator.converter.group_unit_dict[obs_group]
-            except:
+            except Exception:
                 # Something's wrong. Continue this loop to ignore this group
                 # (like group_dust or something non-standard)
                 continue
             try:
                 # Find the number of decimals to round to based on group name
                 obs_round = skin_dict["Units"]["StringFormats"].get(obs_unit, "0")[2]
-            except:
+            except Exception:
                 obs_round = skin_dict["Units"]["StringFormats"].get(obs_unit, "0")
             # Add to the rounding array
             if obs not in all_obs_rounding_json:
@@ -2638,7 +2637,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             )
                         else:
                             minstamp, maxstamp = archiveSpanSpan(
-                                timespan.stop, month_delta=time_ago
+                                timespan.stop, day_delta=time_ago * 31
                             )
                     elif time_length == "year_ago_to_now":
                         if start_at_midnight:
@@ -2650,7 +2649,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             )
                         else:
                             minstamp, maxstamp = archiveSpanSpan(
-                                timespan.stop, year_delta=time_ago
+                                timespan.stop, day_delta=time_ago * 365
                             )
                     elif time_length == "timestamp_ago_to_now":
                         if start_at_midnight:
@@ -2875,7 +2874,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             obs_round = self.skin_dict["Units"]["StringFormats"].get(
                                 obs_unit, "0"
                             )[2]
-                        except:
+                        except Exception:
                             # Not a valid WeeWX schema name - maybe this is
                             # windRose or something?
                             obs_round = -1
@@ -3634,7 +3633,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             try:
                 obs_group = weewx.units.obs_group_dict[obs_lookup]
                 obs_unit_from_target_unit = converter.group_unit_dict[obs_group]
-            except:
+            except Exception:
                 # This observation doesn't exist within WeeWX schema so nothing
                 # to convert, so set None type
                 obs_group = None
@@ -3797,7 +3796,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         if interval is not None:
             try:
                 ts = time_start_vt[0][-1] + interval
-            except:
+            except Exception:
                 ts = start_ts
 
             while ts < end_ts:
@@ -3814,7 +3813,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         if value is not None:
             try:
                 value = round(value, places)
-            except:
+            except Exception:
                 value = None
         return value
 
@@ -3879,9 +3878,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     try:
                         v = to_float(v)
                         d.update({k: v})
-                    except:
+                    except Exception:
                         pass
             return d
-        except:
+        except Exception:
             # This item isn't a dict, so return it back
             return d
