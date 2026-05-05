@@ -2160,10 +2160,12 @@ table.celestial td.label {
   text-align: center;
 }
 
-/* span.highcharts-title { */
-/* width: 100% !important; */
-/* text-align: center !important; */
-/* } */
+span.highcharts-title {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    text-align: center !important;
+}
 
 .wx-buttons {
   margin: 0 auto;
