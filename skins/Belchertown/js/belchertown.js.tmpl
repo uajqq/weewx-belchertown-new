@@ -2278,9 +2278,27 @@ function update_current_wx(data) {
 
 
 Highcharts.setOptions({
-    global: {
-        //useUTC: false
+    time: {
         timezoneOffset: $highcharts_timezoneoffset
+    },
+    chart: {
+        style: {
+            fontFamily: 'Roboto, sans-serif',
+            fontSize: '14px',
+            fontWeight: '500'
+        }
+    },
+    title: {
+        style: {
+            fontFamily: 'Roboto, sans-serif',
+            fontSize: '20px'
+        }
+    },
+    subtitle: {
+        style: {
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: '300'
+        }
     },
     lang: {
         months: moment.months(),
@@ -2713,6 +2731,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     yAxis1_active = true;
                     options.yAxis.push({ // Secondary yAxis
                         opposite: true,
+                        showLastLabel: true,
                         title: {
                             text: s.yAxis_label,
                         },
@@ -2777,10 +2796,14 @@ function showChart(json_file, prepend_renderTo = false) {
                 }
 
                 if (s.obsType == "windDir") {
-                    options.yAxis[this_yAxis].tickInterval = 90;
+                    options.yAxis[this_yAxis].min = 0;
+                    options.yAxis[this_yAxis].max = 360;
+                    options.yAxis[this_yAxis].startOnTick = false;
+                    options.yAxis[this_yAxis].endOnTick = false;
+                    options.yAxis[this_yAxis].tickPositions = [0, 90, 180, 270, 360];
                     options.yAxis[this_yAxis].labels = {
                         useHTML: true,
-                        formatter: function() {var value = weatherdirection[this.value]; return value !== 'undefined' ? value : this.value;}
+                        formatter: function() {if (this.value === 360) return ''; var value = weatherdirection[this.value]; return typeof value !== 'undefined' ? value : this.value;}
                     }
                 }
 
@@ -2808,7 +2831,7 @@ function showChart(json_file, prepend_renderTo = false) {
 
             // If windRose is present, configure a special chart to show that data
             if (observation_type == "windRose") {
-                var categories = $ordinate_names;
+                var categories = $windrose_categories;
                 options.chart.className = "highcharts-windRose"; // Used for dark mode
                 options.chart.type = "column";
                 options.chart.polar = true;
@@ -2816,12 +2839,10 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.pane = {size: '80%'}
                 // Reset xAxis and rebuild
                 options.xAxis = {}
-                options.xAxis.min = 0;
-                options.xAxis.max = 16;
                 options.xAxis.crosshair = true;
                 options.xAxis.categories = categories;
                 options.xAxis.tickmarkPlacement = 'on';
-                options.xAxis.labels = {useHTML: true}
+                options.xAxis.labels = {useHTML: true, formatter: function() { return typeof this.value === 'string' ? this.value : ''; }}
                 //options.legend.align = "right";
                 options.legend.verticalAlign = "top";
                 options.legend.x = 210;
@@ -3237,7 +3258,8 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             // Finally all options are done, now show the chart
-            var chart = new Highcharts.chart(options);
+            // Wind rose is a polar category chart and must use Highcharts.chart(), not stockChart()
+            var chart = (observation_type == "windRose") ? Highcharts.chart(options) : Highcharts.stockChart(options);
 
             // If using debug, show a copy paste debug for use with jsfiddle
             belchertown_debug(options);

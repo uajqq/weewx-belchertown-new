@@ -2172,6 +2172,7 @@ class getData(SearchList):
             "radar_html_kiosk": radar_html_kiosk,
             "archive_interval_ms": archive_interval_ms,
             "ordinate_names": ordinate_names,
+            "windrose_categories": json.dumps(ordinate_names[:16]),
             "charts": json.dumps(charts),
             "graphpage_titles": json.dumps(graphpage_titles),
             "graphpage_titles_dict": graphpage_titles,
