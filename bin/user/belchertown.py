@@ -1647,7 +1647,7 @@ class getData(SearchList):
                             if current_conditions_data["visibilityKM"] is not None:
                                 visibility = locale.format_string(
                                     "%g",
-                                    current_conditions_data["visibilityKM"],
+                                    float(current_conditions_data["visibilityKM"]),
                                 )
                                 visibility_unit = "km"
                             else:
@@ -1953,13 +1953,8 @@ class getData(SearchList):
                 )
 
             if obs == "visibility":
-                try:
-                    obs_output = f"{float(visibility):.2f} {visibility_unit}"
-                except Exception:
-                    log.error(
-                        "Error adding visiblity to station observations table. "
-                        "Check that you have forecast data, or remove visibility from your station_observations Extras option."
-                    )
+                # Using .strip() automatically returns "N/A" for invalid observations
+                obs_output = f"{visibility} {visibility_unit}".strip()
             elif obs == "rainWithRainRate":
                 # rainWithRainRate Rain shows rain daily sum and rain rate
                 obs_binder = weewx.tags.ObservationBinder(
