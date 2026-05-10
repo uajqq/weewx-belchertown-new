@@ -890,7 +890,11 @@ class getData(SearchList):
         noaa_dir = html_root + "/NOAA/"
 
         try:
-            noaa_file_list = os.listdir(noaa_dir)
+            # Only process NOAA report files; ignore any other files (csv, etc.) in the directory
+            noaa_file_list = [
+                f for f in os.listdir(noaa_dir)
+                if f.startswith("NOAA-") and f.endswith(".txt")
+            ]
             noaa_file_set = set(noaa_file_list)  # O(1) membership tests
 
             # Generate a list of years based on file name
@@ -947,7 +951,7 @@ class getData(SearchList):
             now = datetime.datetime.now()
             current_year = str(now.year)
             current_month = str(format(now.month, "02"))
-            if os.path.exists(noaa_dir + f"NOAA-{current_year}-{current_month}.txt"):
+            if f"NOAA-{current_year}-{current_month}.txt" in noaa_file_set:
                 default_noaa_file = f"NOAA-{current_year}-{current_month}.txt"
             else:
                 default_noaa_file = f"NOAA-{current_year}.txt"

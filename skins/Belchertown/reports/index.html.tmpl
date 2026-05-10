@@ -31,7 +31,13 @@
         var xhr = new XMLHttpRequest();
         xhr.onload = function() {
             raw_content = this.responseText;
-            updated_content = raw_content.replace('<sup>', '').replace('</sup>', '').replace('&deg;', '');
+            updated_content = raw_content
+                .replace(/<sup>/g, '')
+                .replace(/<\/sup>/g, '')
+                .replace(/&deg;/g, '\u00b0')
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>');
             document.getElementById('noaa_contents').textContent = updated_content;
         };
         xhr.open('GET', url);
