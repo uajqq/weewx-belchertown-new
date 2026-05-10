@@ -21,11 +21,7 @@ var pageName = "";
 function get_relative_url() {
     var sPath = window.location.pathname.replace(/\/$/, "");
     pageName = sPath.substring(sPath.lastIndexOf('/') + 1);
-    if (pages.includes(pageName)) {
-        var relative_url = "..";
-    } else {
-        var relative_url = ".";
-    }
+    const relative_url = pages.includes(pageName) ? ".." : ".";
     belchertown_debug("URL: Relative URL is: " + relative_url);
 
     return relative_url;
@@ -211,29 +207,56 @@ function getURLvar(k) {
 // http://stackoverflow.com/a/14887961/1177153
 var weatherdirection = $obs.label.graphs_windDir_ordinals;
 
+// Pre-built array of 16 compass ordinals for arithmetic wind-direction lookup
+const ORDINATE_NAMES = [
+    "$ordinate_names[0]",  // N
+    "$ordinate_names[1]",  // NNE
+    "$ordinate_names[2]",  // NE
+    "$ordinate_names[3]",  // ENE
+    "$ordinate_names[4]",  // E
+    "$ordinate_names[5]",  // ESE
+    "$ordinate_names[6]",  // SE
+    "$ordinate_names[7]",  // SSE
+    "$ordinate_names[8]",  // S
+    "$ordinate_names[9]",  // SSW
+    "$ordinate_names[10]", // SW
+    "$ordinate_names[11]", // WSW
+    "$ordinate_names[12]", // W
+    "$ordinate_names[13]", // WNW
+    "$ordinate_names[14]", // NW
+    "$ordinate_names[15]", // NNW
+];
+
 // Returns a color along a rainbow gradient from min (blue) to max (purple)
 // Credit to excellent guide here: https://krazydad.com/tutorials/makecolors.php
 // Setting red, blue, and green channels to oscillate as sine waves and
 // then offsetting those waves by 120º (2π/3) gives us all colors of the rainbow
+
+// Pre-parsed RGB tuples for the gradient stops (avoids repeated parseInt on every call)
+const TEMP_GRADIENT_COLORS = [
+    [0x8E, 0x62, 0xA8],
+    [0x27, 0x7D, 0xA1],
+    [0x27, 0x7D, 0xA1],
+    [0x90, 0xBE, 0x6D],
+    [0xF9, 0xC7, 0x4F],
+    [0xF8, 0x96, 0x1E],
+    [0xF3, 0x72, 0x2C],
+    [0xF9, 0x41, 0x44],
+    [0xE3, 0x3B, 0x76],
+];
+
 function new_gradient_temp(value, min, max) {
-    if (value < min) {value = min};
-    if (value >= max) {value = max};
-    colors = ["#8E62A8", "#277DA1", "#277DA1", "#90BE6D", "#F9C74F", "#F8961E", "#F3722C", "#F94144", "#E33B76"];
-    position = (value - min) / (max - min) * 9; //find where current temp is on a scale from low to high
-    low = Math.floor(position); //find the color just below the current temp
-    high = Math.ceil(position); //find the color just above the current temp
-    if (high >= 8) {high = 8};
-    if (low >= 8) {low = 8};
-    r_low = parseInt(colors[low].substr(1, 2), 16); //get the red component of the hex code and convert to decimal
-    g_low = parseInt(colors[low].substr(3, 2), 16); //get the green component of the hex code and convert to decimal
-    b_low = parseInt(colors[low].substr(5, 2), 16); //get the blue component of the hex code abd convert to decimal
-    r_high = parseInt(colors[high].substr(1, 2), 16);
-    g_high = parseInt(colors[high].substr(3, 2), 16);
-    b_high = parseInt(colors[high].substr(5, 2), 16);
-    r = Math.round(r_low + (r_high - r_low) * (position - low)); //average the red values
-    g = Math.round(g_low + (g_high - g_low) * (position - low)); //average the green values
-    b = Math.round(b_low + (b_high - b_low) * (position - low)); //average the blue values
-    //convert values back to hex, combine them into one string, return new color
+    if (value < min) { value = min; }
+    if (value >= max) { value = max; }
+    const position = (value - min) / (max - min) * 9; // position on 0–9 scale
+    const low  = Math.min(Math.floor(position), 8);
+    const high = Math.min(Math.ceil(position),  8);
+    const [r_low,  g_low,  b_low]  = TEMP_GRADIENT_COLORS[low];
+    const [r_high, g_high, b_high] = TEMP_GRADIENT_COLORS[high];
+    const frac = position - low;
+    const r = Math.round(r_low + (r_high - r_low) * frac);
+    const g = Math.round(g_low + (g_high - g_low) * frac);
+    const b = Math.round(b_low + (b_high - b_low) * frac);
     return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
 }
 
@@ -312,7 +335,7 @@ function kts_to_beaufort(windspeed) {
         return 10
     } else if (windspeed <= 63) {
         return 11
-    } else if (windspeed > 63) {
+    } else {
         return 12
     }
 }
@@ -346,6 +369,8 @@ function beaufort_cat(beaufort) {
             return "$beaufort11"
         case 12:
             return "$beaufort12"
+        default:
+            return ""
     }
 }
 
@@ -356,41 +381,8 @@ function highcharts_tooltip_factory(obsvalue, point_obsType, highchartsReturn = 
     }
 
     if (point_obsType == "windDir") {
-        if (obsvalue >= 0 && obsvalue <= 11.25) {
-            ordinal = "$ordinate_names[0]"; // N
-        } else if (obsvalue >= 11.26 && obsvalue <= 33.75) {
-            ordinal = "$ordinate_names[1]"; // NNE
-        } else if (obsvalue >= 33.76 && obsvalue <= 56.25) {
-            ordinal = "$ordinate_names[2]"; // NE
-        } else if (obsvalue >= 56.26 && obsvalue <= 78.75) {
-            ordinal = "$ordinate_names[3]"; // ENE
-        } else if (obsvalue >= 78.76 && obsvalue <= 101.25) {
-            ordinal = "$ordinate_names[4]"; // E
-        } else if (obsvalue >= 101.26 && obsvalue <= 123.75) {
-            ordinal = "$ordinate_names[5]"; // ESE
-        } else if (obsvalue >= 123.76 && obsvalue <= 146.25) {
-            ordinal = "$ordinate_names[6]"; // SE
-        } else if (obsvalue >= 146.26 && obsvalue <= 168.75) {
-            ordinal = "$ordinate_names[7]"; // SSE
-        } else if (obsvalue >= 168.76 && obsvalue <= 191.25) {
-            ordinal = "$ordinate_names[8]"; // S
-        } else if (obsvalue >= 191.26 && obsvalue <= 213.75) {
-            ordinal = "$ordinate_names[9]"; // SSW
-        } else if (obsvalue >= 213.76 && obsvalue <= 236.25) {
-            ordinal = "$ordinate_names[10]"; // SW
-        } else if (obsvalue >= 236.26 && obsvalue <= 258.75) {
-            ordinal = "$ordinate_names[11]"; // WSW
-        } else if (obsvalue >= 258.76 && obsvalue <= 281.25) {
-            ordinal = "$ordinate_names[12]"; // W
-        } else if (obsvalue >= 281.26 && obsvalue <= 303.75) {
-            ordinal = "$ordinate_names[13]"; // WNW
-        } else if (obsvalue >= 303.76 && obsvalue <= 326.25) {
-            ordinal = "$ordinate_names[14]"; // NW
-        } else if (obsvalue >= 326.26 && obsvalue <= 348.75) {
-            ordinal = "$ordinate_names[15]"; // NNW
-        } else if (obsvalue >= 348.76 && obsvalue <= 360) {
-            ordinal = "$ordinate_names[0]"; // N
-        }
+        // Map degrees to one of 16 compass sectors via arithmetic (replaces 17-branch if-else)
+        const ordinal = ORDINATE_NAMES[Math.round(obsvalue / 22.5) % 16];
 
         // highchartsReturn returns the full wind direction string for highcharts tooltips. e.g "NNW (337)"
         if (highchartsReturn) {
@@ -457,8 +449,9 @@ function titleCase(str) {
 }
 
 function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
-    // First check if ?theme= is in URL. If so, bail out and do not change anything. 
-    if (getURLvar("theme") && getURLvar("theme") != "auto") {
+    // First check if ?theme= is in URL. If so, bail out and do not change anything.
+    const themeParam = getURLvar("theme");
+    if (themeParam && themeParam !== "auto") {
         belchertown_debug("Auto theme: theme override detected in URL. Skipping auto theme");
         return true;
     }
@@ -467,9 +460,6 @@ function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     var d = new Date();
     var nowHour = d.getHours();
     var nowMinutes = d.getMinutes();
-    nowHour = nowHour;
-    sunrise_hour = sunrise_hour;
-    sunset_hour = sunset_hour;
 
     // Determine if it's day time. https://stackoverflow.com/a/14718577/1177153
     if (sunrise_hour <= nowHour && nowHour < sunset_hour) {
@@ -484,7 +474,7 @@ function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     belchertown_debug("Auto theme: are we in daylight hours: " + dayTime);
     belchertown_debug("Auto theme: sessionStorage.getItem('theme') = " + sessionStorage.getItem('theme'));
 
-    if (dayTime == true) {
+    if (dayTime) {
         // Day time, set light if needed
         // Only change theme if user has not overridden the auto option with the toggle
         if (sessionStorage.getItem('theme') == "auto") {
@@ -739,9 +729,7 @@ function ajaxforecast() {
 function aeris_coded_weather(data, full_observation = false) {
     // https://www.aerisweather.com/support/docs/api/reference/weather-codes/
     var output = "";
-    var coverage_code = data.split(":")[0]
-    var intensity_code = data.split(":")[1]
-    var weather_code = data.split(":")[2]
+    const [coverage_code, intensity_code, weather_code] = data.split(":");
 
     var cloud_dict = {
         "CL": "$obs.label.forecast_cloud_code_CL",
@@ -1296,31 +1284,33 @@ function update_forecast_data(data) {
         for (forecast_interval of forecast_types) {
             var forecast_row = [];
             var output_html = "";
-            for (i = 0; i < data[(forecast_interval)][0]["response"][0]["periods"].length; i++) {
+            for (i = 0; i < data[forecast_interval][0]["response"][0]["periods"].length; i++) {
+                // Alias the deeply-nested period object to avoid repeated property traversal
+                const period = data[forecast_interval][0]["response"][0]["periods"][i];
 
                 //  for 24hr interval add 7200 (2 hours) to the epoch to get an hour well into the day to avoid any DST issues. This way it'll either be 1am or 2am. Without it, we get 12am or 11pm (the previous day).
                 if (forecast_interval == "forecast_24hr") {
-                    var image_url = get_relative_url() + "/images/" + aeris_icon(data[(forecast_interval)][0]["response"][0]["periods"][i]["icon"]) + ".png";
-                    var condition_text = aeris_coded_weather(data[(forecast_interval)][0]["response"][0]["periods"][i]["weatherPrimaryCoded"], false);
-                    var weekday = tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"] + 7200).format("$obs.label.time_forecast_date");
+                    var image_url = get_relative_url() + "/images/" + aeris_icon(period["icon"]) + ".png";
+                    var condition_text = aeris_coded_weather(period["weatherPrimaryCoded"], false);
+                    var weekday = tzAdjustedMoment(period["timestamp"] + 7200).format("$obs.label.time_forecast_date");
                 } else {
-                    var image_url = get_relative_url() + "/images/" + aeris_icon(data[(forecast_interval)][0]["response"][0]["periods"][i]["icon"]) + ".png";
-                    var condition_text = aeris_coded_weather(data[(forecast_interval)][0]["response"][0]["periods"][i]["weatherPrimaryCoded"], false);
-                    var weekday = tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"]).format("$obs.label.time_forecast_time");
+                    var image_url = get_relative_url() + "/images/" + aeris_icon(period["icon"]) + ".png";
+                    var condition_text = aeris_coded_weather(period["weatherPrimaryCoded"], false);
+                    var weekday = tzAdjustedMoment(period["timestamp"]).format("$obs.label.time_forecast_time");
                 }
 
                 // Determine temperature units
                 if (("$Extras.forecast_units" == "ca") || ("$Extras.forecast_units" == "uk2") || ("$Extras.forecast_units" == "si")) {
-                    avgTemp = data[(forecast_interval)][0]["response"][0]["periods"][i]["avgTempC"];
-                    minTemp = data[(forecast_interval)][0]["response"][0]["periods"][i]["minTempC"];
-                    maxTemp = data[(forecast_interval)][0]["response"][0]["periods"][i]["maxTempC"];
-                    var dewPoint = data[(forecast_interval)][0]["response"][0]["periods"][i]["dewpointC"];
+                    avgTemp = period["avgTempC"];
+                    minTemp = period["minTempC"];
+                    maxTemp = period["maxTempC"];
+                    var dewPoint = period["dewpointC"];
                 } else {
                     // Default
-                    avgTemp = data[(forecast_interval)][0]["response"][0]["periods"][i]["avgTempF"];
-                    minTemp = data[(forecast_interval)][0]["response"][0]["periods"][i]["minTempF"];
-                    maxTemp = data[(forecast_interval)][0]["response"][0]["periods"][i]["maxTempF"];
-                    var dewPoint = data[(forecast_interval)][0]["response"][0]["periods"][i]["dewpointF"];
+                    avgTemp = period["avgTempF"];
+                    minTemp = period["minTempF"];
+                    maxTemp = period["maxTempF"];
+                    var dewPoint = period["dewpointF"];
                 }
 
                 //  for 1hr interval determine temperature range, set to a minimum value of 2; also avoids div by zero
@@ -1336,33 +1326,33 @@ function update_forecast_data(data) {
 
                 // Determine wind units
                 if ("$unit.unit_type.windSpeed" == "knot") {
-                    windSpeed = data[(forecast_interval)][0]["response"][0]["periods"][i]["windSpeedKTS"];
-                    windGust = data[(forecast_interval)][0]["response"][0]["periods"][i]["windGustKTS"];
+                    windSpeed = period["windSpeedKTS"];
+                    windGust = period["windGustKTS"];
                 } else if ("$unit.unit_type.windSpeed" == "beaufort") {
-                    windSpeed = kts_to_beaufort(data[(forecast_interval)][0]["response"][0]["periods"][i]["windSpeedKTS"]);
-                    windGust = kts_to_beaufort(data[(forecast_interval)][0]["response"][0]["periods"][i]["windGustKTS"]);
+                    windSpeed = kts_to_beaufort(period["windSpeedKTS"]);
+                    windGust = kts_to_beaufort(period["windGustKTS"]);
                 } else if ("$Extras.forecast_units" == "ca") {
                     // ca = kph
-                    windSpeed = data[(forecast_interval)][0]["response"][0]["periods"][i]["windSpeedKPH"];
-                    windGust = data[(forecast_interval)][0]["response"][0]["periods"][i]["windGustKPH"];
+                    windSpeed = period["windSpeedKPH"];
+                    windGust = period["windGustKPH"];
                 } else if ("$Extras.forecast_units" == "si") {
                     // si = meters per second. MPS is KPH / 3.6
-                    windSpeed = data[(forecast_interval)][0]["response"][0]["periods"][i]["windSpeedKPH"] / 3.6;
-                    windGust = data[(forecast_interval)][0]["response"][0]["periods"][i]["windGustKPH"] / 3.6;
+                    windSpeed = period["windSpeedKPH"] / 3.6;
+                    windGust = period["windGustKPH"] / 3.6;
                 } else {
                     // us and uk2 and default = mph
-                    windSpeed = data[(forecast_interval)][0]["response"][0]["periods"][i]["windSpeedMPH"];
-                    windGust = data[(forecast_interval)][0]["response"][0]["periods"][i]["windGustMPH"];
+                    windSpeed = period["windSpeedMPH"];
+                    windGust = period["windGustMPH"];
                 }
 
                 /*
                 As per API specification, "pop" is either a number from 0 to
                 100 or null. We convert to 0 in the second case.
                 */
-                var precip = data[(forecast_interval)][0]["response"][0]["periods"][i]["pop"] || 0;
+                var precip = period["pop"] || 0;
 
                 // Humidity
-                var humidity = data[(forecast_interval)][0]["response"][0]["periods"][i]["humidity"];
+                var humidity = period["humidity"];
 
                 /*
                 Determine snow unit. "snowCM" and "snowIN" are specified
@@ -1370,19 +1360,18 @@ function update_forecast_data(data) {
                 null.
                 */
                 if (("$Extras.forecast_units" == "si") || ("$Extras.forecast_units" == "ca") || ("$Extras.forecast_units" == "uk2")) {
-                    var snow_depth = data[(forecast_interval)][0]["response"][0]["periods"][i]["snowCM"] || 0;
+                    var snow_depth = period["snowCM"] || 0;
                     var snow_unit = "cm";
                 } else {
-                    var snow_depth = data[(forecast_interval)][0]["response"][0]["periods"][i]["snowIN"] || 0;
+                    var snow_depth = period["snowIN"] || 0;
                     var snow_unit = "in";
                 }
 
                 //  for 24hr interval add 7200 (2 hours) to the epoch to get an hour well into the day to avoid any DST issues. This way it'll either be 1am or 2am. Without it, we get 12am or 11pm (the previous day).
                 if (forecast_interval == "forecast_24hr") {
-                    var forecast_link_setup = "$Extras.forecast_daily_forecast_link".replace("YYYY", tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"] + 7200).format("YYYY")).replace("MM", tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"] + 7200).format("MM")).replace("DD", tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"] + 7200).format("DD"));
+                    var forecast_link_setup = "$Extras.forecast_daily_forecast_link".replace("YYYY", tzAdjustedMoment(period["timestamp"] + 7200).format("YYYY")).replace("MM", tzAdjustedMoment(period["timestamp"] + 7200).format("MM")).replace("DD", tzAdjustedMoment(period["timestamp"] + 7200).format("DD"));
                 } else {
-                    var forecast_link_setup = "$Extras.forecast_daily_forecast_link".replace("YYYY", tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"]).format("YYYY")).replace("MM", tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"]).format("MM")).replace("DD", tzAdjustedMoment(data[(forecast_interval)][0]["response"][0]["periods"][i]["timestamp"]).format("DD"));
-
+                    var forecast_link_setup = "$Extras.forecast_daily_forecast_link".replace("YYYY", tzAdjustedMoment(period["timestamp"]).format("YYYY")).replace("MM", tzAdjustedMoment(period["timestamp"]).format("MM")).replace("DD", tzAdjustedMoment(period["timestamp"]).format("DD"));
                 }
 
                 var forecast_link = '<a href="' + forecast_link_setup + '" target="_blank">$obs.label.daily_forecast</a>';
@@ -1950,7 +1939,7 @@ function onFailure() {
     mqttConnected = false;
     var d = new Date();
     epoch = parseFloat((d / 1000)).toFixed(0); // Convert millis to seconds
-    var timestamp = new Date().toISOString();
+    var timestamp = d.toISOString();
     belchertown_debug("MQTT: [" + timestamp + "] Connection FAILED");
     belchertown_debug("MQTT: Client state is now DISCONNECTED (failure)");
     jQuery(".onlineMarker").hide();
@@ -1971,7 +1960,7 @@ function onConnectionLost(responseObject) {
     mqttConnected = false;
     var d = new Date();
     epoch = parseFloat((d / 1000)).toFixed(0);  // Convert millis to seconds
-    var timestamp = new Date().toISOString();
+    var timestamp = d.toISOString();
     belchertown_debug("MQTT: [" + timestamp + "] Connection LOST");
     belchertown_debug("MQTT: Client state is now DISCONNECTED (lost)");
     jQuery(".onlineMarker").hide();
