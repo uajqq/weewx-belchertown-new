@@ -807,54 +807,43 @@ class getData(SearchList):
         ]
 
         # Consecutive days with/without rainfall
+        # Track running max inline instead of storing all values in dicts
         year_days_with_rain_total = 0
         year_days_without_rain_total = 0
-        year_days_with_rain_output = {}
-        year_days_without_rain_output = {}
+        year_days_with_rain = None
+        year_days_without_rain = None
         year_rain_query = wx_manager.genSql(year_rain_data_sql, (current_year,))
         for row in year_rain_query:
             if row[1] != 0:
                 year_days_with_rain_total += 1
-            else:
-                year_days_with_rain_total = 0
-            if row[1] == 0:
-                year_days_without_rain_total += 1
-            else:
                 year_days_without_rain_total = 0
-            year_days_with_rain_output[row[0]] = year_days_with_rain_total
-            year_days_without_rain_output[row[0]] = year_days_without_rain_total
+            else:
+                year_days_without_rain_total += 1
+                year_days_with_rain_total = 0
+            if year_days_with_rain is None or year_days_with_rain_total > year_days_with_rain[0]:
+                year_days_with_rain = (year_days_with_rain_total, row[0])
+            if year_days_without_rain is None or year_days_without_rain_total > year_days_without_rain[0]:
+                year_days_without_rain = (year_days_without_rain_total, row[0])
 
-        if year_days_with_rain_output:
-            year_days_with_rain = max(
-                zip(
-                    year_days_with_rain_output.values(),
-                    year_days_with_rain_output.keys(),
-                )
-            )
-        else:
+        if year_days_with_rain is None:
             year_days_with_rain = [
                 locale.format_string("%.1f", 0),
                 calendar.timegm(time.gmtime()),
             ]
 
-        if year_days_without_rain_output:
-            year_days_without_rain = max(
-                zip(
-                    year_days_without_rain_output.values(),
-                    year_days_without_rain_output.keys(),
-                )
-            )
-        else:
+        if year_days_without_rain is None:
             year_days_without_rain = [
                 locale.format_string("%.1f", 0),
                 calendar.timegm(time.gmtime()),
             ]
 
+        # All-time consecutive days with/without rain
+        # Track running max inline instead of storing all values in dicts
         epoch_prev = 0
         at_days_with_rain_total = 0
         at_days_without_rain_total = 0
-        at_days_with_rain_output = {}
-        at_days_without_rain_output = {}
+        at_days_with_rain = (0, 0)
+        at_days_without_rain = (0, 0)
         at_rain_query = wx_manager.genSql(
             "SELECT dateTime, ROUND( sum, 2 ), count FROM archive_day_rain;"
         )
@@ -866,34 +855,14 @@ class getData(SearchList):
             # Original MySQL way: CASE WHEN sum!=0 THEN @total+1 ELSE 0 END
             if row[1] != 0:
                 at_days_with_rain_total += 1
-            else:
-                at_days_with_rain_total = 0
-
-            # Original MySQL way: CASE WHEN sum=0 THEN @total+1 ELSE 0 END
-            if row[1] == 0:
-                at_days_without_rain_total += 1
-            else:
                 at_days_without_rain_total = 0
-
-            at_days_with_rain_output[row[0]] = at_days_with_rain_total
-            at_days_without_rain_output[row[0]] = at_days_without_rain_total
-
-        if len(at_days_with_rain_output) > 0:
-            at_days_with_rain = max(
-                zip(at_days_with_rain_output.values(), at_days_with_rain_output.keys())
-            )
-        else:
-            at_days_with_rain = (0, 0)
-
-        if len(at_days_without_rain_output) > 0:
-            at_days_without_rain = max(
-                zip(
-                    at_days_without_rain_output.values(),
-                    at_days_without_rain_output.keys(),
-                )
-            )
-        else:
-            at_days_without_rain = (0, 0)
+            else:
+                at_days_without_rain_total += 1
+                at_days_with_rain_total = 0
+            if at_days_with_rain_total > at_days_with_rain[0]:
+                at_days_with_rain = (at_days_with_rain_total, row[0])
+            if at_days_without_rain_total > at_days_without_rain[0]:
+                at_days_without_rain = (at_days_without_rain_total, row[0])
 
         # This portion is right from the WeeWX sample
         # http://www.weewx.com/docs/customizing.htm
@@ -922,6 +891,7 @@ class getData(SearchList):
 
         try:
             noaa_file_list = os.listdir(noaa_dir)
+            noaa_file_set = set(noaa_file_list)  # O(1) membership tests
 
             # Generate a list of years based on file name
             for f in noaa_file_list:
@@ -939,8 +909,7 @@ class getData(SearchList):
             noaa_parts = []
             for y in years:
                 # Link to the year file
-                year_file = f"{noaa_dir}NOAA-{y}.txt"
-                if os.path.exists(year_file):
+                if f"NOAA-{y}.txt" in noaa_file_set:
                     noaa_parts.append(
                         f"""<a href="?yr={y}" class="noaa_rep_nav"><b>{y}</b></a>:"""
                     )
@@ -957,8 +926,7 @@ class getData(SearchList):
                 for i in range(1, 13):
                     month_num = f"{i:02d}"  # Pad the number with a 0 since the NOAA files use 2 digit month
                     month_abbr = calendar.month_abbr[i]
-                    month_file = f"{noaa_dir}NOAA-{y}-{month_num}.txt"
-                    if os.path.exists(month_file):
+                    if f"NOAA-{y}-{month_num}.txt" in noaa_file_set:
                         month_links.append(
                             f"""<a href="?yr={y}&amp;mo={month_num}" class="noaa_rep_nav"><b>{month_abbr}</b></a>"""
                         )
@@ -1914,7 +1882,7 @@ class getData(SearchList):
 
         station_obs_binding = None
         station_obs_json = OrderedDict()
-        station_obs_html = ""
+        station_obs_parts = []
         station_observations = extras_dict["station_observations"]
         # Check if this is a list. If not then we have 1 item, so force it into a list
         if isinstance(station_observations, list) is False:
@@ -1993,19 +1961,17 @@ class getData(SearchList):
             if obs not in station_obs_json:
                 station_obs_json[obs] = str(obs_output)
 
-            # Build the HTML for the front page
-            station_obs_html += "<tr>"
-            station_obs_html += (
-                f"<td class='station-observations-label'>{label_dict[obs]}</td>"
-            )
-            station_obs_html += "<td>"
+            # Build the HTML for the front page (accumulate into list, join later)
+            row_parts = [
+                "<tr>",
+                f"<td class='station-observations-label'>{label_dict[obs]}</td>",
+                "<td>",
+            ]
             if obs == "rainWithRainRate":
                 # Add special rain + rainRate one liner
-                station_obs_html += obs_rain_output
+                row_parts.append(obs_rain_output)
             else:
-                station_obs_html += (
-                    f"<span class={obs}>{obs_output}</span><!-- AJAX -->"
-                )
+                row_parts.append(f"<span class={obs}>{obs_output}</span><!-- AJAX -->")
             if obs in ("barometer", "pressure", "altimeter"):
                 # Append the trend arrow to the pressure observation. Need this
                 # for non-mqtt pages
@@ -2019,20 +1985,19 @@ class getData(SearchList):
                     self.generator.converter,
                 )
                 obs_trend = getattr(trend, obs)
-                station_obs_html += (
-                    ' <span class="pressure-trend">'  # Maintain leading spacing
-                )
+                row_parts.append(' <span class="pressure-trend">')  # Maintain leading spacing
                 if str(obs_trend) == "N/A":
                     pass
                 elif "-" in str(obs_trend):
-                    station_obs_html += (
-                        '<i class="fa fa-arrow-down barometer-down"></i>'
-                    )
+                    row_parts.append('<i class="fa fa-arrow-down barometer-down"></i>')
                 else:
-                    station_obs_html += '<i class="fa fa-arrow-up barometer-up"></i>'
-                station_obs_html += "</span>"  # Close the span
-            station_obs_html += "</td>"
-            station_obs_html += "</tr>"
+                    row_parts.append('<i class="fa fa-arrow-up barometer-up"></i>')
+                row_parts.append("</span>")  # Close the span
+            row_parts.append("</td>")
+            row_parts.append("</tr>")
+            station_obs_parts.append("".join(row_parts))
+
+        station_obs_html = "".join(station_obs_parts)
 
         # ==============================================================================
         # Get all observations and their rounding values
@@ -2065,13 +2030,13 @@ class getData(SearchList):
                 )
                 all_obs_unit_labels_json[obs] = obs_unit_label
 
-            # Special handling items
-            if visibility:
-                all_obs_rounding_json["visibility"] = "2"
-                all_obs_unit_labels_json["visibility"] = visibility_unit
-            else:
-                all_obs_rounding_json["visibility"] = ""
-                all_obs_unit_labels_json["visibility"] = ""
+        # Special handling: visibility is set once after the loop
+        if visibility:
+            all_obs_rounding_json["visibility"] = "2"
+            all_obs_unit_labels_json["visibility"] = visibility_unit
+        else:
+            all_obs_rounding_json["visibility"] = ""
+            all_obs_unit_labels_json["visibility"] = ""
 
         # ==============================================================================
         # Social Share
@@ -3770,9 +3735,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
         # If the values are to be mirrored, we need to make them negative
         if mirrored_value:
-            for i in range(len(obs_round_vt)):
-                if obs_round_vt[i] is not None:
-                    obs_round_vt[i] = -obs_round_vt[i]
+            obs_round_vt = [-x if x is not None else None for x in obs_round_vt]
 
         time_ms = [float(x) * 1000 for x in point_timestamp[0]]
         data = zip(time_ms, obs_round_vt)
@@ -3787,8 +3750,6 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         This function adds the 'future' data points from the last timestamp in the list up until end_ts with None entries.
         This means that graphs still have the option of showing a full day or month or year on the x axis depending on the time_length specfied.
         """
-        count = 0
-
         if interval is not None:
             try:
                 ts = time_start_vt[0][-1] + interval
@@ -3798,11 +3759,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             while ts < end_ts:
                 time_start_vt[0].append(ts)
                 time_stop_vt[0].append(ts)
-                ts = ts + interval
-                count = count + 1
-
-        for i in range(count):
-            obs_vt[0].append(None)
+                obs_vt[0].append(None)
+                ts += interval
 
     def round_none(self, value, places):
         """Round value to 'places' places but also permit a value of None"""
@@ -3832,31 +3790,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         )
 
     def create_windrose_data(self, windDir_list, windSpeed_list):
-        # List comprehension borrowed from weewx-wd extension
-        # Create windrose_list container and initialise to all 0s
-        windrose_list = [0.0 for x in range(16)]
-
-        # Step through each windDir and add corresponding windSpeed to windrose_list
-        x = 0
-        while x < len(windDir_list):
-            # Only want to add windSpeed if both windSpeed and windDir have a value
-            if windSpeed_list[x] is not None and windDir_list[x] is not None:
-                # Add the windSpeed value to the corresponding element of our
-                # windrose list
-                windrose_list[
-                    int((windDir_list[x] + 11.25) / 22.5) % 16
-                ] += windSpeed_list[x]
-            x += 1
-
-        # Step through our windrose list and round all elements to 1 decimal place
-        y = 0
-        while y < len(windrose_list):
-            windrose_list[y] = round(windrose_list[y], 1)
-            y += 1
-        # Need to return a string of the list elements comma separated, no
-        # spaces and bounded by [ and ]
-        # windroseData = '[' + ','.join(str(z) for z in windrose_list) + ']'
-        return windrose_list
+        windrose_list = [0.0] * 16
+        for wind_dir, wind_speed in zip(windDir_list, windSpeed_list):
+            if wind_speed is not None and wind_dir is not None:
+                windrose_list[int((wind_dir + 11.25) / 22.5) % 16] += wind_speed
+        return [round(v, 1) for v in windrose_list]
 
     def highcharts_series_options_to_float(self, d):
         """
