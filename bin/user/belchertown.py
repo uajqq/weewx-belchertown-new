@@ -16,7 +16,7 @@ import time
 from urllib.request import Request, urlopen
 import urllib.error
 from collections import OrderedDict
-from math import asin, atan2, cos, degrees, pi, radians, sin, sqrt
+from math import asin, atan2, cos, degrees, radians, sin, sqrt
 from re import match
 
 import configobj
