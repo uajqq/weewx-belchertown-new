@@ -2899,10 +2899,47 @@ function showChart(json_file, prepend_renderTo = false) {
                         innerRadius: 0,
                     }]
                 }
-                // If user has set colors_enabled, change the color according to the value
-                if (options.series[0].colors_enabled) {
+
+                // Set up yAxis min/max first — needed before color stop fraction calculation
+                options.yAxis = {
+                    min: 0,
+                    max: 100,
+                    lineColor: null,
+                    tickPositions: []
+                }
+                if (options.series[0].yAxis_max) {
+                    options.yAxis.max = parseFloat(options.series[0].yAxis_max);
+                }
+                if (options.series[0].yAxis_min) {
+                    options.yAxis.min = parseFloat(options.series[0].yAxis_min);
+                }
+
+                // Build color stops from colorX / colorX_position pairs if defined
+                var customColorStops = [];
+                for (var ci = 1; ci <= 20; ci++) {
+                    var cPos = options.series[0]["color" + ci + "_position"];
+                    var cVal = options.series[0]["color" + ci];
+                    if (cPos === undefined || cVal === undefined) break;
+                    // Strip any surrounding quotes added by graphs.conf string quoting
+                    var cColor = String(cVal).replace(/^["']|["']$/g, '');
+                    customColorStops.push([parseFloat(cPos), cColor]);
+                }
+
+                if (customColorStops.length > 0) {
+                    // Determine which color applies to the current value
+                    var currentVal = options.series[0].data[1]["y"];
+                    var currentColor = customColorStops[0][1];
+                    for (var si = 0; si < customColorStops.length; si++) {
+                        if (currentVal >= customColorStops[si][0]) {
+                            currentColor = customColorStops[si][1];
+                        }
+                    }
+                    options.series[0].data[1].color = currentColor;
+                } else if (options.series[0].colors_enabled) {
+                    // Fall back to rainbow gradient coloring
                     options.series[0].data[1].color = new_gradient_temp(options.series[0].data[1]["y"], options.series[0].yAxis_min, options.series[0].yAxis_max)
                 }
+
                 options.plotOptions = {
                     solidgauge: {
                         dataLabels: {
@@ -2920,19 +2957,6 @@ function showChart(json_file, prepend_renderTo = false) {
                             }
                         },
                     }
-                }
-                options.yAxis = {
-                    min: 0,
-                    max: 100,
-                    lineColor: null,
-                    tickPositions: []
-                }
-                // Override default max and min if user has specified
-                if (options.series[0].yAxis_max) {
-                    options.yAxis.max = options.series[0].yAxis_max;
-                }
-                if (options.series[0].yAxis_min) {
-                    options.yAxis.min = options.series[0].yAxis_min;
                 }
                 options.tooltip.enabled = false
                 options.xAxis.crosshair = false
