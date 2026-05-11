@@ -1680,29 +1680,19 @@ class getData(SearchList):
                 distance_unit, "%.1f"
             )
             earthquake_maxradiuskm = extras_dict["earthquake_maxradiuskm"]
+            if extras_dict["earthquake_server"] == "ReNaSS":
+                log.error("Belchertown: earthquake_server 'ReNaSS' is no longer supported. Automatically switching to 'EMSC'. Please update your skin.conf.")
+                extras_dict["earthquake_server"] = "EMSC"
             # Sample URL from Belchertown Weather:
             # http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat=42.223&lon=-72.374&maxradiuskm=1000&format=geojson&nodata=204&minmag=2
             if extras_dict["earthquake_server"] == "USGS":
                 earthquake_url = f"http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat={latitude}&lon={longitude}&maxradiuskm={earthquake_maxradiuskm}&format=geojson&nodata=204&minmag=2"
             elif extras_dict["earthquake_server"] == "GeoNet":
                 earthquake_url = f"""https://api.geonet.org.nz/quake?MMI={extras_dict["geonet_mmi"]}"""
-            elif extras_dict["earthquake_server"] == "ReNaSS":
-                # Calculate min/max latitude and min/max longitude from radius and station location. https://stackoverflow.com/a/23118314
-                lat = float(latitude)
-                long = float(longitude)
-                radiusInKm = int(earthquake_maxradiuskm)
-
-                kmInLongitudeDegree = 111.320 * cos(lat / 180.0 * pi)
-
-                deltaLat = radiusInKm / 111.1
-                deltaLong = radiusInKm / kmInLongitudeDegree
-
-                minLat = lat - deltaLat
-                maxLat = lat + deltaLat
-                minLong = long - deltaLong
-                maxLong = long + deltaLong
-
-                earthquake_url = f"https://api.franceseisme.fr/fdsnws/event/1/query?eventtype=earthquake&minmagnitude=2&minlatitude={minLat:.2f}&minlongitude={minLong:.2f}&maxlatitude={maxLat:.2f}&maxlongitude={maxLong:.2f}&format=json&limit=1&orderby=time"
+            elif extras_dict["earthquake_server"] == "EMSC":
+                # EMSC supports a native circle query; convert km radius to degrees (1 deg ≈ 111.1 km)
+                maxradius_deg = float(earthquake_maxradiuskm) / 111.1
+                earthquake_url = f"https://www.seismicportal.eu/fdsnws/event/1/query?latitude={latitude}&longitude={longitude}&maxradius={maxradius_deg:.2f}&minmagnitude=2&format=json&limit=1&orderby=time"
 
             earthquake_is_stale = False
 
@@ -1804,23 +1794,18 @@ class getData(SearchList):
                     eqmag = locale.format_string(
                         "%g", float(eqdata["features"][0]["properties"]["mag"])
                     )
-                elif extras_dict["earthquake_server"] == "ReNaSS":
+                elif extras_dict["earthquake_server"] == "EMSC":
                     eqtime = eqdata["features"][0]["properties"]["time"]
                     # convert time to UNIX format
                     eqtime = datetime.datetime.strptime(eqtime, "%Y-%m-%dT%H:%M:%S.%fZ")
                     eqtime = int(
                         (eqtime - datetime.datetime(1970, 1, 1)).total_seconds()
                     )
-                    if match("fr_.*", system_locale):
-                        equrl = eqdata["features"][0]["properties"]["url"]["fr"]
-                        eqplace = eqdata["features"][0]["properties"]["description"][
-                            "fr"
-                        ]
-                    else:
-                        equrl = eqdata["features"][0]["properties"]["url"]["en"]
-                        eqplace = eqdata["features"][0]["properties"]["description"][
-                            "en"
-                        ]
+                    equrl = (
+                        "https://www.seismicportal.eu/eventdetails.html?unid="
+                        + eqdata["features"][0]["properties"]["unid"]
+                    )
+                    eqplace = eqdata["features"][0]["properties"]["flynn_region"].title()
                     eqmag = format(eqdata["features"][0]["properties"]["mag"], ".1f")
                 elif extras_dict["earthquake_server"] == "GeoNet":
                     eqtime = eqdata["features"][0]["properties"]["time"]
