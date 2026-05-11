@@ -553,6 +553,44 @@ async function ajaxweewx() {
 var unit_rounding_array = "";
 var unit_label_array = "";
 var weewx_data = "";
+
+function updateDailySnapshot(data, key) {
+    var d = data[key];
+    if (!d) return;
+    jQuery(".dailystatshigh").html(d["outTemp"]["max"]);
+    jQuery(".dailystatslow").html(d["outTemp"]["min"]);
+    jQuery(".dailystatswindavg").html(d["wind"]["average"]);
+    jQuery(".dailystatswindmax").html(d["wind"]["max"]);
+    jQuery(".dailystatsrain").html(d["rain"]["sum"]);
+    jQuery(".dailystatsrainrate").html(d["rain"]["max"]);
+    if (d["wind"] && d["wind"]["windrun"]) {
+        jQuery(".dailywindrun").html(d["wind"]["windrun"]);
+    }
+}
+
+function updateMonthlySnapshot(data, key) {
+    var d = data[key];
+    if (!d) return;
+    jQuery(".monthstatshigh").html(d["outTemp"]["max"]);
+    jQuery(".monthstatslow").html(d["outTemp"]["min"]);
+    jQuery(".monthstatswindavg").html(d["wind"]["average"]);
+    jQuery(".monthstatswindmax").html(d["wind"]["max"]);
+    jQuery(".monthstatsrain").html(d["rain"]["sum"]);
+    jQuery(".monthstatsrainrate").html(d["rain"]["max"]);
+}
+
+jQuery(document).on("change", "#snapshot-day-select", function() {
+    if (weewx_data) {
+        updateDailySnapshot(weewx_data, jQuery(this).val());
+    }
+});
+
+jQuery(document).on("change", "#snapshot-month-select", function() {
+    if (weewx_data) {
+        updateMonthlySnapshot(weewx_data, jQuery(this).val());
+    }
+});
+
 function update_weewx_data(data) {
     belchertown_debug("Updating WeeWX data");
     weewx_data = data;
@@ -588,30 +626,13 @@ function update_weewx_data(data) {
     // Daily max gust span
     jQuery(".dailymaxgust").html(parseFloat(data["day"]["wind"]["max"]).toFixed(1));
 
-    // Daily Snapshot Stats Section
-    try {
-        jQuery(".snapshot-records-today-header").html(tzAdjustedMoment(data["current"]["epoch"]).format('$obs.label.time_snapshot_records_today_header'));
-        jQuery(".snapshot-records-month-header").html(tzAdjustedMoment(data["current"]["epoch"]).format('$obs.label.time_snapshot_records_month_header'));
-    } catch (err) {
-        // Returned "current" data does not have this value
-    }
+    // Daily Snapshot Stats Section — use current dropdown selection (default: "day")
+    var dayKey = jQuery("#snapshot-day-select").val() || "day";
+    updateDailySnapshot(data, dayKey);
 
-
-    jQuery(".dailystatshigh").html(data["day"]["outTemp"]["max"]);
-    jQuery(".dailystatslow").html(data["day"]["outTemp"]["min"]);
-    jQuery(".dailystatswindavg").html(data["day"]["wind"]["average"]);
-    jQuery(".dailystatswindmax").html(data["day"]["wind"]["max"]);
-    jQuery(".dailystatsrain").html(data["day"]["rain"]["sum"]);
-    jQuery(".dailystatsrainrate").html(data["day"]["rain"]["max"]);
-    jQuery(".dailywindrun").html(data["day"]["wind"]["windrun"]);
-
-    // Month Snapshot Stats Section
-    jQuery(".monthstatshigh").html(data["month"]["outTemp"]["max"]);
-    jQuery(".monthstatslow").html(data["month"]["outTemp"]["min"]);
-    jQuery(".monthstatswindavg").html(data["month"]["wind"]["average"]);
-    jQuery(".monthstatswindmax").html(data["month"]["wind"]["max"]);
-    jQuery(".monthstatsrain").html(data["month"]["rain"]["sum"]);
-    jQuery(".monthstatsrainrate").html(data["month"]["rain"]["max"]);
+    // Month Snapshot Stats Section — use current dropdown selection (default: "month")
+    var monthKey = jQuery("#snapshot-month-select").val() || "month";
+    updateMonthlySnapshot(data, monthKey);
 
     // Sunrise and Sunset            
     jQuery(".sunrise-value").html(tzAdjustedMoment(parseFloat(data["almanac"]["sunrise_epoch"]).toFixed(0)).format("$obs.label.time_sunrise"));

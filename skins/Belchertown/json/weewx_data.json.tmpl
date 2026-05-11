@@ -30,8 +30,8 @@
     #set $minutes = $seconds // 60
     #set $seconds %= 60
     #set $daylight_str = "%d %s, %d %s, %d %s" % ($hours, $obs.label.hour[0] if ( $hours == 1 ) else $obs.label.hour[1], $minutes, $obs.label.minute[0] if ( $minutes == 1 ) else $obs.label.minute[1], $seconds, $obs.label.second[0] if ( $seconds == 1 ) else $obs.label.second[1])
-    #set $yesterday = $now - 24*3600
-    #set $yesterday_daylight = $almanac($almanac_time=$yesterday).sun.set.raw - $almanac($almanac_time=$yesterday).sun.rise.raw
+    #set $yesterday_ts = $now - 24*3600
+    #set $yesterday_daylight = $almanac($almanac_time=$yesterday_ts).sun.set.raw - $almanac($almanac_time=$yesterday_ts).sun.rise.raw
     #set $difference = $today_daylight - $yesterday_daylight
     #if $difference
       #set $delta = abs($difference)
@@ -466,6 +466,54 @@
             "sum": "$year.rain.sum",
             "max": "$year.rainRate.max",
             "maxtime": "$year.rainRate.maxtime"
+        }
+    },
+    "yesterday": {
+        "outTemp": {
+            "max": "$yesterday.outTemp.max",
+            "min": "$yesterday.outTemp.min"
+        },
+        "wind": {
+            "max": "$yesterday.wind.max",
+            "average": "$yesterday.wind.avg"
+            #if $yesterday.windrun.has_data
+            ,"windrun": "$yesterday.windrun.sum"
+            #end if
+        },
+        "rain": {
+            "sum": "$yesterday.rain.sum",
+            "max": "$yesterday.rainRate.max"
+        }
+    },
+    "last365": {
+        "outTemp": {
+            "max": "$span(time_delta=31536000).outTemp.max",
+            "min": "$span(time_delta=31536000).outTemp.min"
+        },
+        "wind": {
+            "max": "$span(time_delta=31536000).wind.max",
+            "average": "$span(time_delta=31536000).wind.avg"
+        },
+        "rain": {
+            "sum": "$span(time_delta=31536000).rain.sum",
+            "max": "$span(time_delta=31536000).rainRate.max"
+        }
+    },
+    "alltime": {
+        "outTemp": {
+            "max": "$alltime.outTemp.max",
+            "min": "$alltime.outTemp.min"
+        },
+        "wind": {
+            "max": "$alltime.wind.max",
+            "average": "$alltime.wind.avg"
+            #if $alltime.windrun.has_data
+            ,"windrun": "$alltime.windrun.sum"
+            #end if
+        },
+        "rain": {
+            "sum": "$alltime.rain.sum",
+            "max": "$alltime.rainRate.max"
         }
     },
     "almanac": {

@@ -1,20 +1,19 @@
-1.7beta3 May 9, 2026
-Highcharts version bump, bug fixes, translation updates. 
+1.8beta 1 May 11, 2026
 
-1.7beta2 February 10, 2026
-All bug fixes.
+This release adds a drop-down list so users can select which set of records snapshots they'd like to see, without leaving the home page.
 
-1.7beta1 January 18, 2026
+1.7 May 11, 2026
 
-Addition of Pirate Weather (https://pirateweather.net/en/latest/) as a (limited free) forecast service option to replace Darksky
-
-New in this version:
+- Addition of Pirate Weather (https://pirateweather.net/en/latest/) as a (limited free) forecast service option to replace Darksky
 - Back end Pirate Weather API fetch/read logic
 - Improvements to API calls for both forecast sources
 - Front end processing of Pirate Weather forecast data (current conditions/1hr/24hr)
 - Some page formatting logic to display the current conditions icon and format 7 day forecast (forecast descriptions are longer in PW)
 - Forecasts now scroll horizontally on mobile
 - Versions are now marked as New Belchertown to better distinguish this fork from the original
+- Gauge charts can be set to custom gradient colors again -- check wiki for details
+- Highcharts has been bumped to the latest version, 12.6
+- Efficiency/bug fixes throughout
 
 1.6 November 26, 2025
 

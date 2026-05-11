@@ -505,7 +505,11 @@
                         
                         <div class="col-sm-6 stn-quick-stats">
                             <div class="stats-title">
-                                <span class="snapshot-records-today-header"></span><!-- JS and AJAX -->
+                                <select id="snapshot-day-select" class="snapshot-period-select">
+                                    <option value="day">$obs.label.snapshot_period_today</option>
+                                    <option value="yesterday">$obs.label.snapshot_period_yesterday</option>
+                                    <option value="week">$obs.label.snapshot_period_7days</option>
+                                </select>
                             </div>
                             <table>
                                 <tr>
@@ -526,7 +530,12 @@
                         <!-- This Month Snapshot Stats -->
                         <div class="col-sm-6 stn-quick-stats border-left">
                             <div class="stats-title">
-                                <span class="snapshot-records-month-header"></span><!-- JS and AJAX -->
+                                <select id="snapshot-month-select" class="snapshot-period-select">
+                                    <option value="month">$obs.label.snapshot_period_month</option>
+                                    <option value="year">$obs.label.snapshot_period_ytd</option>
+                                    <option value="last365">$obs.label.snapshot_period_last365</option>
+                                    <option value="alltime">$obs.label.snapshot_period_alltime</option>
+                                </select>
                             </div>
                             <table>
                                 <tr>
