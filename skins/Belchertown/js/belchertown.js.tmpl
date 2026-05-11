@@ -64,9 +64,9 @@ const DS_ICON_TO_W34 = {
 };
 
 /*
- Resolve an icon name to the Weather34 icon base (without .png).
- - Aeris: input like "xx.png" -> look up in icon_dict
- - Pirate Weather: Dark Sky-style names -> DS_ICON_TO_W34 map
+Resolve an icon name to the Weather34 icon base (without .png).
+- Aeris: input like "xx.png" -> look up in icon_dict
+- Pirate Weather: Dark Sky-style names -> DS_ICON_TO_W34 map
  */
 
 function resolveIconForProvider(iconRaw, provider) {
@@ -2417,7 +2417,11 @@ function showChart(json_file, prepend_renderTo = false) {
                     renderTo: '',
                     spacing: [5, 10, 10, 10],
                     type: '',
-                    zoomType: 'x'
+                    zooming: {
+                        mouseWheel: {
+                            enabled: false
+                        }
+                    }
                 },
 
                 exporting: {
