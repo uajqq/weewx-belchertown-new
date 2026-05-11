@@ -2339,7 +2339,29 @@ input:checked+.slider:before {
 
 /* End Dark Mode Switch */
 
+/* Dark mode: snapshot period drop-down selects */
+.dark .snapshot-period-select {
+  background-color: #375a7f;
+  color: #fff;
+  border: 1px solid #aaa;
+}
+
+.dark .snapshot-period-select option {
+  background-color: #222;
+  color: #fff;
+}
+
 @media only screen and (max-width: 800px) {
+  .snapshot-period-select {
+    font-size: 14px;
+    width: 100%;
+    max-width: 220px;
+  }
+
+  .stats-title {
+    font-size: 14px;
+  }
+
   .themeSwitchLabel {
     margin-top: 10px;
   }
