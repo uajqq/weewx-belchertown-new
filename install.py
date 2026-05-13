@@ -215,6 +215,7 @@ files = [
         "skins/Belchertown",
         [
             "skins/Belchertown/favicon.ico",
+            "skins/Belchertown/index_radar.inc.example",
             "skins/Belchertown/footer.html.tmpl",
             "skins/Belchertown/header.html.tmpl",
             "skins/Belchertown/index.html.tmpl",
@@ -265,8 +266,11 @@ files = [
         "skins/Belchertown/lang",
         [
             "skins/Belchertown/lang/ca.conf",
+            "skins/Belchertown/lang/da.conf",
             "skins/Belchertown/lang/de.conf",
+            "skins/Belchertown/lang/fr.conf",
             "skins/Belchertown/lang/it.conf",
+            "skins/Belchertown/lang/sv.conf",
         ],
     ),
     (
