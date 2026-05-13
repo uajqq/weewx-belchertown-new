@@ -1174,8 +1174,9 @@ function update_current_conditions(data) {
             }
         }
 
+        var wxicon = get_relative_url() + "/images/unknown.png"; // fallback
         try {
-            var wxicon = get_relative_url() + "/images/" + aeris_icon(current_conditions_data["icon"]) + ".png";
+            wxicon = get_relative_url() + "/images/" + aeris_icon(current_conditions_data["icon"] || "unknown.png") + ".png";
         } catch (err) {
             // Returned "current" data does not have this value
         }
@@ -1274,9 +1275,11 @@ function update_forecast_data(data) {
         belchertown_debug("Forecast: No provider, hiding forecastrow");
         return;
     } else if (forecast_provider == "aeris") {
+        try {
         var forecast_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_forecast_last_updated');
 
         // AQI
+        try {
         if (data["aqi"][0]["success"] && !data["aqi"][0]["error"]) {
             jQuery(".wx-aqi").html(data["aqi"][0]["response"][0]["periods"][0]["aqi"]);
             jQuery(".wx-aqi-category").html(aeris_aqi_translate(data["aqi"][0]["response"][0]["periods"][0]["category"]));
@@ -1297,6 +1300,9 @@ function update_forecast_data(data) {
                 // AQI not in the station observation table, so silently exit
             }
         }
+        } catch (err) {
+            belchertown_debug("Forecast: AQI data missing or malformed, skipping: " + err);
+        }
 
         //  start of new composite version of forecast code
 
@@ -1305,6 +1311,9 @@ function update_forecast_data(data) {
         for (forecast_interval of forecast_types) {
             var forecast_row = [];
             var output_html = "";
+            if (!data[forecast_interval] || !data[forecast_interval][0] || !data[forecast_interval][0]["response"] || !data[forecast_interval][0]["response"][0]) {
+                continue;
+            }
             for (i = 0; i < data[forecast_interval][0]["response"][0]["periods"].length; i++) {
                 // Alias the deeply-nested period object to avoid repeated property traversal
                 const period = data[forecast_interval][0]["response"][0]["periods"][i];
@@ -1552,6 +1561,10 @@ function update_forecast_data(data) {
         // Show weather alert
         show_forcast_alert(data, forecast_provider);
         // #end if
+
+        } catch (err) {
+            belchertown_debug("Forecast: Aeris data missing or malformed: " + err);
+        }
     }
 
 

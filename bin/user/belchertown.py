@@ -1119,7 +1119,8 @@ class getData(SearchList):
                                 else "N/A"
                             )
                             visibility_unit = "miles"
-                        current_obs_icon = current_conditions_data.get("icon", "") or ""
+                        raw_icon = current_conditions_data.get("icon", "") or ""
+                        current_obs_icon = raw_icon + ".png" if raw_icon else ""
                         current_obs_summary = (
                             current_conditions_data.get("summary", "") or ""
                         )
@@ -1554,13 +1555,17 @@ class getData(SearchList):
                                 current_conditions_data = data["current"][0][
                                     "response"
                                 ][0]["periods"][0]
+                        current_conditions_data_len = len(
+                            current_conditions_data
+                        )
+                    except Exception:
+                        current_conditions_data_len = 0
+
+                    try:
                         cloud_cover = f"""{current_conditions_data["sky"]}"""
                     except Exception:
                         log.info("No cloud cover data from Xweather weather")
                         cloud_cover = ""
-                        current_conditions_data_len = (
-                            0  # Not really but good enough for our Use Case below
-                        )
 
                     # Process the forecast file and the Current Conditions data
                     with open(forecast_file, "r") as read_file:
@@ -1583,11 +1588,12 @@ class getData(SearchList):
                                 aqi_time = data["aqi"][0]["response"][0]["periods"][0][
                                     "timestamp"
                                 ]
+                    except KeyError:
+                        pass  # aqi key missing from forecast data (e.g. aqi disabled or older file)
                     except Exception as e:
                         log.error(
-                            f"Error getting AQI from Xweather weather. The error was: {e}. Data: {data['aqi']}"
+                            f"Error getting AQI from Xweather weather. The error was: {e}. Data: {data.get('aqi')}"
                         )
-                        pass
 
                     # https://www.xweather.com/docs/weather-api/endpoints/airquality
                     if aqi_category == "good":
