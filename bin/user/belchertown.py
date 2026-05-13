@@ -3266,7 +3266,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
             # Convert to millis and zip all together
             time_ms = [float(x) * 1000 for x in time_start_vt[0]]
-            output_data = zip(time_ms, min_obs_vt[0], max_obs_vt[0], avg_obs_vt[0])
+            output_data = list(zip(time_ms, min_obs_vt[0], max_obs_vt[0], avg_obs_vt[0]))
 
             data = {
                 "weatherRange": True,

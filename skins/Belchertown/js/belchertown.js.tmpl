@@ -2341,6 +2341,8 @@ function showChart(json_file, prepend_renderTo = false) {
         // Loop through each chart name (e.g. chart1, chart2, chart3)
         jQuery.each(data, function(plotname, obsname) {
             var observation_type = undefined;
+            xAxis_categories = [];
+            plot_tooltip_date_format = undefined;
 
             // Ignore the Belchertown Version since this "plot" has no other options
             if (plotname == "belchertown_version") {
@@ -2535,7 +2537,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     dateTimeLabelFormats: {
                         day: '%e %b',
                         week: '%e %b',
-                        month: '%b %y',
+                        month: '%b %e',
                     },
                     lineColor: '#555',
                     minRange: 900000,
@@ -2546,7 +2548,15 @@ function showChart(json_file, prepend_renderTo = false) {
                         }
                     },
                     ordinal: false,
-                    type: 'datetime'
+                    type: 'datetime',
+                    units: [
+                        ['minute', [1, 2, 5, 10, 15, 30]],
+                        ['hour',   [1, 2, 3, 4, 6, 8, 12]],
+                        ['day',    [1]],
+                        ['week',   [1]],
+                        ['month',  [1]],
+                        ['year',   null]
+                    ]
                 },
 
                 yAxis: [{
@@ -2698,13 +2708,15 @@ function showChart(json_file, prepend_renderTo = false) {
             // If we have xAxis categories, reset xAxis and populate it from these options. Also need to reset tooltip since there's no datetime for moment.js to use.
             if (xAxis_categories.length >= 1) {
                 belchertown_debug(options.chart.renderTo + ": has " + xAxis_categories.length + " xAxis categories. Resetting xAxis and tooltips for grouping");
-                options.xAxis = {}
-                options.xAxis.categories = xAxis_categories;
-                options.tooltip = {}
+                options.xAxis = {
+                    type: 'category',
+                    categories: xAxis_categories
+                };
                 options.tooltip = {
                     enabled: true,
                     crosshairs: true,
-                    split: true,
+                    shared: true,
+                    split: false,
                     formatter: function() {
                         // The first returned item is the header, subsequent items are the points
                         return [this.x].concat(
@@ -2718,7 +2730,7 @@ function showChart(json_file, prepend_renderTo = false) {
                             })
                         );
                     },
-                }
+                };
             }
 
             // Reset the series everytime we loop.
@@ -3173,12 +3185,25 @@ function showChart(json_file, prepend_renderTo = false) {
                     dateTimeLabelFormats: {
                         day: '%e %b',
                         week: '%e %b',
-                        month: '%b %y',
+                        month: '%b %e',
                     },
                     showLastLabel: true,
                     crosshair: true,
-                    type: "datetime"
-                }
+                    type: "datetime",
+                    units: [
+                        ['minute', [1, 2, 5, 10, 15, 30]],
+                        ['hour',   [1, 2, 3, 4, 6, 8, 12]],
+                        ['day',    [1]],
+                        ['week',   [1]],
+                        ['month',  [1]],
+                        ['year',   null]
+                    ],
+                    labels: xAxis_categories.length >= 1 ? {
+                        formatter: function() {
+                            return xAxis_categories[new Date(this.value).getMonth()];
+                        }
+                    } : {}
+                };
 
                 options.plotOptions = {}
                 options.plotOptions = {
@@ -3244,7 +3269,10 @@ function showChart(json_file, prepend_renderTo = false) {
                             var rounding = point.series.userOptions.rounding;
                             var mirrored = point.series.userOptions.mirrored_value;
                             var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
-                            return "<strong>" + tzAdjustedMoment(point.x / 1000).format(tooltip_date_format) + "</strong><br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.high, true) + "'>\u25CF</span> $obs.label.highest_temperature: " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.low, true) + "'>\u25CF</span> $obs.label.lowest_temperature: " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.average, true) + "'>\u25CF</span> $obs.label.average_temperature: " + highcharts_tooltip_factory(point.point.average, observation_type, true, rounding, mirrored, numberFormat);
+                            var header = (xAxis_categories.length >= 1)
+                                ? xAxis_categories[point.x]
+                                : tzAdjustedMoment(point.x / 1000).format(tooltip_date_format);
+                            return "<strong>" + header + "</strong><br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.high, true) + "'>\u25CF</span> $obs.label.highest_temperature: " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.low, true) + "'>\u25CF</span> $obs.label.lowest_temperature: " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.average, true) + "'>\u25CF</span> $obs.label.average_temperature: " + highcharts_tooltip_factory(point.point.average, observation_type, true, rounding, mirrored, numberFormat);
                         });
                     }
                 }
@@ -3307,8 +3335,11 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             // Finally all options are done, now show the chart
-            // Wind rose is a polar category chart and must use Highcharts.chart(), not stockChart()
-            var chart = (observation_type == "windRose") ? Highcharts.chart(options) : Highcharts.stockChart(options);
+            // Wind rose and category charts must use Highcharts.chart(), not stockChart()
+            // Highstock forces a datetime axis internally and ignores type: 'category'
+            // weatherRange always uses datetime data even when xAxis_categories provides custom labels
+            var useStockChart = (observation_type !== "windRose") && (xAxis_categories.length === 0 || observation_type === "weatherRange");
+            var chart = useStockChart ? Highcharts.stockChart(options) : Highcharts.chart(options);
 
             // If using debug, show a copy paste debug for use with jsfiddle
             belchertown_debug(options);
