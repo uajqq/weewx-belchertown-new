@@ -236,80 +236,80 @@
     },
     "week": {
         "outTemp": {
-            "max": "$week.outTemp.max",
-            "maxtime": "$week.outTemp.maxtime",
-            "min": "$week.outTemp.min",
-            "mintime": "$week.outTemp.mintime"
+            "max": "$span(time_delta=604800).outTemp.max",
+            "maxtime": "$span(time_delta=604800).outTemp.maxtime",
+            "min": "$span(time_delta=604800).outTemp.min",
+            "mintime": "$span(time_delta=604800).outTemp.mintime"
         },
-        #if $week.appTemp.has_data
+        #if $span(time_delta=604800).appTemp.has_data
         "appTemp": {
-            "max": "$week.appTemp.max",
-            "maxtime": "$week.appTemp.maxtime",
-            "min": "$week.appTemp.min",
-            "mintime": "$week.appTemp.mintime"
+            "max": "$span(time_delta=604800).appTemp.max",
+            "maxtime": "$span(time_delta=604800).appTemp.maxtime",
+            "min": "$span(time_delta=604800).appTemp.min",
+            "mintime": "$span(time_delta=604800).appTemp.mintime"
         },
         #end if
         "heatindex": {
-            "max": "$week.heatindex.max",
-            "maxtime": "$week.heatindex.maxtime"
+            "max": "$span(time_delta=604800).heatindex.max",
+            "maxtime": "$span(time_delta=604800).heatindex.maxtime"
         },
         "windchill": {
-            "max": "$week.windchill.min",
-            "maxtime": "$week.windchill.mintime"
+            "max": "$span(time_delta=604800).windchill.min",
+            "maxtime": "$span(time_delta=604800).windchill.mintime"
         },
         "humidity": {
-            "max": "$week.outHumidity.max",
-            "maxtime": "$week.outHumidity.maxtime",
-            "min": "$week.outHumidity.min",
-            "mintime": "$week.outHumidity.mintime"
+            "max": "$span(time_delta=604800).outHumidity.max",
+            "maxtime": "$span(time_delta=604800).outHumidity.maxtime",
+            "min": "$span(time_delta=604800).outHumidity.min",
+            "mintime": "$span(time_delta=604800).outHumidity.mintime"
         },
         "dewpoint": {
-            "max": "$week.dewpoint.max",
-            "maxtime": "$week.dewpoint.maxtime",
-            "min": "$week.dewpoint.min",
-            "mintime": "$week.dewpoint.mintime"
+            "max": "$span(time_delta=604800).dewpoint.max",
+            "maxtime": "$span(time_delta=604800).dewpoint.maxtime",
+            "min": "$span(time_delta=604800).dewpoint.min",
+            "mintime": "$span(time_delta=604800).dewpoint.mintime"
         },
         "barometer": {
-            "max": "$week.barometer.max",
-            "maxtime": "$week.barometer.maxtime",
-            "min": "$week.barometer.min",
-            "mintime": "$week.barometer.mintime"
+            "max": "$span(time_delta=604800).barometer.max",
+            "maxtime": "$span(time_delta=604800).barometer.maxtime",
+            "min": "$span(time_delta=604800).barometer.min",
+            "mintime": "$span(time_delta=604800).barometer.mintime"
         },
         "wind": {
-            "max": "$week.wind.max",
-            "maxtime": "$week.wind.maxtime",
-            "gustdir": "$week.wind.gustdir",
-            "average": "$week.wind.avg",
-            "vectordir": "$week.wind.vecdir",
-            "vectoravg": "$week.wind.vecavg",
-            #if $week.windrun.has_data
-            "windrun_max": "$week.windrun.max",
-            "windrun_maxtime": "$week.windrun.maxtime",
-            "windrun_min": "$week.windrun.min",
-            "windrun_mintime": "$week.windrun.mintime",
+            "max": "$span(time_delta=604800).wind.max",
+            "maxtime": "$span(time_delta=604800).wind.maxtime",
+            "gustdir": "$span(time_delta=604800).wind.gustdir",
+            "average": "$span(time_delta=604800).wind.avg",
+            "vectordir": "$span(time_delta=604800).wind.vecdir",
+            "vectoravg": "$span(time_delta=604800).wind.vecavg",
+            #if $span(time_delta=604800).windrun.has_data
+            "windrun_max": "$span(time_delta=604800).windrun.max",
+            "windrun_maxtime": "$span(time_delta=604800).windrun.maxtime",
+            "windrun_min": "$span(time_delta=604800).windrun.min",
+            "windrun_mintime": "$span(time_delta=604800).windrun.mintime",
             #end if
-            "rms": "$week.wind.rms"
+            "rms": "$span(time_delta=604800).wind.rms"
         },
-        #if $week.UV.has_data
+        #if $span(time_delta=604800).UV.has_data
         "uv": {
-            "max": "$week.UV.max",
-            "maxtime": "$week.UV.maxtime",
-            "min": "$week.UV.min",
-            "mintime": "$week.UV.mintime"
+            "max": "$span(time_delta=604800).UV.max",
+            "maxtime": "$span(time_delta=604800).UV.maxtime",
+            "min": "$span(time_delta=604800).UV.min",
+            "mintime": "$span(time_delta=604800).UV.mintime"
         },
         #end if
-        #if $week.radiation.has_data
+        #if $span(time_delta=604800).radiation.has_data
         "solar_radiation": {
-            "max": "$week.radiation.max",
-            "maxtime": "$week.radiation.maxtime",
-            "min": "$week.radiation.min",
-            "mintime": "$week.radiation.mintime"
+            "max": "$span(time_delta=604800).radiation.max",
+            "maxtime": "$span(time_delta=604800).radiation.maxtime",
+            "min": "$span(time_delta=604800).radiation.min",
+            "mintime": "$span(time_delta=604800).radiation.mintime"
         },
         #end if
         "rain": {
-            "sum": "$week.rain.sum",
-            "max": "$week.rainRate.max",
-            "maxtime": "$week.rainRate.maxtime"
+            "sum": "$span(time_delta=604800).rain.sum",
+            "max": "$span(time_delta=604800).rainRate.max",
+            "maxtime": "$span(time_delta=604800).rainRate.maxtime"
         }
     },
     "month": {
