@@ -1686,19 +1686,20 @@ class getData(SearchList):
                 distance_unit, "%.1f"
             )
             earthquake_maxradiuskm = extras_dict["earthquake_maxradiuskm"]
+            earthquake_minmag = extras_dict.get("earthquake_minmag", "2")
             if extras_dict["earthquake_server"] == "ReNaSS":
                 log.error("Belchertown: earthquake_server 'ReNaSS' is no longer supported. Automatically switching to 'EMSC'. Please update your skin.conf.")
                 extras_dict["earthquake_server"] = "EMSC"
             # Sample URL from Belchertown Weather:
-            # http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat=42.223&lon=-72.374&maxradiuskm=1000&format=geojson&nodata=204&minmag=2
+            # http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat=42.223&lon=-72.374&maxradiuskm=1000&format=geojson&nodata=204&minmagnitude=2
             if extras_dict["earthquake_server"] == "USGS":
-                earthquake_url = f"http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat={latitude}&lon={longitude}&maxradiuskm={earthquake_maxradiuskm}&format=geojson&nodata=204&minmag=2"
+                earthquake_url = f"http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat={latitude}&lon={longitude}&maxradiuskm={earthquake_maxradiuskm}&format=geojson&nodata=204&minmagnitude={earthquake_minmag}"
             elif extras_dict["earthquake_server"] == "GeoNet":
-                earthquake_url = f"""https://api.geonet.org.nz/quake?MMI={extras_dict["geonet_mmi"]}"""
+                earthquake_url = f"https://api.geonet.org.nz/fdsnws/event/1/query?latitude={latitude}&longitude={longitude}&maxradiuskm={earthquake_maxradiuskm}&minmagnitude={earthquake_minmag}&format=geojson&limit=1&orderby=time"
             elif extras_dict["earthquake_server"] == "EMSC":
                 # EMSC supports a native circle query; convert km radius to degrees (1 deg ≈ 111.1 km)
                 maxradius_deg = float(earthquake_maxradiuskm) / 111.1
-                earthquake_url = f"https://www.seismicportal.eu/fdsnws/event/1/query?latitude={latitude}&longitude={longitude}&maxradius={maxradius_deg:.2f}&minmagnitude=2&format=json&limit=1&orderby=time"
+                earthquake_url = f"https://www.seismicportal.eu/fdsnws/event/1/query?latitude={latitude}&longitude={longitude}&maxradius={maxradius_deg:.2f}&minmagnitude={earthquake_minmag}&format=json&limit=1&orderby=time"
 
             earthquake_is_stale = False
 
@@ -1814,22 +1815,28 @@ class getData(SearchList):
                     eqplace = eqdata["features"][0]["properties"]["flynn_region"].title()
                     eqmag = format(eqdata["features"][0]["properties"]["mag"], ".1f")
                 elif extras_dict["earthquake_server"] == "GeoNet":
-                    eqtime = eqdata["features"][0]["properties"]["time"]
-                    # convert time to UNIX format
-                    eqtime = datetime.datetime.strptime(eqtime, "%Y-%m-%dT%H:%M:%S.%fZ")
-                    eqtime = int(
-                        (eqtime - datetime.datetime(1970, 1, 1)).total_seconds()
-                    )
+                    eqtime = eqdata["features"][0]["properties"]["time"] / 1000
                     equrl = (
                         "https://www.geonet.org.nz/earthquake/"
-                        + eqdata["features"][0]["properties"]["publicID"]
+                        + eqdata["features"][0]["id"].split("/")[-1]
                     )
-                    eqplace = eqdata["features"][0]["properties"]["locality"]
+                    if distance_unit == "km":
+                        eqplace = eqdata["features"][0]["properties"]["place"]
+                    else:  # assume miles
+                        try:
+                            eqmatched = match(
+                                r"(?P<distance>[0-9]*\.?[0-9]+) km(?P<rest>.*)$",
+                                eqdata["features"][0]["properties"]["place"],
+                            )
+                            eqdist_km = eqmatched.group("distance")
+                            eqdist_miles = round(float(eqdist_km) / 1.609, 1)
+                            eqplace = (
+                                str(eqdist_miles) + " miles" + eqmatched.group("rest")
+                            )
+                        except Exception:
+                            eqplace = eqdata["features"][0]["properties"]["place"]
                     eqmag = locale.format_string(
-                        "%g",
-                        float(
-                            round(eqdata["features"][0]["properties"]["magnitude"], 1)
-                        ),
+                        "%g", float(eqdata["features"][0]["properties"]["mag"])
                     )
                 eqlat = str(
                     round(eqdata["features"][0]["geometry"]["coordinates"][1], 4)
