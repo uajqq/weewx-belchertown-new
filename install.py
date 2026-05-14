@@ -109,7 +109,7 @@ extension_config = """
 
             #---Forecast defaults---
             # forecast_enabled  = 0
-            # forecast_provider = ""   # aeris (Aeris/XWeather) or pirateweather (Pirate Weather)
+            # forecast_provider = "aeris"   # aeris (Aeris/XWeather) or pirateweather (Pirate Weather)
             
             #---forecast API configuration---
             # forecast_api_id                      = "" # Aeris/XWeather Client ID or Pirate Weather API Key
@@ -128,7 +128,6 @@ extension_config = """
             # forecast_place                       = "" # defaults to station lat/lon
             # current_conditions                   = "obs"
             # current_conditions_timestamp_enabled = 0
-            # forecast_write_provider              = 1 # Write provider tag into JSON for front-end switching
 
             #---Air Quality Index (AQI) defaults for Aeris/Xweather---
             # aqi_enabled          = 0
@@ -143,7 +142,7 @@ extension_config = """
             # earthquake_maxradiuskm = 1000
             # earthquake_stale       = 10740
             # earthquake_server      = USGS
-            # geonet_mmi             = 4
+            # earthquake_minmag      = 2
 
             #---Social Share Button Defaults. Define the text below under Labels---
             # facebook_enabled  = 0
@@ -268,8 +267,13 @@ files = [
             "skins/Belchertown/lang/ca.conf",
             "skins/Belchertown/lang/da.conf",
             "skins/Belchertown/lang/de.conf",
+            "skins/Belchertown/lang/es.conf",
             "skins/Belchertown/lang/fr.conf",
             "skins/Belchertown/lang/it.conf",
+            "skins/Belchertown/lang/nb.conf",
+            "skins/Belchertown/lang/nl.conf",
+            "skins/Belchertown/lang/pl.conf",
+            "skins/Belchertown/lang/pt.conf",
             "skins/Belchertown/lang/sv.conf",
         ],
     ),
