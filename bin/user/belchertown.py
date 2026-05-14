@@ -347,7 +347,11 @@ class getData(SearchList):
         # moment.js, and the system decimal for use with highcharts
         belchertown_locale = extras_dict["belchertown_locale"]
         if belchertown_locale == "auto":
-            system_locale, locale_encoding = locale.getdefaultlocale()
+            try:
+                locale.setlocale(locale.LC_ALL, "")
+                system_locale, locale_encoding = locale.getlocale()
+            except Exception:
+                system_locale, locale_encoding = None, None
         else:
             try:
                 # Try setting the locale. Locale needs to be in locale.encoding
@@ -1100,7 +1104,7 @@ class getData(SearchList):
                         log.info("Current conditions are current, no update needed.")
 
                     # Read current_conditions.json and populate the variables used below
-                    with open(current_conditions_file, "r") as read_file:
+                    with open(current_conditions_file, "r", encoding="utf-8") as read_file:
                         data = json.load(read_file)
                     try:
                         current_conditions_data = data["current"][0]
@@ -1235,8 +1239,8 @@ class getData(SearchList):
                         )
                         if os.path.exists(iconlist_file_path):
                             icon_name = data.split(".")[0]  # Remove .png
-                            with open(iconlist_file_path, "r") as dict:
-                                icon_dict = json.load(dict)
+                            with open(iconlist_file_path, "r", encoding="utf-8") as icon_fh:
+                                icon_dict = json.load(icon_fh)
                             return icon_dict[icon_name]
                         else:
                             log.error(
@@ -1519,7 +1523,7 @@ class getData(SearchList):
                             log.error(f"Current Conditions error: {e}")
 
                     # Read the forecast Current Conditions file
-                    with open(current_conditions_file, "r") as read_file:
+                    with open(current_conditions_file, "r", encoding="utf-8") as read_file:
                         data = json.load(read_file)
 
                     # We prefer using an observation (actual) over conditions (an interpolation)
@@ -1568,7 +1572,7 @@ class getData(SearchList):
                         cloud_cover = ""
 
                     # Process the forecast file and the Current Conditions data
-                    with open(forecast_file, "r") as read_file:
+                    with open(forecast_file, "r", encoding="utf-8") as read_file:
                         data = json.load(read_file)
 
                     try:
@@ -1736,10 +1740,9 @@ class getData(SearchList):
                     try:
                         import subprocess
 
-                        command = f'curl -L --silent "{earthquake_url}"'
                         p = subprocess.Popen(
-                            command,
-                            shell=True,
+                            ["curl", "-L", "--silent", earthquake_url],
+                            shell=False,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,
                         )
@@ -1773,7 +1776,7 @@ class getData(SearchList):
                     )
 
             # Process the earthquake file
-            with open(earthquake_file, "r") as read_file:
+            with open(earthquake_file, "r", encoding="utf-8") as read_file:
                 try:
                     eqdata = json.load(read_file)
                 except Exception:
@@ -2943,12 +2946,12 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     )
 
             # Write the output to the JSON file
-            with open(json_filename, mode="w") as jf:
+            with open(json_filename, mode="w", encoding="utf-8") as jf:
                 jf.write(json.dumps(output[chart_group], indent=4))
 
             # Save the graphs.conf to a json file for future debugging
             chart_json_filename = html_dest_dir + "/graphs.json"
-            with open(chart_json_filename, mode="w") as cjf:
+            with open(chart_json_filename, mode="w", encoding="utf-8") as cjf:
                 cjf.write(json.dumps(self.chart_dict, indent=4))
 
     def get_observation_data(
