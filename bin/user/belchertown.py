@@ -2708,8 +2708,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     special_target_unit = line_options.get("unit", None)
 
                     # Get the unit label
-                    if observation_type == "rainTotal":
-                        obs_label = "rain"
+                    if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+                        obs_label = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
                     elif (
                         observation_type == "weatherRange"
                         and weatherRange_obs_lookup is not None
@@ -2826,8 +2826,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             )
                     if obs_round is None:
                         # Add rounding from weewx.conf/skin.conf so Highcharts can use it
-                        if observation_type == "rainTotal":
-                            rounding_obs_lookup = "rain"
+                        if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+                            rounding_obs_lookup = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
                         elif observation_type == "weatherRange":
                             rounding_obs_lookup = weatherRange_obs_lookup
                         elif observation_type == "haysChart":
@@ -3381,8 +3381,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             return data
 
         # Special Belchertown Skin rain counter
-        if observation == "rainTotal":
-            obs_lookup = "rain"
+        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+            obs_lookup = observation[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
             # Force sum on this observation
             if aggregate_interval:
                 aggregate_type = "sum"
@@ -3671,24 +3671,21 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         else:
             obs_vt = self.converter.convert(obs_vt)
 
-        # Special handling for the rain.
-        if observation == "rainTotal":
-            # The WeeWX "rain" observation is really "bucket tips". This
-            # special counter increments the bucket tips over timespan to
-            # return rain total.
-            rain_count = 0
+        # Special handling for running totals (rain, rainDur, hailDur, sunshineDur).
+        # The WeeWX "rain" observation is really "bucket tips"; this counter
+        # accumulates them over the timespan to return a running total. The
+        # same pattern applies to duration observations.
+        # None/"" values are passed through so full-length charts
+        # (like WeeWX v4 archiveYearSpan) don't extend past the last actual plot.
+        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+            running_count = 0
             obs_round_vt = []
-            for rain in obs_vt[0]:
-                # If the rain value is None or "", add it as 0.0
-                if rain is None or rain == "":
-                    # rain = 0.0
-                    # Do not keep adding None or empty results, so that
-                    # full-length charts (like WeeWX v4 archiveYearSpan) don't
-                    # have a line that continues past the last actual plot
-                    obs_round_vt.append(rain)
+            for val in obs_vt[0]:
+                if val is None or val == "":
+                    obs_round_vt.append(val)
                     continue
-                rain_count = rain_count + rain
-                obs_round_vt.append(round(rain_count, 2))
+                running_count = running_count + val
+                obs_round_vt.append(round(running_count, 2))
         else:
             # Send all other observations through the usual process, except
             # Barometer for finer detail
