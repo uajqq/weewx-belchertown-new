@@ -2991,6 +2991,237 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             with open(chart_json_filename, mode="w", encoding="utf-8") as cjf:
                 cjf.write(json.dumps(self.chart_dict, indent=4))
 
+    def _get_forecast_aqi_point(self, observation, fallback_ts=None):
+        """Return a single [timestamp_ms, value] point for AQI observations
+        sourced from current_conditions.json first, then forecast.json, or
+        None if unavailable.
+
+        Supported observation names:
+        - aqi
+        - pm2_5
+        - pm10
+        - o3
+        - co
+        - no2
+        - so2
+        """
+
+        obs_map = {
+            "aqi": {"pollutant": None, "value_key": "aqi"},
+            "pm2_5": {"pollutant": "pm2.5", "value_key": "valueUGM3"},
+            "pm10": {"pollutant": "pm10", "value_key": "valueUGM3"},
+            "o3": {"pollutant": "o3", "value_key": "valuePPB"},
+            "co": {"pollutant": "co", "value_key": "valuePPB"},
+            "no2": {"pollutant": "no2", "value_key": "valuePPB"},
+            "so2": {"pollutant": "so2", "value_key": "valuePPB"},
+        }
+
+        if observation not in obs_map:
+            return None
+
+        try:
+            current_point = self._get_current_conditions_aqi_point(
+                observation, fallback_ts
+            )
+            if current_point is not None:
+                return current_point
+
+            html_root = os.path.join(
+                self.config_dict["WEEWX_ROOT"],
+                self.skin_dict["HTML_ROOT"],
+            )
+            forecast_file = os.path.join(html_root, "json", "forecast.json")
+            if not os.path.isfile(forecast_file):
+                return None
+
+            with open(forecast_file, "r", encoding="utf-8") as fh:
+                forecast_data = json.load(fh)
+
+            aqi_array = forecast_data.get("aqi") or []
+            if not aqi_array:
+                return None
+
+            aqi_payload = aqi_array[0] or {}
+            if not aqi_payload.get("success"):
+                return None
+
+            response = aqi_payload.get("response") or []
+            if not response:
+                return None
+
+            periods = response[0].get("periods") or []
+            if not periods:
+                return None
+
+            # Prefer the period closest to "now" so we only use the current
+            # air-quality snapshot rather than an older or future forecast.
+            now_ts = int(fallback_ts or time.time())
+            current_window = 6 * 3600  # generous enough for stale cache drift
+            valid_periods = []
+            for period in periods:
+                period_ts = period.get("timestamp")
+                try:
+                    period_ts = int(period_ts)
+                except (TypeError, ValueError):
+                    continue
+                if abs(period_ts - now_ts) <= current_window:
+                    valid_periods.append(period)
+
+            if valid_periods:
+                period = min(
+                    valid_periods,
+                    key=lambda p: abs(int(p.get("timestamp", now_ts)) - now_ts),
+                )
+            else:
+                period = periods[0]
+
+            period_ts = period.get("timestamp") or forecast_data.get("timestamp") or now_ts
+            point_ts = period_ts
+
+            value = self._extract_aqi_value_from_period(period, observation, obs_map)
+
+            if value is None:
+                return None
+
+            return [float(point_ts) * 1000, float(value)]
+        except Exception:
+            return None
+
+    def _get_current_conditions_aqi_point(self, observation, fallback_ts=None):
+        """Return AQI data from current_conditions.json if it is available.
+
+        This is intentionally limited to the current snapshot rather than any
+        historical forecast periods.
+        """
+
+        try:
+            html_root = os.path.join(
+                self.config_dict["WEEWX_ROOT"],
+                self.skin_dict["HTML_ROOT"],
+            )
+            current_conditions_file = os.path.join(
+                html_root, "json", "current_conditions.json"
+            )
+            if not os.path.isfile(current_conditions_file):
+                return None
+
+            with open(current_conditions_file, "r", encoding="utf-8") as fh:
+                current_data = json.load(fh)
+
+            current_payload = (current_data.get("current") or [{}])[0] or {}
+            point_ts = current_data.get("timestamp") or fallback_ts or int(time.time())
+
+            # Try the most direct/current payload shapes first, then a couple
+            # of common nested structures returned by Xweather/Aeris.
+            candidate_payloads = [
+                current_payload,
+                current_payload.get("response") if isinstance(current_payload, dict) else None,
+                current_payload.get("ob") if isinstance(current_payload, dict) else None,
+            ]
+
+            for candidate in candidate_payloads:
+                if candidate is None:
+                    continue
+
+                if isinstance(candidate, list):
+                    for item in candidate:
+                        if not isinstance(item, dict):
+                            continue
+                        point = self._extract_aqi_value_from_container(
+                            item, observation, point_ts
+                        )
+                        if point is not None:
+                            return point
+                elif isinstance(candidate, dict):
+                    point = self._extract_aqi_value_from_container(
+                        candidate, observation, point_ts
+                    )
+                    if point is not None:
+                        return point
+
+            return None
+        except Exception:
+            return None
+
+    def _extract_aqi_value_from_period(self, period, observation, obs_map):
+        """Extract a value from an AQI period or snapshot payload."""
+
+        obs_def = obs_map.get(observation)
+        if obs_def is None:
+            return None
+
+        if obs_def["pollutant"] is None:
+            return period.get(obs_def["value_key"])
+
+        pollutants = period.get("pollutants") or []
+        pollutant = next(
+            (
+                p
+                for p in pollutants
+                if str(p.get("type", "")).lower() == obs_def["pollutant"]
+            ),
+            None,
+        )
+        if pollutant is None:
+            return None
+        return pollutant.get(obs_def["value_key"])
+
+    def _extract_aqi_value_from_container(self, container, observation, point_ts):
+        """Extract an AQI point from a container that may hold current data."""
+
+        obs_map = {
+            "aqi": {"pollutant": None, "value_key": "aqi"},
+            "pm2_5": {"pollutant": "pm2.5", "value_key": "valueUGM3"},
+            "pm10": {"pollutant": "pm10", "value_key": "valueUGM3"},
+            "o3": {"pollutant": "o3", "value_key": "valuePPB"},
+            "co": {"pollutant": "co", "value_key": "valuePPB"},
+            "no2": {"pollutant": "no2", "value_key": "valuePPB"},
+            "so2": {"pollutant": "so2", "value_key": "valuePPB"},
+        }
+
+        if observation not in obs_map:
+            return None
+
+        # Direct value on the container
+        if observation == "aqi" and container.get("aqi") is not None:
+            return [float(point_ts) * 1000, float(container.get("aqi"))]
+
+        # Nested current observation/forecast structures
+        if "periods" in container and container["periods"]:
+            value = self._extract_aqi_value_from_period(
+                container["periods"][0], observation, obs_map
+            )
+            if value is not None:
+                return [float(point_ts) * 1000, float(value)]
+
+        if "pollutants" in container and container["pollutants"]:
+            value = self._extract_aqi_value_from_period(container, observation, obs_map)
+            if value is not None:
+                return [float(point_ts) * 1000, float(value)]
+
+        if "response" in container:
+            response = container["response"]
+            if isinstance(response, dict):
+                if response.get("ob"):
+                    return self._extract_aqi_value_from_container(
+                        response["ob"], observation, point_ts
+                    )
+                if response.get("periods"):
+                    return self._extract_aqi_value_from_container(
+                        {"periods": response["periods"]}, observation, point_ts
+                    )
+            elif isinstance(response, list) and response:
+                for item in response:
+                    if not isinstance(item, dict):
+                        continue
+                    point = self._extract_aqi_value_from_container(
+                        item, observation, point_ts
+                    )
+                    if point is not None:
+                        return point
+
+        return None
+
     def get_observation_data(
         self,
         binding,
@@ -3829,6 +4060,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             log.error(
                 f"Error trying to use database binding {binding} to graph observation {obs_lookup}. Error was: {e}."
             )
+            forecast_point = self._get_forecast_aqi_point(observation, end_ts)
+            if forecast_point is not None:
+                log.info(
+                    f"Using forecast.json AQI fallback for observation '{observation}'"
+                )
+                return [forecast_point]
+            return []
 
         self.insert_null_value_timestamps_to_end_ts(
             time_start_vt, time_stop_vt, obs_vt, start_ts, end_ts, aggregate_interval
@@ -3911,6 +4149,17 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         # If the values are to be mirrored, we need to make them negative
         if mirrored_value:
             obs_round_vt = [-x if x is not None else None for x in obs_round_vt]
+
+        # If the archive lookup produced no usable data, fall back to the
+        # forecast-backed AQI observations when available. This covers the
+        # common case where the observation is intentionally not stored in the
+        # archive database, but the value is present in forecast.json.
+        forecast_point = self._get_forecast_aqi_point(observation, end_ts)
+        if forecast_point is not None and not any(x is not None for x in obs_round_vt):
+            log.info(
+                f"Using forecast.json AQI fallback for observation '{observation}' after empty archive result"
+            )
+            return [forecast_point]
 
         time_ms = [float(x) * 1000 for x in point_timestamp[0]]
         data = zip(time_ms, obs_round_vt)

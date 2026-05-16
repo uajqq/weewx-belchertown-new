@@ -2919,7 +2919,7 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             // Configure gauge chart formatting
-            if (options.chart.type == "gauge") {
+            if (options.chart.type == "gauge" && observation_type != "aqiChart") {
                 // Highcharts does not allow the guage background to have rounded ends. To get around
                 // this, define a "dummy" series that fills the gauge with the appropriate color.
                 // This way, the ends are rounded if the user specifies.
@@ -2959,6 +2959,18 @@ function showChart(json_file, prepend_renderTo = false) {
                 if (options.series[0].yAxis_min) {
                     options.yAxis.min = parseFloat(options.series[0].yAxis_min);
                 }
+                options.yAxis.title = {
+                    text: null,
+                    enabled: false,
+                }
+
+                var gaugeUnitLabel = options.series[0].yAxis_label_unit;
+                if (!gaugeUnitLabel && options.series[0].yAxis_label) {
+                    var gaugeUnitMatch = String(options.series[0].yAxis_label).match(/\(([^)]+)\)\s*$/);
+                    if (gaugeUnitMatch) {
+                        gaugeUnitLabel = gaugeUnitMatch[1];
+                    }
+                }
 
                 // Build color stops from colorX / colorX_position pairs if defined
                 var customColorStops = [];
@@ -2991,7 +3003,9 @@ function showChart(json_file, prepend_renderTo = false) {
                         dataLabels: {
                             useHTML: true,
                             enabled: true,
+                            y: -30,
                             borderWidth: 0,
+                            format: '<span style="text-align:center">{y:.' + (options.series[0].rounding >= 0 ? parseInt(options.series[0].rounding, 10) : 0) + 'f}</span><br><span style="font-size:14px;text-align:center">' + (gaugeUnitLabel || '') + '</span>',
                             style: {
                                 fontWeight: 'bold',
                                 lineHeight: '0.5em',
