@@ -1983,7 +1983,8 @@ class getData(SearchList):
             elif obs == "cloud_cover":
                 obs_output = cloud_cover
             elif obs == "aqi":
-                obs_output = aqi
+                aqi_unit = aqi_category if aqi_category else label_dict["aqi_unknown"]
+                obs_output = f"{aqi} ({aqi_unit})"
             elif obs == "UV":
                 obs_output = getattr(current, "UV")
                 if str(obs_output) in ("N/A", "?") and forecast_uv != "N/A":
@@ -2813,6 +2814,16 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         "yAxis_label"
                     ] = yAxis_label
 
+                    # AQI gauge "unit" should be category text (Good,
+                    # Unhealthy, etc.) when available.
+                    if observation_type == "aqi":
+                        try:
+                            output[chart_group][plotname]["series"][line_name][
+                                "yAxis_label_unit"
+                            ] = aqi_category if aqi_category else label_dict["aqi_unknown"]
+                        except Exception:
+                            pass
+
                     # Check for average type:
                     average_type = line_options.get("average_type")
                     if average_type in (None, "", "None", "none"):
@@ -3624,12 +3635,6 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 "range_unit_label": obs_unit_label,
             }
 
-            return data
-
-        if observation == "aqiChart":
-            global aqi
-            global aqi_category
-            data = {"aqiChart": True, "obsdata": [{"y": aqi, "category": aqi_category}]}
             return data
 
         # Hays chart
