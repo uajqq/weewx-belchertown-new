@@ -3338,7 +3338,87 @@ function showChart(json_file, prepend_renderTo = false) {
             // Wind rose and category charts must use Highcharts.chart(), not stockChart()
             // Highstock forces a datetime axis internally and ignores type: 'category'
             // weatherRange always uses datetime data even when xAxis_categories provides custom labels
-            var useStockChart = (observation_type !== "windRose") && (xAxis_categories.length === 0 || observation_type === "weatherRange");
+
+            // Wind barb chart: mirrors https://www.highcharts.com/samples/highcharts/demo/windbarb-series
+            // A line series shows wind speed; a windbarb series shows direction/Beaufort.
+            // shared:true tooltip combines both rows into one popup automatically.
+            // Search all series for the windBarb one so its position in graphs.conf does not matter.
+            var windBarbSeries = null;
+            for (var wbj = 0; wbj < options.series.length; wbj++) {
+                if (options.series[wbj].obsType === "windBarb") {
+                    windBarbSeries = options.series[wbj];
+                    break;
+                }
+            }
+            if (windBarbSeries) {
+                // Build timestamp → direction lookup from raw data before it is converted.
+                var wbDataMap = {};
+                windBarbSeries.data.forEach(function(d) {
+                    if (d[2] !== null) {
+                        wbDataMap[d[0]] = d[2]; // d[0]=ts, d[2]=direction
+                    }
+                });
+
+                // Wind speed line series — carry rounding/obsType so the default formatter works
+                options.series.push({
+                    type: "line",
+                    id: "windbarb-windspeed",
+                    name: windBarbSeries.name,
+                    data: windBarbSeries.windspeedData,
+                    color: windBarbSeries.color,
+                    obsType: windBarbSeries.obsType,
+                    rounding: windBarbSeries.rounding,
+                    numberFormat: windBarbSeries.numberFormat,
+                    showInLegend: true,
+                    states: {
+                        inactive: { opacity: 1 }
+                    }
+                });
+
+                // Reconfigure as a Highcharts windbarb series
+                windBarbSeries.type = "windbarb";
+                windBarbSeries.showInLegend = false;
+                windBarbSeries.vectorLength = 30;
+                windBarbSeries.enableMouseTracking = false;
+                delete windBarbSeries.tooltip;
+
+                // Convert [[ts, m/s, dir], ...] to [{x: , value: , direction: }, ...]
+                // Keep zero-speed (calm) points even when direction is null; Highcharts
+                // windbarb renders a circle for value=0 to indicate calm conditions.
+                windBarbSeries.data = windBarbSeries.data
+                    .filter(function(d) { return d[1] !== null && (d[2] !== null || d[1] === 0); })
+                    .map(function(d) { return {x: d[0], value: d[1], direction: d[2] !== null ? d[2] : 0}; });
+
+                // Custom tooltip: show wind speed (respecting rounding) plus direction.
+                // The windbarb series is excluded from this.points (enableMouseTracking:false),
+                // so direction is appended via wbDataMap instead.
+                options.tooltip = {
+                    split: true,
+                    formatter: function() {
+                        var header = tzAdjustedMoment(this.x / 1000).format(tooltip_date_format);
+                        var direction = wbDataMap[this.x];
+                        var rows = this.points.map(function(point) {
+                            var point_obsType = point.series.userOptions.observation_type ? point.series.userOptions.observation_type : point.series.userOptions.obsType;
+                            var rounding = point.series.userOptions.rounding;
+                            var mirrored = point.series.userOptions.mirrored_value;
+                            var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
+                            var row = "<span style='color:" + point.series.color + "'>\u25CF</span> " +
+                                point.series.name + ": " +
+                                highcharts_tooltip_factory(point.y, point_obsType, true, rounding, mirrored, numberFormat);
+                            if (typeof direction !== "undefined") {
+                                row += "<br/>" + highcharts_tooltip_factory(direction, "windDir", true, 0, false, "");
+                            }
+                            return row;
+                        });
+                        return [header].concat(rows);
+                    }
+                };
+
+                options.xAxis.type = "datetime";
+                options.xAxis.offset = 40;
+            }
+
+            var useStockChart = (observation_type !== "windRose") && !windBarbSeries && (xAxis_categories.length === 0 || observation_type === "weatherRange");
             var chart = useStockChart ? Highcharts.stockChart(options) : Highcharts.chart(options);
 
             // If using debug, show a copy paste debug for use with jsfiddle

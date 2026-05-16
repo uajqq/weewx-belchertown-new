@@ -2339,6 +2339,11 @@ input:checked+.slider:before {
 
 /* End Dark Mode Switch */
 
+/* Dark mode: windbarb series — restore stroke-width zeroed out by .dark .highcharts-point rule */
+.dark .highcharts-windbarb-series .highcharts-point {
+  stroke-width: 2px;
+}
+
 /* Dark mode: snapshot period drop-down selects */
 .dark .snapshot-period-select {
   background-color: #375a7f;

@@ -2407,13 +2407,26 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 output[chart_group][plotname]["options"]["type"] = plottype
 
                 # gapsize has to be in milliseconds. Take the graphs.conf value
-                # and multiply by 1000
-                gapsize = plot_options.get(
-                    "gapsize", 300
-                )  # Default to 5 minutes in millis
+                # and multiply by 1000.
+                # Also ensure gapsize is never smaller than the chart's own
+                # aggregate_interval: if a parent section sets gapsize=86400 and a
+                # child chart overrides aggregate_interval=week (604800 s), the
+                # inherited gapsize would cause every weekly data-point gap to be
+                # treated as a break and the line series would disappear entirely.
+                gapsize = int(plot_options.get("gapsize", 300))  # default 5 minutes
+                chart_agg_interval_raw = plot_options.get("aggregate_interval", None)
+                if chart_agg_interval_raw:
+                    try:
+                        chart_agg_interval_s = int(
+                            weeutil.weeutil.nominal_spans(chart_agg_interval_raw)
+                        )
+                        if chart_agg_interval_s > gapsize:
+                            gapsize = chart_agg_interval_s
+                    except Exception:
+                        pass
                 if gapsize:
                     output[chart_group][plotname]["options"]["gapsize"] = (
-                        int(gapsize) * 1000
+                        gapsize * 1000
                     )
 
                 connectNulls = plot_options.get("connectNulls", "false")
@@ -2715,7 +2728,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         and weatherRange_obs_lookup is not None
                     ):
                         obs_label = weatherRange_obs_lookup
+                    elif observation_type == "windBarb":
+                        wind_obs = line_options.get("wind_obs", "windSpeed")
+                        if wind_obs not in ("windSpeed", "windGust"):
+                            wind_obs = "windSpeed"
+                        obs_label = wind_obs
+                        name = label_dict[wind_obs]
                     else:
+                        wind_obs = "windSpeed"
                         obs_label = observation_type
                     unit_label = line_options.get(
                         "yAxis_label_unit",
@@ -2832,6 +2852,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             rounding_obs_lookup = weatherRange_obs_lookup
                         elif observation_type == "haysChart":
                             rounding_obs_lookup = "windSpeed"
+                        elif observation_type == "windBarb":
+                            rounding_obs_lookup = wind_obs
                         else:
                             rounding_obs_lookup = observation_type
                         try:
@@ -2901,6 +2923,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         wind_rose_color,
                         special_target_unit,
                         obs_round,
+                        wind_obs=wind_obs if observation_type == "windBarb" else "windSpeed",
                     )
 
                     # Build the final series data JSON
@@ -2922,6 +2945,20 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             output[chart_group][plotname]["series"][line_name][
                                 "range_unit_label"
                             ] = series_data["range_unit_label"]
+
+                        elif "windBarb" in series_data:
+                            output[chart_group][plotname]["series"][line_name][
+                                "windBarb"
+                            ] = True
+                            output[chart_group][plotname]["series"][line_name][
+                                "obs_unit"
+                            ] = series_data["obs_unit"]
+                            output[chart_group][plotname]["series"][line_name][
+                                "obs_unit_label"
+                            ] = series_data["obs_unit_label"]
+                            output[chart_group][plotname]["series"][line_name][
+                                "windspeedData"
+                            ] = list(series_data["windspeedData"])
 
                         # No matter what, reset data back to just the series
                         # data and not a dict of values
@@ -2972,6 +3009,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         wind_rose_color,
         special_target_unit,
         obs_round,
+        wind_obs="windSpeed",
     ):
         """
         Get the SQL vectors for the observation, the aggregate type and the
@@ -3006,10 +3044,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_type,
                 aggregate_interval,
             )
-            # Round to 0 decimal places for wind direction
-            windDir_round_vt = [
-                round(x) if x is not None else None for x in windDir_vt[0]
-            ]
+            windDir_vals = list(windDir_vt[0])
 
             (time_start_vt, time_stop_vt, windSpeed_vt) = weewx.xtypes.get_series(
                 "windSpeed",
@@ -3022,7 +3057,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             usage_round = int(
                 skin_dict["Units"]["StringFormats"].get(windSpeed_vt[2], "2f")[-2]
             )
-            windSpeed_round_vt = [
+            windSpeed_vals = [
                 round(x, usage_round) if x is not None else None
                 for x in windSpeed_vt[0]
             ]
@@ -3069,7 +3104,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 thresholds = [1, 4, 8, 13, 19, 25]  # Default to mph
 
             # Process wind data efficiently
-            for windDir, windSpeed in zip(windDir_round_vt, windSpeed_round_vt):
+            for windDir, windSpeed in zip(windDir_vals, windSpeed_vals):
                 if windDir is not None and windSpeed is not None:
                     # Determine group index based on thresholds
                     group_idx = 6  # Default to highest group
@@ -3379,6 +3414,144 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             }
 
             return data
+
+        # Belchertown wind barb chart
+        if observation == "windBarb":
+            start_ts = int(start_ts)
+            end_ts = int(end_ts)
+            timespan = TimeSpan(start_ts, end_ts)
+
+            # Fetch wind speed (windSpeed or windGust based on wind_obs option)
+            try:
+                (time_start_vt, time_stop_vt, windSpeed_vt) = weewx.xtypes.get_series(
+                    wind_obs,
+                    timespan,
+                    archive,
+                    aggregate_type,
+                    aggregate_interval,
+                )
+            except Exception as e:
+                log.error(
+                    f"Error trying to use database binding {binding} to graph "
+                    f"observation {wind_obs} (windBarb). Error was: {e}."
+                )
+                return []
+
+            self.insert_null_value_timestamps_to_end_ts(
+                time_start_vt,
+                time_stop_vt,
+                windSpeed_vt,
+                start_ts,
+                end_ts,
+                aggregate_interval,
+            )
+
+            # Convert windSpeed to the user's display unit (used for the line series)
+            display_vt = self.converter.convert(windSpeed_vt)
+            obs_unit = display_vt[1]
+            obs_unit_label = skin_dict["Units"]["Labels"].get(obs_unit, "")
+            windSpeed_display = list(display_vt[0])
+
+            # Highcharts uses m/s to determine the number of barbs drawn.
+            # When aggregating, always use the *maximum* speed in each interval
+            # so the barb count reflects the peak conditions rather than an
+            # average.
+            ms_converter = weewx.units.Converter({"group_speed": "meter_per_second"})
+            if aggregate_interval and aggregate_type != "max":
+                try:
+                    (_, _, windSpeed_max_vt) = weewx.xtypes.get_series(
+                        wind_obs,
+                        timespan,
+                        archive,
+                        "max",
+                        aggregate_interval,
+                    )
+                    ms_vt = ms_converter.convert(windSpeed_max_vt)
+                except Exception:
+                    ms_vt = ms_converter.convert(windSpeed_vt)
+            else:
+                ms_vt = ms_converter.convert(windSpeed_vt)
+            windSpeed_ms = [
+                x if x is not None else 0 for x in ms_vt[0]
+            ]
+
+            # Fetch windDir. When aggregating:
+            #   - "vecdir" is requested: use vecdir (speed-weighted vector mean direction),
+            #     which correctly handles the 0/360 wraparound and is the most
+            #     meteorologically accurate mean-wind direction aggregate.
+            #   - otherwise: use "gustdir" (direction at the time of the peak gust),
+            #     which avoids max(degrees) picking 360° purely because it is
+            #     numerically largest. Falls back to "avg" if gustdir is unsupported.
+            if aggregate_interval:
+                winddir_agg_type = "vecdir" if aggregate_type == "vecdir" else "gustdir"
+            else:
+                winddir_agg_type = aggregate_type
+            try:
+                (_, _, windDir_vt) = weewx.xtypes.get_series(
+                    "windDir",
+                    timespan,
+                    archive,
+                    winddir_agg_type,
+                    aggregate_interval,
+                )
+            except Exception:
+                # vecdir failed (e.g. custom binding without windSpeed) → try gustdir
+                # gustdir failed (e.g. no windGust column) → try avg
+                if winddir_agg_type == "vecdir":
+                    winddir_agg_type = "gustdir"
+                else:
+                    winddir_agg_type = "avg" if aggregate_interval else aggregate_type
+                try:
+                    (_, _, windDir_vt) = weewx.xtypes.get_series(
+                        "windDir",
+                        timespan,
+                        archive,
+                        winddir_agg_type,
+                        aggregate_interval,
+                    )
+                except Exception:
+                    # Second fallback: avg
+                    winddir_agg_type = "avg" if aggregate_interval else aggregate_type
+                    try:
+                        (_, _, windDir_vt) = weewx.xtypes.get_series(
+                            "windDir",
+                            timespan,
+                            archive,
+                            winddir_agg_type,
+                            aggregate_interval,
+                        )
+                    except Exception as e:
+                        log.error(
+                            f"Error trying to use database binding {binding} to graph "
+                            f"observation windDir (windBarb). Error was: {e}."
+                        )
+                        return []
+
+            windDir_vals = list(windDir_vt[0])
+
+            # Convert timestamps to milliseconds
+            time_ms = [float(x) * 1000 for x in time_start_vt[0]]
+
+            # Wind speed pairs for the line series: [ts_ms, display_speed]
+            windspeed_data = [
+                [ts, spd]
+                for ts, spd in zip(time_ms, windSpeed_display)
+            ]
+
+            # Windbarb triples: [ts_ms, m/s_speed, direction]
+            windbarb_data = [
+                [ts, spd_ms, dr]
+                for ts, spd_ms, dr in zip(time_ms, windSpeed_ms, windDir_vals)
+                if dr is not None
+            ]
+
+            return {
+                "windBarb": True,
+                "obsdata": windbarb_data,
+                "windspeedData": windspeed_data,
+                "obs_unit": obs_unit,
+                "obs_unit_label": obs_unit_label,
+            }
 
         # Special Belchertown Skin rain counter
         if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
