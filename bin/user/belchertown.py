@@ -1988,6 +1988,16 @@ class getData(SearchList):
                 obs_output = getattr(current, "UV")
                 if str(obs_output) in ("N/A", "?") and forecast_uv != "N/A":
                     obs_output = forecast_uv
+                elif str(obs_output) not in ("N/A", "?"):
+                    # Ensure station UV respects configured UV rounding
+                    # preferences, defaulting to a whole integer.
+                    try:
+                        obs_output = uv_format % float(obs_output)
+                    except Exception:
+                        try:
+                            obs_output = "%.0f" % float(obs_output)
+                        except Exception:
+                            pass
             else:
                 # Only call getattr for observations not handled above.
                 obs_output = getattr(current, obs)
@@ -2888,16 +2898,21 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             rounding_obs_lookup = wind_obs
                         else:
                             rounding_obs_lookup = observation_type
-                        try:
-                            obs_group = weewx.units.obs_group_dict[rounding_obs_lookup]
-                            obs_unit = self.converter.group_unit_dict[obs_group]
-                            obs_round = self.skin_dict["Units"]["StringFormats"].get(
-                                obs_unit, "0"
-                            )[2]
-                        except Exception:
-                            # Not a valid WeeWX schema name - maybe this is
-                            # windRose or something?
-                            obs_round = -1
+                        if rounding_obs_lookup == "UV":
+                            # UV defaults to whole integers unless explicitly
+                            # overridden in graphs.conf numberFormat.decimals.
+                            obs_round = 0
+                        else:
+                            try:
+                                obs_group = weewx.units.obs_group_dict[rounding_obs_lookup]
+                                obs_unit = self.converter.group_unit_dict[obs_group]
+                                obs_round = self.skin_dict["Units"]["StringFormats"].get(
+                                    obs_unit, "0"
+                                )[2]
+                            except Exception:
+                                # Not a valid WeeWX schema name - maybe this is
+                                # windRose or something?
+                                obs_round = -1
                     output[chart_group][plotname]["series"][line_name][
                         "rounding"
                     ] = obs_round
