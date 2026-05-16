@@ -1115,16 +1115,14 @@ class getData(SearchList):
                         data = json.load(read_file)
                     try:
                         current_conditions_data = data["current"][0]
+                        # Provider contract (Pirate Weather normalized payload):
+                        # UV is read from uvIndex only.
                         uv_val = current_conditions_data.get("uvIndex")
-                        if uv_val is None:
-                            uv_val = current_conditions_data.get("uvi")
-                        if uv_val is None:
-                            uv_val = current_conditions_data.get("uv")
                         if uv_val is not None:
                             try:
                                 forecast_uv = uv_format % float(uv_val)
                             except Exception:
-                                forecast_uv = locale.format_string("%g", float(uv_val))
+                                forecast_uv = "%.0f" % float(uv_val)
                         vis_val = current_conditions_data.get("visibility")
                         if forecast_units in ("si", "ca"):
                             visibility = (
@@ -1589,22 +1587,23 @@ class getData(SearchList):
                         cloud_cover = ""
 
                     try:
-                        uv_val = current_conditions_data.get("uvIndex")
-                        if uv_val is None:
-                            uv_val = current_conditions_data.get("uvi")
-                        if uv_val is None:
-                            uv_val = current_conditions_data.get("uv")
+                        # Provider contract (Xweather/Aeris current payload):
+                        # UV is read from uvi only.
+                        uv_val = current_conditions_data.get("uvi")
                         if uv_val is not None:
                             try:
                                 forecast_uv = uv_format % float(uv_val)
                             except Exception:
-                                forecast_uv = locale.format_string("%g", float(uv_val))
+                                forecast_uv = "%.0f" % float(uv_val)
                     except Exception:
                         pass
 
                     # Process the forecast file and the Current Conditions data
                     with open(forecast_file, "r", encoding="utf-8") as read_file:
                         data = json.load(read_file)
+
+                    # UV must come only from current conditions, never from
+                    # forecast/history periods.
 
                     try:
                         if data["aqi"][0]["response"]:
@@ -3029,6 +3028,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         sourced from current_conditions.json first, then forecast.json, or
         None if unavailable.
 
+        Extraction contracts used here are strict and provider-specific:
+        - UV comes only from current_conditions.json.
+        - Xweather/Aeris AQI/pollutants use response[].periods[] schema keys.
+
         Supported observation names:
         - aqi
         - pm2_5
@@ -3048,11 +3051,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             "co": {"pollutant": "co", "value_key": "valuePPB"},
             "no2": {"pollutant": "no2", "value_key": "valuePPB"},
             "so2": {"pollutant": "so2", "value_key": "valuePPB"},
-            "UV": {
-                "pollutant": None,
-                "value_key": "uvIndex",
-                "direct_keys": ["uvIndex", "uvi", "uv"],
-            },
+            "UV": {"pollutant": None, "value_key": "uvIndex"},
         }
 
         if observation not in obs_map:
@@ -3065,6 +3064,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if current_point is not None:
                 return current_point
 
+            # UV is current-only by contract: do not read forecast/history.
+            if observation == "UV":
+                return None
+
             html_root = os.path.join(
                 self.config_dict["WEEWX_ROOT"],
                 self.skin_dict["HTML_ROOT"],
@@ -3075,49 +3078,6 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
             with open(forecast_file, "r", encoding="utf-8") as fh:
                 forecast_data = json.load(fh)
-
-            # UV fallback from forecast.json (current snapshot preferred,
-            # nearest hourly point as backup)
-            if observation == "UV":
-                now_ts = int(fallback_ts or time.time())
-
-                current_payload = forecast_data.get("current") or {}
-                current_uv = self._extract_aqi_value_from_period(
-                    current_payload, observation, obs_map
-                )
-                if current_uv is not None:
-                    point_ts = (
-                        current_payload.get("time")
-                        or current_payload.get("timestamp")
-                        or forecast_data.get("generated_at")
-                        or now_ts
-                    )
-                    return [float(point_ts) * 1000, float(current_uv)]
-
-                hourly = forecast_data.get("hourly") or []
-                if hourly:
-                    hourly_with_uv = []
-                    for hour in hourly:
-                        if not isinstance(hour, dict):
-                            continue
-                        hour_uv = self._extract_aqi_value_from_period(
-                            hour, observation, obs_map
-                        )
-                        if hour_uv is None:
-                            continue
-                        hour_ts = hour.get("time") or hour.get("timestamp")
-                        try:
-                            hour_ts = int(hour_ts)
-                        except (TypeError, ValueError):
-                            continue
-                        hourly_with_uv.append((hour_ts, hour_uv))
-
-                    if hourly_with_uv:
-                        point_ts, value = min(
-                            hourly_with_uv,
-                            key=lambda p: abs(p[0] - now_ts),
-                        )
-                        return [float(point_ts) * 1000, float(value)]
 
             aqi_array = forecast_data.get("aqi") or []
             if not aqi_array:
@@ -3193,6 +3153,12 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             current_payload = (current_data.get("current") or [{}])[0] or {}
             point_ts = current_data.get("timestamp") or fallback_ts or int(time.time())
 
+            # current_conditions.json shape determines provider-specific UV key:
+            # this is strict mapping, not fallback probing.
+            # - Pirate Weather normalized current payloads use uvIndex
+            # - Xweather/Aeris current payloads are wrapped in response and use uvi
+            uv_value_key = "uvi" if isinstance(current_payload, dict) and "response" in current_payload else "uvIndex"
+
             # Try the most direct/current payload shapes first, then a couple
             # of common nested structures returned by Xweather/Aeris.
             candidate_payloads = [
@@ -3210,13 +3176,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         if not isinstance(item, dict):
                             continue
                         point = self._extract_aqi_value_from_container(
-                            item, observation, point_ts
+                            item, observation, point_ts, uv_value_key
                         )
                         if point is not None:
                             return point
                 elif isinstance(candidate, dict):
                     point = self._extract_aqi_value_from_container(
-                        candidate, observation, point_ts
+                        candidate, observation, point_ts, uv_value_key
                     )
                     if point is not None:
                         return point
@@ -3226,15 +3192,15 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             return None
 
     def _extract_aqi_value_from_period(self, period, observation, obs_map):
-        """Extract a value from an AQI period or snapshot payload."""
+        """Extract a value from an AQI period or snapshot payload.
+
+        This function intentionally uses exact keys from obs_map and does not
+        perform multi-key alias probing.
+        """
 
         obs_def = obs_map.get(observation)
         if obs_def is None:
             return None
-
-        for key in obs_def.get("direct_keys", []):
-            if period.get(key) is not None:
-                return period.get(key)
 
         if obs_def["pollutant"] is None:
             return period.get(obs_def["value_key"])
@@ -3252,7 +3218,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             return None
         return pollutant.get(obs_def["value_key"])
 
-    def _extract_aqi_value_from_container(self, container, observation, point_ts):
+    def _extract_aqi_value_from_container(
+        self, container, observation, point_ts, uv_value_key="uvIndex"
+    ):
         """Extract an AQI/UV point from a container that may hold current data."""
 
         obs_map = {
@@ -3263,11 +3231,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             "co": {"pollutant": "co", "value_key": "valuePPB"},
             "no2": {"pollutant": "no2", "value_key": "valuePPB"},
             "so2": {"pollutant": "so2", "value_key": "valuePPB"},
-            "UV": {
-                "pollutant": None,
-                "value_key": "uvIndex",
-                "direct_keys": ["uvIndex", "uvi", "uv"],
-            },
+            "UV": {"pollutant": None, "value_key": uv_value_key},
         }
 
         if observation not in obs_map:
@@ -3298,18 +3262,18 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if isinstance(response, dict):
                 if response.get("ob"):
                     return self._extract_aqi_value_from_container(
-                        response["ob"], observation, point_ts
+                        response["ob"], observation, point_ts, uv_value_key
                     )
                 if response.get("periods"):
                     return self._extract_aqi_value_from_container(
-                        {"periods": response["periods"]}, observation, point_ts
+                        {"periods": response["periods"]}, observation, point_ts, uv_value_key
                     )
             elif isinstance(response, list) and response:
                 for item in response:
                     if not isinstance(item, dict):
                         continue
                     point = self._extract_aqi_value_from_container(
-                        item, observation, point_ts
+                        item, observation, point_ts, uv_value_key
                     )
                     if point is not None:
                         return point
@@ -4160,6 +4124,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     f"Using forecast.json AQI fallback for observation '{observation}'"
                 )
                 return [forecast_point]
+            if observation == "UV":
+                log.info("UV unavailable: not present in database or current conditions")
             return []
 
         self.insert_null_value_timestamps_to_end_ts(
@@ -4254,6 +4220,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 f"Using forecast.json AQI fallback for observation '{observation}' after empty archive result"
             )
             return [forecast_point]
+        if observation == "UV" and not any(x is not None for x in obs_round_vt):
+            log.info("UV unavailable: not present in database or current conditions")
 
         time_ms = [float(x) * 1000 for x in point_timestamp[0]]
         data = zip(time_ms, obs_round_vt)
