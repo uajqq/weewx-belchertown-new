@@ -1256,21 +1256,23 @@ function update_forecast_data(data) {
         // AQI
         try {
         if (data["aqi"][0]["success"] && !data["aqi"][0]["error"]) {
-            jQuery(".wx-aqi").html(data["aqi"][0]["response"][0]["periods"][0]["aqi"]);
-            jQuery(".wx-aqi-category").html(aeris_aqi_translate(data["aqi"][0]["response"][0]["periods"][0]["category"]));
+            var aqiValue = data["aqi"][0]["response"][0]["periods"][0]["aqi"];
+            var aqiCategory = aeris_aqi_translate(data["aqi"][0]["response"][0]["periods"][0]["category"]);
+            jQuery(".wx-aqi").html(aqiValue);
+            jQuery(".wx-aqi-category").html(aqiCategory);
             if ("$Extras.aqi_location_enabled" === "1") jQuery(".aqi_location_outer").html("<br>" + data["aqi"][0]["response"][0]["place"]["name"]).css('textTransform', 'capitalize');
-            get_aqi_color(data["aqi"][0]["response"][0]["periods"][0]["aqi"]);
             try {
-                jQuery(".station-observations .aqi").html(data["aqi"][0]["response"][0]["periods"][0]["aqi"]);
+                jQuery(".station-observations .aqi").html(aqiValue + " (" + aqiCategory + ")");
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
         } else if (data["aqi"][0]["success"] && data["aqi"][0]["error"]["code"] === "warn_no_data") {
+            var aqiNoDataCategory = aeris_aqi_translate("");
             jQuery(".wx-aqi").html("No Data");
-            jQuery(".wx-aqi-category").html(aeris_aqi_translate(""));
+            jQuery(".wx-aqi-category").html(aqiNoDataCategory);
             if ("$Extras.aqi_location_enabled" === "1") jQuery(".aqi_location_outer").html("");
             try {
-                jQuery(".station-observations .aqi").html("No Data");
+                jQuery(".station-observations .aqi").html("No Data (" + aqiNoDataCategory + ")");
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
@@ -2319,6 +2321,8 @@ function showChart(json_file, prepend_renderTo = false) {
             xAxis_categories = [];
             plot_tooltip_date_format = undefined;
 
+            try {
+
             // Ignore the Belchertown Version since this "plot" has no other options
             if (plotname == "belchertown_version") {
                 return true;
@@ -3045,81 +3049,42 @@ function showChart(json_file, prepend_renderTo = false) {
                     options.series[0].data[1].color = new_gradient_temp(options.series[0].data[1]["y"], options.series[0].yAxis_min, options.series[0].yAxis_max)
                 }
 
+                // Always resolve a concrete gauge color for both the gauge and
+                // data labels, even if no custom color thresholds are defined.
+                if (!options.series[0].data[1].color) {
+                    options.series[0].data[1].color = options.series[0].color || (options.colors && options.colors[0]) || '#7cb5ec';
+                }
+
+                var gaugeDecimals = options.series[0].rounding >= 0 ? parseInt(options.series[0].rounding, 10) : 0;
+                var gaugeDisplayColor = options.series[0].data[1].color;
+                var gaugeDataLabelFormat = '<span style="display:block;text-align:center;color:' + gaugeDisplayColor + ' !important;">{y:.' + gaugeDecimals + 'f}</span>';
+                var gaugeDataLabelYOffset = -22;
+                var gaugeDataLabelLineHeight = '0.9em';
+                if (gaugeUnitLabel) {
+                    gaugeDataLabelFormat = gaugeDataLabelFormat + '<span style="display:block;font-size:17px;line-height:1em;margin-top:2px;text-align:center;color:' + gaugeDisplayColor + ' !important;">' + gaugeUnitLabel + '</span>';
+                    gaugeDataLabelYOffset = -24;
+                    gaugeDataLabelLineHeight = '0.95em';
+                }
+
                 options.plotOptions = {
                     solidgauge: {
                         dataLabels: {
                             useHTML: true,
                             enabled: true,
-                            y: -30,
+                            y: gaugeDataLabelYOffset,
                             borderWidth: 0,
-                            format: '<span style="text-align:center">{y:.' + (options.series[0].rounding >= 0 ? parseInt(options.series[0].rounding, 10) : 0) + 'f}</span><br><span style="font-size:14px;text-align:center">' + (gaugeUnitLabel || '') + '</span>',
+                            format: gaugeDataLabelFormat,
                             style: {
                                 fontWeight: 'bold',
-                                lineHeight: '0.5em',
+                                lineHeight: gaugeDataLabelLineHeight,
                                 textAlign: 'center',
                                 fontSize: '50px',
                                 // Match color if set by user
-                                color: options.series[0].data[1].color,
+                                color: gaugeDisplayColor,
                                 textOutline: 'none'
                             }
                         },
                     }
-                }
-                options.tooltip.enabled = false
-                options.xAxis.crosshair = false
-            }
-
-            // If AQI chart is present, configure a special chart
-            if (observation_type == "aqiChart") {
-                // Highcharts does not allow the guage background to have rounded ends. To get around
-                // this, define a "dummy" series that fills the gauge with the appropriate color.
-                // This way, the ends are rounded if the user specifies.
-                options.series[0].data = [{
-                    y: 500,
-                    color: '#e6e6e6',
-                    className: 'highcharts-pane',
-                    zIndex: 0,
-                    dataLabels: {enabled: false}
-                }, {
-                    y: options.series[0].data[0]['y'],
-                    color: get_aqi_color(options.series[0].data[0]['y'], true),
-                    category: options.series[0].data[0]['category']
-                }]
-                options.chart.type = "solidgauge"
-                options.pane = {
-                    startAngle: -140,
-                    endAngle: 140,
-                    background: [{
-                        outerRadius: 0,
-                        innerRadius: 0,
-                    }]
-                }
-                options.plotOptions = {
-                    solidgauge: {
-                        dataLabels: {
-                            useHTML: true,
-                            enabled: true,
-                            y: -30,
-                            borderWidth: 0,
-                            format: '<span style="text-align:center">{y}</span><br><span style="font-size:14px;text-align:center">' + options.series[0].data[1]['category'] + '</span>',
-                            style: {
-                                fontWeight: 'bold',
-                                lineHeight: '0.5em',
-                                textAlign: 'center',
-                                fontSize: '50px',
-                                color: options.series[0].data[1].color,
-                                textOutline: 'none'
-                            }
-                        },
-                        linecap: 'round',
-                        rounded: true
-                    }
-                }
-                options.yAxis = {
-                    min: 0,
-                    max: 500,
-                    lineColor: null,
-                    tickPositions: []
                 }
                 options.tooltip.enabled = false
                 options.xAxis.crosshair = false
@@ -3485,6 +3450,28 @@ function showChart(json_file, prepend_renderTo = false) {
             // If using debug, show a copy paste debug for use with jsfiddle
             belchertown_debug(options);
             belchertown_debug("Highcharts.chart('container', " + JSON.stringify(options) + ");");
+
+            } catch (e) {
+                // Keep rendering other charts even if one chart has invalid
+                // series/observation data.
+
+                // Add a visible placeholder for the skipped chart so users
+                // know why this chart is empty.
+                if (typeof options !== "undefined" && options.chart && options.chart.renderTo) {
+                    var failedChart = jQuery("#" + options.chart.renderTo);
+                    if (failedChart.length) {
+                        var unavailableObs = observation_type || plotname || "unknown observation";
+                        failedChart.html(
+                            '<div class="chart-unavailable" style="padding:14px 10px;text-align:center;color:#888;">' +
+                            '<div>Chart unavailable (missing or invalid observation)</div>' +
+                            '<div style="margin-top:6px;font-weight:500;">Observation: ' + unavailableObs + '</div>' +
+                            '</div>'
+                        );
+                    }
+                }
+
+                return true;
+            }
 
         });
 
