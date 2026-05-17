@@ -6,6 +6,9 @@
 ## If extended almanac information is available, do extra calculations.
 #if $almanac.hasExtras
   #import locale
+  #set $hour_short = $obs.label.hour_short if $obs.label.hour_short != "hour_short" else "h"
+  #set $minute_short = $obs.label.minute_short if $obs.label.minute_short != "minute_short" else "m"
+  #set $second_short = $obs.label.second_short if $obs.label.second_short != "second_short" else "s"
   #set $sunrise_ts = $almanac.sun.rise.raw
   #set $sunset_ts = $almanac.sun.set.raw
   #if $sunrise_ts and $sunset_ts
@@ -22,10 +25,10 @@
     #set $difference = $today_daylight - $yesterday_daylight
     #if $difference
       #set $delta = abs($difference)
-      #set $minute_difference = (int($delta) // 60)
-      #set $minutes_text = $obs.label.minute[0] if ( $minute_difference == 1 ) else $obs.label.minute[1]
-      #set $seconds_text = $obs.label.second[0] if ( int($delta) == 1 ) else $obs.label.second[1]
-      #set $amt_str = "%s%d %s" % (str(int($delta) // 60) + ' ' + $minutes_text + ' ' if ($delta // 60) > 0 else '', $delta % 60 if ($delta // 60) > 0 else $delta, $seconds_text)
+      #set $amt_hours = int($delta) // 3600
+      #set $amt_minutes = (int($delta) % 3600) // 60
+      #set $amt_seconds = int($delta) % 60
+      #set $amt_str = "%d%s %d%s %d%s" % ($amt_hours, $hour_short, $amt_minutes, $minute_short, $amt_seconds, $second_short)
       #if $difference > 0
         #if $obs.label.daylight_increase != "daylight_increase"
           #set $delta_str = "%s %s" % ( $amt_str, $obs.label.daylight_increase )
