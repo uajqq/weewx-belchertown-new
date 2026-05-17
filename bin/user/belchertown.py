@@ -68,6 +68,19 @@ HTTP_HEADERS = {
     },
 }
 
+# Shared AQI/pollutant extraction map for forecast/current-condition fallback.
+# UV value key is provider-dependent and is overridden at call sites when needed.
+AQI_OBS_MAP = {
+    "aqi": {"pollutant": None, "value_key": "aqi"},
+    "pm2_5": {"pollutant": "pm2.5", "value_key": "valueUGM3"},
+    "pm10": {"pollutant": "pm10", "value_key": "valueUGM3"},
+    "o3": {"pollutant": "o3", "value_key": "valuePPB"},
+    "co": {"pollutant": "co", "value_key": "valuePPB"},
+    "no2": {"pollutant": "no2", "value_key": "valuePPB"},
+    "so2": {"pollutant": "so2", "value_key": "valuePPB"},
+    "UV": {"pollutant": None, "value_key": "uvIndex"},
+}
+
 
 # Module-level helper functions for HTTP and JSON processing
 
@@ -3069,16 +3082,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         - UV
         """
 
-        obs_map = {
-            "aqi": {"pollutant": None, "value_key": "aqi"},
-            "pm2_5": {"pollutant": "pm2.5", "value_key": "valueUGM3"},
-            "pm10": {"pollutant": "pm10", "value_key": "valueUGM3"},
-            "o3": {"pollutant": "o3", "value_key": "valuePPB"},
-            "co": {"pollutant": "co", "value_key": "valuePPB"},
-            "no2": {"pollutant": "no2", "value_key": "valuePPB"},
-            "so2": {"pollutant": "so2", "value_key": "valuePPB"},
-            "UV": {"pollutant": None, "value_key": "uvIndex"},
-        }
+        obs_map = AQI_OBS_MAP
 
         if observation not in obs_map:
             return None
@@ -3143,8 +3147,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             else:
                 period = periods[0]
 
-            period_ts = period.get("timestamp") or forecast_data.get("timestamp") or now_ts
-            point_ts = period_ts
+            point_ts = period.get("timestamp") or forecast_data.get("timestamp") or now_ts
 
             value = self._extract_aqi_value_from_period(period, observation, obs_map)
 
@@ -3185,33 +3188,23 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             # - Xweather/Aeris current payloads are wrapped in response and use uvi
             uv_value_key = "uvi" if isinstance(current_payload, dict) and "response" in current_payload else "uvIndex"
 
-            # Try the most direct/current payload shapes first, then a couple
-            # of common nested structures returned by Xweather/Aeris.
-            candidate_payloads = [
-                current_payload,
-                current_payload.get("response") if isinstance(current_payload, dict) else None,
-                current_payload.get("ob") if isinstance(current_payload, dict) else None,
-            ]
-
-            for candidate in candidate_payloads:
-                if candidate is None:
-                    continue
-
-                if isinstance(candidate, list):
-                    for item in candidate:
-                        if not isinstance(item, dict):
-                            continue
-                        point = self._extract_aqi_value_from_container(
-                            item, observation, point_ts, uv_value_key
-                        )
-                        if point is not None:
-                            return point
-                elif isinstance(candidate, dict):
+            # Start from the top-level current payload. Nested response/ob/periods
+            # structures are traversed recursively by _extract_aqi_value_from_container.
+            if isinstance(current_payload, list):
+                for item in current_payload:
+                    if not isinstance(item, dict):
+                        continue
                     point = self._extract_aqi_value_from_container(
-                        candidate, observation, point_ts, uv_value_key
+                        item, observation, point_ts, uv_value_key
                     )
                     if point is not None:
                         return point
+            elif isinstance(current_payload, dict):
+                point = self._extract_aqi_value_from_container(
+                    current_payload, observation, point_ts, uv_value_key
+                )
+                if point is not None:
+                    return point
 
             return None
         except Exception:
@@ -3245,20 +3238,18 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         return pollutant.get(obs_def["value_key"])
 
     def _extract_aqi_value_from_container(
-        self, container, observation, point_ts, uv_value_key="uvIndex"
+        self,
+        container,
+        observation,
+        point_ts,
+        uv_value_key="uvIndex",
+        obs_map=None,
     ):
         """Extract an AQI/UV point from a container that may hold current data."""
 
-        obs_map = {
-            "aqi": {"pollutant": None, "value_key": "aqi"},
-            "pm2_5": {"pollutant": "pm2.5", "value_key": "valueUGM3"},
-            "pm10": {"pollutant": "pm10", "value_key": "valueUGM3"},
-            "o3": {"pollutant": "o3", "value_key": "valuePPB"},
-            "co": {"pollutant": "co", "value_key": "valuePPB"},
-            "no2": {"pollutant": "no2", "value_key": "valuePPB"},
-            "so2": {"pollutant": "so2", "value_key": "valuePPB"},
-            "UV": {"pollutant": None, "value_key": uv_value_key},
-        }
+        if obs_map is None:
+            obs_map = dict(AQI_OBS_MAP)
+            obs_map["UV"] = {"pollutant": None, "value_key": uv_value_key}
 
         if observation not in obs_map:
             return None
@@ -3278,28 +3269,35 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if value is not None:
                 return [float(point_ts) * 1000, float(value)]
 
-        if "pollutants" in container and container["pollutants"]:
-            value = self._extract_aqi_value_from_period(container, observation, obs_map)
-            if value is not None:
-                return [float(point_ts) * 1000, float(value)]
-
         if "response" in container:
             response = container["response"]
             if isinstance(response, dict):
                 if response.get("ob"):
                     return self._extract_aqi_value_from_container(
-                        response["ob"], observation, point_ts, uv_value_key
+                        response["ob"],
+                        observation,
+                        point_ts,
+                        uv_value_key,
+                        obs_map,
                     )
                 if response.get("periods"):
                     return self._extract_aqi_value_from_container(
-                        {"periods": response["periods"]}, observation, point_ts, uv_value_key
+                        {"periods": response["periods"]},
+                        observation,
+                        point_ts,
+                        uv_value_key,
+                        obs_map,
                     )
             elif isinstance(response, list) and response:
                 for item in response:
                     if not isinstance(item, dict):
                         continue
                     point = self._extract_aqi_value_from_container(
-                        item, observation, point_ts, uv_value_key
+                        item,
+                        observation,
+                        point_ts,
+                        uv_value_key,
+                        obs_map,
                     )
                     if point is not None:
                         return point
