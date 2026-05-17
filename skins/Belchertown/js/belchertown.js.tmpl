@@ -349,6 +349,179 @@ function beaufort_cat(beaufort) {
     }
 }
 
+function beaufort_to_knots(beaufort) {
+    var b = parseInt(beaufort, 10);
+    if (!isFinite(b) || b < 0) {
+        return null;
+    }
+    // Midpoint-style representative knot values by Beaufort number.
+    var scale = [0, 2, 5, 8, 13, 19, 24, 30, 37, 44, 52, 60, 68];
+    return scale[Math.min(b, 12)];
+}
+
+// #if $Extras.has_key('wind_compass_marker') and str($Extras.wind_compass_marker).strip() != ''
+var wind_compass_marker = "$Extras.wind_compass_marker";
+// #else
+var wind_compass_marker = "triangle";
+// #end if
+if (wind_compass_marker !== "windbarb") {
+    wind_compass_marker = "triangle";
+}
+
+// #if $Extras.has_key('wind_compass_source') and str($Extras.wind_compass_source).strip() != ''
+var wind_compass_source = "$Extras.wind_compass_source";
+// #else
+var wind_compass_source = "windSpeed";
+// #end if
+if (wind_compass_source !== "windGust") {
+    wind_compass_source = "windSpeed";
+}
+
+function knots_from_mqtt_payload(payload, obsName) {
+    var windObs = obsName || "windSpeed";
+
+    if (payload.hasOwnProperty(windObs + "_knot")) {
+        return parseFloat(payload[windObs + "_knot"]);
+    }
+    if (payload.hasOwnProperty(windObs + "_mph")) {
+        return parseFloat(payload[windObs + "_mph"]) * 0.8689758;
+    }
+    if (payload.hasOwnProperty(windObs + "_kph")) {
+        return parseFloat(payload[windObs + "_kph"]) * 0.5399568;
+    }
+    if (payload.hasOwnProperty(windObs + "_mps")) {
+        return parseFloat(payload[windObs + "_mps"]) * 1.943844;
+    }
+    if (payload.hasOwnProperty(windObs + "_beaufort")) {
+        return beaufort_to_knots(payload[windObs + "_beaufort"]);
+    }
+
+    return null;
+}
+
+function build_windbarb_svg(knots) {
+    var value = parseFloat(knots);
+    if (!isFinite(value) || value < 0) {
+        return "";
+    }
+
+    var rounded = Math.max(0, Math.round(value / 5) * 5);
+
+    var color = "#c50a1d";
+    var stroke = 5;
+    var shaftX = 50;
+    var shaftBottom = 88;
+    // Keep the inner/center section invisible so the direction text remains clear.
+    // Only render the outer/top part of the shaft.
+    var shaftVisibleBottom = 44;
+    var shaftTop = -12;
+    var barbLen = 22;
+    var barbStep = 8;
+    var pennantLen = 34;
+    var pennantHeight = 16;
+    var pennantGap = 8;
+    // Hard-coded visual slant tuned to match the pennant edge.
+    var barbRise = 5.18;
+    var barbY = shaftTop;
+
+    var parts = [];
+    parts.push('<line x1="' + shaftX + '" y1="' + shaftVisibleBottom + '" x2="' + shaftX + '" y2="' + shaftTop + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="butt"/>');
+
+    if (rounded >= 5) {
+        while (rounded >= 50) {
+            parts.push('<polygon points="' + shaftX + ',' + barbY + ' ' + shaftX + ',' + (barbY + pennantHeight) + ' ' + (shaftX + pennantLen) + ',' + (barbY + (pennantHeight / 2)) + '" fill="' + color + '"/>');
+            rounded -= 50;
+            barbY += pennantHeight + pennantGap;
+        }
+        while (rounded >= 10) {
+            parts.push('<line x1="' + shaftX + '" y1="' + barbY + '" x2="' + (shaftX + barbLen) + '" y2="' + (barbY - barbRise) + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="round"/>');
+            rounded -= 10;
+            barbY += barbStep;
+        }
+        if (rounded >= 5) {
+            parts.push('<line x1="' + shaftX + '" y1="' + barbY + '" x2="' + (shaftX + barbLen * 0.55) + '" y2="' + (barbY - (barbRise * 0.55)) + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="round"/>');
+        }
+    }
+
+    var viewBoxY = Math.min(0, shaftTop - pennantHeight - 4);
+    var viewBoxHeight = 100 - viewBoxY;
+
+    return '<svg class="windbarb-svg" viewBox="0 ' + viewBoxY + ' 100 ' + viewBoxHeight + '" aria-hidden="true" focusable="false">' + parts.join("") + '</svg>';
+}
+
+var live_wind_compass_state = {
+    windSpeedKnots: null,
+    windGustKnots: null,
+    direction: null,
+};
+
+function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
+    var rotation = parseFloat(direction);
+    var selectedKnots = wind_compass_source == "windGust" ? parseFloat(windGustKnots) : parseFloat(windSpeedKnots);
+    var arrow = jQuery(".arrow");
+
+    if (arrow.length === 0 || !isFinite(rotation)) {
+        return;
+    }
+
+    if (wind_compass_marker == "windbarb") {
+        arrow.addClass("windbarb-marker");
+        var svg = build_windbarb_svg(selectedKnots);
+        if (svg) {
+            arrow.html(svg);
+        }
+    } else {
+        arrow.removeClass("windbarb-marker").empty();
+    }
+
+    rotateThis(rotation);
+}
+
+function initialize_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
+    var parsedDirection = parseFloat(direction);
+    var parsedWindSpeedKnots = parseFloat(windSpeedKnots);
+    var parsedWindGustKnots = parseFloat(windGustKnots);
+
+    if (isFinite(parsedDirection)) {
+        live_wind_compass_state.direction = parsedDirection;
+    }
+    if (isFinite(parsedWindSpeedKnots)) {
+        live_wind_compass_state.windSpeedKnots = parsedWindSpeedKnots;
+    }
+    if (isFinite(parsedWindGustKnots)) {
+        live_wind_compass_state.windGustKnots = parsedWindGustKnots;
+    }
+
+    render_wind_compass_marker(
+        live_wind_compass_state.direction,
+        live_wind_compass_state.windSpeedKnots,
+        live_wind_compass_state.windGustKnots
+    );
+}
+
+function update_wind_compass_marker(payload) {
+    var direction = payload.hasOwnProperty("windDir") ? parseFloat(payload["windDir"]) : live_wind_compass_state.direction;
+    var windSpeedKnots = knots_from_mqtt_payload(payload, "windSpeed");
+    var windGustKnots = knots_from_mqtt_payload(payload, "windGust");
+
+    if (!isFinite(windSpeedKnots)) {
+        windSpeedKnots = live_wind_compass_state.windSpeedKnots;
+    }
+    if (!isFinite(windGustKnots)) {
+        windGustKnots = live_wind_compass_state.windGustKnots;
+    }
+
+    if (!isFinite(direction)) {
+        return;
+    }
+
+    live_wind_compass_state.direction = direction;
+    live_wind_compass_state.windSpeedKnots = windSpeedKnots;
+    live_wind_compass_state.windGustKnots = windGustKnots;
+
+    render_wind_compass_marker(direction, windSpeedKnots, windGustKnots);
+}
+
 function highcharts_tooltip_factory(obsvalue, point_obsType, highchartsReturn = false, rounding, mirrored = false, numberFormat) {
     // Mirrored values have the negative sign removed
     if (mirrored) {
@@ -1033,8 +1206,7 @@ function aeris_icon(data) {
 
 function show_forcast_alert(data, forecast_provider) {
     belchertown_debug("Forecast: Updating alert data for " + forecast_provider);
-    var i, forecast_alert_modal, forecast_alerts;
-    forecast_alert_modal = "";
+    var i, forecast_alerts;
     forecast_alerts = [];
 
     // Empty anything that's been appended to the modal from the previous run
@@ -1075,6 +1247,7 @@ function show_forcast_alert(data, forecast_provider) {
             alert_link = "<i class='fa fa-exclamation-triangle'></i> <a href='#forecast-alert-" + i + "' data-toggle='modal' data-target='#forecast-alert-" + i + "'>" + forecast_alerts[i]["title"] + " $obs.label.alert_in_effect " + forecast_alerts[i]["expires"] + "</a><br>";
             jQuery(".wx-stn-alert-text").append(alert_link);
 
+            var forecast_alert_modal = "";
             forecast_alert_modal += "<!-- Forecast Alert Modal " + i + " -->";
             forecast_alert_modal += "<div class='modal fade' id='forecast-alert-" + i + "' tabindex='-1' role='dialog' aria-labelledby='forecast-alert'>";
             forecast_alert_modal += "<div class='modal-dialog' role='document'>";
@@ -1125,7 +1298,6 @@ function update_current_conditions(data) {
     if (forecast_provider == "aeris") {
         var current_conditions_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_current_conditions_last_updated');
         var current_conditions_data = "";
-        var x = 34;
 
         if (current_conditions == "obs") {
             if (data["current"][0]["response"]["ob"] !== undefined) {
@@ -1594,11 +1766,6 @@ function update_forecast_data(data) {
                 const condition_text = d["summary"] || "";
                 const maxTemp = d["temperatureHigh"];
                 const minTemp = d["temperatureLow"];
-                const humidity = (d["humidity"] != null) ? d["humidity"] * 100 : null; // PW humidity is fraction 0..1
-                const dewPoint = d["dewPoint"];
-                const snow_depth = 0;  // DS doesn’t expose a simple daily snow depth field; skip unless you add it
-                const snow_unit = "";  // no unit for now
-                const precip = (d["precipProbability"] != null) ? d["precipProbability"] * 100 : 0;
 
                 // Card markup consistent with Aeris layout
                 html24 += '<div class="forecast-day forecast-24hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
@@ -1616,104 +1783,76 @@ function update_forecast_data(data) {
                 html24 += '</div>';
             }
 
-            // --- Build an hourly strip (limited to 16 tiles and forced single-row) ---
-            let htmlHr = "";
-            const MAX_HOURLY_TILES = 16;
-            for (let i = 0; i < Math.min(MAX_HOURLY_TILES, hourly.length); i++) {
-                const h = hourly[i];
-                const ts = tzAdjustedMoment(h["time"]).format("$obs.label.time_forecast_time"); // DS epoch seconds
-                const iconBase = resolveIconForProvider(h["icon"] || "unknown", "pirateweather");
-                const image_url = get_relative_url() + "/images/" + iconBase + ".png";
-                const temp = h["temperature"];
-                const humidity = (h["humidity"] != null) ? h["humidity"] * 100 : null; // DS gives fraction 0..1
-                const dewPoint = h["dewPoint"];
-                const precip = (h["precipProbability"] != null) ? h["precipProbability"] * 100 : 0;
+            function buildPirateHourlyTiles(hourlySource, maxTiles, tileClass, timeFormatter) {
+                let html = "";
+                for (let i = 0; i < Math.min(maxTiles, hourlySource.length); i++) {
+                    const h = hourlySource[i];
+                    const rawLabel = tzAdjustedMoment(h["time"]).format("$obs.label.time_forecast_time");
+                    const ts = (typeof timeFormatter === "function") ? timeFormatter(i, rawLabel) : rawLabel;
+                    const iconBase = resolveIconForProvider(h["icon"] || "unknown", "pirateweather");
+                    const image_url = get_relative_url() + "/images/" + iconBase + ".png";
+                    const temp = h["temperature"];
+                    const humidity = (h["humidity"] != null) ? h["humidity"] * 100 : null; // PW humidity is 0..1
+                    const dewPoint = h["dewPoint"];
+                    const precip = (h["precipProbability"] != null) ? h["precipProbability"] * 100 : 0;
+                    const windSpeed = h["windSpeed"];
 
-                // Inline width ensures MAX_HOURLY_TILES fit on a single row regardless of grid
-                htmlHr += '<div class="forecast-day forecast-1hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/' + MAX_HOURLY_TILES + '); max-width:calc(100%/' + MAX_HOURLY_TILES + ');">';
-                htmlHr += '<span id="weekday">' + ts + '</span><br>';
-                htmlHr += '<div class="forecast-conditions">';
-                htmlHr += '<img id="icon" src="' + image_url + '"><br>';
-                htmlHr += '<span class="forecast-condition-text">' + (h["summary"] || "") + '</span>';
-                htmlHr += '</div>';
+                    html += '<div class="forecast-day ' + tileClass + ' pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/' + maxTiles + '); max-width:calc(100%/' + maxTiles + ');">';
+                    html += '<span id="weekday">' + ts + '</span><br>';
+                    html += '<div class="forecast-conditions">';
+                    html += '<img id="icon" src="' + image_url + '"><br>';
+                    html += '<span class="forecast-condition-text">' + (h["summary"] || "") + '</span>';
+                    html += '</div>';
 
-                if (temp != null) {
-                    htmlHr += '<span class="forecast-high">' + parseFloat(temp).toFixed(0) + '°</span>';
-                }
-                htmlHr += '<br>';
+                    if (temp != null) {
+                        html += '<span class="forecast-high">' + parseFloat(temp).toFixed(0) + '°</span>';
+                    }
+                    html += '<br>';
 
-                htmlHr += '<div class="forecast-precip">';
-                if (humidity != null) {
-                    htmlHr += '<i class="wi wi-humidity rain-precip"></i> <span>' + parseFloat(humidity).toFixed(0) + '%</span> ';
-                } else if (dewPoint != null) {
-                    htmlHr += '<i class="wi wi-raindrops rain-precip"></i> <span>' + parseFloat(dewPoint).toFixed(0) + '°</span> ';
-                }
-                if (precip > 0) {
-                    htmlHr += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(precip).toFixed(0) + '%</span>';
-                } else {
-                    htmlHr += '<i class="wi wi-raindrop wi-rotate-45 rain-no-precip"></i> <span>0%</span>';
-                }
-                htmlHr += '</div>';
+                    html += '<div class="forecast-precip">';
+                    if (humidity != null) {
+                        html += '<i class="wi wi-humidity rain-precip"></i> <span>' + parseFloat(humidity).toFixed(0) + '%</span> ';
+                    } else if (dewPoint != null) {
+                        html += '<i class="wi wi-raindrops rain-precip"></i> <span>' + parseFloat(dewPoint).toFixed(0) + '°</span> ';
+                    }
+                    if (precip > 0) {
+                        html += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(precip).toFixed(0) + '%</span>';
+                    } else {
+                        html += '<i class="wi wi-raindrop wi-rotate-45 rain-no-precip"></i> <span>0%</span>';
+                    }
+                    html += '</div>';
 
-                if (h["windSpeed"] != null) {
-                    htmlHr += '<div class="forecast-wind">';
-                    htmlHr += '<i class="wi wi-strong-wind"></i> <span>' + parseFloat(h["windSpeed"]).toFixed(0) + '</span>';
-                    htmlHr += '</div>';
+                    if (windSpeed != null) {
+                        html += '<div class="forecast-wind">';
+                        html += '<i class="wi wi-strong-wind"></i> <span>' + parseFloat(windSpeed).toFixed(0) + '</span>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
                 }
-                htmlHr += '</div>';
+
+                return html;
             }
+
+            // --- Build an hourly strip (limited to 16 tiles and forced single-row) ---
+            const MAX_HOURLY_TILES = 16;
+            const htmlHr = buildPirateHourlyTiles(
+                hourly,
+                MAX_HOURLY_TILES,
+                "forecast-1hour"
+            );
 
             // --- Build the 3-hour contracted strip from PW hourly ---
             const hourly3 = pickThreeHourlyAligned(hourly);
             const MAX_3HR_TILES = 8;
-            let html3Hr = "";
-            for (let i = 0; i < Math.min(MAX_3HR_TILES, hourly3.length); i++) {
-                const h = hourly3[i];
-                const rawLabel = tzAdjustedMoment(h["time"]).format('$obs.label.time_forecast_time');
-                const ts = forecast_time(i, "forecast_3hr", rawLabel);
-                const iconBase = resolveIconForProvider(h["icon"] ?? "unknown", "pirateweather");
-                const image_url = get_relative_url() + "/images/" + iconBase + ".png";
-
-                const temp = h["temperature"];
-                const humidity = (h["humidity"] != null) ? h["humidity"] * 100 : null; // PW humidity 0..1
-                const dewPoint = h["dewPoint"];
-                const precip = (h["precipProbability"] != null) ? h["precipProbability"] * 100 : 0;
-                const windSpeed = h["windSpeed"];
-
-                html3Hr += '<div class="forecast-day forecast-3hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/' + MAX_3HR_TILES + '); max-width:calc(100%/' + MAX_3HR_TILES + ');">';
-                html3Hr += '<span id="weekday">' + ts + '</span><br>';
-                html3Hr += '<div class="forecast-conditions">';
-                html3Hr += '<img id="icon" src="' + image_url + '"><br>';
-                html3Hr += '<span class="forecast-condition-text">' + (h["summary"] ?? "") + '</span>';
-                html3Hr += '</div>';
-
-                if (temp != null) {
-                    html3Hr += '<span class="forecast-high">' + parseFloat(temp).toFixed(0) + '°</span>';
+            const html3Hr = buildPirateHourlyTiles(
+                hourly3,
+                MAX_3HR_TILES,
+                "forecast-3hour",
+                function(i, rawLabel) {
+                    return forecast_time(i, "forecast_3hr", rawLabel);
                 }
-                html3Hr += '<br>';
-
-                // Precip / humidity / dewpoint block (keeps your styling logic)
-                html3Hr += '<div class="forecast-precip">';
-                if (humidity != null) {
-                    html3Hr += '<i class="wi wi-humidity rain-precip"></i> <span>' + parseFloat(humidity).toFixed(0) + '%</span> ';
-                } else if (dewPoint != null) {
-                    html3Hr += '<i class="wi wi-raindrops rain-precip"></i> <span>' + parseFloat(dewPoint).toFixed(0) + '°</span> ';
-                }
-                if (precip > 0) {
-                    html3Hr += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(precip).toFixed(0) + '%</span>';
-                } else {
-                    html3Hr += '<i class="wi wi-raindrop wi-rotate-45 rain-no-precip"></i> <span>0%</span>';
-                }
-                html3Hr += '</div>';
-
-                if (windSpeed != null) {
-                    html3Hr += '<div class="forecast-wind">';
-                    html3Hr += '<i class="wi wi-strong-wind"></i> <span>' + parseFloat(windSpeed).toFixed(0) + '</span>';
-                    html3Hr += '</div>';
-                }
-
-                html3Hr += '</div>'; // end tile
-            }
+            );
 
             // Render 1‑hour strip
             jQuery(".onehr_forecasts").html(htmlHr);
@@ -2037,6 +2176,8 @@ function refreshHooks() {
 // Handle MQTT message
 function update_current_wx(data) {
     data = jQuery.parseJSON(data);
+
+    update_wind_compass_marker(data);
 
     try {
         refreshHooks();

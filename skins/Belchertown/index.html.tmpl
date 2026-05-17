@@ -50,7 +50,11 @@
 
             get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
 
-            rotateThis("$current.windDir.formatted");
+            initialize_wind_compass_marker(
+                "$current.windDir.formatted",
+                "$current.windSpeed.knot.toString(addLabel=False, NONE_string='')",
+                "$current.windGust.knot.toString(addLabel=False, NONE_string='')"
+            );
 
             // Update the Last Updated timestamp with moment.js,
             updated = tzAdjustedMoment($current.dateTime.raw).format("$obs.label.time_last_updated");

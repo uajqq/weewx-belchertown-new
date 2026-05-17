@@ -1963,6 +1963,29 @@ p.entry-meta {
   transition: -webkit-transform 1s ease-in;
 }
 
+.arrow.windbarb-marker {
+  display: block;
+}
+
+.arrow.windbarb-marker:after {
+  display: none;
+}
+
+.arrow .windbarb-svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 70px;
+  height: 70px;
+  transform: translate(-50%, -120%);
+}
+
+/* CSS-only adjustment when Beaufort row is present */
+.windrow:has(.wind-table .beaufort) .arrow .windbarb-svg,
+.wind_col:has(.wind-table .beaufort) .arrow .windbarb-svg {
+  transform: translate(-50%, -114%);
+}
+
 .arrow:after {
   content: "";
   width: 0;

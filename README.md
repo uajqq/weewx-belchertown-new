@@ -1,6 +1,6 @@
 # Belchertown WeeWX skin
 
-### This is a fork of [Pat O'Brien](https://github.com/poblabs)'s excellent Belchertown skin. His repo hasn't been maintained for quite a while now, so this fork will attempt to keep up with bug fixes and new features. Please bear with me!
+### This is a fork of [Pat O'Brien](https://github.com/poblabs)'s excellent Belchertown skin. His repo is no longer maintained, so this fork will be keeping up with bug fixes and new features.
 
 This skin (or theme, or template) is for the [WeeWX weather software](http://weewx.com) and is modeled after [BelchertownWeather.com](https://belchertownweather.com).
 
