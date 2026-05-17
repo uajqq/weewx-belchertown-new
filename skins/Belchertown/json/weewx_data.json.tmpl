@@ -203,14 +203,14 @@
             "average": "$day.wind.avg",
             "vectordir": "$day.wind.vecdir",
             "vectoravg": "$day.wind.vecavg",
+            "rms": "$day.wind.rms"
             #if $day.windrun.has_data
-            "windrun_max": "$day.windrun.max",
+            ,"windrun_max": "$day.windrun.max",
             "windrun_maxtime": "$day.windrun.maxtime",
             "windrun_min": "$day.windrun.min",
             "windrun_mintime": "$day.windrun.mintime",
-            "windrun": "$day.windrun.sum",
+            "windrun": "$day.windrun.sum"
             #end if
-            "rms": "$day.wind.rms"
         },
         #if $day.UV.has_data
         "uv": {
@@ -281,14 +281,13 @@
             "gustdir": "$span(time_delta=604800).wind.gustdir",
             "average": "$span(time_delta=604800).wind.avg",
             "vectordir": "$span(time_delta=604800).wind.vecdir",
-            "vectoravg": "$span(time_delta=604800).wind.vecavg",
+            "vectoravg": "$span(time_delta=604800).wind.vecavg"
             #if $span(time_delta=604800).windrun.has_data
-            "windrun_max": "$span(time_delta=604800).windrun.max",
+            ,"windrun_max": "$span(time_delta=604800).windrun.max",
             "windrun_maxtime": "$span(time_delta=604800).windrun.maxtime",
             "windrun_min": "$span(time_delta=604800).windrun.min",
-            "windrun_mintime": "$span(time_delta=604800).windrun.mintime",
+            "windrun_mintime": "$span(time_delta=604800).windrun.mintime"
             #end if
-            "rms": "$span(time_delta=604800).wind.rms"
         },
         #if $span(time_delta=604800).UV.has_data
         "uv": {
@@ -360,13 +359,13 @@
             "average": "$month.wind.avg",
             "vectordir": "$month.wind.vecdir",
             "vectoravg": "$month.wind.vecavg",
+            "rms": "$month.wind.rms"
             #if $month.windrun.has_data
-            "windrun_max": "$month.windrun.max",
+            ,"windrun_max": "$month.windrun.max",
             "windrun_maxtime": "$month.windrun.maxtime",
             "windrun_min": "$month.windrun.min",
-            "windrun_mintime": "$month.windrun.mintime",
+            "windrun_mintime": "$month.windrun.mintime"
             #end if
-            "rms": "$month.wind.rms"
         },
         #if $month.UV.has_data
         "uv": {
@@ -438,13 +437,13 @@
             "average": "$year.wind.avg",
             "vectordir": "$year.wind.vecdir",
             "vectoravg": "$year.wind.vecavg",
+            "rms": "$year.wind.rms"
             #if $year.windrun.has_data
-            "windrun_max": "$year.windrun.max",
+            ,"windrun_max": "$year.windrun.max",
             "windrun_maxtime": "$year.windrun.maxtime",
             "windrun_min": "$year.windrun.min",
-            "windrun_mintime": "$year.windrun.mintime",
+            "windrun_mintime": "$year.windrun.mintime"
             #end if
-            "rms": "$year.wind.rms"
         },
         #if $year.UV.has_data
         "uv": {
