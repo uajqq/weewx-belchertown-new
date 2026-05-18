@@ -47,6 +47,6 @@ GitHub repository for the variables and their descriptions.
 
 Credits:
 
-Highcharts graph extension from Gary Roderick at https://github.com/gjr80/weewx-highcharts
+Highcharts chart extension from Gary Roderick at https://github.com/gjr80/weewx-highcharts
 Weather icon set from Brian at http://weather34.com
 Forecast data from http://darksky.net

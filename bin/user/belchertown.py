@@ -108,7 +108,7 @@ def _pw_transform_to_belch(pw):
     HOURLY_FIELDS = [
         "time", "summary", "icon", "temperature", "apparentTemperature",
         "windSpeed", "windGust", "windBearing", "precipIntensity",
-        "precipProbability", "cloudCover"
+        "precipProbability", "cloudCover", "humidity", "dewPoint"
     ]
     DAILY_FIELDS = [
         "time", "summary", "icon", "temperatureHigh", "temperatureLow",
@@ -146,6 +146,57 @@ def _parse_aeris_json(obj):
     except Exception as e:
         log.error(f"Error parsing forecast JSON: {e}")
         return {}
+
+
+def _validate_and_fix_legacy_options(extras_dict):
+    """
+    Check for deprecated/legacy option names and warn users.
+    
+    Maps legacy naming patterns to current ones:
+    - "graph_*" → "chart_*"
+    - "graphs_*" → "charts_*"
+    
+    Args:
+        extras_dict: The [Extras] configuration dictionary
+        
+    Returns:
+        Updated extras_dict with legacy keys replaced (originals removed)
+    """
+    
+    # Legacy mapping: old_key -> new_key
+    legacy_mapping = {
+        "graph_page_show_all_button": "chart_page_show_all_button",
+        "graph_page_default_graphgroup": "chart_page_default_chartgroup",
+        "highcharts_homepage_graphgroup": "highcharts_homepage_chartgroup",
+        "graphs_page_header": "charts_page_header",
+    }
+    
+    found_legacy = []
+    
+    for legacy_key, new_key in legacy_mapping.items():
+        if legacy_key in extras_dict:
+            value = extras_dict[legacy_key]
+            found_legacy.append((legacy_key, new_key, value))
+            
+            # If the new key doesn't already exist, use the legacy value
+            if new_key not in extras_dict:
+                extras_dict[new_key] = value
+                log.warning(
+                    f"Belchertown: Deprecated option '{legacy_key}' found in skin configuration. "
+                    f"This has been automatically mapped to '{new_key}'. "
+                    f"Please update your config to use the new name."
+                )
+            else:
+                log.warning(
+                    f"Belchertown: Deprecated option '{legacy_key}' found in skin configuration, "
+                    f"but new option '{new_key}' is already defined. Ignoring legacy key. "
+                    f"Please remove '{legacy_key}' from your configuration."
+                )
+            
+            # Remove the legacy key
+            del extras_dict[legacy_key]
+    
+    return extras_dict
 
 
 class getData(SearchList):
@@ -301,6 +352,10 @@ class getData(SearchList):
         config_dict = self.generator.config_dict
         skin_dict = self.generator.skin_dict
         extras_dict = self.generator.skin_dict["Extras"]
+        
+        # Validate and fix any legacy configuration options
+        extras_dict = _validate_and_fix_legacy_options(extras_dict)
+        
         db_binder = self.generator.db_binder
 
         # Look for the debug flag which can be used to show more logging
@@ -438,10 +493,19 @@ class getData(SearchList):
             skin_dict["SKIN_ROOT"],
             skin_dict.get("skin", ""),
         )
-        chart_config_path = os.path.join(skin_root_path, "graphs.conf")
-        default_chart_config_path = os.path.join(skin_root_path, "graphs.conf.example")
-        if os.path.exists(chart_config_path):
+        legacy_chart_config_path = os.path.join(skin_root_path, "graphs.conf")
+        chart_config_path = os.path.join(skin_root_path, "charts.conf")
+        default_chart_config_path = os.path.join(skin_root_path, "charts.conf.example")
+        if os.path.exists(legacy_chart_config_path):
+            log.warning(
+                f"Belchertown: Found legacy chart config '{legacy_chart_config_path}'. "
+                "Using it for backward compatibility. Please migrate to 'charts.conf'."
+            )
+            chart_dict = configobj.ConfigObj(legacy_chart_config_path, file_error=True)
+        elif os.path.exists(chart_config_path):
             chart_dict = configobj.ConfigObj(chart_config_path, file_error=True)
+        elif os.path.exists(default_chart_config_path):
+            chart_dict = configobj.ConfigObj(default_chart_config_path, file_error=True)
         else:
             chart_dict = configobj.ConfigObj(default_chart_config_path, file_error=True)
         charts = OrderedDict()
@@ -452,34 +516,34 @@ class getData(SearchList):
                     timespan_chart_list.append(plotname)
             charts[chart_timespan] = timespan_chart_list
 
-        # Create a dict of chart group titles for use on the graphs page
+        # Create a dict of chart group titles for use on the charts page
         # header. If no title defined, use the chart group name
-        graphpage_titles = OrderedDict()
+        chartpage_titles = OrderedDict()
         for chartgroup in chart_dict.sections:
             chart_group_config = chart_dict[chartgroup]
-            graphpage_titles[chartgroup] = chart_group_config.get("title", chartgroup)
+            chartpage_titles[chartgroup] = chart_group_config.get("title", chartgroup)
 
-        # Create a dict of chart group page content for use on the graphs page
+        # Create a dict of chart group page content for use on the charts page
         # below the header.
-        graphpage_content = OrderedDict()
+        chartpage_content = OrderedDict()
         for chartgroup in chart_dict.sections:
             if "page_content" in chart_dict[chartgroup]:
-                graphpage_content[chartgroup] = chart_dict[chartgroup]["page_content"]
+                chartpage_content[chartgroup] = chart_dict[chartgroup]["page_content"]
 
-        # Setup the Graphs page button row based on the skin extras option and
-        # the button_text from graphs.conf
-        graph_page_graphgroup_buttons = [
+        # Setup the Charts page button row based on the skin extras option and
+        # the button_text from charts.conf
+        chart_page_chartgroup_buttons = [
             chartgroup
             for chartgroup in chart_dict.sections
             if chart_dict[chartgroup].get("show_button", "").lower() == "true"
         ]
         button_parts = []
-        for gg in graph_page_graphgroup_buttons:
+        for gg in chart_page_chartgroup_buttons:
             button_text = chart_dict[gg].get("button_text", gg)
             button_parts.append(
-                f'<a href="./?graph={gg}"><button type="button" class="btn btn-primary">{button_text}</button></a>'
+                f'<a href="./?chart={gg}"><button type="button" class="btn btn-primary">{button_text}</button></a>'
             )
-        graph_page_buttons = " ".join(button_parts)
+        chart_page_buttons = " ".join(button_parts)
 
         # Set a default radar URL using station's lat/lon
         lat = config_dict["Station"]["latitude"]
@@ -1061,7 +1125,7 @@ class getData(SearchList):
                     # Fetch → normalize → write forecast
                     if forecast_is_stale:
                         try:
-                            url = f"https://api.pirateweather.net/forecast/{forecast_api_id}/{latitude},{longitude}?units={forecast_units}&lang={forecast_lang}&exclude=minutely"
+                            url = f"https://api.pirateweather.net/forecast/{forecast_api_id}/{forecast_place}?units={forecast_units}&lang={forecast_lang}&exclude=minutely"
                             pw_raw = _http_get_json(url)
                             normalized = _pw_transform_to_belch(pw_raw)
                             os.makedirs(os.path.dirname(forecast_file), exist_ok=True)
@@ -2150,10 +2214,10 @@ class getData(SearchList):
             "ordinate_names": ordinate_names,
             "windrose_categories": json.dumps(ordinate_names[:16]),
             "charts": json.dumps(charts),
-            "graphpage_titles": json.dumps(graphpage_titles),
-            "graphpage_titles_dict": graphpage_titles,
-            "graphpage_content": json.dumps(graphpage_content),
-            "graph_page_buttons": graph_page_buttons,
+            "chartpage_titles": json.dumps(chartpage_titles),
+            "chartpage_titles_dict": chartpage_titles,
+            "chartpage_content": json.dumps(chartpage_content),
+            "chart_page_buttons": chart_page_buttons,
             "alltime": all_stats,
             "year_outTemp_range_max": year_outTemp_range_max,
             "year_outTemp_range_min": year_outTemp_range_min,
@@ -2242,20 +2306,36 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
     def run(self):
         """Main entry point for file generation."""
 
-        chart_config_path = os.path.join(
+        legacy_chart_config_path = os.path.join(
             self.config_dict["WEEWX_ROOT"],
             self.skin_dict["SKIN_ROOT"],
             self.skin_dict.get("skin", ""),
             "graphs.conf",
         )
+        chart_config_path = os.path.join(
+            self.config_dict["WEEWX_ROOT"],
+            self.skin_dict["SKIN_ROOT"],
+            self.skin_dict.get("skin", ""),
+            "charts.conf",
+        )
         default_chart_config_path = os.path.join(
             self.config_dict["WEEWX_ROOT"],
             self.skin_dict["SKIN_ROOT"],
             self.skin_dict.get("skin", ""),
-            "graphs.conf.example",
+            "charts.conf.example",
         )
-        if os.path.exists(chart_config_path):
+        if os.path.exists(legacy_chart_config_path):
+            log.warning(
+                f"Belchertown: Found legacy chart config '{legacy_chart_config_path}'. "
+                "Using it for backward compatibility. Please migrate to 'charts.conf'."
+            )
+            self.chart_dict = configobj.ConfigObj(legacy_chart_config_path, file_error=True)
+        elif os.path.exists(chart_config_path):
             self.chart_dict = configobj.ConfigObj(chart_config_path, file_error=True)
+        elif os.path.exists(default_chart_config_path):
+            self.chart_dict = configobj.ConfigObj(
+                default_chart_config_path, file_error=True
+            )
         else:
             self.chart_dict = configobj.ConfigObj(
                 default_chart_config_path, file_error=True
@@ -2300,7 +2380,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             )
             output[chart_group]["colors"] = colors
 
-            # chartgroup_title is used on the graphs page
+            # chartgroup_title is used on the charts page
             chartgroup_title = chart_options.get("title", None)
             if chartgroup_title:
                 output[chart_group]["chartgroup_title"] = chartgroup_title
@@ -2379,10 +2459,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
                 output[chart_group][plotname]["options"] = {}
                 # output[chart_group][plotname]["options"]["renderTo"] = chart_group + plotname # daychart1, weekchart1, etc.
-                # Used for the graphs page and the different chart_groups
+                # Used for the charts page and the different chart_groups
                 output[chart_group][plotname]["options"][
                     "renderTo"
-                ] = plotname  # daychart1, weekchart1, etc. Used for the graphs page and the different chart_groups
+                ] = plotname  # daychart1, weekchart1, etc. Used for the charts page and the different chart_groups
                 output[chart_group][plotname]["options"]["chart_group"] = chart_group
 
                 plot_options = accumulateLeaves(self.chart_dict[chart_group][plotname])
@@ -2417,7 +2497,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 plottype = plot_options.get("type", "line")
                 output[chart_group][plotname]["options"]["type"] = plottype
 
-                # gapsize has to be in milliseconds. Take the graphs.conf value
+                # gapsize has to be in milliseconds. Take the charts.conf value
                 # and multiply by 1000.
                 # Also ensure gapsize is never smaller than the chart's own
                 # aggregate_interval: if a parent section sets gapsize=86400 and a
@@ -2653,7 +2733,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         maxstamp = line_options.get("timespan_stop", None)
                         if minstamp is None or maxstamp is None:
                             log.error(
-                                "Error trying to create timespan_specific graph. "
+                                "Error trying to create timespan_specific chart. "
                                 "You are missing either timespan_start or timespan_stop options."
                             )
                     elif time_length == "all":
@@ -2762,7 +2842,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     # Set the yAxis label. Place into series for custom
                     # JavaScript. Highcharts will ignore these by default
                     yAxisLabel_config = line_options.get("yAxis_label", None)
-                    # Set a default yAxis label if graphs.conf yAxis_label is
+                    # Set a default yAxis label if charts.conf yAxis_label is
                     # none and there's a unit_label - e.g. Temperature (F)
                     if yAxisLabel_config is None and unit_label:
                         yAxis_label = name + " (" + unit_label.strip() + ")"
@@ -2919,7 +2999,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         return "#" + red + green + blue
 
                     # Set default colors, unless the user has specified
-                    # otherwise in graphs.conf
+                    # otherwise in charts.conf
                     wind_rose_color = {}
                     for x in range(7):
                         wind_rose_color[x] = line_options.get(
@@ -3007,8 +3087,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             with open(json_filename, mode="w", encoding="utf-8") as jf:
                 jf.write(json.dumps(output[chart_group], indent=4))
 
-            # Save the graphs.conf to a json file for future debugging
-            chart_json_filename = html_dest_dir + "/graphs.json"
+            # Save the charts.conf to a json file for future debugging
+            chart_json_filename = html_dest_dir + "/charts.json"
             with open(chart_json_filename, mode="w", encoding="utf-8") as cjf:
                 cjf.write(json.dumps(self.chart_dict, indent=4))
 
@@ -3458,7 +3538,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 obs_lookup = weatherRange_obs_lookup
             else:
                 log.error(
-                    "Error trying to create the weather range graph. "
+                    "Error trying to create the weather range chart. "
                     "You are missing the range_type configuration item."
                 )
 
@@ -3479,7 +3559,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 )
             except Exception as e:
                 log.error(
-                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error trying to use database binding {binding} to chart observation {obs_lookup}. "
                     f"Error was: {e}."
                 )
 
@@ -3506,7 +3586,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 )
             except Exception as e:
                 log.error(
-                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error trying to use database binding {binding} to chart observation {obs_lookup}. "
                     f"Error was: {e}."
                 )
 
@@ -3533,7 +3613,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 )
             except Exception as e:
                 log.error(
-                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error trying to use database binding {binding} to chart observation {obs_lookup}. "
                     f"Error was: {e}."
                 )
 
@@ -3593,7 +3673,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 )
             except Exception as e:
                 log.error(
-                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error trying to use database binding {binding} to chart observation {obs_lookup}. "
                     f"Error was: {e}."
                 )
 
@@ -3620,7 +3700,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 )
             except Exception as e:
                 log.error(
-                    f"Error trying to use database binding {binding} to graph observation {obs_lookup}. "
+                    f"Error trying to use database binding {binding} to chart observation {obs_lookup}. "
                     f"Error was: {e}."
                 )
 
@@ -3668,7 +3748,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 )
             except Exception as e:
                 log.error(
-                    f"Error trying to use database binding {binding} to graph "
+                    f"Error trying to use database binding {binding} to chart "
                     f"observation {wind_obs} (windBarb). Error was: {e}."
                 )
                 return []
@@ -3758,7 +3838,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         )
                     except Exception as e:
                         log.error(
-                            f"Error trying to use database binding {binding} to graph "
+                            f"Error trying to use database binding {binding} to chart "
                             f"observation windDir (windBarb). Error was: {e}."
                         )
                         return []
@@ -4063,7 +4143,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             )
         except Exception as e:
             log.error(
-                f"Error trying to use database binding {binding} to graph observation {obs_lookup}. Error was: {e}."
+                f"Error trying to use database binding {binding} to chart observation {obs_lookup}. Error was: {e}."
             )
             forecast_point = self._get_forecast_aqi_point(observation, end_ts)
             if forecast_point is not None:
@@ -4177,7 +4257,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         """
         In WeeWX 4.5.1 xtypes.py was modified to not return any data points which didn't exist in the archive database.
         This function adds the 'future' data points from the last timestamp in the list up until end_ts with None entries.
-        This means that graphs still have the option of showing a full day or month or year on the x axis depending on the time_length specfied.
+        This means that charts still have the option of showing a full day or month or year on the x axis depending on the time_length specfied.
         """
         if interval is not None:
             try:

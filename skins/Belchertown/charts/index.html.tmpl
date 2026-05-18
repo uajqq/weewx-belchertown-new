@@ -1,0 +1,107 @@
+#errorCatcher Echo
+#encoding UTF-8
+#set global $page = "charts"
+
+#include "header.html.tmpl"
+
+<div class="site-inner">
+    <main class="content">
+        <article class="weewx charts" itemscope itemtype="https://schema.org/CreativeWork">
+
+            <script type="text/javascript">
+                var chart = getURLvar("chart");
+                if (chart === undefined) {
+                    // If no URL VAR, default to the chart group defined in Extras
+                    chart = "$Extras.chart_page_default_chartgroup";
+                }
+                var thisPageCharts = chartgroups_raw[chart];
+
+                jQuery(document).ready(function() {
+                    if (chart == "all") {
+                        // Build all charts
+                        var i = 0;
+                        for (var chartgroup in chartgroups_raw) {
+                            // Rename the chart-outer div to remove CSS
+                            jQuery(".chart-outer").attr("class", "chart-outer-all");
+
+                            var page_content = "";
+                            if (chartpage_content[chartgroup]) {
+                                page_content = chartpage_content[chartgroup];
+                            }
+
+                            // Loop through every chart group defined and add a title section
+                            jQuery(".chart-outer-all").append('\
+                                    <div class="' + chartgroup + '_outer row" style="margin:25px 0px 25px 0px;clear:both;">\
+                                        <div class="chartpage-title wx-buttons-description">\
+                                            <a href="./?chart='+ chartgroup + '">' + chartgroups_titles[chartgroup] + '</a>\
+                                        </div>\
+                                        <div class="chartpage-content col-sm-12">'+ page_content + '</div>\
+                                        <div class="' + chartgroup + '"></div>\
+                                    </div>\
+                                ');
+
+                            if (i > 0) {
+                                jQuery("." + chartgroup + "_outer").css("border-top", "1px solid #ccc");
+                            }
+
+                            // Within each title section add the chart divs with the chart group prepending to avoid conflicts
+                            chartgroups_raw[chartgroup].forEach(chartID => {
+                                jQuery("." + chartgroup).append('<div class="col-sm-6"><div id="' + chartgroup + "_" + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                            });
+
+                            // Render the charts with the prepend_renderTo set to true
+                            showChart(chartgroup, true);
+
+                            i++;
+                        };
+                    } else {
+                        // Loop through the chart group for this page and add the chart divs to the page
+                        try {
+                            thisPageCharts.forEach(chartID => {
+                                jQuery(".chart-outer").append('<div class="col-sm-12"><div id="' + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                            });
+
+                            // Set page title
+                            jQuery(".chartpage-title").html(chartgroups_titles[chart]);
+
+                            // Set page content
+                            jQuery(".chartpage-content").html(chartpage_content[chart]);
+
+                            // Render the charts
+                            showChart(chart);
+                        } catch (err) {
+                            console.log("ERROR: Cannot add charts from [" + chart + "] chart group: " + err.message);
+                        }
+                    }
+                });
+            </script>
+
+            #include "page-header.inc"
+
+            <!-- Begin row -->
+            <div class="row">
+                <div class="col-sm-12 wx-buttons">
+                    #if $Extras.has_key("chart_page_show_all_button") and $Extras.chart_page_show_all_button == '1'
+                    <a href="./?chart=all"><button type="button"
+                            class="btn btn-primary wx-btn-year">$obs.label.charts_page_all_button</button></a>
+                    #end if
+                    $chart_page_buttons
+                </div>
+                <div class="col-sm-12 wx-buttons-description">
+                    <span class='chartpage-title'></span>
+                </div>
+            </div>
+            <!-- End row -->
+
+            <div class="chartpage-content col-sm-12"></div><!-- JS populated -->
+
+            <div class="chart-outer"></div><!-- JS populated -->
+
+            <div class="clear"></div>
+
+        </article>
+    </main>
+</div>
+
+
+#include "footer.html.tmpl"

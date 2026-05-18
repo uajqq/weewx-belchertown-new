@@ -279,7 +279,7 @@ input[type="search"] {
 /* # Defaults
 ---------------------------------------------------------------------------------------------------- */
 
-/* ## Typographical Elements
+/* ## Text Elements
 --------------------------------------------- */
 
 body {
@@ -1103,7 +1103,7 @@ p.entry-meta {
   font-weight: 500;
 }
 
-.forecast-temp-graph {
+.forecast-temp-chart {
   font-size: 20px;
   font-weight: 250;
   height: 178px;
@@ -1885,6 +1885,8 @@ p.entry-meta {
 .current_wind {
   /* padding:20px 0px 0px 0px !important; */
   padding: 10px 0px 0px 0px !important;
+  display: flex;
+  align-items: center;
 }
 
 .windspeedtable {
@@ -2168,7 +2170,7 @@ table.celestial td.label {
   font-size: 12px;
 }
 
-.wx-graph-front {
+.wx-chart-front {
   font-size: 24px;
   padding-top: 30px;
   /* font-size:25px; */
@@ -2177,7 +2179,7 @@ table.celestial td.label {
   text-align: center;
 }
 
-.graph-outer {
+.chart-outer {
   width: 100%;
   margin: 0 auto;
   text-align: center;
@@ -2544,12 +2546,12 @@ input:checked+.slider:before {
     width: 25% !important;
   }
 
-  .forecast-temp-graph {
+  .forecast-temp-chart {
     padding-top: 0px !important;
     height: 75px !important;
   }
 
-  .forecast-temp-graph img {
+  .forecast-temp-chart img {
     width: 50% !important;
     height: auto;
   }

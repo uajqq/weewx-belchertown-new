@@ -15,7 +15,7 @@ generator even if within a comment.
 #end if
 */
 
-var pages = ["graphs", "records", "reports", "about", "pi"];
+var pages = ["charts", "records", "reports", "about", "pi"];
 var pageName = "";
 // If this page we're on now is listed as a subpage, use ".." to get to the relative root
 function get_relative_url() {
@@ -39,9 +39,9 @@ if (getURLvar("debug") && (getURLvar("debug") == "true" || getURLvar("debug") ==
 var moment_locale = "$system_locale_js";
 moment.locale(moment_locale);
 
-var graphgroups_raw = $charts;
-var graphgroups_titles = $graphpage_titles;
-var graphpage_content = $graphpage_content;
+var chartgroups_raw = $charts;
+var chartgroups_titles = $chartpage_titles;
+var chartpage_content = $chartpage_content;
 
 //  declare icon_dict as global variable
 var icon_dict = {};
@@ -205,7 +205,7 @@ function getURLvar(k) {
 }
 
 // http://stackoverflow.com/a/14887961/1177153
-var weatherdirection = $obs.label.graphs_windDir_ordinals;
+var weatherdirection = $obs.label.charts_windDir_ordinals;
 
 // Pre-built array of 16 compass ordinals for arithmetic wind-direction lookup
 const ORDINATE_NAMES = [
@@ -540,11 +540,11 @@ function highcharts_tooltip_factory(obsvalue, point_obsType, highchartsReturn = 
         }
     } else {
         try {
-            // Setup any graphs.conf overrides on formatting
+            // Setup any charts.conf overrides on formatting
             var {decimals, decimalPoint, thousandsSep} = numberFormat;
 
             // Try to apply the highcharts numberFormat for locale awareness. Use rounding from weewx.conf StringFormats.
-            // -1 is set from Python to notate no rounding data available and decimals from graphs.conf is undefined.
+            // -1 is set from Python to notate no rounding data available and decimals from charts.conf is undefined.
             if (rounding == "-1" && typeof decimals === "undefined") {
                 output = Highcharts.numberFormat(obsvalue);
             } else {
@@ -1595,13 +1595,13 @@ function update_forecast_data(data) {
                     output_html += '<div class="forecast-conditions"';
                     // #if $Extras.has_key("forecast_show_humidity_dewpoint") and $Extras.forecast_show_humidity_dewpoint > '0'
                     output_html += ' style="min-height:155px">'
-                    output_html += '<div class="forecast-temp-graph" style="padding-top:';
+                    output_html += '<div class="forecast-temp-chart" style="padding-top:';
                     //  padding = ( ( highTemp - forecast_row[i]["avgTemp"] = offset ) * 76 / ( rangeTemp) ) where 100 ~ max calculated space available for padding
                     output_html += parseInt((highTemp - forecast_row[i]["avgTemp"] + offset) * 76 / (rangeTemp)) + 'px';
                     output_html += '; height:155px">'
                     // #else
                     output_html += '>'
-                    output_html += '<div class="forecast-temp-graph" style="padding-top:';
+                    output_html += '<div class="forecast-temp-chart" style="padding-top:';
                     //  padding = ( ( highTemp - forecast_row[i]["avgTemp"] = offset ) * 100 / ( rangeTemp) ) where 100 ~ max calculated space available for padding
                     output_html += parseInt((highTemp - forecast_row[i]["avgTemp"] + offset) * 100 / (rangeTemp)) + 'px">';
                     // #end if
@@ -1766,6 +1766,14 @@ function update_forecast_data(data) {
                 const condition_text = d["summary"] || "";
                 const maxTemp = d["temperatureHigh"];
                 const minTemp = d["temperatureLow"];
+                const maxTempNum = parseFloat(maxTemp);
+                const minTempNum = parseFloat(minTemp);
+                const windSpeedNum = parseFloat(d["windSpeed"]);
+                const windGustNum = parseFloat(d["windGust"]);
+                const maxTempText = isFinite(maxTempNum) ? maxTempNum.toFixed(0) + '&deg;' : 'N/A';
+                const minTempText = isFinite(minTempNum) ? minTempNum.toFixed(0) + '&deg;' : 'N/A';
+                const windSpeedText = isFinite(windSpeedNum) ? windSpeedNum.toFixed(0) : 'N/A';
+                const windGustText = isFinite(windGustNum) ? windGustNum.toFixed(0) : 'N/A';
 
                 // Card markup consistent with Aeris layout
                 html24 += '<div class="forecast-day forecast-24hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
@@ -1775,10 +1783,10 @@ function update_forecast_data(data) {
                 html24 += '<br>';
                 html24 += '<span class="forecast-condition-text">' + condition_text + '</span>';
                 html24 += '</div>';
-                html24 += '<span class="forecast-high">' + parseFloat(maxTemp).toFixed(0) + '&deg;</span> | <span class="forecast-low">' + parseFloat(minTemp).toFixed(0) + '&deg;</span>';
+                html24 += '<span class="forecast-high">' + maxTempText + '</span> | <span class="forecast-low">' + minTempText + '</span>';
                 html24 += '<br>';
                 html24 += '<div class="forecast-wind">';
-                html24 += '<i class="wi wi-strong-wind"></i> <span>' + parseFloat(d["windSpeed"]).toFixed(0) + '</span> | <span> ' + parseFloat(d["windGust"] || 0).toFixed(0) + '$unit.label.windSpeed';
+                html24 += '<i class="wi wi-strong-wind"></i> <span>' + windSpeedText + '</span> | <span> ' + windGustText + '$unit.label.windSpeed';
                 html24 += '</div>';
                 html24 += '</div>';
             }
@@ -2189,7 +2197,7 @@ function update_current_wx(data) {
     gtag('config', '$Extras.googleAnalyticsId');
     // #end if
 
-    // This message is a WeeWX archive update. Update WeeWX data, forecast data and highcharts graphs
+    // This message is a WeeWX archive update. Update WeeWX data, forecast data and highcharts charts
     if (data.hasOwnProperty("interval_minute")) {
         // Delays are recommended to allow the other skins to complete processing
         belchertown_debug("MQTT: Archive interval detected - updating charts and data");
@@ -2198,7 +2206,7 @@ function update_current_wx(data) {
             belchertown_debug("Skipping chart update for page " + pageName + ", no charts to be updated.");
         }
         else {
-            setTimeout(showChart, 30000, homepage_graphgroup); // Load updated charts.
+            setTimeout(showChart, 30000, homepage_chartgroup); // Load updated charts.
         }
         ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
             setTimeout(update_weewx_data.bind(null, weewx_data), 10000); // Initial call to update (date, daily high, low, etc)
@@ -2797,7 +2805,7 @@ function showChart(json_file, prepend_renderTo = false) {
 
             };
 
-            // Default options completed, build overrides from JSON and graphs.conf
+            // Default options completed, build overrides from JSON and charts.conf
 
             // Set the chart render div and title
             if (prepend_renderTo) {
@@ -2990,7 +2998,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     options.yAxis[this_yAxis].tickInterval = s.yAxis_tickInterval;
                 }
 
-                // Set yAxis minorTicks. This is a graph-wide setting so setting it for any of the yAxis will set it for the graph itself
+                // Set yAxis minorTicks. This is a chart-wide setting so setting it for any of the yAxis will set it for the chart itself
                 if (s.yAxis_minorTicks) {
                     options.yAxis[this_yAxis].minorTicks = true;
                 }
@@ -3068,7 +3076,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.yAxis[0].min = 0;
                 options.yAxis[0].endOnTick = false;
                 options.yAxis[0].reversedStacks = false;
-                options.yAxis[0].title.text = "$obs.label.graphs_windrose_frequency (%)";
+                options.yAxis[0].title.text = "$obs.label.charts_windrose_frequency (%)";
                 options.yAxis[0].gridLineWidth = 0;
                 options.yAxis[0].labels = {enabled: false}
                 options.plotOptions = {
@@ -3170,7 +3178,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     var cPos = options.series[0]["color" + ci + "_position"];
                     var cVal = options.series[0]["color" + ci];
                     if (cPos === undefined || cVal === undefined) break;
-                    // Strip any surrounding quotes added by graphs.conf string quoting
+                    // Strip any surrounding quotes added by charts.conf string quoting
                     var cColor = String(cVal).replace(/^["']|["']$/g, '');
                     customColorStops.push([parseFloat(cPos), cColor]);
                 }
@@ -3509,7 +3517,7 @@ function showChart(json_file, prepend_renderTo = false) {
             // Wind barb chart: mirrors https://www.highcharts.com/samples/highcharts/demo/windbarb-series
             // A line series shows wind speed; a windbarb series shows direction/Beaufort.
             // shared:true tooltip combines both rows into one popup automatically.
-            // Search all series for the windBarb one so its position in graphs.conf does not matter.
+            // Search all series for the windBarb one so its position in charts.conf does not matter.
             var windBarbSeries = null;
             for (var wbj = 0; wbj < options.series.length; wbj++) {
                 if (options.series[wbj].obsType === "windBarb") {

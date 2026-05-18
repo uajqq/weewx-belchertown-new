@@ -80,9 +80,9 @@ extension_config = """
 
             #---Highcharts settings---
             # highcharts_enabled             = 1
-            # graph_page_show_all_button     = 1
-            # graph_page_default_graphgroup  = "day"
-            # highcharts_homepage_graphgroup = "homepage"
+            # chart_page_show_all_button     = 1
+            # chart_page_default_chartgroup  = "day"
+            # highcharts_homepage_chartgroup = "homepage"
             # highcharts_decimal             = "auto"
             # highcharts_thousands           = "auto"
 
@@ -190,7 +190,7 @@ extension_config = """
 
                     #-- Default page headers --
                     # home_page_header    = "My Station Weather Conditions"
-                    # graphs_page_header  = "Weather Observation Graphs"
+                    # charts_page_header  = "Weather Observation Charts"
                     # reports_page_header = "Weather Observation Reports"
                     # records_page_header = "Weather Observation Records"
                     # about_page_header   = "About This Site"
@@ -223,7 +223,7 @@ files = [
             "skins/Belchertown/kiosk.css",
             "skins/Belchertown/celestial.inc",
             "skins/Belchertown/daylight.inc",
-            "skins/Belchertown/graphs.conf.example",
+            "skins/Belchertown/charts.conf.example",
             "skins/Belchertown/page-header.inc",
             "skins/Belchertown/manifest.json.tmpl",
             "skins/Belchertown/records.inc.example",
@@ -235,7 +235,7 @@ files = [
         ],
     ),
     ("skins/Belchertown/about", ["skins/Belchertown/about/index.html.tmpl"]),
-    ("skins/Belchertown/graphs", ["skins/Belchertown/graphs/index.html.tmpl"]),
+    ("skins/Belchertown/charts", ["skins/Belchertown/charts/index.html.tmpl"]),
     (
         "skins/Belchertown/NOAA",
         [

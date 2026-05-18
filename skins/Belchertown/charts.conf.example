@@ -9,14 +9,14 @@
 #
 # Overview of options:
 # A timespan refers to "day", "week", "month" or "year". 
-# The first configuration item is the graph group, such as [day], [week], [month], [year] sections. 
-# The charts are defined under the graph group and can be renamed and reorganized. They will display on your website in the order they appear here.
+# The first configuration item is the chart group, such as [day], [week], [month], [year] sections. 
+# The charts are defined under the chart group and can be renamed and reorganized. They will display on your website in the order they appear here.
 # Under the chart are the observation names from the WeeWX database. Any item within your database "archive type" can be charted. For a list of "archive types" refer to this chart. http://weewx.com/docs/customizing.htm#archive_types
 # Each observation can be customized with built-in Highcharts "series" options. Popular ones are color, name and zIndex. For a list of Highcharts Series options refer to https://api.highcharts.com/highcharts/series 
 #
 # If a custom option broke your charts:
-# Undo your change and run wee_reports. You do not need to restart WeeWX if you make a graphs.conf change.
-# If that doesn't work, undo ALL changes and go back to the default graphs.conf.example configuration.
+# Undo your change and run wee_reports. You do not need to restart WeeWX if you make a charts.conf change.
+# If that doesn't work, undo ALL changes and go back to the default charts.conf.example configuration.
 # There is no guarantee that every customization option will work. 
 #
 # Detailed settings overview can be found in the wiki under Detailed Configuration Settings Overview
