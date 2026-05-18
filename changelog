@@ -1,34 +1,172 @@
-1.7 May 11, 2026
+# Changelog
 
-- Addition of Pirate Weather (https://pirateweather.net/en/latest/) as a (limited free) forecast service option to replace Darksky
+## 1.8 — May 17, 2026
+
+Lots of new options in this release, including a few potentially breaking changes. Read the notes carefully.
+
+### Potentially breaking changes
+#### "Graphs" have been renamed to "charts" throughout the entire project
+Before, there was a confusing mismatch: some options referred to "graphs," while others referred to "charts." The language has been updated throughout the skin to use charts, since Highcharts refers to them that way and not all of the charted items in Belchertown are technically graphs.
+
+That includes some options in `weewx.conf`. For now, the skin emits warnings in the log and automatically maps the old terminology so users have time to update any settings. **The most consequential change is that charts are now defined in `charts.conf`, not `graphs.conf`.** The skin will still check for a `graphs.conf` file and use it, but with a warning. Rename `graphs.conf` to `charts.conf` to avoid future issues.
+
+#### Earthquake updates
+**ReNaSS has been replaced by EMSC as the European earthquake source.** EMSC uses ReNaSS as one of its data sources, but also covers the rest of Europe, making it a better choice for users outside North America. If you have ReNaSS set as a source, the logs will show a warning and the source will be updated automatically, but you should still update your config because ReNaSS will be removed in the future.
+
+This change also means that a magnitude limit can be set for all sources, not just GeoNet as before. **The old `geonet_mmi` option, which only worked with GeoNet, has been removed. It has been replaced with `earthquake_minmag`, which sets a magnitude limit for all earthquake sources.** Update your config if you are using GeoNet.
+
+#### aqiChart has been deprecated
+There is no longer a special `aqiChart` observation. The existing chart architecture can produce the same result, so the special chart was removed. To get an AQI chart that looks the same as before, use the following config:
+
+```
+[[exampleChart]]
+    title = AQI
+    type = gauge
+    [[[aqi]]]
+        name = AQI
+        rounded = 1
+        colors_enabled = 1
+        color1_position = 0
+        color1 = "#71bc3c"
+        color2_position = 51
+        color2 = "rgba(255,174,0,0.9)"
+        color3_position = 101
+        color3 = "rgba(255,127,0,1)"
+        color4_position = 151
+        color4 = "rgba(255,69,69,1)"
+        color5_position = 201
+        color5 = "#b16286"
+        color6_position = 301
+        color6 = "#cc241d"
+        yAxis_min = 0
+        yAxis_max = 500
+```
+
+The AQI category is still displayed because the new AQI-handling code treats it as a unit.
+
+### New features
+
+### Records snapshot drop-down lists
+The records snapshot section on the homepage now includes drop-down lists so users can change the time range without leaving the homepage.
+
+<img width="870" height="196" alt="Screenshot 2026-05-17 at 16 10 45" src="https://github.com/user-attachments/assets/3e942f79-a062-4f05-839e-92c4edd63c2c" />
+
+### New chart type: wind barb
+This release adds support for a new chart type: wind barb. An arrow represents wind direction, and barbs represent wind speed in knots. Each half-notch represents 5 knots, like so (from the NWS):
+
+<img width="975" height="158" alt="Screenshot 2026-05-16 at 13 30 32" src="https://github.com/user-attachments/assets/7cc7236d-9865-4bda-a410-91e05c9a2de3" />
+
+The simplest configuration plots wind speed and corresponding barbs:
+
+```
+[[exampleChart]]
+    title = Wind
+    [[[windBarb]]]
+```
+
+<img width="825" height="441" alt="Screenshot 2026-05-16 at 13 22 59" src="https://github.com/user-attachments/assets/517c8011-298d-4c4b-a00f-bb7e6ba53053" />
+
+Note that because of crowding, Highcharts can't always display every single flag, so it will remove some to save space. This can result in the barbs not showing the maximum wind speed (this chart shows a maximum wind speed of 26 mph = 22.6 kts, but the maximum barb shown is 15 kts because Highcharts had to eliminate some barbs). You can fix that by adjusting the `aggregate_interval` and type:
+
+```
+[[exampleChart]]
+    title = Wind
+    aggregate_interval = 2000
+    aggregate_type = max
+    [[[windBarb]]]
+```
+
+<img width="807" height="435" alt="Screenshot 2026-05-16 at 13 23 54" src="https://github.com/user-attachments/assets/dbfaf539-6781-4e8b-9ef2-4de32a0d8460" />
+
+Now the barbs correctly show the maximum speed as two full notches (20–24 kts).
+
+You can also choose whether the wind barbs are calculated from wind speed or wind gusts by setting `wind_obs`. The default is wind speed.
+
+```
+[[exampleChart]]
+    title = Wind
+    aggregate_interval = 2000
+    aggregate_type = max
+    [[[windBarb]]]
+        wind_obs = windGust
+```
+
+You can also combine wind speed and wind gusts into a single chart:
+
+```
+[[exampleChart]]
+    title = Wind
+    aggregate_interval = 2000
+    aggregate_type = max
+    [[[windBarb]]]
+        wind_obs = windGust
+    [[[windSpeed]]]
+```
+
+<img width="706" height="442" alt="Screenshot 2026-05-16 at 13 17 30" src="https://github.com/user-attachments/assets/318a7821-94bb-44c2-9cd3-a3b13336a58e" />
+
+### Wind barb compass indicator option
+Inspired by the wind barb chart, users can now choose to show a wind barb as the compass direction indicator on the main page. Two new options can be set in `weewx.conf`:
+
+```
+# Wind compass marker defaults
+# wind_compass_marker = triangle, windbarb
+# wind_compass_source = windSpeed, windGust
+wind_compass_marker = "triangle"
+wind_compass_source = "windSpeed"
+```
+
+When `wind_compass_marker = "windbarb"`, the rotating triangle is replaced by a wind barb that updates with wind speed. Setting `wind_compass_source = "windSpeed"` means the barbs are calculated from wind gusts; otherwise, the default is wind speed.
+
+<img width="394" height="145" alt="Screenshot 2026-05-17 at 11 20 16" src="https://github.com/user-attachments/assets/b03ea348-2a86-447e-bc1f-3c0e57b5dd80" />
+
+<img width="392" height="139" alt="Screenshot 2026-05-17 at 11 21 47" src="https://github.com/user-attachments/assets/21a863cf-0574-43b2-a1a4-4946c907cd5f" />
+
+### Bug fixes and improvements
+
+- **Languages:** the skin now supports Catalan, Danish, German, Spanish, French, Italian, Norwegian, Dutch, Polish, Portuguese, and Swedish. New languages can now be added easily through AI, so please let me know which other languages you would like the skin translated into. The goal is for the skin to work out of the box for almost any locale. As always, please open a pull request if you're a speaker and spot some poor translations.
+- If a chart is not configured properly, the other charts show normally instead of the entire thing crashing. A warning is inserted into the homepage so you can identify which chart is broken.
+- Fix for missing current condition icons.
+- AQI (plus other pollutants like ozone) is now automatically sourced from forecast data when available, so you can graph them even if you don't have those observations in your database, as long as your forecast source (Pirate Weather or Xweather) provides that data. UV index was also sourced from forecast data in previous betas, but that led to odd results like showing a UV index after sunset.
+
+## 1.7 — May 11, 2026
+
+### Highlights
+
+- Addition of Pirate Weather (https://pirateweather.net/en/latest/) as a (limited free) forecast service option to replace Dark Sky
 - Back end Pirate Weather API fetch/read logic
 - Improvements to API calls for both forecast sources
 - Front end processing of Pirate Weather forecast data (current conditions/1hr/24hr)
-- Some page formatting logic to display the current conditions icon and format 7 day forecast (forecast descriptions are longer in PW)
+- Some page formatting logic to display the current conditions icon and format 7 day forecast (forecast descriptions are longer in Pirate Weather)
 - Forecasts now scroll horizontally on mobile
 - Versions are now marked as New Belchertown to better distinguish this fork from the original
-- Gauge charts can be set to custom gradient colors again -- check wiki for details
+- Gauge charts can be set to custom gradient colors again — check wiki for details
 - Highcharts has been bumped to the latest version, 12.6
-- Efficiency/bug fixes throughout
+- Efficiency and bug fixes throughout
 
-1.6 November 26, 2025
+## 1.6 — November 26, 2025
 
-Minor bug fixes for specific circumstances. Most notable changes are code standardization/modernization. 
+### Notes
 
-**Support for WeeWx < 5.0 is dropped by this release!** Minimum WeeWx version is now 5.0.
+- Minor bug fixes for specific circumstances. Most notable changes are code standardization and modernization.
+- **Support for WeeWX < 5.0 is dropped by this release!** Minimum WeeWX version is now 5.0.
 
-1.5 November 7, 2025
+## 1.5 — November 7, 2025
 
-First new version release to New Belchertown -- much thanks to contributors! Many minor bug fixes, documentation updates, and coding changes.
+### New features
+
+First new version release to New Belchertown — much thanks to contributors! Many minor bug fixes, documentation updates, and coding changes.
 
 Notable new features courtesy of @pablos-here:
+
 - Ability to refresh "Current Conditions" portion of forecast more frequently if desired. These options can be set from weewx.conf or skin.conf.
 - More granular control over forecast location.
-- Ability to set units in the default Windy.com radar widget:
+- Ability to set units in the default Windy.com radar widget.
 
-Please note: support for WeeWx 3.9 and earlier has been dropped by this release!
+Please note: support for WeeWX 3.9 and earlier has been dropped by this release!
 
-Notable bug fixes and tweaks since v1.4:
+### Bug fixes and tweaks since v1.4
+
 - Fix for a Cheetah error with sunrise/sunset data
 - Fix for a crash that would disable the weatherRange chart on days with no data
 - Fix for potential octal/leading zero errors
@@ -36,15 +174,16 @@ Notable bug fixes and tweaks since v1.4:
 - Fix for a crash when Beaufort category was set to display based on wind speed, not wind gust
 - Fix for Beaufort category not appearing upon initial page load by @pablos-here
 - Tweak that makes the weather records page more accurate when there are gaps in data
-- CSS / formatting improvements on different screen sizes by @pablos-here
+- CSS and formatting improvements on different screen sizes by @pablos-here
 
+## 1.4 — June 27, 2025
 
+### Notes
 
-1.4 June 27, 2025
+Start of a new fork, since the old repo is no longer being actively maintained. I'll do my best to keep up with bug fixes and add a few new features!
 
-Start of a new fork, since the old repo is no longer being actively maintained. I'll do my best to keep up with bug fixes and add a few new features! 
+### New in this version
 
-New in this version:
 - Multiple bug fixes that have been pending
 - Multiple code formatting cleanups
 - Cardinal directions are now calculated programmatically, instead of relying on a dict
