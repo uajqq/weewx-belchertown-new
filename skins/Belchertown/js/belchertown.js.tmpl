@@ -261,6 +261,26 @@ function new_gradient_temp(value, min, max) {
 }
 
 // Change the color of the outTemp_F variable
+function get_aqi_color(aqi) {
+    aqi = parseInt(aqi);
+    if (isNaN(aqi)) return;
+    var color;
+    if (aqi <= 50) {
+        color = "#71bc3c";
+    } else if (aqi <= 100) {
+        color = "rgba(255,174,0,0.9)";
+    } else if (aqi <= 150) {
+        color = "rgba(255,127,0,1)";
+    } else if (aqi <= 200) {
+        color = "rgba(255,69,69,1)";
+    } else if (aqi <= 300) {
+        color = "#b16286";
+    } else {
+        color = "#cc241d";
+    }
+    jQuery(".wx-aqi, .wx-aqi-category, .aqi_outer").css("color", color);
+}
+
 function get_outTemp_color(unit, outTemp, returnColor = false) {
     if (outTemp != null) {
         outTemp = parseFloat(outTemp).toFixed(0); // Convert back to decimal literal
