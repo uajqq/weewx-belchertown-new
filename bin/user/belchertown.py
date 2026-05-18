@@ -4144,15 +4144,15 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 aggregate_interval,
             )
         except Exception as e:
-            log.error(
-                f"Error trying to use database binding {binding} to chart observation {obs_lookup}. Error was: {e}."
-            )
             forecast_point = self._get_forecast_aqi_point(observation, end_ts)
             if forecast_point is not None:
                 log.info(
                     f"Using forecast.json AQI fallback for observation '{observation}'"
                 )
                 return [forecast_point]
+            log.error(
+                f"Error trying to use database binding {binding} to chart observation {obs_lookup}. Error was: {e}."
+            )
             return []
 
         self.insert_null_value_timestamps_to_end_ts(
