@@ -3787,9 +3787,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     ms_vt = ms_converter.convert(windSpeed_vt)
             else:
                 ms_vt = ms_converter.convert(windSpeed_vt)
-            windSpeed_ms = [
-                x if x is not None else 0 for x in ms_vt[0]
-            ]
+            windSpeed_ms = list(ms_vt[0])
 
             # Fetch windDir. When aggregating:
             #   - "vecdir" is requested: use vecdir (speed-weighted vector mean direction),
@@ -3855,10 +3853,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             ]
 
             # Windbarb triples: [ts_ms, m/s_speed, direction]
+            # Keep calm points (speed < 2.5 knots) even if windDir is None so the
+            # frontend windbarb series can render the standard calm circle.
+            # Exclude missing speeds (None) to avoid rendering false calm points.
+            calm_threshold_ms = 2.5 * 0.514444
             windbarb_data = [
                 [ts, spd_ms, dr]
                 for ts, spd_ms, dr in zip(time_ms, windSpeed_ms, windDir_vals)
-                if dr is not None
+                if spd_ms is not None and (dr is not None or spd_ms < calm_threshold_ms)
             ]
 
             return {

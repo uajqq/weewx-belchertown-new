@@ -13,6 +13,13 @@ generator even if within a comment.
 #else
 #set global $hemisphere = "northern-hemisphere"
 #end if
+
+#if $almanac.sunrise.raw is not None and $almanac.sunset.raw is not None
+#set global $sunset_hour = datetime.datetime.fromtimestamp($almanac.sunset.raw).strftime('%-H')
+#set global $sunset_minute = datetime.datetime.fromtimestamp($almanac.sunset.raw).strftime('%-M')
+#set global $sunrise_hour = datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%-H')
+#set global $sunrise_minute = datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%-M')
+#end if
 */
 
 var pages = ["charts", "records", "reports", "about", "pi"];
@@ -125,7 +132,7 @@ jQuery(document).ready(function() {
             belchertown_debug("Theme: Setting auto theme because of URL override");
             sessionStorage.setItem('theme', 'auto')
             // #if $almanac.sunrise.raw is not None and $almanac.sunset.raw is not None
-            autoTheme(#echo datetime.datetime.fromtimestamp($almanac.sunset.raw).strftime('%-H')#, #echo datetime.datetime.fromtimestamp($almanac.sunset.raw).strftime('%-M')#, #echo datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%-H')#, #echo datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%-M')#)
+            autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute)
             // #end if
         }
     }
@@ -260,7 +267,7 @@ function new_gradient_temp(value, min, max) {
     return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
 }
 
-// Change the color of the outTemp_F variable
+// Change the color of the AQI value
 function get_aqi_color(aqi) {
     aqi = parseInt(aqi);
     if (isNaN(aqi)) return;
@@ -478,11 +485,23 @@ var live_wind_compass_state = {
 function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     var rotation = parseFloat(direction);
     var selectedKnots = wind_compass_source == "windGust" ? parseFloat(windGustKnots) : parseFloat(windSpeedKnots);
+    var calmThresholdKnots = 2.5;
     var arrow = jQuery(".arrow");
 
     if (arrow.length === 0 || !isFinite(rotation)) {
         return;
     }
+
+    // Calm wind: hide both indicator styles (triangle and windbarb).
+    if (!isFinite(selectedKnots) || selectedKnots < calmThresholdKnots) {
+        arrow.removeClass("windbarb-marker").empty().css("visibility", "hidden");
+        jQuery(".wind-arrow").css("visibility", "hidden");
+        return;
+    }
+
+    // Wind is not calm: ensure indicators are visible.
+    arrow.css("visibility", "visible");
+    jQuery(".wind-arrow").css("visibility", "visible");
 
     if (wind_compass_marker == "windbarb") {
         arrow.addClass("windbarb-marker");
@@ -3573,15 +3592,16 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Reconfigure as a Highcharts windbarb series
                 windBarbSeries.type = "windbarb";
                 windBarbSeries.showInLegend = false;
-                windBarbSeries.vectorLength = 30;
+                windBarbSeries.vectorLength = 24;
                 windBarbSeries.enableMouseTracking = false;
                 delete windBarbSeries.tooltip;
 
                 // Convert [[ts, m/s, dir], ...] to [{x: , value: , direction: }, ...]
-                // Keep zero-speed (calm) points even when direction is null; Highcharts
-                // windbarb renders a circle for value=0 to indicate calm conditions.
+                // Keep calm points (<2.5 knots) even when direction is null; Highcharts
+                // windbarb renders a circle for calm conditions.
+                var calmThresholdMs = 2.5 * 0.514444;
                 windBarbSeries.data = windBarbSeries.data
-                    .filter(function(d) { return d[1] !== null && (d[2] !== null || d[1] === 0); })
+                    .filter(function(d) { return d[1] !== null && (d[2] !== null || d[1] < calmThresholdMs); })
                     .map(function(d) { return {x: d[0], value: d[1], direction: d[2] !== null ? d[2] : 0}; });
 
                 // Custom tooltip: show wind speed (respecting rounding) plus direction.
