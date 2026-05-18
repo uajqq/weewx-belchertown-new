@@ -25,10 +25,9 @@
     #set $difference = $today_daylight - $yesterday_daylight
     #if $difference
       #set $delta = abs($difference)
-      #set $amt_hours = int($delta) // 3600
       #set $amt_minutes = (int($delta) % 3600) // 60
       #set $amt_seconds = int($delta) % 60
-      #set $amt_str = "%d%s %d%s %d%s" % ($amt_hours, $hour_short, $amt_minutes, $minute_short, $amt_seconds, $second_short)
+      #set $amt_str = "%d%s %d%s" % ($amt_minutes, $minute_short, $amt_seconds, $second_short)
       #if $difference > 0
         #if $obs.label.daylight_increase != "daylight_increase"
           #set $delta_str = "%s %s" % ( $amt_str, $obs.label.daylight_increase )

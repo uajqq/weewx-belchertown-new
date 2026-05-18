@@ -33,16 +33,19 @@
     #set $seconds %= 3600
     #set $minutes = $seconds // 60
     #set $seconds %= 60
-    #set $daylight_str = "%d%s %d%s %d%s" % ($hours, $hour_short, $minutes, $minute_short, $seconds, $second_short)
+    #if $hours > 0
+      #set $daylight_str = "%d%s %d%s %d%s" % ($hours, $hour_short, $minutes, $minute_short, $seconds, $second_short)
+    #else
+      #set $daylight_str = "%d%s %d%s" % ($minutes, $minute_short, $seconds, $second_short)
+    #end if
     #set $yesterday = $now - 24*3600
     #set $yesterday_daylight = $almanac($almanac_time=$yesterday).sun.set.raw - $almanac($almanac_time=$yesterday).sun.rise.raw
     #set $difference = $today_daylight - $yesterday_daylight
     #if $difference
       #set $delta = abs($difference)
-      #set $amt_hours = int($delta) // 3600
       #set $amt_minutes = (int($delta) % 3600) // 60
       #set $amt_seconds = int($delta) % 60
-      #set $amt_str = "%d%s %d%s %d%s" % ($amt_hours, $hour_short, $amt_minutes, $minute_short, $amt_seconds, $second_short)
+      #set $amt_str = "%d%s %d%s" % ($amt_minutes, $minute_short, $amt_seconds, $second_short)
       #if $difference > 0
         #set $delta_str = "%s %s" % ( $amt_str, $obs.label.more_than_yesterday )
       #else
