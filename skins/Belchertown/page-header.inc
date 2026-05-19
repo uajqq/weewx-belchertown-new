@@ -12,7 +12,7 @@
         <div class="col-sm-5">
             <div class="wx-stn-name">
 		#if $page == "charts"
-        <h1>$obs.label.charts_page_header</h1>
+        <h1>$charts_page_header_label</h1>
 		#else if $page == "records"
                 <h1>$obs.label.records_page_header</h1>
 		#else if $page == "reports"

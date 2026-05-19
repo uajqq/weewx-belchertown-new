@@ -148,54 +148,55 @@ def _parse_aeris_json(obj):
         return {}
 
 
-def _validate_and_fix_legacy_options(extras_dict):
+def _apply_legacy_option_mappings(section_dict, section_name, legacy_mapping):
+    """Apply legacy option mappings to a configuration section.
+
+    If a legacy key is present, it is always used for now (backward
+    compatibility) and mapped onto the current key name, with a warning.
     """
-    Check for deprecated/legacy option names and warn users.
-    
-    Maps legacy naming patterns to current ones:
-    - "graph_*" → "chart_*"
-    - "graphs_*" → "charts_*"
-    
-    Args:
-        extras_dict: The [Extras] configuration dictionary
-        
-    Returns:
-        Updated extras_dict with legacy keys replaced (originals removed)
-    """
-    
-    # Legacy mapping: old_key -> new_key
-    legacy_mapping = {
-        "graph_page_show_all_button": "chart_page_show_all_button",
-        "graph_page_default_graphgroup": "chart_page_default_chartgroup",
-        "highcharts_homepage_graphgroup": "highcharts_homepage_chartgroup",
-        "graphs_page_header": "charts_page_header",
-    }
-    
-    found_legacy = []
-    
+
     for legacy_key, new_key in legacy_mapping.items():
-        if legacy_key in extras_dict:
-            value = extras_dict[legacy_key]
-            found_legacy.append((legacy_key, new_key, value))
-            
-            # If the new key doesn't already exist, use the legacy value
-            if new_key not in extras_dict:
-                extras_dict[new_key] = value
-                log.warning(
-                    f"Belchertown: Deprecated option '{legacy_key}' found in skin configuration. "
-                    f"This has been automatically mapped to '{new_key}'. "
-                    f"Please update your config to use the new name."
-                )
-            else:
-                log.warning(
-                    f"Belchertown: Deprecated option '{legacy_key}' found in skin configuration, "
-                    f"but new option '{new_key}' is already defined. Ignoring legacy key. "
-                    f"Please remove '{legacy_key}' from your configuration."
-                )
-            
-            # Remove the legacy key
-            del extras_dict[legacy_key]
-    
+        if legacy_key in section_dict:
+            section_dict[new_key] = section_dict[legacy_key]
+            log.warning(
+                f"Belchertown: Deprecated option '{legacy_key}' found in [{section_name}]. "
+                f"Using it as '{new_key}' for backward compatibility. "
+                f"Please rename it in weewx.conf."
+            )
+
+    return section_dict
+
+
+EXTRAS_LEGACY_MAPPING = {
+    "graph_page_show_all_button": "chart_page_show_all_button",
+    "graph_page_default_graphgroup": "chart_page_default_chartgroup",
+    "highcharts_homepage_graphgroup": "highcharts_homepage_chartgroup",
+}
+
+LABELS_GENERIC_LEGACY_MAPPING = {
+    "nav_graphs": "nav_charts",
+    "graphs_page_header": "charts_page_header",
+    "homepage_graphs_link": "homepage_charts_link",
+    "graphs_page_all_button": "charts_page_all_button",
+    "graphs_windrose_frequency": "charts_windrose_frequency",
+    "graphs_windDir_ordinals": "charts_windDir_ordinals",
+}
+
+
+def _validate_and_fix_legacy_options(extras_dict, label_generic_dict=None):
+    """Check for deprecated/legacy option names and warn users.
+
+    Maps legacy naming patterns to current ones in supported sections.
+    Legacy values take precedence when present for backward compatibility.
+    """
+
+    _apply_legacy_option_mappings(extras_dict, "Extras", EXTRAS_LEGACY_MAPPING)
+
+    if label_generic_dict is not None:
+        _apply_legacy_option_mappings(
+            label_generic_dict, "Labels][Generic", LABELS_GENERIC_LEGACY_MAPPING
+        )
+
     return extras_dict
 
 
@@ -352,9 +353,62 @@ class getData(SearchList):
         config_dict = self.generator.config_dict
         skin_dict = self.generator.skin_dict
         extras_dict = self.generator.skin_dict["Extras"]
+        label_generic_dict = skin_dict.get("Labels", {}).get("Generic", None)
+        if label_generic_dict is None:
+            skin_dict.setdefault("Labels", {})["Generic"] = {}
+            label_generic_dict = skin_dict["Labels"]["Generic"]
+
+        # Pull user overrides directly from weewx.conf report stanza and
+        # normalize any legacy keys there before copying into effective skin dict.
+        report_name = skin_dict.get("skin", "Belchertown")
+        report_dict = config_dict.get("StdReport", {}).get(report_name, {})
+        report_extras_dict = report_dict.get("Extras", {})
+        report_label_generic_dict = report_dict.get("Labels", {}).get("Generic", {})
+
+        _apply_legacy_option_mappings(
+            report_extras_dict,
+            f"StdReport][{report_name}][Extras",
+            EXTRAS_LEGACY_MAPPING,
+        )
+        _apply_legacy_option_mappings(
+            report_label_generic_dict,
+            f"StdReport][{report_name}][Labels][Generic",
+            LABELS_GENERIC_LEGACY_MAPPING,
+        )
+
+        for key in EXTRAS_LEGACY_MAPPING.values():
+            if key in report_extras_dict:
+                extras_dict[key] = report_extras_dict[key]
+
+        for key in LABELS_GENERIC_LEGACY_MAPPING.values():
+            if key in report_label_generic_dict:
+                label_generic_dict[key] = report_label_generic_dict[key]
+
+        # Backward compatibility for users who put page headers under Extras.
+        if "graphs_page_header" in report_extras_dict:
+            label_generic_dict["charts_page_header"] = report_extras_dict[
+                "graphs_page_header"
+            ]
+            log.warning(
+                "Belchertown: Deprecated option 'graphs_page_header' found in "
+                f"[StdReport][{report_name}][Extras]. Using it as "
+                "'charts_page_header' for backward compatibility. "
+                f"Please move it to [StdReport][{report_name}][Labels][Generic]."
+            )
+        elif "charts_page_header" in report_extras_dict:
+            label_generic_dict["charts_page_header"] = report_extras_dict[
+                "charts_page_header"
+            ]
+            log.warning(
+                "Belchertown: Option 'charts_page_header' found in "
+                f"[StdReport][{report_name}][Extras]. Using it, but this option "
+                f"belongs under [StdReport][{report_name}][Labels][Generic]."
+            )
         
         # Validate and fix any legacy configuration options
-        extras_dict = _validate_and_fix_legacy_options(extras_dict)
+        extras_dict = _validate_and_fix_legacy_options(
+            extras_dict, label_generic_dict
+        )
         
         db_binder = self.generator.db_binder
 
@@ -2260,6 +2314,24 @@ class getData(SearchList):
             "aqi_category": aqi_category,
             "aqi_location": aqi_location,
             "aqi_time": aqi_time,
+            "nav_charts_label": label_generic_dict.get(
+                "nav_charts", label_dict["nav_charts"]
+            ),
+            "charts_page_header_label": label_generic_dict.get(
+                "charts_page_header", label_dict["charts_page_header"]
+            ),
+            "homepage_charts_link_label": label_generic_dict.get(
+                "homepage_charts_link", label_dict["homepage_charts_link"]
+            ),
+            "charts_page_all_button_label": label_generic_dict.get(
+                "charts_page_all_button", label_dict["charts_page_all_button"]
+            ),
+            "charts_windrose_frequency_label": label_generic_dict.get(
+                "charts_windrose_frequency", label_dict["charts_windrose_frequency"]
+            ),
+            "charts_windDir_ordinals_label": label_generic_dict.get(
+                "charts_windDir_ordinals", label_dict["charts_windDir_ordinals"]
+            ),
             "beaufort0": label_dict["beaufort0"],
             "beaufort1": label_dict["beaufort1"],
             "beaufort2": label_dict["beaufort2"],

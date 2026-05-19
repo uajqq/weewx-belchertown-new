@@ -212,7 +212,7 @@ function getURLvar(k) {
 }
 
 // http://stackoverflow.com/a/14887961/1177153
-var weatherdirection = $obs.label.charts_windDir_ordinals;
+var weatherdirection = $charts_windDir_ordinals_label;
 
 // Pre-built array of 16 compass ordinals for arithmetic wind-direction lookup
 const ORDINATE_NAMES = [
@@ -3115,7 +3115,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.yAxis[0].min = 0;
                 options.yAxis[0].endOnTick = false;
                 options.yAxis[0].reversedStacks = false;
-                options.yAxis[0].title.text = "$obs.label.charts_windrose_frequency (%)";
+                options.yAxis[0].title.text = "$charts_windrose_frequency_label (%)";
                 options.yAxis[0].gridLineWidth = 0;
                 options.yAxis[0].labels = {enabled: false}
                 options.plotOptions = {
