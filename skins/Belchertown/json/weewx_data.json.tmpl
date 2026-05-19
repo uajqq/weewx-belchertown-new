@@ -222,6 +222,7 @@
         "uv": {
             "max": "$day.UV.max",
             "maxtime": "$day.UV.maxtime",
+            "average": "$day.UV.avg",
             "min": "$day.UV.min",
             "mintime": "$day.UV.mintime"
         },
@@ -230,8 +231,14 @@
         "solar_radiation": {
             "max": "$day.radiation.max",
             "maxtime": "$day.radiation.maxtime",
+            "average": "$day.radiation.avg",
             "min": "$day.radiation.min",
             "mintime": "$day.radiation.mintime"
+        },
+        #end if
+        #if $day.sunshineDur.has_data
+        "sunshineDur": {
+            "sum": "$day.sunshineDur.sum"
         },
         #end if
         "rain": {
@@ -299,6 +306,7 @@
         "uv": {
             "max": "$span(time_delta=604800).UV.max",
             "maxtime": "$span(time_delta=604800).UV.maxtime",
+            "average": "$span(time_delta=604800).UV.avg",
             "min": "$span(time_delta=604800).UV.min",
             "mintime": "$span(time_delta=604800).UV.mintime"
         },
@@ -307,8 +315,14 @@
         "solar_radiation": {
             "max": "$span(time_delta=604800).radiation.max",
             "maxtime": "$span(time_delta=604800).radiation.maxtime",
+            "average": "$span(time_delta=604800).radiation.avg",
             "min": "$span(time_delta=604800).radiation.min",
             "mintime": "$span(time_delta=604800).radiation.mintime"
+        },
+        #end if
+        #if $span(time_delta=604800).sunshineDur.has_data
+        "sunshineDur": {
+            "sum": "$span(time_delta=604800).sunshineDur.sum"
         },
         #end if
         "rain": {
@@ -377,6 +391,7 @@
         "uv": {
             "max": "$month.UV.max",
             "maxtime": "$month.UV.maxtime",
+            "average": "$month.UV.avg",
             "min": "$month.UV.min",
             "mintime": "$month.UV.mintime"
         },
@@ -385,6 +400,7 @@
         "solar_radiation": {
             "max": "$month.radiation.max",
             "maxtime": "$month.radiation.maxtime",
+            "average": "$month.radiation.avg",
             "min": "$month.radiation.min",
             "mintime": "$month.radiation.mintime"
         },
@@ -455,6 +471,7 @@
         "uv": {
             "max": "$year.UV.max",
             "maxtime": "$year.UV.maxtime",
+            "average": "$year.UV.avg",
             "min": "$year.UV.min",
             "mintime": "$year.UV.mintime"
         },
@@ -463,6 +480,7 @@
         "solar_radiation": {
             "max": "$year.radiation.max",
             "maxtime": "$year.radiation.maxtime",
+            "average": "$year.radiation.avg",
             "min": "$year.radiation.min",
             "mintime": "$year.radiation.mintime"
         },
@@ -488,6 +506,19 @@
         "rain": {
             "sum": "$yesterday.rain.sum",
             "max": "$yesterday.rainRate.max"
+        },
+        #if $yesterday.sunshineDur.has_data
+        "sunshineDur": {
+            "sum": "$yesterday.sunshineDur.sum"
+        },
+        #end if
+        "uv": {
+            "max": "$yesterday.UV.max",
+            "average": "$yesterday.UV.avg"
+        },
+        "solar_radiation": {
+            "max": "$yesterday.radiation.max",
+            "average": "$yesterday.radiation.avg"
         }
     },
     "last365": {
@@ -502,6 +533,14 @@
         "rain": {
             "sum": "$span(time_delta=31536000).rain.sum",
             "max": "$span(time_delta=31536000).rainRate.max"
+        },
+        "uv": {
+            "max": "$span(time_delta=31536000).UV.max",
+            "average": "$span(time_delta=31536000).UV.avg"
+        },
+        "solar_radiation": {
+            "max": "$span(time_delta=31536000).radiation.max",
+            "average": "$span(time_delta=31536000).radiation.avg"
         }
     },
     "alltime": {
@@ -519,6 +558,14 @@
         "rain": {
             "sum": "$alltime.rain.sum",
             "max": "$alltime.rainRate.max"
+        },
+        "uv": {
+            "max": "$alltime.UV.max",
+            "average": "$alltime.UV.avg"
+        },
+        "solar_radiation": {
+            "max": "$alltime.radiation.max",
+            "average": "$alltime.radiation.avg"
         }
     },
     "almanac": {

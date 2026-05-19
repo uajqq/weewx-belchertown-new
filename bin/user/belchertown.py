@@ -50,7 +50,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-VERSION = "1.8-new-belchertown"
+VERSION = "1.8kw-new-belchertown"
 log.info(f"version {VERSION}")
 
 # Default timeout for all HTTP requests (seconds)
@@ -148,55 +148,54 @@ def _parse_aeris_json(obj):
         return {}
 
 
-def _apply_legacy_option_mappings(section_dict, section_name, legacy_mapping):
-    """Apply legacy option mappings to a configuration section.
-
-    If a legacy key is present, it is always used for now (backward
-    compatibility) and mapped onto the current key name, with a warning.
+def _validate_and_fix_legacy_options(extras_dict):
     """
-
+    Check for deprecated/legacy option names and warn users.
+    
+    Maps legacy naming patterns to current ones:
+    - "graph_*" → "chart_*"
+    - "graphs_*" → "charts_*"
+    
+    Args:
+        extras_dict: The [Extras] configuration dictionary
+        
+    Returns:
+        Updated extras_dict with legacy keys replaced (originals removed)
+    """
+    
+    # Legacy mapping: old_key -> new_key
+    legacy_mapping = {
+        "graph_page_show_all_button": "chart_page_show_all_button",
+        "graph_page_default_graphgroup": "chart_page_default_chartgroup",
+        "highcharts_homepage_graphgroup": "highcharts_homepage_chartgroup",
+        "graphs_page_header": "charts_page_header",
+    }
+    
+    found_legacy = []
+    
     for legacy_key, new_key in legacy_mapping.items():
-        if legacy_key in section_dict:
-            section_dict[new_key] = section_dict[legacy_key]
-            log.warning(
-                f"Belchertown: Deprecated option '{legacy_key}' found in [{section_name}]. "
-                f"Using it as '{new_key}' for backward compatibility. "
-                f"Please rename it in weewx.conf."
-            )
-
-    return section_dict
-
-
-EXTRAS_LEGACY_MAPPING = {
-    "graph_page_show_all_button": "chart_page_show_all_button",
-    "graph_page_default_graphgroup": "chart_page_default_chartgroup",
-    "highcharts_homepage_graphgroup": "highcharts_homepage_chartgroup",
-}
-
-LABELS_GENERIC_LEGACY_MAPPING = {
-    "nav_graphs": "nav_charts",
-    "graphs_page_header": "charts_page_header",
-    "homepage_graphs_link": "homepage_charts_link",
-    "graphs_page_all_button": "charts_page_all_button",
-    "graphs_windrose_frequency": "charts_windrose_frequency",
-    "graphs_windDir_ordinals": "charts_windDir_ordinals",
-}
-
-
-def _validate_and_fix_legacy_options(extras_dict, label_generic_dict=None):
-    """Check for deprecated/legacy option names and warn users.
-
-    Maps legacy naming patterns to current ones in supported sections.
-    Legacy values take precedence when present for backward compatibility.
-    """
-
-    _apply_legacy_option_mappings(extras_dict, "Extras", EXTRAS_LEGACY_MAPPING)
-
-    if label_generic_dict is not None:
-        _apply_legacy_option_mappings(
-            label_generic_dict, "Labels][Generic", LABELS_GENERIC_LEGACY_MAPPING
-        )
-
+        if legacy_key in extras_dict:
+            value = extras_dict[legacy_key]
+            found_legacy.append((legacy_key, new_key, value))
+            
+            # If the new key doesn't already exist, use the legacy value
+            if new_key not in extras_dict:
+                extras_dict[new_key] = value
+                log.warning(
+                    f"Belchertown: Deprecated option '{legacy_key}' found in skin configuration. "
+                    f"This has been automatically mapped to '{new_key}'. "
+                    f"Please update your config to use the new name."
+                )
+            else:
+                log.warning(
+                    f"Belchertown: Deprecated option '{legacy_key}' found in skin configuration, "
+                    f"but new option '{new_key}' is already defined. Ignoring legacy key. "
+                    f"Please remove '{legacy_key}' from your configuration."
+                )
+            
+            # Remove the legacy key
+            del extras_dict[legacy_key]
+    
     return extras_dict
 
 
@@ -276,7 +275,7 @@ class getData(SearchList):
             return names[0]
 
     def _get_radar_html(self, extras_dict, lat, lon, zoom, width, height,
-                        rain, wind, temp, marker):
+                        rain, wind, temp, marker, overlay):
         """Generate radar HTML based on provider configuration."""
         custom = extras_dict.get("radar_html", "")
         if custom:
@@ -287,10 +286,10 @@ class getData(SearchList):
                 extras_dict, width, height, lat, lon, zoom, dark=False
             )
         return self._build_windy_radar(
-            width, height, lat, lon, zoom, rain, wind, temp, marker == "true"
+            width, height, lat, lon, zoom, rain, wind, temp, marker == "true", overlay
         )
 
-    def _get_radar_html_dark(self, extras_dict, lat, lon, zoom, width, height):
+    def _get_radar_html_dark(self, extras_dict, lat, lon, zoom, overlay, width, height):
         """Generate dark mode radar HTML based on provider configuration."""
         custom = extras_dict.get("radar_html_dark", "")
         if custom:
@@ -326,13 +325,15 @@ class getData(SearchList):
             f'referrerpolicy="no-referrer"></img>'
         )
 
-    def _build_windy_radar(self, width, height, lat, lon, zoom, rain, wind, temp, marker):
+    def _build_windy_radar(self, width, height, lat, lon, zoom, rain, wind, temp, marker, overlay):
         """Build Windy.com embedded radar HTML."""
         marker_str = "true" if marker else "false"
         return (
             f'<iframe width="{width}px" height="{height}px" '
             f'src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}'
-            f'&zoom={zoom}&level=surface&overlay=radar&menu=&message=true'
+            f'&zoom={zoom}&level=surface'
+            f'&overlay={overlay}'
+            f'&menu=&message=true'
             f'&marker={marker_str}&calendar=&pressure=&type=map'
             f'&location=coordinates&detail=&detailLat={lat}&detailLon={lon}'
             f'&metricRain={rain}&metricWind={wind}&metricTemp={temp}'
@@ -353,62 +354,9 @@ class getData(SearchList):
         config_dict = self.generator.config_dict
         skin_dict = self.generator.skin_dict
         extras_dict = self.generator.skin_dict["Extras"]
-        label_generic_dict = skin_dict.get("Labels", {}).get("Generic", None)
-        if label_generic_dict is None:
-            skin_dict.setdefault("Labels", {})["Generic"] = {}
-            label_generic_dict = skin_dict["Labels"]["Generic"]
-
-        # Pull user overrides directly from weewx.conf report stanza and
-        # normalize any legacy keys there before copying into effective skin dict.
-        report_name = skin_dict.get("skin", "Belchertown")
-        report_dict = config_dict.get("StdReport", {}).get(report_name, {})
-        report_extras_dict = report_dict.get("Extras", {})
-        report_label_generic_dict = report_dict.get("Labels", {}).get("Generic", {})
-
-        _apply_legacy_option_mappings(
-            report_extras_dict,
-            f"StdReport][{report_name}][Extras",
-            EXTRAS_LEGACY_MAPPING,
-        )
-        _apply_legacy_option_mappings(
-            report_label_generic_dict,
-            f"StdReport][{report_name}][Labels][Generic",
-            LABELS_GENERIC_LEGACY_MAPPING,
-        )
-
-        for key in EXTRAS_LEGACY_MAPPING.values():
-            if key in report_extras_dict:
-                extras_dict[key] = report_extras_dict[key]
-
-        for key in LABELS_GENERIC_LEGACY_MAPPING.values():
-            if key in report_label_generic_dict:
-                label_generic_dict[key] = report_label_generic_dict[key]
-
-        # Backward compatibility for users who put page headers under Extras.
-        if "graphs_page_header" in report_extras_dict:
-            label_generic_dict["charts_page_header"] = report_extras_dict[
-                "graphs_page_header"
-            ]
-            log.warning(
-                "Belchertown: Deprecated option 'graphs_page_header' found in "
-                f"[StdReport][{report_name}][Extras]. Using it as "
-                "'charts_page_header' for backward compatibility. "
-                f"Please move it to [StdReport][{report_name}][Labels][Generic]."
-            )
-        elif "charts_page_header" in report_extras_dict:
-            label_generic_dict["charts_page_header"] = report_extras_dict[
-                "charts_page_header"
-            ]
-            log.warning(
-                "Belchertown: Option 'charts_page_header' found in "
-                f"[StdReport][{report_name}][Extras]. Using it, but this option "
-                f"belongs under [StdReport][{report_name}][Labels][Generic]."
-            )
         
         # Validate and fix any legacy configuration options
-        extras_dict = _validate_and_fix_legacy_options(
-            extras_dict, label_generic_dict
-        )
+        extras_dict = _validate_and_fix_legacy_options(extras_dict)
         
         db_binder = self.generator.db_binder
 
@@ -611,13 +559,16 @@ class getData(SearchList):
         marker = "true" if (
             "radar_marker" in extras_dict and extras_dict["radar_marker"] == "1"
         ) else ""
+        radar_overlay = "radar"
+        if ("radar_overlay" in extras_dict and extras_dict["radar_overlay"] != ""):
+          radar_overlay = extras_dict["radar_overlay"]
 
         radar_html = self._get_radar_html(
             extras_dict, lat, lon, zoom, radar_width, radar_height,
-            radar_rain, radar_wind, radar_temp, marker
+            radar_rain, radar_wind, radar_temp, marker, radar_overlay
         )
         radar_html_dark = self._get_radar_html_dark(
-            extras_dict, lat, lon, zoom, radar_width, radar_height
+            extras_dict, lat, lon, zoom, radar_width, radar_height, radar_overlay
         )
         radar_html_kiosk = (
             self._get_radar_html_kiosk(extras_dict, skin_dict)
@@ -804,6 +755,18 @@ class getData(SearchList):
         # Find the number of decimals to round the result based on the skin.conf
         rain_round = skin_dict["Units"]["StringFormats"].get(skin_rain_unit, "%.2f")
 
+## edit MaKi Beginn
+        # Rain lookups
+        # Find the group_name for rain in database
+        sunshineDur_unit = converter.group_unit_dict["group_deltatime"]
+
+        # Find the group_name for rain in the skin.conf
+        skin_sunshineDur_unit = self.generator.converter.group_unit_dict["group_deltatime"]
+
+        # Find the number of decimals to round the result based on the skin.conf
+        sunshineDur_round = skin_dict["Units"]["StringFormats"].get(skin_sunshineDur_unit, "%.2f")
+## edit MaKi Ende
+
         rainiest_day_sql = """
             SELECT dateTime, sum FROM archive_day_rain
             WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
@@ -938,6 +901,144 @@ class getData(SearchList):
             at_rain_highest_year_query[0],
             locale.format_string("%g", float(at_rain_highest_year_converted)),
         ]
+
+## edit MaKi Beginn
+        # suniest day
+        suniest_day_sql = """
+            SELECT dateTime, sum FROM archive_day_sunshineDur
+            WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
+        """
+        suniest_day_query = wx_manager.getSql(suniest_day_sql, (year_start_epoch,))
+        if suniest_day_query is not None:
+            suniest_day_tuple = (suniest_day_query[1], sunshineDur_unit, "group_deltatime")
+            suniest_day_converted = (
+                sunshineDur_round % self.generator.converter.convert(suniest_day_tuple)[0]
+            )
+            suniest_day = [
+                suniest_day_query[0],
+                locale.format_string("%g", float(suniest_day_converted)),
+            ]
+        else:
+            suniest_day = [
+                calendar.timegm(time.gmtime()),
+                locale.format_string("%.2f", 0),
+            ]
+
+        at_suniest_day_sql = """
+            SELECT dateTime, sum FROM archive_day_sunshineDur
+            ORDER BY sum DESC LIMIT 1;
+        """
+        at_suniest_day_query = wx_manager.getSql(at_suniest_day_sql)
+        at_suniest_day_tuple = (at_suniest_day_query[1], sunshineDur_unit, "group_deltatime")
+        at_suniest_day_converted = (
+            sunshineDur_round % self.generator.converter.convert(at_suniest_day_tuple)[0]
+        )
+        at_suniest_day = [
+            at_suniest_day_query[0],
+            locale.format_string("%g", float(at_suniest_day_converted)),
+        ]
+
+        # Find what kind of database we're working with and specify the
+        # correctly tailored SQL Query for each type of database
+        data_binding = config_dict["StdArchive"]["data_binding"]
+        database = config_dict["DataBindings"][data_binding]["database"]
+        database_type = config_dict["Databases"][database]["database_type"]
+        driver = config_dict["DatabaseTypes"][database_type]["driver"]
+        current_year = str(now.year)
+        if driver == "weedb.sqlite":
+            year_suniest_month_sql = """
+                SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, SUM(sum) AS total
+                FROM archive_day_sunshineDur
+                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?
+                GROUP BY month ORDER BY total DESC LIMIT 1;
+            """
+            at_suniest_month_sql = """
+                SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY month, year ORDER BY total DESC LIMIT 1;
+            """
+            year_sunshineDur_data_sql = """
+                SELECT dateTime, sum FROM archive_day_sunshineDur
+                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?;
+            """
+            at_sunshineDur_highest_year_sql = """
+                SELECT strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY year ORDER BY total DESC LIMIT 1;
+            """
+        elif driver == "weedb.mysql":
+            year_suniest_month_sql = """
+                SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_sunshineDur
+                WHERE YEAR(FROM_UNIXTIME(dateTime)) = ?
+                GROUP BY month ORDER BY total DESC LIMIT 1;
+            """
+            at_suniest_month_sql = """
+                SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY month, year ORDER BY total DESC LIMIT 1;
+            """
+            year_sunshineDur_data_sql = """
+                SELECT dateTime, ROUND(sum, 2) FROM archive_day_sunshineDur
+                WHERE year(FROM_UNIXTIME(dateTime)) = ?;
+            """
+            at_sunshineDur_highest_year_sql = """
+                SELECT FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY year ORDER BY total DESC LIMIT 1;
+            """
+
+        # suniest month
+        year_suniest_month_query = wx_manager.getSql(
+            year_suniest_month_sql, (current_year,)
+        )
+        if year_suniest_month_query is not None:
+            year_suniest_month_tuple = (
+                year_suniest_month_query[1],
+                sunshineDur_unit,
+                "group_deltatime",
+            )
+            year_suniest_month_converted = (
+                sunshineDur_round
+                % self.generator.converter.convert(year_suniest_month_tuple)[0]
+            )
+            year_suniest_month_name = calendar.month_name[
+                int(year_suniest_month_query[0])
+            ]
+            year_suniest_month = [
+                year_suniest_month_name,
+                locale.format_string("%g", float(year_suniest_month_converted)),
+            ]
+        else:
+            year_suniest_month = ["N/A", 0.0]
+
+        # All time suniest month
+        at_suniest_month_query = wx_manager.getSql(at_suniest_month_sql)
+        at_suniest_month_tuple = (at_suniest_month_query[2], sunshineDur_unit, "group_deltatime")
+        at_suniest_month_converted = (
+            sunshineDur_round % self.generator.converter.convert(at_suniest_month_tuple)[0]
+        )
+        at_suniest_month_name = calendar.month_name[int(at_suniest_month_query[0])]
+        at_suniest_month = [
+            f"{at_suniest_month_name} {at_suniest_month_query[1]}",
+            locale.format_string("%g", float(at_suniest_month_converted)),
+        ]
+
+        # All time suniest year
+        at_sunshineDur_highest_year_query = wx_manager.getSql(at_sunshineDur_highest_year_sql)
+        at_sunshineDur_highest_year_tuple = (
+            at_sunshineDur_highest_year_query[1],
+            sunshineDur_unit,
+            "group_deltatime",
+        )
+        at_sunshineDur_highest_year_converted = (
+            sunshineDur_round % self.generator.converter.convert(at_sunshineDur_highest_year_tuple)[0]
+        )
+        at_sunshineDur_highest_year = [
+            at_sunshineDur_highest_year_query[0],
+            locale.format_string("%g", float(at_sunshineDur_highest_year_converted)),
+        ]
+## edit MaKi Ende
 
         # Consecutive days with/without rainfall
         # Track running max inline instead of storing all values in dicts
@@ -1201,8 +1302,8 @@ class getData(SearchList):
                             log.error(f"Pirate Weather missing config: {e}")
                         except Exception as e:
                             log.error(f"Pirate Weather update failed: {e}")
-                    else:
-                        log.info("Forecast is current, no update needed.")
+                    #else:
+                    #   log.info("Forecast is current, no update needed.")
 
                     # current_conditions.json (tiny file just with 'current')
                     if current_conditions_is_stale:
@@ -1229,8 +1330,8 @@ class getData(SearchList):
                             log.error(
                                 f"Pirate Weather current-conditions write failed: {e}",
                             )
-                    else:
-                        log.info("Current conditions are current, no update needed.")
+                    #else:
+                    #   log.info("Current conditions are current, no update needed.")
 
                     # Read current_conditions.json and populate the variables used below
                     with open(current_conditions_file, "r", encoding="utf-8") as read_file:
@@ -1257,7 +1358,8 @@ class getData(SearchList):
                         current_obs_summary = (
                             current_conditions_data.get("summary", "") or ""
                         )
-                        cloud_cover = f"{current_conditions_data.get('cloudCover', '')}"
+                        #cloud_cover = f"{current_conditions_data.get('cloudCover', '')}"
+                        cloud_cover = f"{current_conditions_data.get('cloudCover', '')*100:.0f}"
                     except Exception as e:
                         current_obs_icon = ""
                         current_obs_summary = ""
@@ -2127,6 +2229,23 @@ class getData(SearchList):
                 else:
                     row_parts.append('<i class="fa fa-arrow-up barometer-up"></i>')
                 row_parts.append("</span>")  # Close the span
+
+## edit MaKi Beginn
+            if obs=='outHumidity':
+                humabs_output = getattr(current,'outHumAbs',None)
+                if humabs_output is not None:
+                    humabs_output = humabs_output.gram_per_meter_cubed
+                    obs_humabs_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
+                    obs_humabs_output += f"<span class='outHumAbs'>%s</span><!-- AJAX -->" % humabs_output
+                    row_parts.append(obs_humabs_output)
+            if obs=='radiation':
+                maxSolarRad_output = getattr(current,'maxSolarRad',None)
+                if maxSolarRad_output is not None:
+                    maxSolarRad_output = maxSolarRad_output.watt_per_meter_squared
+                    obs_maxSolarRad_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
+                    obs_maxSolarRad_output += f"<span class='maxSolarRad'>%s</span><!-- AJAX -->" % maxSolarRad_output
+                    row_parts.append(obs_maxSolarRad_output)
+## edit MaKi Ende
             row_parts.append("</td>")
             row_parts.append("</tr>")
             station_obs_parts.append("".join(row_parts))
@@ -2262,6 +2381,7 @@ class getData(SearchList):
             "highcharts_decimal": highcharts_decimal,
             "highcharts_thousands": highcharts_thousands,
             "radar_html": radar_html,
+            "radar_overlay": radar_overlay,            
             "radar_html_dark": radar_html_dark,
             "radar_html_kiosk": radar_html_kiosk,
             "archive_interval_ms": archive_interval_ms,
@@ -2279,9 +2399,20 @@ class getData(SearchList):
             "at_outTemp_range_min": at_outTemp_range_min,
             "rainiest_day": rainiest_day,
             "at_rainiest_day": at_rainiest_day,
+## edit MaKi Beginn
+            "suniest_day": suniest_day,
+            "at_suniest_day": at_suniest_day,
+## edit MaKi Ende
             "year_rainiest_month": year_rainiest_month,
             "at_rainiest_month": at_rainiest_month,
+## edit MaKi Beginn
+            "year_suniest_month": year_suniest_month,
+            "at_suniest_month": at_suniest_month,
+## edit MaKi Ende
             "at_rain_highest_year": at_rain_highest_year,
+## edit MaKi Beginn
+            "at_sunshineDur_highest_year": at_sunshineDur_highest_year,
+## edit MaKi Ende
             "year_days_with_rain": year_days_with_rain,
             "year_days_without_rain": year_days_without_rain,
             "at_days_with_rain": at_days_with_rain,
@@ -2314,24 +2445,6 @@ class getData(SearchList):
             "aqi_category": aqi_category,
             "aqi_location": aqi_location,
             "aqi_time": aqi_time,
-            "nav_charts_label": label_generic_dict.get(
-                "nav_charts", label_dict["nav_charts"]
-            ),
-            "charts_page_header_label": label_generic_dict.get(
-                "charts_page_header", label_dict["charts_page_header"]
-            ),
-            "homepage_charts_link_label": label_generic_dict.get(
-                "homepage_charts_link", label_dict["homepage_charts_link"]
-            ),
-            "charts_page_all_button_label": label_generic_dict.get(
-                "charts_page_all_button", label_dict["charts_page_all_button"]
-            ),
-            "charts_windrose_frequency_label": label_generic_dict.get(
-                "charts_windrose_frequency", label_dict["charts_windrose_frequency"]
-            ),
-            "charts_windDir_ordinals_label": label_generic_dict.get(
-                "charts_windDir_ordinals", label_dict["charts_windDir_ordinals"]
-            ),
             "beaufort0": label_dict["beaufort0"],
             "beaufort1": label_dict["beaufort1"],
             "beaufort2": label_dict["beaufort2"],
@@ -2884,7 +2997,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     special_target_unit = line_options.get("unit", None)
 
                     # Get the unit label
-                    if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+                    if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
                         obs_label = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
                     elif (
                         observation_type == "weatherRange"
@@ -3019,8 +3132,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             )
                     if obs_round is None:
                         # Add rounding from weewx.conf/skin.conf so Highcharts can use it
-                        if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
-                            rounding_obs_lookup = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
+                        if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
+                            rounding_obs_lookup = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur", "ET"
                         elif observation_type == "weatherRange":
                             rounding_obs_lookup = weatherRange_obs_lookup
                         elif observation_type == "haysChart":
@@ -3944,8 +4057,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             }
 
         # Special Belchertown Skin rain counter
-        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
-            obs_lookup = observation[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
+        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
+            obs_lookup = observation[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur", "ET"
             # Force sum on this observation
             if aggregate_interval:
                 aggregate_type = "sum"
@@ -4247,7 +4360,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         # same pattern applies to duration observations.
         # None/"" values are passed through so full-length charts
         # (like WeeWX v4 archiveYearSpan) don't extend past the last actual plot.
-        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
             running_count = 0
             obs_round_vt = []
             for val in obs_vt[0]:
