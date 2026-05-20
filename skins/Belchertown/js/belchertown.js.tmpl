@@ -741,20 +741,35 @@ var unit_rounding_array = "";
 var unit_label_array = "";
 var weewx_data = "";
 
+function getNestedValue(obj, path, fallback = "N/A") {
+    try {
+        var cur = obj;
+        for (var i = 0; i < path.length; i++) {
+            if (cur == null || typeof cur !== "object" || !(path[i] in cur)) {
+                return fallback;
+            }
+            cur = cur[path[i]];
+        }
+        return (cur === null || cur === undefined || cur === "") ? fallback : cur;
+    } catch (e) {
+        return fallback;
+    }
+}
+
 function updateDailySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".dailystatshigh").html(d["outTemp"]["max"]);
-    jQuery(".dailystatslow").html(d["outTemp"]["min"]);
-    jQuery(".dailystatswindavg").html(d["wind"]["average"]);
-    jQuery(".dailystatswindmax").html(d["wind"]["max"]);
-    jQuery(".dailystatsrain").html(d["rain"]["sum"]);
-    jQuery(".dailystatsrainrate").html(d["rain"]["max"]);
-    jQuery(".dailystatsuvavg").html(d["uv"]["average"]);
-    jQuery(".dailystatsuvmax").html(d["uv"]["max"]);
-    jQuery(".dailystatsradiationavg").html(d["solar_radiation"]["average"]);
-    jQuery(".dailystatsradiationmax").html(d["solar_radiation"]["max"]);
-    jQuery(".dailystatssunshineDur").html(d["sunshineDur"]["sum"]);
+    jQuery(".dailystatshigh").html(getNestedValue(d, ["outTemp", "max"]));
+    jQuery(".dailystatslow").html(getNestedValue(d, ["outTemp", "min"]));
+    jQuery(".dailystatswindavg").html(getNestedValue(d, ["wind", "average"]));
+    jQuery(".dailystatswindmax").html(getNestedValue(d, ["wind", "max"]));
+    jQuery(".dailystatsrain").html(getNestedValue(d, ["rain", "sum"]));
+    jQuery(".dailystatsrainrate").html(getNestedValue(d, ["rain", "max"]));
+    jQuery(".dailystatsuvavg").html(getNestedValue(d, ["uv", "average"]));
+    jQuery(".dailystatsuvmax").html(getNestedValue(d, ["uv", "max"]));
+    jQuery(".dailystatsradiationavg").html(getNestedValue(d, ["solar_radiation", "average"]));
+    jQuery(".dailystatsradiationmax").html(getNestedValue(d, ["solar_radiation", "max"]));
+    jQuery(".dailystatssunshineDur").html(getNestedValue(d, ["sunshineDur", "sum"]));
     if (d["wind"] && d["wind"]["windrun"]) {
         jQuery(".dailywindrun").html(d["wind"]["windrun"]);
     }
@@ -763,16 +778,16 @@ function updateDailySnapshot(data, key) {
 function updateMonthlySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".monthstatshigh").html(d["outTemp"]["max"]);
-    jQuery(".monthstatslow").html(d["outTemp"]["min"]);
-    jQuery(".monthstatswindavg").html(d["wind"]["average"]);
-    jQuery(".monthstatswindmax").html(d["wind"]["max"]);
-    jQuery(".monthstatsrain").html(d["rain"]["sum"]);
-    jQuery(".monthstatsrainrate").html(d["rain"]["max"]);
-    jQuery(".monthstatsuvavg").html(d["uv"]["average"]);
-    jQuery(".monthstatsuvmax").html(d["uv"]["max"]);
-    jQuery(".monthstatsradiationavg").html(d["solar_radiation"]["average"]);
-    jQuery(".monthstatsradiationmax").html(d["solar_radiation"]["max"]);
+    jQuery(".monthstatshigh").html(getNestedValue(d, ["outTemp", "max"]));
+    jQuery(".monthstatslow").html(getNestedValue(d, ["outTemp", "min"]));
+    jQuery(".monthstatswindavg").html(getNestedValue(d, ["wind", "average"]));
+    jQuery(".monthstatswindmax").html(getNestedValue(d, ["wind", "max"]));
+    jQuery(".monthstatsrain").html(getNestedValue(d, ["rain", "sum"]));
+    jQuery(".monthstatsrainrate").html(getNestedValue(d, ["rain", "max"]));
+    jQuery(".monthstatsuvavg").html(getNestedValue(d, ["uv", "average"]));
+    jQuery(".monthstatsuvmax").html(getNestedValue(d, ["uv", "max"]));
+    jQuery(".monthstatsradiationavg").html(getNestedValue(d, ["solar_radiation", "average"]));
+    jQuery(".monthstatsradiationmax").html(getNestedValue(d, ["solar_radiation", "max"]));
 }
 
 jQuery(document).on("change", "#snapshot-day-select", function() {
