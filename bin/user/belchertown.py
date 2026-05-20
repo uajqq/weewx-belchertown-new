@@ -50,7 +50,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-VERSION = "1.8-new-belchertown"
+VERSION = "1.8kw-new-belchertown"
 log.info(f"version {VERSION}")
 
 # Default timeout for all HTTP requests (seconds)
@@ -276,7 +276,7 @@ class getData(SearchList):
             return names[0]
 
     def _get_radar_html(self, extras_dict, lat, lon, zoom, width, height,
-                        rain, wind, temp, marker):
+                        rain, wind, temp, marker, overlay):
         """Generate radar HTML based on provider configuration."""
         custom = extras_dict.get("radar_html", "")
         if custom:
@@ -287,10 +287,10 @@ class getData(SearchList):
                 extras_dict, width, height, lat, lon, zoom, dark=False
             )
         return self._build_windy_radar(
-            width, height, lat, lon, zoom, rain, wind, temp, marker == "true"
+            width, height, lat, lon, zoom, rain, wind, temp, marker == "true", overlay
         )
 
-    def _get_radar_html_dark(self, extras_dict, lat, lon, zoom, width, height):
+    def _get_radar_html_dark(self, extras_dict, lat, lon, zoom, overlay, width, height):
         """Generate dark mode radar HTML based on provider configuration."""
         custom = extras_dict.get("radar_html_dark", "")
         if custom:
@@ -326,13 +326,15 @@ class getData(SearchList):
             f'referrerpolicy="no-referrer"></img>'
         )
 
-    def _build_windy_radar(self, width, height, lat, lon, zoom, rain, wind, temp, marker):
+    def _build_windy_radar(self, width, height, lat, lon, zoom, rain, wind, temp, marker, overlay):
         """Build Windy.com embedded radar HTML."""
         marker_str = "true" if marker else "false"
         return (
             f'<iframe width="{width}px" height="{height}px" '
             f'src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}'
-            f'&zoom={zoom}&level=surface&overlay=radar&menu=&message=true'
+            f'&zoom={zoom}&level=surface'
+            f'&overlay={overlay}'
+            f'&menu=&message=true'
             f'&marker={marker_str}&calendar=&pressure=&type=map'
             f'&location=coordinates&detail=&detailLat={lat}&detailLon={lon}'
             f'&metricRain={rain}&metricWind={wind}&metricTemp={temp}'
@@ -611,13 +613,16 @@ class getData(SearchList):
         marker = "true" if (
             "radar_marker" in extras_dict and extras_dict["radar_marker"] == "1"
         ) else ""
+        radar_overlay = "radar"
+        if ("radar_overlay" in extras_dict and extras_dict["radar_overlay"] != ""):
+          radar_overlay = extras_dict["radar_overlay"]
 
         radar_html = self._get_radar_html(
             extras_dict, lat, lon, zoom, radar_width, radar_height,
-            radar_rain, radar_wind, radar_temp, marker
+            radar_rain, radar_wind, radar_temp, marker, radar_overlay
         )
         radar_html_dark = self._get_radar_html_dark(
-            extras_dict, lat, lon, zoom, radar_width, radar_height
+            extras_dict, lat, lon, zoom, radar_width, radar_height, radar_overlay
         )
         radar_html_kiosk = (
             self._get_radar_html_kiosk(extras_dict, skin_dict)
@@ -804,6 +809,18 @@ class getData(SearchList):
         # Find the number of decimals to round the result based on the skin.conf
         rain_round = skin_dict["Units"]["StringFormats"].get(skin_rain_unit, "%.2f")
 
+## edit MaKi Beginn
+        # Rain lookups
+        # Find the group_name for rain in database
+        sunshineDur_unit = converter.group_unit_dict["group_deltatime"]
+
+        # Find the group_name for rain in the skin.conf
+        skin_sunshineDur_unit = self.generator.converter.group_unit_dict["group_deltatime"]
+
+        # Find the number of decimals to round the result based on the skin.conf
+        sunshineDur_round = skin_dict["Units"]["StringFormats"].get(skin_sunshineDur_unit, "%.2f")
+## edit MaKi Ende
+
         rainiest_day_sql = """
             SELECT dateTime, sum FROM archive_day_rain
             WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
@@ -938,6 +955,144 @@ class getData(SearchList):
             at_rain_highest_year_query[0],
             locale.format_string("%g", float(at_rain_highest_year_converted)),
         ]
+
+## edit MaKi Beginn
+        # suniest day
+        suniest_day_sql = """
+            SELECT dateTime, sum FROM archive_day_sunshineDur
+            WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
+        """
+        suniest_day_query = wx_manager.getSql(suniest_day_sql, (year_start_epoch,))
+        if suniest_day_query is not None:
+            suniest_day_tuple = (suniest_day_query[1], sunshineDur_unit, "group_deltatime")
+            suniest_day_converted = (
+                sunshineDur_round % self.generator.converter.convert(suniest_day_tuple)[0]
+            )
+            suniest_day = [
+                suniest_day_query[0],
+                locale.format_string("%g", float(suniest_day_converted)),
+            ]
+        else:
+            suniest_day = [
+                calendar.timegm(time.gmtime()),
+                locale.format_string("%.2f", 0),
+            ]
+
+        at_suniest_day_sql = """
+            SELECT dateTime, sum FROM archive_day_sunshineDur
+            ORDER BY sum DESC LIMIT 1;
+        """
+        at_suniest_day_query = wx_manager.getSql(at_suniest_day_sql)
+        at_suniest_day_tuple = (at_suniest_day_query[1], sunshineDur_unit, "group_deltatime")
+        at_suniest_day_converted = (
+            sunshineDur_round % self.generator.converter.convert(at_suniest_day_tuple)[0]
+        )
+        at_suniest_day = [
+            at_suniest_day_query[0],
+            locale.format_string("%g", float(at_suniest_day_converted)),
+        ]
+
+        # Find what kind of database we're working with and specify the
+        # correctly tailored SQL Query for each type of database
+        data_binding = config_dict["StdArchive"]["data_binding"]
+        database = config_dict["DataBindings"][data_binding]["database"]
+        database_type = config_dict["Databases"][database]["database_type"]
+        driver = config_dict["DatabaseTypes"][database_type]["driver"]
+        current_year = str(now.year)
+        if driver == "weedb.sqlite":
+            year_suniest_month_sql = """
+                SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, SUM(sum) AS total
+                FROM archive_day_sunshineDur
+                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?
+                GROUP BY month ORDER BY total DESC LIMIT 1;
+            """
+            at_suniest_month_sql = """
+                SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY month, year ORDER BY total DESC LIMIT 1;
+            """
+            year_sunshineDur_data_sql = """
+                SELECT dateTime, sum FROM archive_day_sunshineDur
+                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?;
+            """
+            at_sunshineDur_highest_year_sql = """
+                SELECT strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY year ORDER BY total DESC LIMIT 1;
+            """
+        elif driver == "weedb.mysql":
+            year_suniest_month_sql = """
+                SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_sunshineDur
+                WHERE YEAR(FROM_UNIXTIME(dateTime)) = ?
+                GROUP BY month ORDER BY total DESC LIMIT 1;
+            """
+            at_suniest_month_sql = """
+                SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY month, year ORDER BY total DESC LIMIT 1;
+            """
+            year_sunshineDur_data_sql = """
+                SELECT dateTime, ROUND(sum, 2) FROM archive_day_sunshineDur
+                WHERE year(FROM_UNIXTIME(dateTime)) = ?;
+            """
+            at_sunshineDur_highest_year_sql = """
+                SELECT FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
+                FROM archive_day_sunshineDur
+                GROUP BY year ORDER BY total DESC LIMIT 1;
+            """
+
+        # suniest month
+        year_suniest_month_query = wx_manager.getSql(
+            year_suniest_month_sql, (current_year,)
+        )
+        if year_suniest_month_query is not None:
+            year_suniest_month_tuple = (
+                year_suniest_month_query[1],
+                sunshineDur_unit,
+                "group_deltatime",
+            )
+            year_suniest_month_converted = (
+                sunshineDur_round
+                % self.generator.converter.convert(year_suniest_month_tuple)[0]
+            )
+            year_suniest_month_name = calendar.month_name[
+                int(year_suniest_month_query[0])
+            ]
+            year_suniest_month = [
+                year_suniest_month_name,
+                locale.format_string("%g", float(year_suniest_month_converted)),
+            ]
+        else:
+            year_suniest_month = ["N/A", 0.0]
+
+        # All time suniest month
+        at_suniest_month_query = wx_manager.getSql(at_suniest_month_sql)
+        at_suniest_month_tuple = (at_suniest_month_query[2], sunshineDur_unit, "group_deltatime")
+        at_suniest_month_converted = (
+            sunshineDur_round % self.generator.converter.convert(at_suniest_month_tuple)[0]
+        )
+        at_suniest_month_name = calendar.month_name[int(at_suniest_month_query[0])]
+        at_suniest_month = [
+            f"{at_suniest_month_name} {at_suniest_month_query[1]}",
+            locale.format_string("%g", float(at_suniest_month_converted)),
+        ]
+
+        # All time suniest year
+        at_sunshineDur_highest_year_query = wx_manager.getSql(at_sunshineDur_highest_year_sql)
+        at_sunshineDur_highest_year_tuple = (
+            at_sunshineDur_highest_year_query[1],
+            sunshineDur_unit,
+            "group_deltatime",
+        )
+        at_sunshineDur_highest_year_converted = (
+            sunshineDur_round % self.generator.converter.convert(at_sunshineDur_highest_year_tuple)[0]
+        )
+        at_sunshineDur_highest_year = [
+            at_sunshineDur_highest_year_query[0],
+            locale.format_string("%g", float(at_sunshineDur_highest_year_converted)),
+        ]
+## edit MaKi Ende
 
         # Consecutive days with/without rainfall
         # Track running max inline instead of storing all values in dicts
@@ -1201,8 +1356,8 @@ class getData(SearchList):
                             log.error(f"Pirate Weather missing config: {e}")
                         except Exception as e:
                             log.error(f"Pirate Weather update failed: {e}")
-                    else:
-                        log.info("Forecast is current, no update needed.")
+                    #else:
+                    #   log.info("Forecast is current, no update needed.")
 
                     # current_conditions.json (tiny file just with 'current')
                     if current_conditions_is_stale:
@@ -1229,8 +1384,8 @@ class getData(SearchList):
                             log.error(
                                 f"Pirate Weather current-conditions write failed: {e}",
                             )
-                    else:
-                        log.info("Current conditions are current, no update needed.")
+                    #else:
+                    #   log.info("Current conditions are current, no update needed.")
 
                     # Read current_conditions.json and populate the variables used below
                     with open(current_conditions_file, "r", encoding="utf-8") as read_file:
@@ -1257,7 +1412,8 @@ class getData(SearchList):
                         current_obs_summary = (
                             current_conditions_data.get("summary", "") or ""
                         )
-                        cloud_cover = f"{current_conditions_data.get('cloudCover', '')}"
+                        #cloud_cover = f"{current_conditions_data.get('cloudCover', '')}"
+                        cloud_cover = f"{current_conditions_data.get('cloudCover', '')*100:.0f}"
                     except Exception as e:
                         current_obs_icon = ""
                         current_obs_summary = ""
@@ -2127,6 +2283,23 @@ class getData(SearchList):
                 else:
                     row_parts.append('<i class="fa fa-arrow-up barometer-up"></i>')
                 row_parts.append("</span>")  # Close the span
+
+## edit MaKi Beginn
+            if obs=='outHumidity':
+                humabs_output = getattr(current,'outHumAbs',None)
+                if humabs_output is not None:
+                    humabs_output = humabs_output.gram_per_meter_cubed
+                    obs_humabs_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
+                    obs_humabs_output += f"<span class='outHumAbs'>%s</span><!-- AJAX -->" % humabs_output
+                    row_parts.append(obs_humabs_output)
+            if obs=='radiation':
+                maxSolarRad_output = getattr(current,'maxSolarRad',None)
+                if maxSolarRad_output is not None:
+                    maxSolarRad_output = maxSolarRad_output.watt_per_meter_squared
+                    obs_maxSolarRad_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
+                    obs_maxSolarRad_output += f"<span class='maxSolarRad'>%s</span><!-- AJAX -->" % maxSolarRad_output
+                    row_parts.append(obs_maxSolarRad_output)
+## edit MaKi Ende
             row_parts.append("</td>")
             row_parts.append("</tr>")
             station_obs_parts.append("".join(row_parts))
@@ -2262,6 +2435,7 @@ class getData(SearchList):
             "highcharts_decimal": highcharts_decimal,
             "highcharts_thousands": highcharts_thousands,
             "radar_html": radar_html,
+            "radar_overlay": radar_overlay,            
             "radar_html_dark": radar_html_dark,
             "radar_html_kiosk": radar_html_kiosk,
             "archive_interval_ms": archive_interval_ms,
@@ -2279,9 +2453,20 @@ class getData(SearchList):
             "at_outTemp_range_min": at_outTemp_range_min,
             "rainiest_day": rainiest_day,
             "at_rainiest_day": at_rainiest_day,
+## edit MaKi Beginn
+            "suniest_day": suniest_day,
+            "at_suniest_day": at_suniest_day,
+## edit MaKi Ende
             "year_rainiest_month": year_rainiest_month,
             "at_rainiest_month": at_rainiest_month,
+## edit MaKi Beginn
+            "year_suniest_month": year_suniest_month,
+            "at_suniest_month": at_suniest_month,
+## edit MaKi Ende
             "at_rain_highest_year": at_rain_highest_year,
+## edit MaKi Beginn
+            "at_sunshineDur_highest_year": at_sunshineDur_highest_year,
+## edit MaKi Ende
             "year_days_with_rain": year_days_with_rain,
             "year_days_without_rain": year_days_without_rain,
             "at_days_with_rain": at_days_with_rain,
@@ -2884,7 +3069,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     special_target_unit = line_options.get("unit", None)
 
                     # Get the unit label
-                    if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+                    if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
                         obs_label = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
                     elif (
                         observation_type == "weatherRange"
@@ -3019,8 +3204,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             )
                     if obs_round is None:
                         # Add rounding from weewx.conf/skin.conf so Highcharts can use it
-                        if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
-                            rounding_obs_lookup = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
+                        if observation_type in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
+                            rounding_obs_lookup = observation_type[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur", "ET"
                         elif observation_type == "weatherRange":
                             rounding_obs_lookup = weatherRange_obs_lookup
                         elif observation_type == "haysChart":
@@ -3944,8 +4129,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             }
 
         # Special Belchertown Skin rain counter
-        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
-            obs_lookup = observation[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur"
+        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
+            obs_lookup = observation[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur", "ET"
             # Force sum on this observation
             if aggregate_interval:
                 aggregate_type = "sum"
@@ -4247,7 +4432,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         # same pattern applies to duration observations.
         # None/"" values are passed through so full-length charts
         # (like WeeWX v4 archiveYearSpan) don't extend past the last actual plot.
-        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal"):
+        if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
             running_count = 0
             obs_round_vt = []
             for val in obs_vt[0]:

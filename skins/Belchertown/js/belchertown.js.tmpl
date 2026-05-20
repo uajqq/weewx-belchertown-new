@@ -750,6 +750,11 @@ function updateDailySnapshot(data, key) {
     jQuery(".dailystatswindmax").html(d["wind"]["max"]);
     jQuery(".dailystatsrain").html(d["rain"]["sum"]);
     jQuery(".dailystatsrainrate").html(d["rain"]["max"]);
+    jQuery(".dailystatsuvavg").html(d["uv"]["average"]);
+    jQuery(".dailystatsuvmax").html(d["uv"]["max"]);
+    jQuery(".dailystatsradiationavg").html(d["solar_radiation"]["average"]);
+    jQuery(".dailystatsradiationmax").html(d["solar_radiation"]["max"]);
+    jQuery(".dailystatssunshineDur").html(d["sunshineDur"]["sum"]);
     if (d["wind"] && d["wind"]["windrun"]) {
         jQuery(".dailywindrun").html(d["wind"]["windrun"]);
     }
@@ -764,6 +769,10 @@ function updateMonthlySnapshot(data, key) {
     jQuery(".monthstatswindmax").html(d["wind"]["max"]);
     jQuery(".monthstatsrain").html(d["rain"]["sum"]);
     jQuery(".monthstatsrainrate").html(d["rain"]["max"]);
+    jQuery(".monthstatsuvavg").html(d["uv"]["average"]);
+    jQuery(".monthstatsuvmax").html(d["uv"]["max"]);
+    jQuery(".monthstatsradiationavg").html(d["solar_radiation"]["average"]);
+    jQuery(".monthstatsradiationmax").html(d["solar_radiation"]["max"]);
 }
 
 jQuery(document).on("change", "#snapshot-day-select", function() {
