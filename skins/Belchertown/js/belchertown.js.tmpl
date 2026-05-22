@@ -313,29 +313,34 @@ function get_outTemp_color(unit, outTemp, returnColor = false) {
 
 function kts_to_beaufort(windspeed) {
     // Given windspeed in knots, converts to Beaufort scale
-    if (windspeed <= 1) {
+    var ws = parseFloat(windspeed);
+    if (!isFinite(ws) || ws < 0) {
+        return null;
+    }
+
+    if (ws <= 1) {
         return 0
-    } else if (windspeed <= 3) {
+    } else if (ws <= 3) {
         return 1
-    } else if (windspeed <= 6) {
+    } else if (ws <= 6) {
         return 2
-    } else if (windspeed <= 10) {
+    } else if (ws <= 10) {
         return 3
-    } else if (windspeed <= 15) {
+    } else if (ws <= 15) {
         return 4
-    } else if (windspeed <= 21) {
+    } else if (ws <= 21) {
         return 5
-    } else if (windspeed <= 27) {
+    } else if (ws <= 27) {
         return 6
-    } else if (windspeed <= 33) {
+    } else if (ws <= 33) {
         return 7
-    } else if (windspeed <= 40) {
+    } else if (ws <= 40) {
         return 8
-    } else if (windspeed <= 47) {
+    } else if (ws <= 47) {
         return 9
-    } else if (windspeed <= 55) {
+    } else if (ws <= 55) {
         return 10
-    } else if (windspeed <= 63) {
+    } else if (ws <= 63) {
         return 11
     } else {
         return 12
@@ -372,7 +377,7 @@ function beaufort_cat(beaufort) {
         case 12:
             return "$beaufort12"
         default:
-            return ""
+            return "--"
     }
 }
 
@@ -2257,7 +2262,9 @@ function update_current_wx(data) {
 
     // #if $Extras.has_key('googleAnalyticsId')
     // Send a pageview
-    gtag('config', '$Extras.googleAnalyticsId');
+    if (typeof gtag === "function") {
+        gtag('config', '$Extras.googleAnalyticsId');
+    }
     // #end if
 
     // This message is a WeeWX archive update. Update WeeWX data, forecast data and highcharts charts
@@ -2489,38 +2496,40 @@ function update_current_wx(data) {
 // #end if
 
 
-Highcharts.setOptions({
-    time: {
-        timezoneOffset: $highcharts_timezoneoffset
-    },
-    chart: {
-        style: {
-            fontFamily: 'Roboto, sans-serif',
-            fontSize: '14px',
-            fontWeight: '500'
+if (typeof Highcharts !== "undefined") {
+    Highcharts.setOptions({
+        time: {
+            timezoneOffset: $highcharts_timezoneoffset
+        },
+        chart: {
+            style: {
+                fontFamily: 'Roboto, sans-serif',
+                fontSize: '14px',
+                fontWeight: '500'
+            }
+        },
+        title: {
+            style: {
+                fontFamily: 'Roboto, sans-serif',
+                fontSize: '20px'
+            }
+        },
+        subtitle: {
+            style: {
+                fontFamily: 'Roboto, sans-serif',
+                fontWeight: '300'
+            }
+        },
+        lang: {
+            months: moment.months(),
+            shortMonths: moment.monthsShort(),
+            weekdays: moment.weekdays(),
+            shortWeekdays: moment.weekdaysShort(),
+            decimalPoint: "$highcharts_decimal",
+            thousandsSep: "$highcharts_thousands"
         }
-    },
-    title: {
-        style: {
-            fontFamily: 'Roboto, sans-serif',
-            fontSize: '20px'
-        }
-    },
-    subtitle: {
-        style: {
-            fontFamily: 'Roboto, sans-serif',
-            fontWeight: '300'
-        }
-    },
-    lang: {
-        months: moment.months(),
-        shortMonths: moment.monthsShort(),
-        weekdays: moment.weekdays(),
-        shortWeekdays: moment.weekdaysShort(),
-        decimalPoint: "$highcharts_decimal",
-        thousandsSep: "$highcharts_thousands"
-    }
-});
+    });
+}
 
 function showChart(json_file, prepend_renderTo = false) {
 

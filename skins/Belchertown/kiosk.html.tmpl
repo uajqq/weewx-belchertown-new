@@ -41,8 +41,10 @@
             get_aqi_color("$aqi");
             // #end if
 
-            // #if $Extras.has_key("beaufort_category") and $Extras.beaufort_category == '1'
-            jQuery(".beaufort").html("$current.windSpeed.beaufort");
+            // #if $Extras.has_key("beaufort_category") and $Extras.beaufort_category == '1' and $Extras.beaufort_category_gusts != '1'
+            jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort("$current.windSpeed.knot.toString(addLabel=False, NONE_string='')")));
+            // #else
+            jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort("$current.windGust.knot.toString(addLabel=False, NONE_string='')")));
             // #end if
 
             get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
@@ -297,9 +299,9 @@
                                         <tr>
                                             <td class="mph" colspan="3">$unit.label.windSpeed</td>
                                         </tr>
-                                        #if $day.windrun.has_data
+                                        #if $Extras.has_key("beaufort_category") and $Extras.beaufort_category == '1'
                                         <tr>
-                                            <td style="padding-top:5px">Wind Run</td><td class="dailywindrun" style="padding-top:5px">$day.windrun.sum</td>
+                                            <td class="beaufort" colspan="4"></td>
                                         </tr>
                                         #end if
                                     </tbody>
