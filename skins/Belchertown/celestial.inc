@@ -14,7 +14,7 @@
   #set $moon_dec = locale.format_string( "%.1f&deg;", $almanac.moon.dec )
   #set $sun_altitude = $almanac.sun.alt
   #include "almanac_daylight_data.inc"
-  #set $sun_altitude = locale.format_string( "%.1f&deg;", $almanac.sun.alt )
+  #set $sun_altitude = locale.format_string( "%.1f&deg;", $sun_altitude_raw )
 #end if
 ## Compressed for the weewx_data.json file to stay consistent
 <div id='celestial_widget' class='widget'> <div class='widget_contents'> <div id='celestial_details'> <div class='celestial_body'> <table class='celestial'> <tr><th>&#9728; $obs.label.sun</th><th></th></tr> <tr> <td class='label'>$obs.label.start_civil_twilight</td> <td class='data'>$almanac(horizon=-6).sun(use_center=1).rise</td> </tr> <tr> <td class='label'>$obs.label.rise</td> <td class='data'>$almanac.sun.rise.format(None_string=$sun_None)</td> </tr> <tr> <td class='label'>$obs.label.transit</td> <td class='data'>$almanac.sun.transit</td> </tr> <tr> <td class='label'>$obs.label.set</td> <td class='data'>$almanac.sun.set.format(None_string=$sun_None)</td> </tr> <tr> <td class='label'>$obs.label.end_civil_twilight</td> <td class='data'>$almanac(horizon=-6).sun(use_center=1).set</td> </tr> <tr> <td class='label'>$obs.label.azimuth</td> <td class='data'>$sun_azimuth</td> </tr> <tr> <td class='label'>$obs.label.altitude</td> <td class='data'>$sun_altitude</td> </tr> <tr> <td class='label'>$obs.label.right_ascension</td> <td class='data'>$sun_ra</td> </tr> <tr> <td class='label'>$obs.label.declination</td> <td class='data'>$sun_dec</td> </tr>#slurp
