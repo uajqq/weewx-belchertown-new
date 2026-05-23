@@ -3119,8 +3119,8 @@ table.celestial td.label {
 .frontpage .homepage-card--earthquake .earthquake-map {
   width: 100%;
   display: block;
-  height: calc(clamp(98px, 10vw, 128px) + 28px);
-  margin-top: -2px;
+  height: calc(clamp(98px, 10vw, 128px) + 48px);
+  margin-top: -6px;
   min-height: 0;
   border: 0;
 }
