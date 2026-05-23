@@ -4,56 +4,17 @@
 ## If extended almanac information is available, do extra calculations.
 #if $almanac.hasExtras
   #import locale
-  #set $sun_azimuth = locale.format_string( "%.1f&deg;", $almanac.sun.az )
-  #set $sun_ra = locale.format_string( "%.1f&deg;", $almanac.sun.ra )
-  #set $sun_dec = locale.format_string( "%.1f&deg;", $almanac.sun.dec )
-  #set $moon_azimuth = locale.format_string( "%.1f&deg;", $almanac.moon.az )
-  #set $moon_altitude = locale.format_string( "%.1f&deg;", $almanac.moon.alt )
-  #set $moon_ra = locale.format_string( "%.1f&deg;", $almanac.moon.ra )
-  #set $moon_dec = locale.format_string( "%.1f&deg;", $almanac.moon.dec )
-  #set $sun_altitude = $almanac.sun.alt
-    #set $hour_short = $obs.label.hour_short if $obs.label.hour_short != "hour_short" else "h"
-    #set $minute_short = $obs.label.minute_short if $obs.label.minute_short != "minute_short" else "m"
-    #set $second_short = $obs.label.second_short if $obs.label.second_short != "second_short" else "s"
-  #if $sun_altitude < 0
-    #set $sun_None="<i>(%s)</i>" % $obs.label.sun_always_down
-        #set $daylight_str = "0%s 0%s 0%s" % ($hour_short, $minute_short, $second_short)
-  #else
-    #set $sun_None="<i>(%s)</i>" % $obs.label.sun_always_up
-        #set $daylight_str = "24%s 0%s 0%s" % ($hour_short, $minute_short, $second_short)
-  #end if
-  #set $sunrise_ts = $almanac.sun.rise.raw
-  #set $sunset_ts = $almanac.sun.set.raw
-  #if $sunrise_ts and $sunset_ts
-    #set $now = $current.dateTime.raw
-    #set $today_daylight = $sunset_ts -  $sunrise_ts
-    #set $seconds = $today_daylight
-    #set $hours = $seconds // 3600
-    #set $seconds %= 3600
-    #set $minutes = $seconds // 60
-    #set $seconds %= 60
-        #if $hours > 0
-            #set $daylight_str = "%d%s %d%s %d%s" % ($hours, $hour_short, $minutes, $minute_short, $seconds, $second_short)
-        #else
-            #set $daylight_str = "%d%s %d%s" % ($minutes, $minute_short, $seconds, $second_short)
-        #end if
-    #set $yesterday_ts = $now - 24*3600
-    #set $yesterday_daylight = $almanac($almanac_time=$yesterday_ts).sun.set.raw - $almanac($almanac_time=$yesterday_ts).sun.rise.raw
-    #set $difference = $today_daylight - $yesterday_daylight
-    #if $difference
-      #set $delta = abs($difference)
-            #set $amt_minutes = (int($delta) % 3600) // 60
-            #set $amt_seconds = int($delta) % 60
-                        #set $amt_str = "%d%s %d%s" % ($amt_minutes, $minute_short, $amt_seconds, $second_short)
-      #if $difference > 0
-        #set $delta_str = "%s %s" % ( $amt_str, $obs.label.more_than_yesterday )
-      #else
-        #set $delta_str = "%s %s" % ( $amt_str, $obs.label.less_than_yesterday )
-      #end if
-      #set $daylight_str = "%s<br/>%s" % ($daylight_str, $delta_str)
-    #end if
-  #end if
-  #set $sun_altitude = locale.format_string( "%.1f&deg;", $almanac.sun.alt )  
+    #set $sun_azimuth = locale.format_string( "%.1f&deg;", $almanac.sun.az )
+    #set $sun_ra = locale.format_string( "%.1f&deg;", $almanac.sun.ra )
+    #set $sun_dec = locale.format_string( "%.1f&deg;", $almanac.sun.dec )
+    #set $moon_azimuth = locale.format_string( "%.1f&deg;", $almanac.moon.az )
+    #set $moon_altitude = locale.format_string( "%.1f&deg;", $almanac.moon.alt )
+    #set $moon_ra = locale.format_string( "%.1f&deg;", $almanac.moon.ra )
+    #set $moon_dec = locale.format_string( "%.1f&deg;", $almanac.moon.dec )
+    #set $sun_altitude = $almanac.sun.alt
+        #include "almanac_daylight_data.inc"
+    #set $sun_altitude = locale.format_string( "%.1f&deg;", $almanac.sun.alt )
+    #include "almanac_diagram_data.inc"
 #end if
 
 {
@@ -599,6 +560,59 @@
         "sunset_hour": "0",
         "sunset_minute": "0",
         #end if
+        "diagram": {
+            #if $almanac.hasExtras
+            "hasExtras": true,
+            "sun": {
+                "azimuth": #echo "%.3f" % $almanac.sun.az#,
+                "altitude": #echo "%.3f" % $almanac.sun.alt#,
+                "rise": {
+                    "azimuth": #if $sun_rise_az is not None##echo "%.3f" % $sun_rise_az##else#null#end if#,
+                    "altitude": #if $sun_rise_alt is not None##echo "%.3f" % $sun_rise_alt##else#null#end if#
+                },
+                "transit": {
+                    "azimuth": #if $sun_transit_az is not None##echo "%.3f" % $sun_transit_az##else#null#end if#,
+                    "altitude": #if $sun_transit_alt is not None##echo "%.3f" % $sun_transit_alt##else#null#end if#
+                },
+                "set": {
+                    "azimuth": #if $sun_set_az is not None##echo "%.3f" % $sun_set_az##else#null#end if#,
+                    "altitude": #if $sun_set_alt is not None##echo "%.3f" % $sun_set_alt##else#null#end if#
+                }
+            },
+            "moon": {
+                "azimuth": #echo "%.3f" % $almanac.moon.az#,
+                "altitude": #echo "%.3f" % $almanac.moon.alt#,
+                "rise": {
+                    "azimuth": #if $moon_rise_az is not None##echo "%.3f" % $moon_rise_az##else#null#end if#,
+                    "altitude": #if $moon_rise_alt is not None##echo "%.3f" % $moon_rise_alt##else#null#end if#
+                },
+                "transit": {
+                    "azimuth": #if $moon_transit_az is not None##echo "%.3f" % $moon_transit_az##else#null#end if#,
+                    "altitude": #if $moon_transit_alt is not None##echo "%.3f" % $moon_transit_alt##else#null#end if#
+                },
+                "set": {
+                    "azimuth": #if $moon_set_az is not None##echo "%.3f" % $moon_set_az##else#null#end if#,
+                    "altitude": #if $moon_set_alt is not None##echo "%.3f" % $moon_set_alt##else#null#end if#
+                }
+            }
+            #else
+            "hasExtras": false,
+            "sun": {
+                "azimuth": null,
+                "altitude": null,
+                "rise": {"azimuth": null, "altitude": null},
+                "transit": {"azimuth": null, "altitude": null},
+                "set": {"azimuth": null, "altitude": null}
+            },
+            "moon": {
+                "azimuth": null,
+                "altitude": null,
+                "rise": {"azimuth": null, "altitude": null},
+                "transit": {"azimuth": null, "altitude": null},
+                "set": {"azimuth": null, "altitude": null}
+            }
+            #end if
+        },
         #if $almanac.hasExtras
         "almanac_extras_modal_html": "<div id='celestial_widget' class='widget'> <div class='widget_contents'> <div id='celestial_details'> <div class='celestial_body'> <table class='celestial'> <tr><th>&#9728; $obs.label.sun</th><th></th></tr> <tr> <td class='label'>$obs.label.start_civil_twilight</td> <td class='data'>$almanac(horizon=-6).sun(use_center=1).rise</td> </tr> <tr> <td class='label'>$obs.label.rise</td> <td class='data'>$almanac.sun.rise.format(None_string=$sun_None)</td> </tr> <tr> <td class='label'>$obs.label.transit</td> <td class='data'>$almanac.sun.transit</td> </tr> <tr> <td class='label'>$obs.label.set</td> <td class='data'>$almanac.sun.set.format(None_string=$sun_None)</td> </tr> <tr> <td class='label'>$obs.label.end_civil_twilight</td> <td class='data'>$almanac(horizon=-6).sun(use_center=1).set</td> </tr> <tr> <td class='label'>$obs.label.azimuth</td> <td class='data'>$sun_azimuth</td> </tr> <tr> <td class='label'>$obs.label.altitude</td> <td class='data'>$sun_altitude</td> </tr> <tr> <td class='label'>$obs.label.right_ascension</td> <td class='data'>$sun_ra</td> </tr> <tr> <td class='label'>$obs.label.declination</td> <td class='data'>$sun_dec</td> </tr>#slurp
         #if $almanac.next_equinox.raw < $almanac.next_solstice.raw

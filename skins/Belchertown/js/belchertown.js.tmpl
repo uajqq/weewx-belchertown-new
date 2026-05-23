@@ -187,6 +187,8 @@ jQuery(document).ready(function() {
     // #end if
     // #end if
 
+    initializeAlmanacDiagramFromDOM();
+
 });
 
 // #if $Extras.has_key("theme") and $Extras.theme == 'auto'
@@ -640,6 +642,348 @@ function titleCase(str) {
     }).join(' ');
 }
 
+function almanacSkyCoordinates(azimuth, altitude) {
+    var az = parseFloat(azimuth);
+    var alt = parseFloat(altitude);
+    var minX = 16;
+    var maxX = 204;
+    var horizonY = 100;
+    var maxAboveHorizon = 124;
+    var maxBelowHorizon = 16;
+
+    if (!isFinite(az) || !isFinite(alt)) {
+        return null;
+    }
+
+    var wrappedAzimuth = ((az % 360) + 360) % 360;
+    var x = minX + (wrappedAzimuth / 360) * (maxX - minX);
+
+    var boundedAltitude = Math.max(-18, Math.min(90, alt));
+    var y;
+    if (boundedAltitude >= 0) {
+        y = horizonY - (boundedAltitude / 90) * maxAboveHorizon;
+    } else {
+        y = horizonY + (Math.abs(boundedAltitude) / 18) * maxBelowHorizon;
+    }
+
+    return {
+        x: x,
+        y: y,
+        belowHorizon: alt < 0
+    };
+}
+
+function almanacBodyGeometry(bodyData) {
+    var horizonY = 100;
+    var minX = 16;
+    var maxX = 204;
+    var defaultApexY = 2;
+
+    var risePoint = almanacSkyCoordinates(bodyData && bodyData.rise && bodyData.rise.azimuth, bodyData && bodyData.rise && bodyData.rise.altitude);
+    var transitPoint = almanacSkyCoordinates(bodyData && bodyData.transit && bodyData.transit.azimuth, bodyData && bodyData.transit && bodyData.transit.altitude);
+    var setPoint = almanacSkyCoordinates(bodyData && bodyData.set && bodyData.set.azimuth, bodyData && bodyData.set && bodyData.set.altitude);
+    var currentPoint = almanacSkyCoordinates(bodyData && bodyData.azimuth, bodyData && bodyData.altitude);
+
+    var riseX = risePoint ? risePoint.x : 68;
+    var setX = setPoint ? setPoint.x : 152;
+    if (riseX > setX) {
+        var tmp = riseX;
+        riseX = setX;
+        setX = tmp;
+    }
+
+    var transitX = transitPoint ? transitPoint.x : ((riseX + setX) / 2);
+    var transitY = transitPoint ? transitPoint.y : (currentPoint ? currentPoint.y : defaultApexY);
+    transitY = Math.min(horizonY - 14, Math.max(-12, transitY));
+
+    var transitAlt = parseFloat(bodyData && bodyData.transit && bodyData.transit.altitude);
+    var nightY = isFinite(transitAlt)
+        ? horizonY + Math.max(8, Math.min(18, Math.abs(transitAlt) * 0.22))
+        : 114;
+
+    return {
+        minX: minX,
+        maxX: maxX,
+        horizonY: horizonY,
+        riseX: Math.max(minX + 14, Math.min(maxX - 14, riseX)),
+        setX: Math.max(minX + 14, Math.min(maxX - 14, setX)),
+        transitX: Math.max(minX + 20, Math.min(maxX - 20, transitX)),
+        transitY: transitY,
+        nightY: Math.max(horizonY + 6, Math.min(124, nightY))
+    };
+}
+
+function almanacBodyPath(bodyData) {
+    var g = almanacBodyGeometry(bodyData);
+    var leftCtrlX = g.minX + ((g.riseX - g.minX) * 0.55);
+    var rightCtrlX = g.setX + ((g.maxX - g.setX) * 0.45);
+
+    return "M " + g.minX.toFixed(1) + " " + g.nightY.toFixed(1) +
+        " Q " + leftCtrlX.toFixed(1) + " " + g.nightY.toFixed(1) + " " + g.riseX.toFixed(1) + " " + g.horizonY.toFixed(1) +
+        " Q " + g.transitX.toFixed(1) + " " + g.transitY.toFixed(1) + " " + g.setX.toFixed(1) + " " + g.horizonY.toFixed(1) +
+        " Q " + rightCtrlX.toFixed(1) + " " + g.nightY.toFixed(1) + " " + g.maxX.toFixed(1) + " " + g.nightY.toFixed(1);
+}
+
+function almanacPathPointSamples(bodyData) {
+    var g = almanacBodyGeometry(bodyData);
+    var leftCtrlX = g.minX + ((g.riseX - g.minX) * 0.55);
+    var rightCtrlX = g.setX + ((g.maxX - g.setX) * 0.45);
+    var points = [];
+
+    for (var i = 0; i <= 40; i++) {
+        var t = i / 40;
+        var omt = 1 - t;
+        points.push({
+            x: (omt * omt * g.minX) + (2 * omt * t * leftCtrlX) + (t * t * g.riseX),
+            y: (omt * omt * g.nightY) + (2 * omt * t * g.nightY) + (t * t * g.horizonY)
+        });
+    }
+    for (var j = 1; j <= 80; j++) {
+        var u = j / 80;
+        var omu = 1 - u;
+        points.push({
+            x: (omu * omu * g.riseX) + (2 * omu * u * g.transitX) + (u * u * g.setX),
+            y: (omu * omu * g.horizonY) + (2 * omu * u * g.transitY) + (u * u * g.horizonY)
+        });
+    }
+    for (var k = 1; k <= 40; k++) {
+        var v = k / 40;
+        var omv = 1 - v;
+        points.push({
+            x: (omv * omv * g.setX) + (2 * omv * v * rightCtrlX) + (v * v * g.maxX),
+            y: (omv * omv * g.horizonY) + (2 * omv * v * g.nightY) + (v * v * g.nightY)
+        });
+    }
+
+    return points;
+}
+
+function almanacPathYForX(bodyData, targetX, targetY) {
+    if (!bodyData) {
+        return null;
+    }
+
+    var points = almanacPathPointSamples(bodyData);
+    if (!points.length) {
+        return null;
+    }
+
+    var nearest = null;
+    var bestScore = Number.POSITIVE_INFINITY;
+
+    points.forEach(function(p) {
+        var dx = Math.abs(p.x - targetX);
+        var dy = isFinite(targetY) ? Math.abs(p.y - targetY) : 0;
+        var score = (dx * 4) + dy;
+        if (score < bestScore) {
+            bestScore = score;
+            nearest = p;
+        }
+    });
+
+    return nearest ? nearest.y : null;
+}
+
+function setAlmanacDiagramPath(selector, d) {
+    var path = jQuery(selector);
+
+    if (!path.length) {
+        return;
+    }
+
+    if (!d) {
+        path.attr("d", "").hide();
+        return;
+    }
+
+    path.attr("d", d).show();
+}
+
+function setAlmanacDiagramPaths(diagramData) {
+    setAlmanacDiagramPath(".almanac-diagram-track--sun", almanacBodyPath(diagramData["sun"]));
+    setAlmanacDiagramPath(".almanac-diagram-track--moon", almanacBodyPath(diagramData["moon"]));
+
+    // Backward compatibility with older single-track markup.
+    if (!jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
+        setAlmanacDiagramPath(".almanac-diagram-track", almanacBodyPath(diagramData["sun"]));
+    }
+}
+
+function setAlmanacDiagramObject(selector, label, azimuth, altitude, bodyData) {
+    var point = almanacSkyCoordinates(azimuth, altitude);
+    var marker = jQuery(selector);
+
+    if (!marker.length) {
+        return;
+    }
+
+    if (!point) {
+        marker.hide();
+        return;
+    }
+
+    var snappedY = almanacPathYForX(bodyData, point.x, point.y);
+    if (snappedY !== null && isFinite(snappedY)) {
+        point.y = snappedY;
+    }
+
+    marker
+        .show()
+        .attr("transform", "translate(" + point.x.toFixed(1) + " " + point.y.toFixed(1) + ")")
+        .toggleClass("is-below-horizon", point.belowHorizon);
+
+    marker.find("title").text(label);
+}
+
+function fitAlmanacDiagramViewBox(diagramData) {
+    var svg = jQuery(".almanac-diagram-svg");
+
+    if (!svg.length || !diagramData) {
+        return;
+    }
+
+    var markerRadius = 15;
+    var sidePadding = 4;
+    var topPadding = 4;
+    var bottomPadding = 8;
+    var verticalShiftUpRatio = 0.2;
+
+    var minX = Number.POSITIVE_INFINITY;
+    var maxX = Number.NEGATIVE_INFINITY;
+    var minY = Number.POSITIVE_INFINITY;
+    var maxY = Number.NEGATIVE_INFINITY;
+
+    function includePoint(x, y, withMarkerPadding) {
+        if (!isFinite(x) || !isFinite(y)) {
+            return;
+        }
+
+        var pad = withMarkerPadding ? markerRadius : 0;
+        minX = Math.min(minX, x - pad);
+        maxX = Math.max(maxX, x + pad);
+        minY = Math.min(minY, y - pad);
+        maxY = Math.max(maxY, y + pad);
+    }
+
+    function includeBody(bodyDataItem) {
+        if (!bodyDataItem) {
+            return;
+        }
+
+        var g = almanacBodyGeometry(bodyDataItem);
+        includePoint(g.minX, g.nightY, false);
+        includePoint(g.riseX, g.horizonY, false);
+        includePoint(g.transitX, g.transitY, false);
+        includePoint(g.setX, g.horizonY, false);
+        includePoint(g.maxX, g.nightY, false);
+
+        var bodyPoint = almanacSkyCoordinates(bodyDataItem.azimuth, bodyDataItem.altitude);
+        if (bodyPoint) {
+            var snappedY = almanacPathYForX(bodyDataItem, bodyPoint.x, bodyPoint.y);
+            if (snappedY !== null && isFinite(snappedY)) {
+                bodyPoint.y = snappedY;
+            }
+            includePoint(bodyPoint.x, bodyPoint.y, true);
+        }
+    }
+
+    includeBody(diagramData["sun"]);
+    includeBody(diagramData["moon"]);
+
+    if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+        return;
+    }
+
+    var contentHeight = Math.max(0, maxY - minY);
+    var shiftUpAmount = Math.round(contentHeight * verticalShiftUpRatio);
+
+    var viewBoxX = Math.max(0, Math.floor(minX - sidePadding));
+    var baseViewBoxY = Math.floor(minY - topPadding);
+    var viewBoxY = baseViewBoxY + shiftUpAmount;
+    var viewBoxWidth = Math.max(40, Math.ceil((maxX + sidePadding) - viewBoxX));
+    var viewBoxHeight = Math.max(28, Math.ceil((maxY + bottomPadding) - baseViewBoxY));
+
+    svg.attr("viewBox", viewBoxX + " " + viewBoxY + " " + viewBoxWidth + " " + viewBoxHeight);
+}
+
+function renderAlmanacDiagram(diagramData) {
+    var diagram = jQuery(".almanac-diagram");
+
+    if (!diagram.length) {
+        return;
+    }
+
+    if (!diagramData || diagramData["hasExtras"] !== true) {
+        diagram.addClass("almanac-diagram--inactive");
+        return;
+    }
+
+    diagram.removeClass("almanac-diagram--inactive");
+
+    setAlmanacDiagramPaths(diagramData);
+
+    setAlmanacDiagramObject(
+        ".almanac-diagram-object--sun",
+        "$obs.label.sun",
+        diagramData["sun"]["azimuth"],
+        diagramData["sun"]["altitude"],
+        diagramData["sun"]
+    );
+    setAlmanacDiagramObject(
+        ".almanac-diagram-object--moon",
+        "$obs.label.moon",
+        diagramData["moon"]["azimuth"],
+        diagramData["moon"]["altitude"],
+        diagramData["moon"]
+    );
+
+    fitAlmanacDiagramViewBox(diagramData);
+}
+
+function initializeAlmanacDiagramFromDOM() {
+    var diagram = jQuery(".almanac-diagram");
+
+    if (!diagram.length) {
+        return;
+    }
+
+    renderAlmanacDiagram({
+        hasExtras: true,
+        sun: {
+            azimuth: diagram.data("sunAz"),
+            altitude: diagram.data("sunAlt"),
+            rise: {
+                azimuth: diagram.data("sunRiseAz"),
+                altitude: diagram.data("sunRiseAlt")
+            },
+            transit: {
+                azimuth: diagram.data("sunTransitAz"),
+                altitude: diagram.data("sunTransitAlt")
+            },
+            set: {
+                azimuth: diagram.data("sunSetAz"),
+                altitude: diagram.data("sunSetAlt")
+            }
+        },
+        moon: {
+            azimuth: diagram.data("moonAz"),
+            altitude: diagram.data("moonAlt"),
+            rise: {
+                azimuth: diagram.data("moonRiseAz"),
+                altitude: diagram.data("moonRiseAlt")
+            },
+            transit: {
+                azimuth: diagram.data("moonTransitAz"),
+                altitude: diagram.data("moonTransitAlt")
+            },
+            set: {
+                azimuth: diagram.data("moonSetAz"),
+                altitude: diagram.data("moonSetAlt")
+            }
+        }
+    });
+}
+
 function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     // First check if ?theme= is in URL. If so, bail out and do not change anything.
     const themeParam = getURLvar("theme");
@@ -857,9 +1201,10 @@ function update_weewx_data(data) {
     jQuery(".moonset-value").html(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_set_epoch"]).toFixed(0)).format("$obs.label.time_sunrise"));
 
     // Moon icon, phase and illumination percent
-    jQuery(".moon-icon").html(moon_icon(data["almanac"]["moon"]["moon_index"]));
+    jQuery(".moon-container > .moon-icon").html(render_moon_icon_html(data));
     jQuery(".moon-phase").html(titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
     jQuery(".moon-visible").html("<strong>" + data["almanac"]["moon"]["moon_fullness"] + "%</strong> $obs.label.moon_visible");
+    renderAlmanacDiagram(data["almanac"]["diagram"]);
     // #if $almanac.hasExtras
     // Close current modal if open
     jQuery('#almanac').modal('hide');
@@ -871,6 +1216,139 @@ function update_weewx_data(data) {
         // Returned "current" data does not have this value
     }
     // #end if
+}
+
+function to_radians(degrees) {
+    var value = parseFloat(degrees);
+    if (!isFinite(value)) {
+        return null;
+    }
+    return value * Math.PI / 180;
+}
+
+function moon_illumination_fraction(moonData) {
+    var fullness = parseFloat(moonData && moonData["moon_fullness"]);
+    if (!isFinite(fullness)) {
+        return null;
+    }
+    return Math.max(0, Math.min(1, fullness / 100));
+}
+
+function moon_is_waxing(moonData) {
+    var index = parseInt(moonData && moonData["moon_index"], 10);
+    if (!isFinite(index)) {
+        return null;
+    }
+    return index > 0 && index < 4;
+}
+
+function moon_limb_orientation_degrees(almanacData) {
+    var diagram = almanacData && almanacData["diagram"];
+    var sun = diagram && diagram["sun"];
+    var moon = diagram && diagram["moon"];
+
+    var sunAz = to_radians(sun && sun["azimuth"]);
+    var sunAlt = to_radians(sun && sun["altitude"]);
+    var moonAz = to_radians(moon && moon["azimuth"]);
+    var moonAlt = to_radians(moon && moon["altitude"]);
+
+    if (!isFinite(sunAz) || !isFinite(sunAlt) || !isFinite(moonAz) || !isFinite(moonAlt)) {
+        return 0;
+    }
+
+    var deltaAz = sunAz - moonAz;
+    var numerator = Math.sin(deltaAz);
+    var denominator = (Math.tan(sunAlt) * Math.cos(moonAlt)) - (Math.sin(moonAlt) * Math.cos(deltaAz));
+    var angle = Math.atan2(numerator, denominator);
+
+    if (!isFinite(angle)) {
+        return 0;
+    }
+
+    // Convert to CSS/SVG rotation where 0 keeps horns vertical.
+    return angle * 180 / Math.PI;
+}
+
+function moon_full_disc_path(cx, cy, r) {
+    return "M " + cx + " " + (cy - r) +
+        " A " + r + " " + r + " 0 1 1 " + cx + " " + (cy + r) +
+        " A " + r + " " + r + " 0 1 1 " + cx + " " + (cy - r) + " Z";
+}
+
+function moon_crescent_path(cx, cy, r, rx, brightOnRight) {
+    if (brightOnRight) {
+        return "M " + cx + " " + (cy - r) +
+            " A " + r + " " + r + " 0 0 1 " + cx + " " + (cy + r) +
+            " A " + rx + " " + r + " 0 0 0 " + cx + " " + (cy - r) + " Z";
+    }
+
+    return "M " + cx + " " + (cy - r) +
+        " A " + r + " " + r + " 0 0 0 " + cx + " " + (cy + r) +
+        " A " + rx + " " + r + " 0 0 1 " + cx + " " + (cy - r) + " Z";
+}
+
+function moon_illuminated_path(fraction, waxing, cx, cy, r) {
+    var k = Math.max(0, Math.min(1, fraction));
+
+    if (k <= 0) {
+        return "";
+    }
+    if (k >= 1) {
+        return moon_full_disc_path(cx, cy, r);
+    }
+
+    if (k <= 0.5) {
+        var rxCrescent = Math.max(0.01, r * (1 - (2 * k)));
+        return moon_crescent_path(cx, cy, r, rxCrescent, waxing);
+    }
+
+    var darkPortion = 1 - k;
+    var rxDark = Math.max(0.01, r * (1 - (2 * darkPortion)));
+    var darkOnRight = !waxing;
+    var cutoutPath = moon_crescent_path(cx, cy, r, rxDark, darkOnRight);
+
+    // Even-odd fill creates a gibbous shape by subtracting the dark crescent.
+    return moon_full_disc_path(cx, cy, r) + " " + cutoutPath;
+}
+
+function render_oriented_moon_svg(illuminationFraction, waxing, orientationDeg) {
+    var cx = 20;
+    var cy = 20;
+    var r = 17;
+    var litPath = moon_illuminated_path(illuminationFraction, waxing, cx, cy, r);
+    var litFillRule = illuminationFraction > 0.5 && illuminationFraction < 1 ? "evenodd" : "nonzero";
+
+    var isDarkTheme = jQuery("body").hasClass("dark") || sessionStorage.getItem('currentTheme') === 'dark';
+    var moonDark = isDarkTheme ? "#6b7280" : "#8b95a5";
+    var moonLight = isDarkTheme ? "#e5ebf7" : "#f6f8fc";
+    var moonEdge = isDarkTheme ? "#cbd5e1" : "#6b7280";
+
+    var svg = "";
+    svg += "<svg class='moon-phase-svg' viewBox='0 0 40 40' width='40' height='40' aria-hidden='true' focusable='false'>";
+    svg += "<g transform='rotate(" + orientationDeg.toFixed(2) + " 20 20)'>";
+    svg += "<circle cx='" + cx + "' cy='" + cy + "' r='" + r + "' fill='" + moonDark + "'></circle>";
+    if (litPath) {
+        svg += "<path d='" + litPath + "' fill='" + moonLight + "' fill-rule='" + litFillRule + "'></path>";
+    }
+    svg += "<circle cx='" + cx + "' cy='" + cy + "' r='" + r + "' fill='none' stroke='" + moonEdge + "' stroke-width='0.8'></circle>";
+    svg += "</g>";
+    svg += "</svg>";
+
+    return svg;
+}
+
+function render_moon_icon_html(data) {
+    var almanac = data && data["almanac"];
+    var moon = almanac && almanac["moon"];
+    var illumination = moon_illumination_fraction(moon);
+    var waxing = moon_is_waxing(moon);
+
+    if (!isFinite(illumination) || waxing === null) {
+        return moon_icon(moon && moon["moon_index"]);
+    }
+
+    var orientation = moon_limb_orientation_degrees(almanac);
+    return render_oriented_moon_svg(illumination, waxing, orientation);
 }
 
 //  function returns html for moon-icon according to moonphase value and currentTheme setting
@@ -1364,7 +1842,7 @@ function update_current_conditions(data) {
     belchertown_debug(data);
 
     if (forecast_provider == "aeris") {
-        var current_conditions_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_current_conditions_last_updated');
+        var current_conditions_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_current_conditions_last_updated').trim().replace(/[\.\s]+$/, '');
         var current_conditions_data = "";
 
         if (current_conditions == "obs") {
@@ -1430,7 +1908,7 @@ function update_current_conditions(data) {
 
         // Show the current_conditions_subtitle
         if ("$Extras.current_conditions_timestamp_enabled" == "1") {
-            jQuery(".current-conditions-subtitle").html(current_conditions_subtitle);
+            jQuery(".current-conditions-subtitle").html(current_conditions_subtitle + ".");
         }
     }
 
@@ -1469,8 +1947,8 @@ function update_current_conditions(data) {
             if ("$Extras.current_conditions_timestamp_enabled" == "1") {
                 // Use our current_conditions.json timestamp as the "last updated"
                 const ts = data["timestamp"];
-                const current_subtitle = tzAdjustedMoment(ts).format('$obs.label.time_current_conditions_last_updated');
-                jQuery(".current-conditions-subtitle").html(current_subtitle);
+                const current_subtitle = tzAdjustedMoment(ts).format('$obs.label.time_current_conditions_last_updated').trim().replace(/[\.\s]+$/, '');
+                jQuery(".current-conditions-subtitle").html(current_subtitle + ".");
             }
         } catch (error) {
             // If anything fails, leave defaults
@@ -1491,7 +1969,7 @@ function update_forecast_data(data) {
         return;
     } else if (forecast_provider == "aeris") {
         try {
-        var forecast_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_forecast_last_updated');
+        var forecast_subtitle = tzAdjustedMoment(data["timestamp"]).format('$obs.label.time_forecast_last_updated').trim().replace(/[\.\s]+$/, '');
 
         // AQI
         try {
@@ -1769,7 +2247,7 @@ function update_forecast_data(data) {
                 belchertown_debug("html_24hr: " + output_html);
             }
             // Show the forecast_subtitle
-            jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + forecast_subtitle);
+            jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + forecast_subtitle + ".");
         }
 
         // End of new composite version of forecast code
@@ -1820,9 +2298,9 @@ function update_forecast_data(data) {
 
             // Subtitle: last updated (use generated_at if present)
             const lastUpdated = (data["generated_at"])
-                ? tzAdjustedMoment(data["generated_at"]).format('$obs.label.time_forecast_last_updated')
-                : tzAdjustedMoment(Date.now() / 1000).format('$obs.label.time_forecast_last_updated');
-            jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + lastUpdated);
+                ? tzAdjustedMoment(data["generated_at"]).format('$obs.label.time_forecast_last_updated').trim().replace(/[\.\s]+$/, '')
+                : tzAdjustedMoment(Date.now() / 1000).format('$obs.label.time_forecast_last_updated').trim().replace(/[\.\s]+$/, '');
+            jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + lastUpdated + ".");
 
             // Build a simple daily forecast row
             let html24 = "";

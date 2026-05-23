@@ -1806,6 +1806,11 @@ p.entry-meta {
   min-width: 113px;
 }
 
+.station-observations {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
 .current_temp,
 .current_wind {
   text-align: center;
@@ -1814,25 +1819,10 @@ p.entry-meta {
   padding: 0px !important;
 }
 
-.current-obs-container {
+.current_temp,
+.current-obs-container,
+.homepage-temperature-sidebar {
   text-align: center;
-  padding: 0px !important;
-}
-
-.current-obs-text {
-  text-align: center;
-  font-size: 18px;
-}
-
-.aqi_outer {
-  text-align: center;
-  font-size: 20px;
-  padding-top: 10px;
-}
-
-.aqi_location_outer {
-  text-align: center;
-  font-size: 14px;
 }
 
 .current_temp {
@@ -1885,8 +1875,6 @@ p.entry-meta {
 .current_wind {
   /* padding:20px 0px 0px 0px !important; */
   padding: 10px 0px 0px 0px !important;
-  display: flex;
-  align-items: center;
 }
 
 .windspeedtable {
@@ -2023,14 +2011,19 @@ p.entry-meta {
   font-size: 30px;
 }
 
-.mph {
-  padding-top: 10px !important;
+.wind-table td.mph {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1;
+  height: auto;
   font-size: 18px !important;
 }
 
-.wind-table .beaufort {
-  padding-top: 8px;
-  padding-bottom: 8px;
+.wind-table td.beaufort {
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
+  height: auto;
   font-size: 16px;
 }
 
@@ -2083,6 +2076,87 @@ p.entry-meta {
   text-align: center;
   font-size: 15px;
   display: block;
+}
+
+.almanac-diagram {
+  margin: 0 auto 12px;
+}
+
+.almanac-diagram-svg {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: 80px;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.almanac-diagram-track {
+  fill: none;
+  stroke: rgba(245, 158, 11, 0.5);
+  stroke-width: 2.9;
+  stroke-linecap: round;
+}
+
+.almanac-diagram-track--sun {
+  stroke: rgba(251, 191, 36, 0.9);
+  stroke-width: 3.05;
+  stroke-dasharray: none;
+}
+
+.almanac-diagram-track--moon {
+  stroke: rgba(188, 202, 231, 0.9);
+  stroke-width: 3.3;
+  stroke-linejoin: round;
+  stroke-dasharray: none;
+}
+
+.dark .almanac-diagram-track {
+  stroke: rgba(251, 191, 36, 0.55);
+}
+
+.dark .almanac-diagram-track--sun {
+  stroke: rgba(252, 211, 77, 0.92);
+}
+
+.dark .almanac-diagram-track--moon {
+  stroke: rgba(226, 232, 245, 0.95);
+}
+
+.almanac-diagram-horizon {
+  fill: none;
+  stroke: rgba(15, 23, 42, 0.18);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+.dark .almanac-diagram-horizon {
+  stroke: rgba(255, 255, 255, 0.28);
+}
+
+.almanac-diagram-object {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.almanac-diagram-object.is-below-horizon {
+  opacity: 0.5;
+}
+
+.almanac-diagram-object--sun .almanac-diagram-object-core {
+  fill: #fbbf24;
+}
+
+.almanac-diagram-object--moon .almanac-diagram-object-core {
+  fill: #d7e0f2;
+}
+
+.dark .almanac-diagram-object--moon .almanac-diagram-object-core {
+  fill: #c5d0e6;
+}
+
+.almanac-diagram-object-symbol {
+  font-size: 15px;
+  pointer-events: none;
 }
 
 .page .sun-moon-modal a {
@@ -2182,7 +2256,1341 @@ table.celestial td.label {
 .chart-outer {
   width: 100%;
   margin: 0 auto;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.chart-outer .homepage-chart-panel {
+  min-width: 0;
+}
+
+.frontpage .chart-outer {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.frontpage .homepage-layout {
+  --homepage-card-surface: #fafbfd;
+  --homepage-card-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+  --homepage-card-border: rgba(15, 23, 42, 0.12);
+  --homepage-info-card-min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.dark .frontpage .homepage-layout {
+  --homepage-card-surface: #313131;
+  --homepage-card-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  --homepage-card-border: rgba(255, 255, 255, 0.16);
+}
+
+.frontpage .homepage-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.frontpage .homepage-primary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: stretch;
+}
+
+.frontpage .homepage-secondary-row {
+  display: grid;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.frontpage .homepage-secondary-row--with-earthquake {
+  grid-template-columns: minmax(0, 1.618fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.frontpage .homepage-secondary-row--single {
+  grid-template-columns: 1fr;
+}
+
+.frontpage .homepage-card {
+  border-radius: 18px;
+  padding: 24px;
+  background-color: var(--homepage-card-surface) !important;
+  border: 1px solid var(--homepage-card-border);
+  box-shadow: var(--homepage-card-shadow);
+  overflow: hidden;
+}
+
+.frontpage .homepage-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.frontpage .homepage-card--records .homepage-card-header,
+.frontpage .homepage-card--earthquake .homepage-card-header,
+.frontpage .homepage-card--charts .homepage-card-header {
+  position: relative;
+  justify-content: center;
+}
+
+.frontpage .homepage-card--records .homepage-card-header,
+.frontpage .homepage-card--charts .homepage-card-header {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
   text-align: center;
+}
+
+.frontpage .homepage-card--records .homepage-card-header h2,
+.frontpage .homepage-card--earthquake .homepage-card-header h2,
+.frontpage .homepage-card--charts .homepage-card-header h2 {
+  width: 100%;
+  text-align: center;
+}
+
+.frontpage .homepage-card--records .homepage-card-header h2,
+.frontpage .homepage-card--charts .homepage-card-header h2 {
+  width: auto;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35em;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  line-height: 1.25;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.frontpage .homepage-card--records .homepage-card-header .homepage-card-link-inline,
+.frontpage .homepage-card--charts .homepage-card-header .homepage-card-link-inline {
+  display: inline;
+  margin-left: 0;
+  white-space: nowrap;
+  -webkit-appearance: none;
+  appearance: none;
+  background: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+
+.frontpage .homepage-card--records .homepage-card-header .homepage-card-link-inline:hover,
+.frontpage .homepage-card--records .homepage-card-header .homepage-card-link-inline:focus,
+.frontpage .homepage-card--records .homepage-card-header .homepage-card-link-inline:active,
+.frontpage .homepage-card--charts .homepage-card-header .homepage-card-link-inline:hover,
+.frontpage .homepage-card--charts .homepage-card-header .homepage-card-link-inline:focus,
+.frontpage .homepage-card--charts .homepage-card-header .homepage-card-link-inline:active {
+  background: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.frontpage .homepage-card--records .homepage-card-header .homepage-card-link-inline,
+.frontpage .homepage-card--charts .homepage-card-header .homepage-card-link-inline {
+  font-size: 0.92em;
+}
+
+.frontpage .homepage-card-header h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.frontpage .homepage-card-body,
+.frontpage .homepage-card-body table {
+  width: 100%;
+}
+
+.frontpage .homepage-card .row {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.frontpage .homepage-card--temperature .homepage-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+.frontpage .homepage-card--temperature,
+.frontpage .homepage-card--observations {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.frontpage .homepage-card--temperature .current_temp .outtemp_outer {
+  padding-top: 8px;
+  font-size: 56px;
+}
+
+.frontpage .homepage-card--temperature .stn-high-low {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.frontpage .homepage-card--observations td {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  line-height: 1.2;
+}
+
+.frontpage .homepage-card--observations .station-observations {
+  width: 100%;
+}
+
+.frontpage .homepage-card--observations .station-observations tbody {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  border: 0;
+}
+
+.frontpage .homepage-card--observations .station-observations tbody tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dark .frontpage .homepage-card--observations .station-observations tbody tr {
+  border-color: transparent;
+  background: transparent;
+}
+
+.frontpage .homepage-card--observations .station-observations tbody tr td {
+  padding: 0;
+  line-height: 1.2;
+}
+
+.frontpage .homepage-card--observations .station-observations tbody tr td:first-child {
+  font-size: 14px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.dark .frontpage .homepage-card--observations .station-observations tbody tr td:first-child {
+  color: #cbd5e1;
+}
+
+.frontpage .homepage-card--observations .station-observations tbody tr td:last-child {
+  text-align: right;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.frontpage .homepage-card--temperature .current_obs_top,
+.frontpage .homepage-card--temperature .current_temp,
+.frontpage .homepage-card--temperature .homepage-temperature-sidebar {
+  text-align: center;
+}
+
+.frontpage .homepage-card--temperature .homepage-temperature-sidebar {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.frontpage .homepage-card--temperature .temp-observation {
+  padding-top: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.frontpage .homepage-card--temperature #wxicon {
+  display: block;
+  margin: 0 auto;
+}
+
+.frontpage .homepage-card--temperature .current_temp,
+.frontpage .homepage-card--temperature .current-obs-container,
+.frontpage .homepage-card--temperature .homepage-temperature-sidebar {
+  text-align: center;
+}
+
+.frontpage .homepage-card--temperature .homepage-temperature-details {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.frontpage .homepage-card--almanac {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  align-self: stretch;
+}
+
+.frontpage .homepage-card--almanac .homepage-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.frontpage .homepage-card--almanac .almanac-main {
+  --almanac-diagram-width: 228px;
+  --almanac-moon-size: 40px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+}
+
+.frontpage .homepage-card--almanac .small-almanac {
+  border-top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0;
+  margin: 4px 0 8px;
+}
+
+.frontpage .homepage-card--almanac .almanac-diagram {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+
+.frontpage .homepage-card--almanac .almanac-sun-time {
+  display: inline-flex;
+  align-items: flex-end;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 1;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.frontpage .homepage-card--almanac .almanac-sun-time > span:last-child {
+  display: inline-block;
+  line-height: 1;
+}
+
+.frontpage .homepage-card--almanac .almanac-sun-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 132px;
+  width: max-content;
+  align-self: center;
+}
+
+.frontpage .homepage-card--almanac .almanac-sun-stack--rise {
+  justify-self: end;
+}
+
+.frontpage .homepage-card--almanac .almanac-sun-stack--set {
+  justify-self: start;
+}
+
+.frontpage .homepage-card--almanac .almanac-sun-stack--rise .almanac-sun-time {
+  justify-content: flex-end;
+}
+
+.frontpage .homepage-card--almanac .almanac-sun-stack--set .almanac-sun-time {
+  justify-content: flex-start;
+}
+
+.frontpage .homepage-card--almanac .almanac-diagram-svg {
+  max-width: var(--almanac-diagram-width);
+  height: 90px;
+}
+
+.frontpage .homepage-card--almanac .sun,
+.frontpage .homepage-card--almanac .moon {
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.frontpage .homepage-card--almanac .sun {
+  text-align: left;
+}
+
+.frontpage .homepage-card--almanac .almanac-meta-block {
+  min-width: 0;
+}
+
+.frontpage .homepage-card--almanac .almanac-time-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.frontpage .homepage-card--almanac .almanac-time-row + .almanac-time-row {
+  margin-top: 1px;
+}
+
+.frontpage .homepage-card--almanac .sun .almanac-time-row + .almanac-time-row {
+  margin-top: 0;
+}
+
+.frontpage .homepage-card--almanac .sunrise-set-image {
+  width: 15px;
+  margin-right: 2px;
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+.frontpage .homepage-card--almanac .sunrise-set-image img {
+  display: block;
+}
+
+.frontpage .homepage-card--almanac .moonrise-set-image {
+  width: 15px;
+  height: 8px;
+  margin-right: 2px;
+  border: 2px solid #9ca3af;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  display: inline-block;
+  opacity: 0.95;
+}
+
+.frontpage .homepage-card--almanac .moonrise-set-image--set {
+  border-top: 0;
+  border-bottom: 2px solid #9ca3af;
+  border-radius: 0 0 10px 10px;
+}
+
+.dark .frontpage .homepage-card--almanac .moonrise-set-image {
+  border-color: #cbd5e1;
+}
+
+.frontpage .homepage-card--almanac .moon-container {
+  font-size: 14px;
+  line-height: 1.1;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  margin: 0 auto;
+}
+
+.frontpage .homepage-card--almanac .moon-container > .moon-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--almanac-moon-size);
+  height: var(--almanac-moon-size);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.frontpage .homepage-card--almanac .moon-container > .moon-icon .moon-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--almanac-moon-size);
+  height: var(--almanac-moon-size);
+  font-size: var(--almanac-moon-size);
+  line-height: 1;
+}
+
+.frontpage .homepage-card--almanac .moon-container > .moon-icon .moon-phase-svg {
+  display: block;
+  width: var(--almanac-moon-size);
+  height: var(--almanac-moon-size);
+  max-width: 100%;
+}
+
+.frontpage .homepage-card--almanac .moon-container > strong,
+.frontpage .homepage-card--almanac .moon-container > .moon-visible {
+  grid-column: 2;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.frontpage .homepage-card--almanac .moon {
+  text-align: left;
+}
+
+.frontpage .homepage-card--almanac .moon-icon {
+  font-size: 22px;
+}
+
+.frontpage .homepage-card--almanac .daylight-change {
+  width: 100%;
+  display: block;
+  font-size: 16px;
+  line-height: 1.15;
+  margin-top: -3px;
+  margin-bottom: 2px;
+  text-align: center;
+}
+
+.frontpage .homepage-card--almanac .almanac-details-link {
+  width: 100%;
+  margin-top: 1px;
+  margin-bottom: 6px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.frontpage .homepage-card--almanac .almanac-details-link--inline {
+  width: auto;
+  margin: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.frontpage .homepage-card--wind .homepage-card-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.frontpage .homepage-card--wind {
+  display: flex;
+  flex-direction: column;
+}
+
+.frontpage .homepage-card--wind .windrow {
+  border-top: 0;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding-top: 0;
+}
+
+.frontpage .homepage-card--wind .current_wind {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding-top: 0 !important;
+}
+
+.frontpage .homepage-card--wind .current_wind > [class*="col-"] {
+  float: none;
+  display: flex;
+  justify-content: center;
+  flex: 0 0 50%;
+  width: 50%;
+  max-width: 50%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.frontpage .homepage-card--wind .compass {
+  margin: 0 auto;
+}
+
+.frontpage .homepage-card--wind .windspeedtable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0;
+}
+
+.frontpage .homepage-card--wind .wind-table {
+  margin: 0 auto;
+}
+
+.frontpage .homepage-card--radar {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.frontpage .homepage-card--forecast {
+  padding-left: 16px;
+  padding-right: 16px;
+  container-type: inline-size;
+  container-name: forecast-card;
+}
+
+.frontpage .homepage-card--forecast .homepage-card-header {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  margin-bottom: 10px;
+}
+
+.frontpage .homepage-card--forecast .forecast-header-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.frontpage .homepage-card--forecast .homepage-card-header h2 {
+  width: 100%;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  justify-content: flex-start;
+  text-align: left;
+  margin: 0;
+  white-space: nowrap;
+  --forecast-meta-size: 0.62em;
+}
+
+.frontpage .homepage-card--forecast .forecast-subtitle {
+  font-size: var(--forecast-meta-size);
+}
+
+.frontpage .homepage-card--forecast .forecast-current-conditions-inline {
+  display: inline;
+  font-size: var(--forecast-meta-size);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.frontpage .homepage-card--forecast .forecast-current-conditions-inline .current-conditions-subtitle {
+  font-size: 1em;
+}
+
+.frontpage .homepage-card--forecast .forecast-menu {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  height: auto;
+  text-align: right;
+  padding-left: 0;
+  white-space: nowrap;
+}
+
+/* Mode 2: title row one-line; interval centered beneath */
+@container forecast-card (max-width: 980px) {
+  .frontpage .homepage-card--forecast .forecast-menu {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+/* Mode 3: forecast line centered, updated/observed centered below, interval centered beneath */
+@container forecast-card (max-width: 760px) {
+  .frontpage .homepage-card--forecast .forecast-header-text {
+    flex-basis: 100%;
+  }
+
+  .frontpage .homepage-card--forecast .homepage-card-header h2 {
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-subtitle::before {
+    content: "";
+    display: block;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-current-conditions-inline {
+    white-space: normal;
+  }
+}
+
+.frontpage .homepage-card--forecast .forecast-menu .forecast-button {
+  margin: 0 4px;
+}
+
+.frontpage .homepage-card--forecast .forecast-24hour {
+  flex: 0 1 165px;
+  min-width: 120px;
+  width: 165px;
+  max-width: none;
+  padding-left: 8px;
+  padding-right: 8px;
+  box-sizing: border-box;
+}
+
+.frontpage .homepage-card--records,
+.frontpage .homepage-card--earthquake {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.frontpage .homepage-card--records {
+  align-self: stretch;
+  height: auto;
+}
+
+.frontpage .homepage-card--observations {
+  align-self: stretch;
+  height: auto;
+  min-height: var(--homepage-info-card-min-height);
+}
+
+.frontpage .homepage-card--earthquake {
+  align-self: stretch;
+  height: auto;
+  min-height: var(--homepage-info-card-min-height);
+}
+
+.frontpage .homepage-card--records .homepage-card-header,
+.frontpage .homepage-card--earthquake .homepage-card-header,
+.frontpage .homepage-card--charts .homepage-card-header {
+  margin-bottom: 8px;
+}
+
+.frontpage .homepage-card--records .homepage-card-body>.row {
+  margin-left: -4px;
+  margin-right: -4px;
+}
+
+.frontpage .homepage-card--records .stn-quick-stats {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.frontpage .homepage-card--records .snapshot-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.frontpage .homepage-card--records .snapshot-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: 42px;
+}
+
+.dark .frontpage .homepage-card--records .snapshot-metric {
+  border-color: transparent;
+  background: transparent;
+}
+
+.frontpage .homepage-card--records .snapshot-metric-label {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: #6b7280;
+}
+
+.dark .frontpage .homepage-card--records .snapshot-metric-label {
+  color: #cbd5e1;
+}
+
+.frontpage .homepage-card--records .snapshot-metric-value {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.frontpage .homepage-card--records .stats-title {
+  font-size: 20px;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.frontpage .homepage-card--records .snapshot-period-select {
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.2;
+}
+
+.frontpage .homepage-card--records .stn-quick-stats td:nth-child(1),
+.frontpage .homepage-card--records .stn-quick-stats td:nth-child(3) {
+  font-size: 16px;
+  line-height: 1.3;
+  white-space: nowrap;
+  padding: 2px 12px 2px 0;
+}
+
+.frontpage .homepage-card--records .stn-quick-stats td:nth-child(2),
+.frontpage .homepage-card--records .stn-quick-stats td:nth-child(4) {
+  font-size: 16px;
+  line-height: 1.3;
+  text-align: left;
+  white-space: nowrap;
+  padding: 2px 20px 2px 0;
+}
+
+.frontpage .homepage-card--records .stn-quick-stats table {
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.frontpage .homepage-card--earthquake {
+  min-height: 0;
+  font-size: 16px;
+}
+
+.frontpage .homepage-card--earthquake.earthquake-container {
+  min-height: 0 !important;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-distance-outer {
+  min-height: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-container .earthquake-distance-outer,
+.frontpage .homepage-card--earthquake .earthquake-distance-outer {
+  min-height: 0 !important;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-info {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-subcard {
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-subcard--summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-subcard--stats {
+  display: flex;
+  justify-content: center;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-subcard--map {
+  display: flex;
+  justify-content: center;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-map-wrap {
+  margin-top: 0;
+  padding-top: 0;
+  height: clamp(98px, 10vw, 128px);
+  overflow: hidden;
+  align-self: stretch;
+  width: 100%;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-map {
+  width: 100%;
+  display: block;
+  height: calc(clamp(98px, 10vw, 128px) + 28px);
+  margin-top: -2px;
+  min-height: 0;
+  border: 0;
+}
+
+.dark .frontpage .homepage-card--earthquake .earthquake-map-wrap {
+  background: #1f2937;
+}
+
+.dark .frontpage .homepage-card--earthquake .earthquake-map {
+  filter: brightness(0.78) contrast(1.12) saturate(0.9) hue-rotate(180deg) invert(0.94);
+}
+
+.frontpage .homepage-card--earthquake .eq-region {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: center;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-info {
+  align-items: flex-end;
+}
+
+.frontpage .homepage-card--earthquake .homepage-card-header {
+  margin-bottom: 4px;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-place,
+.frontpage .homepage-card--earthquake .earthquake-time {
+  margin-bottom: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-subcard--summary .earthquake-time {
+  margin-bottom: 2px;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-subcard--stats {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-subcard--map {
+  margin-top: 2px;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-time {
+  display: block;
+  font-size: 15px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-place {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-place i {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-place a {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-info {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-info > [class*="col-"] {
+  float: none;
+  width: auto;
+  padding: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-stat {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1.15;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-stat .earthquake-stat-label {
+  font-weight: 400;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-stat .magnitude,
+.frontpage .homepage-card--earthquake .earthquake-distance {
+  font-weight: 500;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-stat--distance {
+  justify-content: center;
+}
+
+.frontpage .homepage-radar-content {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.frontpage .homepage-card--radar {
+  align-self: stretch;
+  min-height: 0;
+}
+
+.frontpage .homepage-card--radar .homepage-card-body {
+  height: 100%;
+}
+
+.frontpage .homepage-card--radar #tabs-container,
+.frontpage .homepage-card--radar .radar_image,
+.frontpage .homepage-card--radar iframe,
+.frontpage .homepage-card--radar img {
+  width: 100%;
+}
+
+.frontpage .homepage-card--radar .radar_image,
+.frontpage .homepage-card--radar iframe,
+.frontpage .homepage-card--radar img {
+  height: 100%;
+  min-height: 100%;
+}
+
+.frontpage .homepage-card--radar iframe,
+.frontpage .homepage-card--radar img {
+  display: block;
+  object-fit: cover;
+}
+
+.frontpage .homepage-snapshot-column--secondary {
+  position: relative;
+  padding-left: 14px;
+}
+
+.frontpage .homepage-snapshot-column--secondary:before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.dark .frontpage .homepage-snapshot-column--secondary:before {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.frontpage .homepage-card .border-top,
+.frontpage .homepage-card .border-bottom,
+.frontpage .homepage-card .border-left,
+.frontpage .homepage-card .border-right,
+.frontpage .homepage-card .windrow,
+.frontpage .homepage-card .forecastrow,
+.frontpage .homepage-card .earthquake-container,
+.frontpage .homepage-card .stn-quick-stats,
+.frontpage .homepage-card .earthquake-distance-outer,
+.frontpage .homepage-card .stn-high-low-table td,
+.frontpage .homepage-card .wind-table td {
+  border: 0 !important;
+}
+
+.frontpage .homepage-hook {
+  width: 100%;
+}
+
+/* Homepage responsive breakpoint map
+  - <=1366 and >=801: medium desktop/tablet landscape
+  - <=960: charts collapse to single column
+  - <=800: stacked single-card-column layout
+  - <=600: smallest phones */
+
+/* <=1366 and >=801 ------------------------------------------------------- */
+@media only screen and (max-width: 1366px) and (min-width: 801px) {
+  .frontpage .homepage-hero {
+    grid-template-areas:
+      "temperature wind"
+      "observations radar"
+      "almanac radar";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    align-items: stretch;
+  }
+
+  .frontpage .homepage-primary-grid {
+    display: contents;
+  }
+
+  .frontpage .homepage-card--temperature {
+    grid-area: temperature;
+  }
+
+  .frontpage .homepage-card--wind {
+    grid-area: wind;
+  }
+
+  .frontpage .homepage-card--observations {
+    grid-area: observations;
+    min-height: 0;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .frontpage .homepage-card--observations .homepage-card-body {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 6px;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody tr {
+    padding: 5px 6px;
+  }
+
+  .frontpage .homepage-card--almanac {
+    grid-area: almanac;
+    min-height: 0;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .frontpage .homepage-card--radar {
+    grid-area: radar;
+  }
+
+  .frontpage .homepage-card--wind .current_wind {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .frontpage .homepage-card--wind .current_wind > [class*="col-"] {
+    width: 50%;
+    max-width: 50%;
+  }
+
+  .frontpage .homepage-card--wind .windspeedtable,
+  .frontpage .homepage-card--wind .compass {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .frontpage .homepage-card--radar .homepage-radar-content {
+    min-height: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+}
+
+/* <=960 ------------------------------------------------------------------ */
+@media only screen and (max-width: 960px) {
+  .frontpage .chart-outer {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* <=800 ------------------------------------------------------------------ */
+@media only screen and (max-width: 800px) {
+  .frontpage .homepage-layout {
+    gap: 20px;
+  }
+
+  .frontpage .homepage-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .frontpage .homepage-primary-grid,
+  .frontpage .homepage-secondary-row--with-earthquake {
+    grid-template-columns: 1fr;
+  }
+
+  .frontpage .homepage-primary-grid .homepage-card--temperature {
+    order: 1;
+  }
+
+  .frontpage .homepage-primary-grid .homepage-card--wind {
+    order: 2;
+  }
+
+  .frontpage .homepage-primary-grid .homepage-card--observations {
+    order: 3;
+  }
+
+  .frontpage .homepage-primary-grid .homepage-card--almanac {
+    order: 4;
+  }
+
+  .frontpage .homepage-card {
+    padding: 20px;
+    border-radius: 16px;
+  }
+
+  .frontpage .homepage-card--records .homepage-card-body>.row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .frontpage .homepage-card--records .stn-quick-stats {
+    width: 50%;
+    float: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .frontpage .homepage-card--records .snapshot-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .frontpage .homepage-card--records .homepage-card-body > .row {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+
+  .frontpage .homepage-card--records .homepage-snapshot-column--secondary {
+    padding-left: 0;
+    margin-left: 0;
+  }
+
+  .frontpage .homepage-card--records .homepage-snapshot-column--secondary:before {
+    display: none;
+  }
+
+  .frontpage .homepage-card--observations td {
+    font-size: 15px;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 6px;
+  }
+
+  .frontpage .homepage-card--observations {
+    min-height: 0;
+    height: auto;
+    align-self: start;
+  }
+
+  .frontpage .homepage-card--radar {
+    padding: 0;
+  }
+
+  .frontpage .homepage-card--radar .homepage-radar-content {
+    aspect-ratio: 16 / 10;
+    min-height: 260px;
+  }
+
+  .chart-outer {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* <=600 ------------------------------------------------------------------ */
+@media only screen and (max-width: 600px) {
+  .frontpage .homepage-card--observations td {
+    font-size: 14px;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody {
+    grid-template-columns: 1fr;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody tr {
+    padding: 4px 6px;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody tr td:last-child {
+    font-size: 15px;
+  }
+
+  .frontpage .homepage-card--forecast .homepage-card-header h2 {
+    font-size: 20px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-menu {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    margin-top: 2px;
+  }
+
+  .frontpage .homepage-card--records .homepage-card-body > .row {
+    display: block;
+  }
+
+  .frontpage .homepage-card--records .stn-quick-stats {
+    width: 100%;
+    float: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .frontpage .homepage-card--records .snapshot-metric-grid {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-main {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-sun-stack {
+    max-width: none;
+    min-width: 0;
+    width: max-content;
+    align-items: flex-start;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-sun-time,
+  .frontpage .homepage-card--almanac .almanac-sun-stack--rise .almanac-sun-time,
+  .frontpage .homepage-card--almanac .almanac-sun-stack--set .almanac-sun-time {
+    justify-content: flex-start;
+  }
+
+  .frontpage .homepage-card--almanac .small-almanac {
+    gap: 8px;
+    justify-content: center;
+    text-align: center;
+    flex-wrap: wrap;
+  }
+
+  .frontpage .homepage-card--almanac .moon-container {
+    width: 100%;
+    justify-content: center;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .frontpage .homepage-card--almanac .moon-container > strong,
+  .frontpage .homepage-card--almanac .moon-container > .moon-visible,
+  .frontpage .homepage-card--almanac .moon {
+    text-align: center;
+  }
+
+  .frontpage .homepage-card--radar .homepage-radar-content {
+    aspect-ratio: 16 / 11;
+    min-height: 220px;
+  }
 }
 
 span.highcharts-title {
@@ -2204,6 +3612,31 @@ span.highcharts-title {
   font-weight: 400;
   text-align: center;
   padding: 10px 0px;
+}
+
+.charts .wx-stn-info-container,
+.records .wx-stn-info-container {
+  text-align: center;
+}
+
+.charts .wx-stn-name,
+.records .wx-stn-name,
+.charts .wx-stn-info,
+.records .wx-stn-info,
+.charts .wx-stn-info-social,
+.records .wx-stn-info-social {
+  float: none;
+  margin-right: 0;
+}
+
+.charts .wx-stn-info-container>.row>div.col-sm-5[style],
+.records .wx-stn-info-container>.row>div.col-sm-5[style],
+.charts .wx-stn-info-social[style],
+.records .wx-stn-info-social[style] {
+  float: none !important;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
 }
 
 .wx-records-description {
@@ -2297,6 +3730,53 @@ span.highcharts-title {
   padding-left: 10px;
   padding-right: 10px;
   display: inline-block;
+  width: 165px;
+}
+
+.forecasts,
+.onehr_forecasts,
+.threehr_forecasts,
+.day_forecasts {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+}
+
+.forecasts .forecast-day,
+.onehr_forecasts .forecast-1hour,
+.threehr_forecasts .forecast-3hour,
+.day_forecasts .forecast-24hour {
+  box-sizing: border-box;
+  flex-shrink: 1;
+  max-width: none;
+}
+
+.forecasts .forecast-day {
+  flex: 0 1 165px;
+  min-width: 120px;
+  width: 165px;
+}
+
+.onehr_forecasts .forecast-1hour {
+  flex: 0 1 72px;
+  min-width: 56px;
+  width: 72px;
+}
+
+.threehr_forecasts .forecast-3hour {
+  flex: 0 1 144px;
+  min-width: 108px;
+  width: 144px;
+}
+
+.day_forecasts .forecast-24hour {
+  flex: 0 1 165px;
+  min-width: 120px;
   width: 165px;
 }
 
@@ -2496,172 +3976,40 @@ input:checked+.slider:before {
     margin-left: 0px;
     margin-top: 0px;
     /* margin: 0 auto; */
-    float: left;
-    /* margin: 0 35px; */
-  }
-
-  .sun {
-    float: left;
-  }
-
-  .moon {
     float: right;
+    /* margin-right: auto; */
+    /* margin-left: auto; */
+    margin: 0 35px;
   }
 
-  .page .sun-moon-modal a {
-    font-size: 20px;
+  /* Frontpage stacked layout: keep wind card centered with side-by-side compass + info */
+  .frontpage .homepage-card--wind .windrow {
+    border-bottom: 0 !important;
+    padding: 0 !important;
+    margin: 0 auto;
   }
 
-  .forecast-subtitle {
-    display: block;
-  }
-
-  .onehr_forecasts,
-  .threehr_forecasts,
-  .day_forecasts {
+  .frontpage .homepage-card--wind .current_wind {
     display: flex;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    flex-direction: row;
     flex-wrap: nowrap;
-    gap: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 0 !important;
   }
 
-  .forecast-day {
-    font-size: 18px;
-    /* min-height: 170px !important;  DarkSky */
-    min-height: 175px !important;
-    /* border-bottom:1px solid #D7D7D7; */
-    padding-bottom: 15px;
-    margin-bottom: 15px;
-    flex: 0 0 auto;
-    width: 130px;
-    min-width: 130px;
-  }
-
-  .forecast-day::after {
-    display: none;
-  }
-
-  .forecast-1hour {
-    width: 25% !important;
-  }
-
-  .forecast-temp-chart {
-    padding-top: 0px !important;
-    height: 75px !important;
-  }
-
-  .forecast-temp-chart img {
-    width: 50% !important;
-    height: auto;
-  }
-
-  .forecast-condition-text {
-    display: block;
-  }
-
-  .forecast-day.pirateweather-forecast .forecast-conditions {
-    line-height: 1;
-  }
-
-  .forecast-day.pirateweather-forecast .forecast-conditions .forecast-condition-text {
-    font-size: 11px;
-    display: block;
-    white-space: normal;
-    line-height: 1;
-    margin-top: 5px;
-    margin-bottom: 0;
-    margin-left: 0;
-    margin-right: 0;
-    padding: 0;
-  }
-
-  .forecast-precip,
-  .forecast-wind {
-    font-size: 16px;
-    /* display:inline-block !important; */
-  }
-
-  .forecast-conditions {
-    min-height: 90px;
-  }
-
-  .forecast-conditions img {
+  .frontpage .homepage-card--wind .current_wind > [class*="col-"] {
     width: 50%;
-    height: auto;
+    max-width: 50%;
+    justify-content: center;
   }
 
-  .earthquake-container {
-    margin-top: 20px;
-    border-top: 1px solid #d7d7d7;
-    padding-bottom: 10px;
-  }
-
-  .stn-quick-stats {
-    padding-left: 0px !important;
-    padding-right: 0px !important;
-    padding-top: 15px;
-  }
-
-  .records-table {
-    word-break: break-all;
-  }
-
-  .records table {
-    table-layout: fixed;
-    width: 100%;
-  }
-
-  /* Responsive tables from: https://css-tricks.com/responsive-data-tables/ */
-  /* Force table to not be like tables anymore */
-  table,
-  thead,
-  tbody,
-  th,
-  td,
-  tr {}
-
-  /* Hide table headers (but not display: none;, for accessibility) */
-  thead tr {
-    position: absolute;
-    top: -9999px;
-    left: -9999px;
-  }
-
-  tr {
-    border: 0px;
-  }
-
-  td {
-    /* Behave  like a "row" */
-    border: none;
-    border-bottom: 1px solid #eee;
-    position: relative;
-    padding-left: 50%;
-    /* display:block; POB Added */
-  }
-
-  td:before {
-    /* Now like a table header */
-    position: absolute;
-    /* Top/left values mimic padding */
-    top: 6px;
-    left: 6px;
-    width: 45%;
-    padding-right: 10px;
-    white-space: nowrap;
-  }
-
-  .col-sm-1-5 {
-    padding-left: 0px;
-    padding-right: 0px;
-    width: 45%;
-    font-size: 18px;
-  }
-
-  .row {
-    margin-right: 0px;
-    margin-left: 0px;
+  .frontpage .homepage-card--wind .windspeedtable,
+  .frontpage .homepage-card--wind .compass {
+    float: none !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
 }
 

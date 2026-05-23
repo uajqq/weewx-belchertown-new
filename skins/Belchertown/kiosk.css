@@ -47,3 +47,20 @@ html {
   font-size: 50%;
   margin-left: -0.2em;
 }
+
+/* Kiosk-specific tweaks layered on top of shared style.css homepage-card rules */
+.frontpage .homepage-layout {
+  margin-top: 16px;
+}
+
+@media only screen and (max-width: 800px) {
+  .frontpage .homepage-card {
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .frontpage .homepage-card--forecast {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
