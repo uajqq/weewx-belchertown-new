@@ -223,6 +223,8 @@ files = [
             "skins/Belchertown/kiosk.css",
             "skins/Belchertown/celestial.inc",
             "skins/Belchertown/daylight.inc",
+            "skins/Belchertown/almanac_daylight_data.inc",
+            "skins/Belchertown/almanac_diagram_data.inc",
             "skins/Belchertown/charts.conf.example",
             "skins/Belchertown/page-header.inc",
             "skins/Belchertown/manifest.json.tmpl",
