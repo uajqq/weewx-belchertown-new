@@ -182,8 +182,8 @@ extension_config = """
             #-------------------------------------------------------------
             work_around_ConfigObj_limitations = "true"
 
-            # [[[Labels]]]
-                # [[[[Generic]]]]
+            [[[Labels]]]
+                [[[[Generic]]]]
                     #-- Footer information --
                     # footer_copyright_text  = "My Weather Website"
                     # footer_disclaimer_text = "Never make important decisions based on info from this website."
@@ -201,6 +201,13 @@ extension_config = """
                     # twitter_owner    = "YourTwitterUsernameHere"
                     # twitter_hashtags = "WeeWX #weather"
 
+                    #---------------------------------------------------------
+                    #---
+                    #--- ConfigObj can drop fully-commented sections, so keep
+                    #--- one inert key to ensure this stanza is written.
+                    #---
+                    #---------------------------------------------------------
+                    work_around_ConfigObj_limitations = "true"
 """
 config_dict = configobj.ConfigObj(StringIO(extension_config))
 
