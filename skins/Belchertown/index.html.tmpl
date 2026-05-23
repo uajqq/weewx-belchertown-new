@@ -607,27 +607,23 @@
                     <div class="homepage-card-body eq-region">
                         <div class="earthquake-subcard earthquake-subcard--summary">
                             <span class="earthquake-time"></span><!-- moment.js -->
-                            #if $earthquake_place != ''
-                            <div class="earthquake-place">
-                                <i class="fa fa-map-marker" aria-hidden="true"></i>
-                                <a href="$earthquake_url" target="_blank">$earthquake_place</a>
-                            </div>
-                            #end if
                         </div>
                         <div class="earthquake-subcard earthquake-subcard--stats">
-                        <div class="row earthquake-info">
-                            <div class="col-sm-6 earthquake-stat earthquake-stat--magnitude">
-                                <i class="wi wi-earthquake" aria-hidden="true"></i><span class="earthquake-stat-label">$obs.label.earthquake_magnitude</span> <span class="magnitude">$earthquake_magnitude</span>
-                            </div>
-                            <div class="col-sm-6 earthquake-distance-outer border-left earthquake-stat earthquake-stat--distance">
-                                <span class="earthquake-distance">$earthquake_distance_away $earthquake_distance_label $earthquake_bearing</span>
-                            </div>
-                        </div>
+                            <a class="earthquake-info-link" href="$earthquake_url" target="_blank">
+                                <div class="row earthquake-info">
+                                    <div class="col-sm-6 earthquake-stat earthquake-stat--magnitude">
+                                        <i class="wi wi-earthquake" aria-hidden="true"></i><span class="earthquake-stat-label">$obs.label.earthquake_magnitude</span> <span class="magnitude">$earthquake_magnitude</span>
+                                    </div>
+                                    <div class="col-sm-6 earthquake-distance-outer border-left earthquake-stat earthquake-stat--distance">
+                                        <span class="earthquake-distance">$earthquake_distance_away $earthquake_distance_label $earthquake_bearing</span>
+                                    </div>
+                                </div>
+                            </a>
                         </div>
                         #if $earthquake_lat != '' and $earthquake_lon != ''
                         #set $eq_lat = float($earthquake_lat)
                         #set $eq_lon = float($earthquake_lon)
-                        #set $eq_delta = 0.4
+                        #set $eq_delta = 1.6
                         #set $eq_west = $eq_lon - $eq_delta
                         #set $eq_south = $eq_lat - $eq_delta
                         #set $eq_east = $eq_lon + $eq_delta

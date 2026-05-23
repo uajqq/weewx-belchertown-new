@@ -3105,12 +3105,14 @@ table.celestial td.label {
 .frontpage .homepage-card--earthquake .earthquake-subcard--map {
   display: flex;
   justify-content: center;
+  align-items: stretch;
+  width: 100%;
 }
 
 .frontpage .homepage-card--earthquake .earthquake-map-wrap {
   margin-top: 0;
   padding-top: 0;
-  height: clamp(98px, 10vw, 128px);
+  height: clamp(112px, 11vw, 160px);
   overflow: hidden;
   align-self: stretch;
   width: 100%;
@@ -3119,7 +3121,7 @@ table.celestial td.label {
 .frontpage .homepage-card--earthquake .earthquake-map {
   width: 100%;
   display: block;
-  height: calc(clamp(98px, 10vw, 128px) + 48px);
+  height: calc(clamp(112px, 11vw, 160px) + 48px);
   margin-top: -6px;
   min-height: 0;
   border: 0;
@@ -3228,6 +3230,19 @@ table.celestial td.label {
 .frontpage .homepage-card--earthquake .earthquake-stat .magnitude,
 .frontpage .homepage-card--earthquake .earthquake-distance {
   font-weight: 500;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-info-link,
+.frontpage .homepage-card--earthquake .earthquake-info-link:hover,
+.frontpage .homepage-card--earthquake .earthquake-info-link:focus,
+.frontpage .homepage-card--earthquake .earthquake-info-link:active {
+  color: #e5554e;
+  text-decoration: none;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-info-link {
+  display: block;
+  width: 100%;
 }
 
 .frontpage .homepage-card--earthquake .earthquake-stat--distance {
