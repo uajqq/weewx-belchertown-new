@@ -13,6 +13,8 @@
   #set $moon_ra = locale.format_string( "%.1f&deg;", $almanac.moon.ra )
   #set $moon_dec = locale.format_string( "%.1f&deg;", $almanac.moon.dec )
   #set $sun_altitude_for_display = $almanac.sun.alt
+  #set $sun_None = "--"
+  #set $daylight_str = "--"
   #if $sun_altitude_for_display is None
     #set $sun_altitude_for_display = -90.0
   #end if

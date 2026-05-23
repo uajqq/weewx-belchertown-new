@@ -17,6 +17,8 @@
     #set $moon_ra = locale.format_string( "%.1f&deg;", $almanac.moon.ra )
     #set $moon_dec = locale.format_string( "%.1f&deg;", $almanac.moon.dec )
     #set $sun_altitude = $almanac.sun.alt
+    #set $sun_None = "--"
+    #set $daylight_str = "--"
         #include "almanac_daylight_data.inc"
     #set $sun_altitude = locale.format_string( "%.1f&deg;", $sun_altitude_raw )
 #end if
