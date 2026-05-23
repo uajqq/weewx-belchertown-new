@@ -565,7 +565,7 @@
             "hasExtras": true,
             "sun": {
                 "azimuth": #echo "%.3f" % $almanac.sun.az#,
-                "altitude": #echo "%.3f" % $almanac.sun.alt#,
+                "altitude": #echo "%.3f" % $sun_altitude_raw#,
                 "rise": {
                     "azimuth": #if $sun_rise_az is not None##echo "%.3f" % $sun_rise_az##else#null#end if#,
                     "altitude": #if $sun_rise_alt is not None##echo "%.3f" % $sun_rise_alt##else#null#end if#
