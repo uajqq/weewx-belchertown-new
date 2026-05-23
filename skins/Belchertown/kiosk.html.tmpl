@@ -318,7 +318,6 @@
                             <div class="homepage-card-body">
                                 <div class="almanac-main">
                                 #if $almanac.hasExtras
-                                #include "almanac_diagram_data.inc"
                                 <div class="almanac-sun-stack almanac-sun-stack--rise">
                                     <div class="almanac-sun-time almanac-sun-time--rise almanac-time-row">
                                         <span class="sunrise-set-image"><img src="$relative_url/images/sunrise.png"></span><span class="sunrise-value"></span><!-- moment.js -->
@@ -329,21 +328,21 @@
                                 </div>
                                 <div class="almanac-diagram"
                                     data-sun-az="#echo '%.3f' % $almanac.sun.az#"
-                                    data-sun-alt="#echo '%.3f' % $sun_altitude_raw#"
+                                    data-sun-alt="#if $almanac.sun.alt is not None##echo '%.3f' % $almanac.sun.alt##end if#"
                                     data-moon-az="#echo '%.3f' % $almanac.moon.az#"
                                     data-moon-alt="#echo '%.3f' % $almanac.moon.alt#"
-                                    data-sun-rise-az="$sun_rise_az_attr"
-                                    data-sun-rise-alt="$sun_rise_alt_attr"
-                                    data-sun-transit-az="$sun_transit_az_attr"
-                                    data-sun-transit-alt="$sun_transit_alt_attr"
-                                    data-sun-set-az="$sun_set_az_attr"
-                                    data-sun-set-alt="$sun_set_alt_attr"
-                                    data-moon-rise-az="$moon_rise_az_attr"
-                                    data-moon-rise-alt="$moon_rise_alt_attr"
-                                    data-moon-transit-az="$moon_transit_az_attr"
-                                    data-moon-transit-alt="$moon_transit_alt_attr"
-                                    data-moon-set-az="$moon_set_az_attr"
-                                    data-moon-set-alt="$moon_set_alt_attr">
+                                    data-sun-rise-az="#if $almanac.sun.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.rise.raw)).sun.az##end if#"
+                                    data-sun-rise-alt="#if $almanac.sun.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.rise.raw)).sun.alt##end if#"
+                                    data-sun-transit-az="#if $almanac.sun.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.transit.raw)).sun.az##end if#"
+                                    data-sun-transit-alt="#if $almanac.sun.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.transit.raw)).sun.alt##end if#"
+                                    data-sun-set-az="#if $almanac.sun.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.set.raw)).sun.az##end if#"
+                                    data-sun-set-alt="#if $almanac.sun.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.set.raw)).sun.alt##end if#"
+                                    data-moon-rise-az="#if $almanac.moon.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.rise.raw)).moon.az##end if#"
+                                    data-moon-rise-alt="#if $almanac.moon.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.rise.raw)).moon.alt##end if#"
+                                    data-moon-transit-az="#if $almanac.moon.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.transit.raw)).moon.az##end if#"
+                                    data-moon-transit-alt="#if $almanac.moon.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.transit.raw)).moon.alt##end if#"
+                                    data-moon-set-az="#if $almanac.moon.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.set.raw)).moon.az##end if#"
+                                    data-moon-set-alt="#if $almanac.moon.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.set.raw)).moon.alt##end if#">
                                     <svg class="almanac-diagram-svg" viewBox="24 45 172 80" preserveAspectRatio="none" role="img" aria-label="$obs.label.sun_and_moon">
                                         <path class="almanac-diagram-track almanac-diagram-track--sun" d=""></path>
                                         <path class="almanac-diagram-track almanac-diagram-track--moon" d=""></path>

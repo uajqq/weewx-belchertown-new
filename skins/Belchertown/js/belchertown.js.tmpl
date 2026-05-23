@@ -694,9 +694,13 @@ function almanacBodyGeometry(bodyData) {
 
     var transitX = transitPoint ? transitPoint.x : ((riseX + setX) / 2);
     var transitY = transitPoint ? transitPoint.y : (currentPoint ? currentPoint.y : defaultApexY);
-    transitY = Math.min(horizonY - 14, Math.max(-12, transitY));
 
     var transitAlt = parseFloat(bodyData && bodyData.transit && bodyData.transit.altitude);
+    var transitIsBelowHorizon = isFinite(transitAlt) && transitAlt < 0;
+    transitY = transitIsBelowHorizon
+        ? Math.max(horizonY + 6, Math.min(124, transitY))
+        : Math.min(horizonY - 14, Math.max(-12, transitY));
+
     var nightY = isFinite(transitAlt)
         ? horizonY + Math.max(8, Math.min(18, Math.abs(transitAlt) * 0.22))
         : 114;

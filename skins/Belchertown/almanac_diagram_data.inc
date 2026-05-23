@@ -1,7 +1,3 @@
-#set $sun_altitude_raw = $almanac.sun.alt
-#if $sun_altitude_raw is None
-    #set $sun_altitude_raw = -90.0
-#end if
 #set $sun_rise_raw = $almanac.sun.rise.raw
 #set $sun_set_raw = $almanac.sun.set.raw
 #set $sun_transit_raw = $almanac.sun.transit.raw

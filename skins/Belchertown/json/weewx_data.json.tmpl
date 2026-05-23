@@ -1,9 +1,14 @@
 #encoding UTF-8
 #import datetime
 #errorCatcher Echo
+
 ## If extended almanac information is available, do extra calculations.
 #if $almanac.hasExtras
   #import locale
+        #set $sun_altitude_raw = $almanac.sun.alt
+        #if $sun_altitude_raw is None
+            #set $sun_altitude_raw = -90.0
+        #end if
     #set $sun_azimuth = locale.format_string( "%.1f&deg;", $almanac.sun.az )
     #set $sun_ra = locale.format_string( "%.1f&deg;", $almanac.sun.ra )
     #set $sun_dec = locale.format_string( "%.1f&deg;", $almanac.sun.dec )
@@ -14,7 +19,6 @@
     #set $sun_altitude = $almanac.sun.alt
         #include "almanac_daylight_data.inc"
     #set $sun_altitude = locale.format_string( "%.1f&deg;", $sun_altitude_raw )
-    #include "almanac_diagram_data.inc"
 #end if
 
 {
@@ -565,34 +569,34 @@
             "hasExtras": true,
             "sun": {
                 "azimuth": #echo "%.3f" % $almanac.sun.az#,
-                "altitude": #echo "%.3f" % $sun_altitude_raw#,
+                "altitude": #if $almanac.sun.alt is not None##echo "%.3f" % $almanac.sun.alt##else#null#end if#,
                 "rise": {
-                    "azimuth": #if $sun_rise_az is not None##echo "%.3f" % $sun_rise_az##else#null#end if#,
-                    "altitude": #if $sun_rise_alt is not None##echo "%.3f" % $sun_rise_alt##else#null#end if#
+                    "azimuth": #if $almanac.sun.rise.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.sun.rise.raw)).sun.az##else#null#end if#,
+                    "altitude": #if $almanac.sun.rise.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.sun.rise.raw)).sun.alt##else#null#end if#
                 },
                 "transit": {
-                    "azimuth": #if $sun_transit_az is not None##echo "%.3f" % $sun_transit_az##else#null#end if#,
-                    "altitude": #if $sun_transit_alt is not None##echo "%.3f" % $sun_transit_alt##else#null#end if#
+                    "azimuth": #if $almanac.sun.transit.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.sun.transit.raw)).sun.az##else#null#end if#,
+                    "altitude": #if $almanac.sun.transit.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.sun.transit.raw)).sun.alt##else#null#end if#
                 },
                 "set": {
-                    "azimuth": #if $sun_set_az is not None##echo "%.3f" % $sun_set_az##else#null#end if#,
-                    "altitude": #if $sun_set_alt is not None##echo "%.3f" % $sun_set_alt##else#null#end if#
+                    "azimuth": #if $almanac.sun.set.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.sun.set.raw)).sun.az##else#null#end if#,
+                    "altitude": #if $almanac.sun.set.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.sun.set.raw)).sun.alt##else#null#end if#
                 }
             },
             "moon": {
                 "azimuth": #echo "%.3f" % $almanac.moon.az#,
                 "altitude": #echo "%.3f" % $almanac.moon.alt#,
                 "rise": {
-                    "azimuth": #if $moon_rise_az is not None##echo "%.3f" % $moon_rise_az##else#null#end if#,
-                    "altitude": #if $moon_rise_alt is not None##echo "%.3f" % $moon_rise_alt##else#null#end if#
+                    "azimuth": #if $almanac.moon.rise.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.moon.rise.raw)).moon.az##else#null#end if#,
+                    "altitude": #if $almanac.moon.rise.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.moon.rise.raw)).moon.alt##else#null#end if#
                 },
                 "transit": {
-                    "azimuth": #if $moon_transit_az is not None##echo "%.3f" % $moon_transit_az##else#null#end if#,
-                    "altitude": #if $moon_transit_alt is not None##echo "%.3f" % $moon_transit_alt##else#null#end if#
+                    "azimuth": #if $almanac.moon.transit.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.moon.transit.raw)).moon.az##else#null#end if#,
+                    "altitude": #if $almanac.moon.transit.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.moon.transit.raw)).moon.alt##else#null#end if#
                 },
                 "set": {
-                    "azimuth": #if $moon_set_az is not None##echo "%.3f" % $moon_set_az##else#null#end if#,
-                    "altitude": #if $moon_set_alt is not None##echo "%.3f" % $moon_set_alt##else#null#end if#
+                    "azimuth": #if $almanac.moon.set.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.moon.set.raw)).moon.az##else#null#end if#,
+                    "altitude": #if $almanac.moon.set.raw is not None##echo "%.3f" % $almanac($almanac_time=int($almanac.moon.set.raw)).moon.alt##else#null#end if#
                 }
             }
             #else
