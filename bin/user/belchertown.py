@@ -50,7 +50,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-VERSION = "2.0beta1-new-belchertown"
+VERSION = "2.0beta2-new-belchertown"
 log.info(f"version {VERSION}")
 
 # Default timeout for all HTTP requests (seconds)
