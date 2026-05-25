@@ -11,6 +11,222 @@
     var moment_locale = "$system_locale_js";
     moment.locale(moment_locale);
 
+    function enhanceRecordsPage(snapshotData) {
+        var tableRow = jQuery(".records-table");
+        var legacyTable = tableRow.find("table").first();
+
+        function pickValueAndDateCells(firstCell, secondCell) {
+            var first = jQuery(firstCell);
+            var second = jQuery(secondCell);
+            var firstIsDate = first.find("[id$='-ts']").length > 0;
+            var secondIsDate = second.find("[id$='-ts']").length > 0;
+
+            if (firstIsDate && !secondIsDate) {
+                return { value: second, date: first };
+            }
+
+            if (secondIsDate && !firstIsDate) {
+                return { value: first, date: second };
+            }
+
+            return { value: first, date: second };
+        }
+
+        function cellDisplayText(cell) {
+            var jqCell = (cell && cell.jquery) ? cell : jQuery(cell);
+            var text = jQuery.trim(jqCell.first().text().replace(/\s+/g, " "));
+            return text || "--";
+        }
+
+        function snapshotMetricFromRow(row, periodKey) {
+            if (!snapshotData || !snapshotData[periodKey]) {
+                return null;
+            }
+
+            var yearTsElement = row.find("[id^='year-'][id$='-ts']").first();
+            var yearTsId = yearTsElement.attr("id");
+            if (!yearTsId) {
+                return null;
+            }
+
+            var slug = yearTsId.replace(/^year-/, "").replace(/-ts$/, "");
+            var slugMap = {
+                "outtemp-max": { group: "outTemp", valueKey: "max", timeKey: "maxtime" },
+                "outtemp-min": { group: "outTemp", valueKey: "min", timeKey: "mintime" },
+                "apptemp-max": { group: "appTemp", valueKey: "max", timeKey: "maxtime" },
+                "apptemp-min": { group: "appTemp", valueKey: "min", timeKey: "mintime" },
+                "heatindex-max": { group: "heatindex", valueKey: "max", timeKey: "maxtime" },
+                "windchill-min": { group: "windchill", valueKey: "max", timeKey: "maxtime" },
+                "windGust-max": { group: "wind", valueKey: "max", timeKey: "maxtime" },
+                "windrun-max": { group: "wind", valueKey: "windrun_max", timeKey: "windrun_maxtime" },
+                "rainRate-max": { group: "rain", valueKey: "max", timeKey: "maxtime" },
+                "outHumidity-max": { group: "humidity", valueKey: "max", timeKey: "maxtime" },
+                "outHumidity-min": { group: "humidity", valueKey: "min", timeKey: "mintime" },
+                "dewpoint-max": { group: "dewpoint", valueKey: "max", timeKey: "maxtime" },
+                "dewpoint-min": { group: "dewpoint", valueKey: "min", timeKey: "mintime" },
+                "barometer-max": { group: "barometer", valueKey: "max", timeKey: "maxtime" },
+                "barometer-min": { group: "barometer", valueKey: "min", timeKey: "mintime" },
+                "radiation-max": { group: "solar_radiation", valueKey: "max", timeKey: "maxtime" },
+                "uv-max": { group: "uv", valueKey: "max", timeKey: "maxtime" },
+                "rainiest-day": { group: "rain", valueKey: "sum", timeKey: "maxtime" }
+            };
+
+            var mapping = slugMap[slug];
+            if (!mapping) {
+                return null;
+            }
+
+            var periodGroup = snapshotData[periodKey][mapping.group];
+            if (!periodGroup) {
+                return null;
+            }
+
+            var value = periodGroup[mapping.valueKey];
+            var date = periodGroup[mapping.timeKey];
+            if (typeof value === "undefined" || value === null || value === "") {
+                return null;
+            }
+
+            return {
+                value: jQuery.trim(String(value)),
+                date: jQuery.trim(String(date || "--")) || "--"
+            };
+        }
+
+        function applyPeriod(recordCard, row, periodClass, labelText, periodKey, fallbackValue, fallbackDate) {
+            var metric = snapshotMetricFromRow(row, periodKey);
+            var valueText = metric ? metric.value : fallbackValue;
+            var dateText = metric ? metric.date : fallbackDate;
+
+            recordCard.find(periodClass + " .records-record-period__label").text(labelText);
+            recordCard.find(periodClass + " .records-record-period__value").text(valueText);
+            recordCard.find(periodClass + " .records-record-period__date").text(dateText);
+        }
+
+        if (!legacyTable.length) {
+            return;
+        }
+
+        var sectionsContainer = jQuery("#records-sections");
+        if (!sectionsContainer.length) {
+            return;
+        }
+
+        sectionsContainer.empty();
+
+        var currentSection = null;
+        var currentSectionBody = null;
+        var currentPeriodLabels = {
+            year: "",
+            alltime: "$obs.label.records_all_time"
+        };
+
+        legacyTable.find("tbody > tr").each(function() {
+            var row = jQuery(this);
+            var headerCell = row.find("td.records-header[colspan='5']").first();
+
+            if (headerCell.length) {
+                currentSection = jQuery(
+                    '<section class="records-section-card">' +
+                        '<div class="records-section-card__header">' +
+                            '<h2 class="records-section-card__title"></h2>' +
+                        '</div>' +
+                        '<div class="records-section-card__body"></div>' +
+                    '</section>'
+                );
+                currentSection.find(".records-section-card__title").html(headerCell.html());
+                currentSectionBody = currentSection.find(".records-section-card__body");
+                sectionsContainer.append(currentSection);
+                return;
+            }
+
+            if (row.find(".records-header-year, .records-header-alltime").length) {
+                var headerCells = row.children("td");
+                currentPeriodLabels = {
+                    year: jQuery.trim(jQuery(headerCells[1]).text()) || currentPeriodLabels.year,
+                    alltime: jQuery.trim(jQuery(headerCells[2]).text()) || currentPeriodLabels.alltime
+                };
+                return;
+            }
+
+            var cells = row.children("td");
+            if (cells.length !== 5 || !currentSectionBody) {
+                return;
+            }
+
+            var recordTitle = jQuery.trim(jQuery(cells[0]).text());
+            if (!recordTitle) {
+                return;
+            }
+
+            var recordCard = jQuery(
+                '<article class="records-record-card">' +
+                    '<div class="records-record-card__header">' +
+                        '<h3 class="records-record-card__title"></h3>' +
+                    '</div>' +
+                    '<div class="records-record-card__body">' +
+                        '<section class="records-record-period records-record-period--today">' +
+                            '<div class="records-record-period__label"></div>' +
+                            '<div class="records-record-period__value"></div>' +
+                            '<div class="records-record-period__date"></div>' +
+                        '</section>' +
+                        '<section class="records-record-period records-record-period--yesterday">' +
+                            '<div class="records-record-period__label"></div>' +
+                            '<div class="records-record-period__value"></div>' +
+                            '<div class="records-record-period__date"></div>' +
+                        '</section>' +
+                        '<section class="records-record-period records-record-period--week">' +
+                            '<div class="records-record-period__label"></div>' +
+                            '<div class="records-record-period__value"></div>' +
+                            '<div class="records-record-period__date"></div>' +
+                        '</section>' +
+                        '<section class="records-record-period records-record-period--month">' +
+                            '<div class="records-record-period__label"></div>' +
+                            '<div class="records-record-period__value"></div>' +
+                            '<div class="records-record-period__date"></div>' +
+                        '</section>' +
+                        '<section class="records-record-period records-record-period--year">' +
+                            '<div class="records-record-period__label"></div>' +
+                            '<div class="records-record-period__value"></div>' +
+                            '<div class="records-record-period__date"></div>' +
+                        '</section>' +
+                        '<section class="records-record-period records-record-period--alltime">' +
+                            '<div class="records-record-period__label"></div>' +
+                            '<div class="records-record-period__value"></div>' +
+                            '<div class="records-record-period__date"></div>' +
+                        '</section>' +
+                    '</div>' +
+                '</article>'
+            );
+
+            recordCard.find(".records-record-card__title").text(recordTitle);
+            recordCard.find(".records-record-period--year .records-record-period__label").text(currentPeriodLabels.year);
+            var yearCells = pickValueAndDateCells(cells[1], cells[2]);
+            var alltimeCells = pickValueAndDateCells(cells[3], cells[4]);
+
+            recordCard.find(".records-record-period--year .records-record-period__value").html(yearCells.value.html());
+            recordCard.find(".records-record-period--year .records-record-period__date").html(yearCells.date.html());
+
+            var fallbackValue = cellDisplayText(recordCard.find(".records-record-period--year .records-record-period__value"));
+            var fallbackDate = cellDisplayText(recordCard.find(".records-record-period--year .records-record-period__date"));
+
+            applyPeriod(recordCard, row, ".records-record-period--today", "$obs.label.snapshot_period_today", "day", fallbackValue, fallbackDate);
+            applyPeriod(recordCard, row, ".records-record-period--yesterday", "$obs.label.snapshot_period_yesterday", "yesterday", fallbackValue, fallbackDate);
+            applyPeriod(recordCard, row, ".records-record-period--week", "$obs.label.snapshot_period_7days", "week", fallbackValue, fallbackDate);
+            applyPeriod(recordCard, row, ".records-record-period--month", "$obs.label.snapshot_period_month", "month", fallbackValue, fallbackDate);
+
+            recordCard.find(".records-record-period--alltime .records-record-period__label").text(currentPeriodLabels.alltime);
+            recordCard.find(".records-record-period--alltime .records-record-period__value").html(alltimeCells.value.html());
+            recordCard.find(".records-record-period--alltime .records-record-period__date").html(alltimeCells.date.html());
+
+            currentSectionBody.append(recordCard);
+        });
+
+        if (sectionsContainer.children().length) {
+            tableRow.addClass("records-table--enhanced");
+        }
+    }
+
     jQuery(document).ready(function() {
         jQuery("#year-outtemp-max-ts").text(tzAdjustedMoment($year.outTemp.maxtime.raw).format("$obs.label.time_records_page_full_date"));
         jQuery("#at-outtemp-max-ts").text(tzAdjustedMoment($alltime.outTemp.maxtime.raw).format("$obs.label.time_records_page_full_date"));
@@ -105,6 +321,15 @@
             jQuery("#at-days-without-rainfall-range-ts").text("---");
         }
 
+        if (typeof ajaxweewx === "function") {
+            ajaxweewx().then(function(weewxData) {
+                enhanceRecordsPage(weewxData);
+            }).catch(function() {
+                enhanceRecordsPage(null);
+            });
+        } else {
+            enhanceRecordsPage(null);
+        }
 
     });
 </script>
@@ -124,6 +349,8 @@
                 </div>
             </div>
             <!-- End row -->
+
+            <div id="records-sections" class="records-sections"></div>
 
             <!-- Records table row -->
             <div class="row records-table">

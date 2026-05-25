@@ -4,6 +4,7 @@
 ## actually in Latin-1, then you should replace the string "UTF-8" with "latin-1"
 ## If you do this, you should also change the 'Content-Type' metadata below.
 #encoding UTF-8
+#import math
 ##
 #set global $page = "home"
 
@@ -349,10 +350,10 @@
                                 #if $almanac.hasExtras
                                 <div class="almanac-sun-stack almanac-sun-stack--rise">
                                     <div class="almanac-sun-time almanac-sun-time--rise almanac-time-row">
-                                        <span class="sunrise-set-image"><img src="$relative_url/images/sunrise.png"></span><span class="sunrise-value"></span><!-- moment.js -->
+                                        <span class="sunrise-value"></span><span class="sunrise-set-image sunrise-set-image--rise"><img src="$relative_url/images/sunrise.png"></span><!-- moment.js -->
                                     </div>
                                     <div class="almanac-sun-time almanac-sun-time--moonrise almanac-time-row">
-                                        <span class="moonrise-set-image moonrise-set-image--rise" aria-hidden="true"></span><span class="moonrise-value"></span><!-- moment.js -->
+                                        <span class="moonrise-value"></span><span class="moonrise-set-image moonrise-set-image--rise" aria-hidden="true"></span><!-- moment.js -->
                                     </div>
                                 </div>
                                 <div class="almanac-diagram"
@@ -623,19 +624,21 @@
                         #if $earthquake_lat != '' and $earthquake_lon != ''
                         #set $eq_lat = float($earthquake_lat)
                         #set $eq_lon = float($earthquake_lon)
-                        #set $eq_delta = 1.6
-                        #set $eq_west = $eq_lon - $eq_delta
-                        #set $eq_south = $eq_lat - $eq_delta
-                        #set $eq_east = $eq_lon + $eq_delta
-                        #set $eq_north = $eq_lat + $eq_delta
+                        #set $eq_zoom = 6
+                        #set $eq_n = 2 ** $eq_zoom
+                        #set $eq_lat_rad = math.radians($eq_lat)
+                        #set $eq_tile_x = int((($eq_lon + 180.0) / 360.0) * $eq_n)
+                        #set $eq_tile_y = int((1.0 - math.log(math.tan($eq_lat_rad) + (1.0 / math.cos($eq_lat_rad))) / math.pi) / 2.0 * $eq_n)
                         <div class="earthquake-subcard earthquake-subcard--map">
                             <div class="earthquake-map-wrap">
-                                <iframe
+                                <img
                                     class="earthquake-map"
-                                    title="$obs.label.earthquake_title"
-                                    loading="lazy"
-                                    referrerpolicy="no-referrer-when-downgrade"
-                                    src="https://www.openstreetmap.org/export/embed.html?bbox=$eq_west,$eq_south,$eq_east,$eq_north&amp;layer=mapnik&amp;marker=$earthquake_lat,$earthquake_lon"></iframe>
+                                    alt="$obs.label.earthquake_title"
+                                    loading="eager"
+                                    decoding="async"
+                                    src="https://tile.openstreetmap.org/${eq_zoom}/${eq_tile_x}/${eq_tile_y}.png"
+                                    onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='https://a.tile.openstreetmap.org/${eq_zoom}/${eq_tile_x}/${eq_tile_y}.png';}else if(this.dataset.fallback==='1'){this.dataset.fallback='2';this.src='https://b.tile.openstreetmap.org/${eq_zoom}/${eq_tile_x}/${eq_tile_y}.png';}else if(this.dataset.fallback==='2'){this.dataset.fallback='3';this.src='https://c.tile.openstreetmap.org/${eq_zoom}/${eq_tile_x}/${eq_tile_y}.png';}" />
+                                <span class="earthquake-map-marker" aria-hidden="true"></span>
                             </div>
                         </div>
                         #end if

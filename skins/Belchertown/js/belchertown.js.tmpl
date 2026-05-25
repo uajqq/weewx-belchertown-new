@@ -493,14 +493,17 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     var rotation = parseFloat(direction);
     var selectedKnots = wind_compass_source == "windGust" ? parseFloat(windGustKnots) : parseFloat(windSpeedKnots);
     var calmThresholdKnots = 2.5;
+    var speedIsCalm = isFinite(parseFloat(windSpeedKnots)) && parseFloat(windSpeedKnots) < calmThresholdKnots;
+    var gustIsCalm = isFinite(parseFloat(windGustKnots)) && parseFloat(windGustKnots) < calmThresholdKnots;
     var arrow = jQuery(".arrow");
 
     if (arrow.length === 0 || !isFinite(rotation)) {
         return;
     }
 
-    // Calm wind: hide both indicator styles (triangle and windbarb).
-    if (!isFinite(selectedKnots) || selectedKnots < calmThresholdKnots) {
+    // Calm wind: hide both indicator styles (triangle and windbarb)
+    // only when *both* speed and gust are below the calm threshold.
+    if (speedIsCalm && gustIsCalm) {
         arrow.removeClass("windbarb-marker").empty().css("visibility", "hidden");
         jQuery(".wind-arrow").css("visibility", "hidden");
         return;
@@ -2717,8 +2720,8 @@ function onMessageArrived(message) {
     var payload_size = message.payloadString.length;
     belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message received - Size: " + payload_size + " bytes, Topic: " + message.destinationName);
     try {
-        update_current_wx(message.payloadString);
         mqtt_payload = jQuery.parseJSON(message.payloadString);
+        update_current_wx(mqtt_payload);
         belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message processed successfully");
     } catch (e) {
         console.error("MQTT: [Msg #" + mqtt_message_count + "] Error processing message: " + e.message);
@@ -2731,11 +2734,130 @@ function refreshHooks() {
     //belchertown_debug(mqtt_payload);
 }
 
+function normalize_mqtt_payload(payload) {
+    if (!payload || typeof payload !== "object") {
+        return payload;
+    }
+
+    var aliases = {
+        "beaufort_count": "beaufort",
+        "solarAltitude_degree_angle": "solarAltitude",
+        "lunarAltitude_degree_angle": "lunarAltitude",
+        "solarDistance_mile": "solarDistance",
+        "lunarDistance_mile": "lunarDistance",
+        "maxSolarRad_Wpm2": "maxSolarRad",
+        "rainRate_inch_per_hour": "rainRate",
+        "rainCountRate_per_hour": "rainCountRate",
+        "rainCount_count": "rainCount"
+    };
+
+    Object.keys(aliases).forEach(function(aliasKey) {
+        var canonicalKey = aliases[aliasKey];
+        if (payload.hasOwnProperty(aliasKey) && !payload.hasOwnProperty(canonicalKey)) {
+            payload[canonicalKey] = payload[aliasKey];
+        }
+    });
+
+    return payload;
+}
+
+function parse_mqtt_number(payload, key) {
+    if (!payload || !payload.hasOwnProperty(key)) {
+        return null;
+    }
+    var value = parseFloat(payload[key]);
+    return isFinite(value) ? value : null;
+}
+
+function update_almanac_diagram_from_mqtt(payload) {
+    var diagram = jQuery(".almanac-diagram");
+    if (!diagram.length) {
+        return;
+    }
+
+    var solarAz = parse_mqtt_number(payload, "solarAzimuth");
+    var solarAlt = parse_mqtt_number(payload, "solarAltitude");
+    var lunarAz = parse_mqtt_number(payload, "lunarAzimuth");
+    var lunarAlt = parse_mqtt_number(payload, "lunarAltitude");
+
+    if (!isFinite(solarAz) && !isFinite(solarAlt) && !isFinite(lunarAz) && !isFinite(lunarAlt)) {
+        return;
+    }
+
+    var getDiagramValue = function(dataKey) {
+        var value = parseFloat(diagram.data(dataKey));
+        return isFinite(value) ? value : null;
+    };
+
+    var diagramData = {
+        hasExtras: true,
+        sun: {
+            azimuth: getDiagramValue("sunAz"),
+            altitude: getDiagramValue("sunAlt"),
+            rise: {
+                azimuth: getDiagramValue("sunRiseAz"),
+                altitude: getDiagramValue("sunRiseAlt")
+            },
+            transit: {
+                azimuth: getDiagramValue("sunTransitAz"),
+                altitude: getDiagramValue("sunTransitAlt")
+            },
+            set: {
+                azimuth: getDiagramValue("sunSetAz"),
+                altitude: getDiagramValue("sunSetAlt")
+            }
+        },
+        moon: {
+            azimuth: getDiagramValue("moonAz"),
+            altitude: getDiagramValue("moonAlt"),
+            rise: {
+                azimuth: getDiagramValue("moonRiseAz"),
+                altitude: getDiagramValue("moonRiseAlt")
+            },
+            transit: {
+                azimuth: getDiagramValue("moonTransitAz"),
+                altitude: getDiagramValue("moonTransitAlt")
+            },
+            set: {
+                azimuth: getDiagramValue("moonSetAz"),
+                altitude: getDiagramValue("moonSetAlt")
+            }
+        }
+    };
+
+    if (isFinite(solarAz)) {
+        diagramData.sun.azimuth = solarAz;
+        diagram.data("sunAz", solarAz);
+        diagram.attr("data-sun-az", solarAz.toFixed(3));
+    }
+    if (isFinite(solarAlt)) {
+        diagramData.sun.altitude = solarAlt;
+        diagram.data("sunAlt", solarAlt);
+        diagram.attr("data-sun-alt", solarAlt.toFixed(3));
+    }
+    if (isFinite(lunarAz)) {
+        diagramData.moon.azimuth = lunarAz;
+        diagram.data("moonAz", lunarAz);
+        diagram.attr("data-moon-az", lunarAz.toFixed(3));
+    }
+    if (isFinite(lunarAlt)) {
+        diagramData.moon.altitude = lunarAlt;
+        diagram.data("moonAlt", lunarAlt);
+        diagram.attr("data-moon-alt", lunarAlt.toFixed(3));
+    }
+
+    renderAlmanacDiagram(diagramData);
+}
+
 // Handle MQTT message
 function update_current_wx(data) {
-    data = jQuery.parseJSON(data);
+    if (typeof data === "string") {
+        data = jQuery.parseJSON(data);
+    }
+    data = normalize_mqtt_payload(data);
 
     update_wind_compass_marker(data);
+    update_almanac_diagram_from_mqtt(data);
 
     try {
         refreshHooks();

@@ -2060,6 +2060,11 @@ p.entry-meta {
   margin-right: 5px;
 }
 
+.sunrise-set-image--rise {
+  margin-right: 0;
+  margin-left: 5px;
+}
+
 .sun-moon-title {
   font-size: 25px;
   text-align: left;
@@ -2441,6 +2446,7 @@ table.celestial td.label {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 10px;
   height: 100%;
 }
 
@@ -2451,13 +2457,25 @@ table.celestial td.label {
 }
 
 .frontpage .homepage-card--temperature .current_temp .outtemp_outer {
-  padding-top: 8px;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 0;
   font-size: 56px;
+  line-height: 1;
+}
+
+.frontpage .homepage-card--temperature .outtempunitlabelsuper {
+  top: -0.18em;
+  margin-left: 0.06em;
+  font-size: 48%;
+  line-height: 1;
 }
 
 .frontpage .homepage-card--temperature .stn-high-low {
-  padding-top: 8px;
-  padding-bottom: 8px;
+  width: 100%;
+  padding-top: 4px;
+  padding-bottom: 0;
 }
 
 .frontpage .homepage-card--observations td {
@@ -2472,35 +2490,52 @@ table.celestial td.label {
 
 .frontpage .homepage-card--observations .station-observations tbody {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--homepage-observation-tile-min)), 1fr));
+  grid-auto-rows: 1fr;
+  flex: 1 1 auto;
+  height: 100%;
   gap: 4px;
   border: 0;
+  width: 100%;
+  align-items: stretch;
+  align-content: stretch;
 }
 
 .frontpage .homepage-card--observations .station-observations tbody tr {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 5px 6px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+  min-height: 0;
+  padding: 7px 7px;
+  border: 1px solid var(--homepage-card-border);
+  border-radius: 12px;
+  background-color: var(--homepage-card-surface) !important;
+  text-align: center;
+  box-shadow: var(--homepage-card-shadow);
 }
 
 .dark .frontpage .homepage-card--observations .station-observations tbody tr {
-  border-color: transparent;
-  background: transparent;
+  border-color: var(--homepage-card-border);
+  background: var(--homepage-card-surface) !important;
+  box-shadow: var(--homepage-card-shadow);
 }
 
 .frontpage .homepage-card--observations .station-observations tbody tr td {
   padding: 0;
   line-height: 1.2;
+  width: 100%;
 }
 
 .frontpage .homepage-card--observations .station-observations tbody tr td:first-child {
-  font-size: 14px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  text-align: center;
   color: #6b7280;
 }
 
@@ -2509,9 +2544,11 @@ table.celestial td.label {
 }
 
 .frontpage .homepage-card--observations .station-observations tbody tr td:last-child {
-  text-align: right;
-  font-size: 16px;
-  font-weight: 400;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.15;
+  word-break: break-word;
 }
 
 .frontpage .homepage-card--temperature .current_obs_top,
@@ -2526,14 +2563,35 @@ table.celestial td.label {
 }
 
 .frontpage .homepage-card--temperature .temp-observation {
+  display: flex;
+  flex-wrap: nowrap;
   padding-top: 0;
   align-items: center;
   justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.frontpage .homepage-card--temperature .temp-observation > [class*="col-"] {
+  float: none;
+  display: flex;
+  flex: 1 1 50%;
+  width: 50%;
+  max-width: 50%;
+  align-items: center;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.frontpage .homepage-card--temperature .current_obs_top {
+  min-height: 96px;
 }
 
 .frontpage .homepage-card--temperature #wxicon {
   display: block;
   margin: 0 auto;
+  max-width: min(100%, 108px);
 }
 
 .frontpage .homepage-card--temperature .current_temp,
@@ -2544,8 +2602,68 @@ table.celestial td.label {
 
 .frontpage .homepage-card--temperature .homepage-temperature-details {
   display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 14px;
+  padding: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.frontpage .homepage-card--temperature .homepage-temperature-details > [class*="col-"] {
+  float: none;
+  display: flex;
+  flex: 1 1 50%;
+  width: 50%;
+  max-width: 50%;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.frontpage .homepage-card--temperature .current-obs-container,
+.frontpage .homepage-card--temperature .homepage-temperature-sidebar {
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+}
+
+.frontpage .homepage-card--temperature .current-obs-text,
+.frontpage .homepage-card--temperature .aqi_outer,
+.frontpage .homepage-card--temperature .feelslike {
+  width: 100%;
+  margin: 0;
+}
+
+.frontpage .homepage-card--temperature .current-obs-text {
+  line-height: 1.25;
+}
+
+.frontpage .homepage-card--temperature .aqi_outer {
+  line-height: 1.3;
+}
+
+.frontpage .homepage-card--temperature .feelslike {
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.frontpage .homepage-card--temperature .stn-high-low-table {
+  width: 100%;
+}
+
+.frontpage .homepage-card--temperature .stn-high-low-table td {
+  width: 50%;
+  vertical-align: top;
+}
+
+.frontpage .homepage-card--temperature .stn-high-low-table-title {
+  line-height: 1.2;
 }
 
 .frontpage .homepage-card--almanac {
@@ -2668,6 +2786,10 @@ table.celestial td.label {
   align-items: flex-end;
 }
 
+.frontpage .homepage-card--almanac .sunrise-set-image--rise {
+  margin: 0;
+}
+
 .frontpage .homepage-card--almanac .sunrise-set-image img {
   display: block;
 }
@@ -2691,6 +2813,10 @@ table.celestial td.label {
 
 .dark .frontpage .homepage-card--almanac .moonrise-set-image {
   border-color: #cbd5e1;
+}
+
+.frontpage .homepage-card--almanac .moonrise-set-image--rise {
+  margin: 0;
 }
 
 .frontpage .homepage-card--almanac .moon-container {
@@ -2949,6 +3075,10 @@ table.celestial td.label {
   padding-bottom: 8px;
 }
 
+.frontpage .homepage-card--earthquake {
+  padding-bottom: 16px;
+}
+
 .frontpage .homepage-card--records {
   align-self: stretch;
   height: auto;
@@ -2956,14 +3086,56 @@ table.celestial td.label {
 
 .frontpage .homepage-card--observations {
   align-self: stretch;
+  display: flex;
+  flex-direction: column;
   height: auto;
   min-height: var(--homepage-info-card-min-height);
+  --homepage-observation-tile-min: 132px;
+  padding: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.frontpage .homepage-card--observations .homepage-card-body,
+.frontpage .homepage-card--observations .homepage-card-body table {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  padding: 0;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.frontpage .homepage-card--observations .homepage-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+}
+
+.frontpage .homepage-card--observations .station-observations,
+.frontpage .homepage-card--observations .homepage-card-body table {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
 .frontpage .homepage-card--earthquake {
   align-self: stretch;
   height: auto;
   min-height: var(--homepage-info-card-min-height);
+  display: flex;
+  flex-direction: column;
+}
+
+.frontpage .homepage-card--earthquake .homepage-card-body.eq-region {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .frontpage .homepage-card--records .homepage-card-header,
@@ -2985,30 +3157,37 @@ table.celestial td.label {
 .frontpage .homepage-card--records .snapshot-metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
   margin-top: 2px;
 }
 
 .frontpage .homepage-card--records .snapshot-metric {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 5px 6px;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 7px;
   border: 0;
-  border-radius: 0;
-  background: transparent;
-  min-height: 42px;
+  border-radius: 12px;
+  background-color: var(--homepage-card-surface) !important;
+  text-align: center;
+  min-height: 58px;
+  box-shadow: none;
 }
 
 .dark .frontpage .homepage-card--records .snapshot-metric {
   border-color: transparent;
-  background: transparent;
+  background: var(--homepage-card-surface) !important;
 }
 
 .frontpage .homepage-card--records .snapshot-metric-label {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.25;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  text-align: center;
   color: #6b7280;
 }
 
@@ -3017,9 +3196,10 @@ table.celestial td.label {
 }
 
 .frontpage .homepage-card--records .snapshot-metric-value {
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 1.2;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .frontpage .homepage-card--records .stats-title {
@@ -3103,28 +3283,60 @@ table.celestial td.label {
 }
 
 .frontpage .homepage-card--earthquake .earthquake-subcard--map {
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
+  display: block;
+  flex: 0 0 auto;
+  min-height: 0;
+  position: relative;
   width: 100%;
 }
 
 .frontpage .homepage-card--earthquake .earthquake-map-wrap {
+  display: flex;
+  align-items: stretch;
+  position: relative;
   margin-top: 0;
+  margin-bottom: 6px;
   padding-top: 0;
-  height: clamp(112px, 11vw, 160px);
+  width: 100%;
+  min-height: 0;
   overflow: hidden;
   align-self: stretch;
-  width: 100%;
+  background: #e5e7eb;
 }
 
 .frontpage .homepage-card--earthquake .earthquake-map {
-  width: 100%;
   display: block;
-  height: calc(clamp(112px, 11vw, 160px) + 48px);
-  margin-top: -6px;
-  min-height: 0;
+  position: relative;
+  width: 100%;
+  height: clamp(160px, 26vw, 190px);
+  min-height: 160px;
+  object-fit: cover;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 1;
+  visibility: visible;
   border: 0;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-map-marker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #74d247;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 4px rgba(116, 210, 71, 0.35), 0 2px 6px rgba(0, 0, 0, 0.45);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.dark .frontpage .homepage-card--earthquake .earthquake-map-marker {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 4px rgba(116, 210, 71, 0.4), 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 .dark .frontpage .homepage-card--earthquake .earthquake-map-wrap {
@@ -3358,28 +3570,34 @@ table.celestial td.label {
   .frontpage .homepage-card--observations {
     grid-area: observations;
     min-height: 0;
-    padding-top: 14px;
-    padding-bottom: 14px;
+    height: auto;
+    align-self: start;
+    padding-top: 0;
+    padding-bottom: 0;
+    --homepage-observation-tile-min: 126px;
   }
 
   .frontpage .homepage-card--observations .homepage-card-body {
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .frontpage .homepage-card--observations .station-observations tbody {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--homepage-observation-tile-min)), 1fr));
+    gap: 4px;
   }
 
   .frontpage .homepage-card--observations .station-observations tbody tr {
-    padding: 5px 6px;
+    min-height: 56px;
+    padding: 7px 7px;
   }
 
   .frontpage .homepage-card--almanac {
     grid-area: almanac;
     min-height: 0;
+    height: auto;
+    align-self: start;
     padding-top: 4px;
     padding-bottom: 4px;
   }
@@ -3436,6 +3654,22 @@ table.celestial td.label {
     grid-template-columns: 1fr;
   }
 
+  .frontpage .homepage-primary-grid,
+  .frontpage .homepage-secondary-row,
+  .frontpage .homepage-secondary-row--with-earthquake,
+  .frontpage .homepage-secondary-row--single {
+    align-items: start;
+  }
+
+  .frontpage .homepage-primary-grid > .homepage-card,
+  .frontpage .homepage-secondary-row > .homepage-card,
+  .frontpage .homepage-secondary-row--with-earthquake > .homepage-card,
+  .frontpage .homepage-secondary-row--single > .homepage-card {
+    height: auto;
+    min-height: 0;
+    align-self: start;
+  }
+
   .frontpage .homepage-primary-grid .homepage-card--temperature {
     order: 1;
   }
@@ -3452,9 +3686,40 @@ table.celestial td.label {
     order: 4;
   }
 
+  .frontpage .homepage-card--almanac {
+    display: block;
+    height: auto;
+    min-height: 0;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .frontpage .homepage-card--almanac .homepage-card-body {
+    flex: none;
+    justify-content: flex-start;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-main {
+    align-items: stretch;
+  }
+
   .frontpage .homepage-card {
     padding: 20px;
     border-radius: 16px;
+  }
+
+  .frontpage .homepage-card--earthquake {
+    padding-bottom: 14px;
+  }
+
+  .frontpage .homepage-card--observations {
+    padding: 0;
+    border-radius: 0;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
   }
 
   .frontpage .homepage-card--records .homepage-card-body>.row {
@@ -3471,7 +3736,7 @@ table.celestial td.label {
 
   .frontpage .homepage-card--records .snapshot-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
+    gap: 3px;
   }
 
   .frontpage .homepage-card--records .homepage-card-body > .row {
@@ -3493,14 +3758,23 @@ table.celestial td.label {
   }
 
   .frontpage .homepage-card--observations .station-observations tbody {
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .frontpage .homepage-card--observations {
     min-height: 0;
     height: auto;
     align-self: start;
+  }
+
+  .frontpage .homepage-card--observations .homepage-card-body,
+  .frontpage .homepage-card--observations .homepage-card-body table,
+  .frontpage .homepage-card--observations .station-observations,
+  .frontpage .homepage-card--observations .station-observations tbody {
+    height: auto;
+    min-height: 0;
+    flex: none;
   }
 
   .frontpage .homepage-card--radar {
@@ -3512,6 +3786,15 @@ table.celestial td.label {
     min-height: 260px;
   }
 
+  .frontpage .homepage-card--earthquake .earthquake-map-wrap {
+    margin-bottom: 8px;
+  }
+
+  .frontpage .homepage-card--earthquake .earthquake-map {
+    height: 160px;
+    min-height: 160px;
+  }
+
   .chart-outer {
     grid-template-columns: 1fr;
   }
@@ -3519,20 +3802,59 @@ table.celestial td.label {
 
 /* <=600 ------------------------------------------------------------------ */
 @media only screen and (max-width: 600px) {
+  .frontpage .homepage-card--temperature .homepage-card-body {
+    gap: 8px;
+  }
+
+  .frontpage .homepage-card--temperature .temp-observation,
+  .frontpage .homepage-card--temperature .homepage-temperature-details {
+    gap: 8px;
+  }
+
+  .frontpage .homepage-card--temperature .current_obs_top {
+    min-height: 82px;
+  }
+
+  .frontpage .homepage-card--temperature #wxicon {
+    max-width: min(100%, 88px);
+  }
+
+  .frontpage .homepage-card--temperature .current_temp .outtemp_outer {
+    font-size: 48px;
+  }
+
+  .frontpage .homepage-card--temperature .outtempunitlabelsuper {
+    top: -0.14em;
+    font-size: 46%;
+  }
+
+  .frontpage .homepage-card--temperature .current-obs-text,
+  .frontpage .homepage-card--temperature .aqi_outer,
+  .frontpage .homepage-card--temperature .feelslike,
+  .frontpage .homepage-card--temperature .stn-high-low-table td {
+    font-size: 14px;
+  }
+
   .frontpage .homepage-card--observations td {
     font-size: 14px;
   }
 
+  .frontpage .homepage-card--observations {
+    --homepage-observation-tile-min: 108px;
+  }
+
   .frontpage .homepage-card--observations .station-observations tbody {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--homepage-observation-tile-min)), 1fr));
   }
 
   .frontpage .homepage-card--observations .station-observations tbody tr {
-    padding: 4px 6px;
+    min-height: 54px;
+    padding: 7px 7px;
+    gap: 3px;
   }
 
   .frontpage .homepage-card--observations .station-observations tbody tr td:last-child {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .frontpage .homepage-card--forecast .homepage-card-header h2 {
@@ -3549,19 +3871,45 @@ table.celestial td.label {
   }
 
   .frontpage .homepage-card--records .homepage-card-body > .row {
-    display: block;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
 
   .frontpage .homepage-card--records .stn-quick-stats {
-    width: 100%;
+    width: 50%;
+    flex: 1 1 0;
     float: none;
     padding-left: 0;
     padding-right: 0;
   }
 
   .frontpage .homepage-card--records .snapshot-metric-grid {
-    grid-template-columns: 1fr;
-    gap: 4px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .frontpage .homepage-card--records .stats-title {
+    font-size: 18px;
+  }
+
+  .frontpage .homepage-card--records .snapshot-period-select {
+    font-size: 15px;
+    padding: 10px 12px;
+  }
+
+  .frontpage .homepage-card--records .snapshot-metric {
+    padding: 6px 6px;
+    min-height: 54px;
+    gap: 3px;
+  }
+
+  .frontpage .homepage-card--records .snapshot-metric-label {
+    font-size: 12px;
+  }
+
+  .frontpage .homepage-card--records .snapshot-metric-value {
+    font-size: 15px;
   }
 
   .frontpage .homepage-card--almanac .almanac-main {
@@ -3606,6 +3954,7 @@ table.celestial td.label {
     aspect-ratio: 16 / 11;
     min-height: 220px;
   }
+
 }
 
 span.highcharts-title {
@@ -3629,25 +3978,294 @@ span.highcharts-title {
   padding: 10px 0px;
 }
 
-.charts .wx-stn-info-container,
-.records .wx-stn-info-container {
+.charts .wx-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 0;
+  margin-bottom: 18px;
+  line-height: normal;
+}
+
+.charts .wx-buttons a {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.charts .wx-buttons button,
+.charts .wx-buttons .btn,
+.charts .wx-buttons a[class*="wx-btn"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.88) !important;
+  color: inherit;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.dark .charts .wx-buttons button,
+.dark .charts .wx-buttons .btn,
+.dark .charts .wx-buttons a[class*="wx-btn"] {
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+.charts .wx-buttons button:hover,
+.charts .wx-buttons button:focus,
+.charts .wx-buttons .btn:hover,
+.charts .wx-buttons .btn:focus,
+.charts .wx-buttons a[class*="wx-btn"]:hover,
+.charts .wx-buttons a[class*="wx-btn"]:focus {
+  transform: translateY(-1px);
+  border-color: rgba(229, 85, 78, 0.35);
+}
+
+.charts .wx-buttons-description {
+  padding: 0;
+  margin-bottom: 10px;
+}
+
+.charts .chartpage-title {
+  display: block;
+  margin: 0;
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.2;
   text-align: center;
+}
+
+.charts .chartpage-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.charts .chartpage-content {
+  float: none;
+  width: 100%;
+  margin: 0 0 24px;
+  padding: 18px 22px;
+  border-radius: 16px;
+  background-color: var(--homepage-card-surface) !important;
+  border: 1px solid var(--homepage-card-border);
+  box-shadow: var(--homepage-card-shadow);
+  text-align: center;
+}
+
+.charts .chartpage-content:empty {
+  display: none;
+}
+
+.charts .chart-outer,
+.charts .chart-outer-all {
+  display: grid;
+  gap: 24px;
+}
+
+.charts .chart-outer > [class*="col-"],
+.charts .chart-outer-all > .row {
+  float: none;
+  width: 100%;
+  margin: 0 !important;
+  padding: 24px;
+  border-radius: 18px;
+  background-color: var(--homepage-card-surface) !important;
+  border: 1px solid var(--homepage-card-border);
+  box-shadow: var(--homepage-card-shadow);
+  clear: none !important;
+}
+
+.charts .chart-outer-all > .row {
+  display: block;
+}
+
+.charts .chart-outer-all > .row + .row {
+  border-top: 1px solid var(--homepage-card-border) !important;
+}
+
+.charts .chart-outer > [class*="col-"] > div[id],
+.charts .chart-outer-all > .row .col-sm-6 {
+  margin-top: 0 !important;
+}
+
+.charts .chart-outer-all > .row .col-sm-6 {
+  width: 100%;
+  float: none;
+  padding: 0;
+}
+
+.charts .chart-outer-all > .row .col-sm-6 + .col-sm-6 {
+  margin-top: 20px;
+}
+
+.charts .chart-outer-all > .row .chartpage-title {
+  margin-bottom: 12px;
+}
+
+.charts .chart-outer-all > .row .chartpage-content {
+  margin-bottom: 18px;
+}
+
+.charts .wx-stn-info-container,
+.records .wx-stn-info-container,
+.about .wx-stn-info-container,
+.reports .wx-stn-info-container {
+  text-align: center;
+  border-bottom: 0;
+  margin-bottom: 24px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background-color: var(--homepage-card-surface) !important;
+  border: 1px solid var(--homepage-card-border);
+  box-shadow: var(--homepage-card-shadow);
+}
+
+
+.charts .wx-stn-info-container > .row,
+.records .wx-stn-info-container > .row,
+.about .wx-stn-info-container > .row,
+.reports .wx-stn-info-container > .row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
+  align-items: center;
+  margin: 0;
+}
+
+.charts .wx-stn-info-container > .row > [class*="col-"],
+.records .wx-stn-info-container > .row > [class*="col-"],
+.about .wx-stn-info-container > .row > [class*="col-"],
+.reports .wx-stn-info-container > .row > [class*="col-"] {
+  float: none;
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.charts .wx-stn-info-container > .row > div.col-sm-5:not([style]),
+.records .wx-stn-info-container > .row > div.col-sm-5:not([style]),
+.about .wx-stn-info-container > .row > div.col-sm-5:not([style]),
+.reports .wx-stn-info-container > .row > div.col-sm-5:not([style]) {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.charts .wx-stn-info-current-obs,
+.records .wx-stn-info-current-obs,
+.about .wx-stn-info-current-obs,
+.reports .wx-stn-info-current-obs {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.charts .obs-header-icon img,
+.records .obs-header-icon img,
+.about .obs-header-icon img,
+.reports .obs-header-icon img {
+  max-height: 56px;
+  width: auto;
+  margin: 0;
+}
+
+.charts .obs-header-outtemp,
+.records .obs-header-outtemp,
+.about .obs-header-outtemp,
+.reports .obs-header-outtemp {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.1;
 }
 
 .charts .wx-stn-name,
 .records .wx-stn-name,
+.about .wx-stn-name,
+.reports .wx-stn-name {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.charts .wx-stn-name h1,
+.records .wx-stn-name h1,
+.about .wx-stn-name h1,
+.reports .wx-stn-name h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.15;
+}
+
+.charts .wx-stn-info-container > .row > div.col-sm-5[style],
+.records .wx-stn-info-container > .row > div.col-sm-5[style],
+.about .wx-stn-info-container > .row > div.col-sm-5[style],
+.reports .wx-stn-info-container > .row > div.col-sm-5[style] {
+  order: 3;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+
 .charts .wx-stn-info,
 .records .wx-stn-info,
+.about .wx-stn-info,
+.reports .wx-stn-info {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: right;
+}
+
 .charts .wx-stn-info-social,
-.records .wx-stn-info-social {
+.records .wx-stn-info-social,
+.about .wx-stn-info-social,
+.reports .wx-stn-info-social {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.charts .wx-stn-name,
+.records .wx-stn-name,
+.about .wx-stn-name,
+.reports .wx-stn-name,
+.charts .wx-stn-info,
+.records .wx-stn-info,
+.about .wx-stn-info,
+.reports .wx-stn-info,
+.charts .wx-stn-info-social,
+.records .wx-stn-info-social,
+.about .wx-stn-info-social,
+.reports .wx-stn-info-social {
   float: none;
   margin-right: 0;
 }
 
 .charts .wx-stn-info-container>.row>div.col-sm-5[style],
 .records .wx-stn-info-container>.row>div.col-sm-5[style],
+.about .wx-stn-info-container>.row>div.col-sm-5[style],
+.reports .wx-stn-info-container>.row>div.col-sm-5[style],
 .charts .wx-stn-info-social[style],
-.records .wx-stn-info-social[style] {
+.records .wx-stn-info-social[style],
+.about .wx-stn-info-social[style],
+.reports .wx-stn-info-social[style] {
   float: none !important;
   margin-left: auto;
   margin-right: auto;
@@ -3656,6 +4274,270 @@ span.highcharts-title {
 
 .wx-records-description {
   margin: 25px 0px;
+}
+
+.records .wx-records-description {
+  margin: 0 0 24px;
+  padding: 0 12px;
+  text-align: center;
+}
+
+.records .wx-records-description > *:last-child {
+  margin-bottom: 0;
+}
+
+.about .about-page-card,
+.reports .noaa_reports {
+  border-radius: 18px;
+  padding: 24px;
+  background-color: var(--homepage-card-surface) !important;
+  border: 1px solid var(--homepage-card-border);
+  box-shadow: var(--homepage-card-shadow);
+}
+
+.reports .noaa_reports {
+  background: transparent !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.reports .noaa_reports .row {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.about .about-page-card {
+  margin-bottom: 24px;
+}
+
+.about .about-page-card .about-outer,
+.about .about-page-card .entry-content {
+  margin: 0;
+  padding: 0;
+}
+
+.about .about-page-card h2:first-child,
+.about .about-page-card h3:first-child {
+  margin-top: 0;
+}
+
+.reports .noaa_reports {
+  margin-top: 0;
+}
+
+.reports .noaa_reports h1 {
+  margin: 0 0 18px;
+  font-size: 30px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.reports .wx-year-row {
+  margin-bottom: 18px;
+}
+
+.reports .noaa_direct_link {
+  display: inline-block;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.reports .noaa_report_container {
+  margin: 18px auto 0;
+  max-width: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dark .reports .noaa_report_container {
+  background: transparent;
+  border-color: transparent;
+}
+
+.reports #noaa_contents {
+  display: block;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  color: #1f2937;
+  background: transparent;
+  border: 0;
+  overflow-x: visible;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-wrap: normal;
+  word-break: normal;
+  text-align: left;
+}
+
+.dark .reports #noaa_contents {
+  color: #e5e7eb;
+}
+
+.records .records-sections {
+  display: grid;
+  gap: 24px;
+  margin: 0 0 24px;
+}
+
+.records .records-section-card {
+  border-radius: 18px;
+  padding: 24px;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0;
+  box-shadow: none;
+}
+
+.records .records-section-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 18px;
+  padding: 0;
+  text-align: center;
+}
+
+.records .records-section-card__title {
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  font-size: 30px;
+  line-height: 1.25;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.records .records-section-card__body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.records .records-record-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 16px;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0;
+  box-shadow: none;
+}
+
+.dark .records .records-record-card {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0;
+  box-shadow: none;
+}
+
+.records .records-record-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.records .records-record-card__title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.records .records-record-card__body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.records .records-record-period {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background-color: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--homepage-card-border);
+  text-align: center;
+}
+
+.records .records-record-period--alltime {
+  border-color: #e5554e;
+}
+
+.dark .records .records-record-period {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-color: var(--homepage-card-border);
+}
+
+.dark .records .records-record-period--alltime {
+  border-color: #e5554e;
+}
+
+.records .records-record-period__label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #6b7280;
+}
+
+.dark .records .records-record-period__label {
+  color: #cbd5e1;
+}
+
+.records .records-record-period__value {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.records .records-record-period__date {
+  font-size: 14px;
+  line-height: 1.35;
+  color: #6b7280;
+  word-break: break-word;
+}
+
+.dark .records .records-record-period__date {
+  color: #cbd5e1;
+}
+
+.records .records-table.records-table--enhanced {
+  display: none;
 }
 
 .records table {
@@ -3691,6 +4573,191 @@ span.highcharts-title {
   font-weight: 400;
 }
 
+.charts,
+.records,
+.about,
+.reports {
+  --homepage-card-surface: #fafbfd;
+  --homepage-card-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+  --homepage-card-border: rgba(15, 23, 42, 0.12);
+  --secondary-page-gap: 24px;
+  --secondary-page-card-radius: 18px;
+  --secondary-page-card-padding: 24px;
+  --secondary-page-title-size: 30px;
+  --secondary-page-hero-title-size: 34px;
+}
+
+.dark .charts,
+.dark .records,
+.dark .about,
+.dark .reports {
+  --homepage-card-surface: #313131;
+  --homepage-card-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  --homepage-card-border: rgba(255, 255, 255, 0.16);
+}
+
+.charts .wx-stn-info-container,
+.records .wx-stn-info-container,
+.about .wx-stn-info-container,
+.reports .wx-stn-info-container,
+.charts .chart-outer > [class*="col-"],
+.charts .chart-outer-all > .row,
+.about .about-page-card,
+.reports .noaa_reports {
+  margin-bottom: var(--secondary-page-gap);
+  padding: var(--secondary-page-card-padding);
+  border-radius: var(--secondary-page-card-radius);
+}
+
+.charts .wx-stn-info-container > .row,
+.records .wx-stn-info-container > .row,
+.about .wx-stn-info-container > .row,
+.reports .wx-stn-info-container > .row,
+.charts .chart-outer,
+.charts .chart-outer-all,
+.records .records-sections {
+  gap: var(--secondary-page-gap);
+}
+
+.charts .wx-stn-name h1,
+.records .wx-stn-name h1,
+.about .wx-stn-name h1,
+.reports .wx-stn-name h1 {
+  font-size: var(--secondary-page-hero-title-size);
+}
+
+.charts .chartpage-title,
+.records .records-section-card__title,
+.reports .noaa_reports h1 {
+  font-size: var(--secondary-page-title-size);
+  line-height: 1.25;
+}
+
+.records .records-section-card__header,
+.charts .wx-buttons-description,
+.reports .wx-year-row {
+  margin-bottom: 18px;
+}
+
+@media only screen and (max-width: 800px) {
+  .charts,
+  .records,
+  .about,
+  .reports {
+    --secondary-page-gap: 20px;
+    --secondary-page-card-radius: 16px;
+    --secondary-page-card-padding: 20px;
+    --secondary-page-title-size: 28px;
+    --secondary-page-hero-title-size: 30px;
+  }
+
+  .charts .wx-stn-info-container > .row,
+  .records .wx-stn-info-container > .row,
+  .about .wx-stn-info-container > .row,
+  .reports .wx-stn-info-container > .row {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .charts .wx-stn-info-container > .row > div.col-sm-5[style],
+  .records .wx-stn-info-container > .row > div.col-sm-5[style],
+  .about .wx-stn-info-container > .row > div.col-sm-5[style],
+  .reports .wx-stn-info-container > .row > div.col-sm-5[style] {
+    align-items: center;
+    margin-left: 0;
+  }
+
+  .charts .wx-stn-info,
+  .records .wx-stn-info,
+  .about .wx-stn-info,
+  .reports .wx-stn-info {
+    text-align: center;
+  }
+
+  .reports .noaa_report_container,
+  .charts .chartpage-content,
+  .charts .chart-outer > [class*="col-"],
+  .charts .chart-outer-all > .row {
+    padding: 20px;
+    border-radius: 16px;
+  }
+
+  .charts .wx-buttons {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .charts .wx-buttons button,
+  .charts .wx-buttons .btn,
+  .charts .wx-buttons a[class*="wx-btn"] {
+    width: 100%;
+  }
+
+  .records .records-record-card__body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media only screen and (max-width: 500px) {
+  .records .records-sections {
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .records .records-section-card {
+    padding: 16px;
+  }
+
+  .records .records-section-card__header {
+    margin-bottom: 14px;
+  }
+
+  .records .records-section-card__title {
+    font-size: 24px;
+  }
+
+  .records .records-section-card__body {
+    gap: 12px;
+  }
+
+  .records .records-record-card__body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .records .records-record-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .records .records-record-card__header {
+    min-height: 44px;
+    padding-bottom: 8px;
+  }
+
+  .records .records-record-card__title {
+    font-size: 16px;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  .records .records-record-period {
+    padding: 12px 10px;
+  }
+
+  .records .records-record-period__label {
+    font-size: 12px;
+  }
+
+  .records .records-record-period__value {
+    font-size: 18px;
+  }
+
+  .records .records-record-period__date {
+    font-size: 13px;
+  }
+}
+
 .wx-year-row {
   text-align: center;
   margin-bottom: 25px;
@@ -3702,8 +4769,13 @@ span.highcharts-title {
 }
 
 #noaa_contents {
-  width: 75%;
-  margin: 0 auto;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  margin: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-wrap: normal;
 }
 
 /* .col-sm-1-5 { */
