@@ -2079,7 +2079,7 @@ p.entry-meta {
 .daylight-change {
   width: 100%;
   text-align: center;
-  font-size: 15px;
+  font-size: 14px;
   display: block;
 }
 
@@ -2089,9 +2089,6 @@ p.entry-meta {
 
 .almanac-diagram-svg {
   display: block;
-  width: 100%;
-  max-width: 220px;
-  height: 80px;
   margin: 0 auto;
   overflow: visible;
 }
@@ -2099,19 +2096,21 @@ p.entry-meta {
 .almanac-diagram-track {
   fill: none;
   stroke: rgba(245, 158, 11, 0.5);
-  stroke-width: 2.9;
+  stroke-width: 3.5;
+  vector-effect: non-scaling-stroke;
   stroke-linecap: round;
+  transition: opacity 0.25s ease;
 }
 
 .almanac-diagram-track--sun {
   stroke: rgba(251, 191, 36, 0.9);
-  stroke-width: 3.05;
+  stroke-width: 3.8;
   stroke-dasharray: none;
 }
 
 .almanac-diagram-track--moon {
   stroke: rgba(188, 202, 231, 0.9);
-  stroke-width: 3.3;
+  stroke-width: 4.0;
   stroke-linejoin: round;
   stroke-dasharray: none;
 }
@@ -2126,6 +2125,10 @@ p.entry-meta {
 
 .dark .almanac-diagram-track--moon {
   stroke: rgba(226, 232, 245, 0.95);
+}
+
+.almanac-diagram-track.is-below-horizon {
+  opacity: 0.38;
 }
 
 .almanac-diagram-horizon {
@@ -2148,19 +2151,28 @@ p.entry-meta {
 }
 
 .almanac-diagram-object--sun .almanac-diagram-object-core {
-  fill: #fbbf24;
+  fill: rgba(251, 191, 36, 0.48);
+  stroke: rgba(180, 83, 9, 0.62);
+  stroke-width: 4.8;
 }
 
 .almanac-diagram-object--moon .almanac-diagram-object-core {
-  fill: #d7e0f2;
+  fill: rgba(215, 224, 242, 0.42);
+  stroke: rgba(100, 116, 139, 0.62);
+  stroke-width: 4.8;
 }
 
 .dark .almanac-diagram-object--moon .almanac-diagram-object-core {
-  fill: #c5d0e6;
+  fill: rgba(197, 208, 230, 0.4);
+  stroke: rgba(196, 207, 226, 0.68);
+  stroke-width: 4.8;
 }
 
 .almanac-diagram-object-symbol {
-  font-size: 15px;
+  font-size: 74px;
+  font-weight: 600;
+  dominant-baseline: middle;
+  alignment-baseline: central;
   pointer-events: none;
 }
 
@@ -2191,6 +2203,204 @@ table.celestial td.label {
   display: inline-block;
   text-align: left;
   font-size: initial;
+}
+
+/* Almanac extras modal: align with frontpage card design language */
+#almanac {
+  --almanac-subcard-surface: #fafbfd;
+  --almanac-subcard-border: rgba(15, 23, 42, 0.12);
+  --almanac-subcard-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+}
+
+#almanac .modal-content {
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+#almanac .modal-header {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  padding: 16px 20px 14px;
+}
+
+#almanac .modal-title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+#almanac .almanac-extras-modal-body {
+  padding: 16px 20px 12px;
+}
+
+#almanac #celestial_widget,
+#almanac #celestial_widget .widget_contents,
+#almanac #celestial_widget #celestial_details {
+  width: 100%;
+}
+
+#almanac #celestial_widget #celestial_details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+#almanac .celestial_body {
+  display: block;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#almanac table.celestial {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+  table-layout: fixed;
+}
+
+#almanac table.celestial th {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  padding: 0 0 8px;
+  color: #1f2937;
+}
+
+#almanac table.celestial td {
+  padding: 8px 10px;
+  vertical-align: top;
+  line-height: 1.3;
+}
+
+#almanac table.celestial tr.celestial-row--item td {
+  background: var(--almanac-subcard-surface);
+  border: 1px solid var(--almanac-subcard-border);
+  box-shadow: var(--almanac-subcard-shadow);
+}
+
+#almanac table.celestial tr.celestial-row--item td:first-child {
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+}
+
+#almanac table.celestial tr.celestial-row--item td:last-child {
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+}
+
+#almanac table.celestial td.label {
+  min-width: 0 !important;
+  width: 57%;
+  display: table-cell;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #6b7280 !important;
+  padding-right: 8px;
+}
+
+#almanac table.celestial td.data {
+  width: 43%;
+  text-align: right;
+  font-weight: 500;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+#almanac .almanac_last_updated {
+  margin-top: 10px;
+  font-size: 13px;
+  text-align: right;
+  color: #6b7280;
+}
+
+#almanac .modal-footer {
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
+  padding: 10px 20px 14px;
+}
+
+.dark #almanac .modal-content {
+  background: #313131;
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.dark #almanac {
+  --almanac-subcard-surface: #313131;
+  --almanac-subcard-border: rgba(255, 255, 255, 0.16);
+  --almanac-subcard-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.dark #almanac .modal-header,
+.dark #almanac .modal-footer {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.dark #almanac .modal-title {
+  color: #e5e7eb;
+}
+
+.dark #almanac .celestial_body {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.dark #almanac table.celestial th,
+.dark #almanac table.celestial td.data {
+  color: #e5e7eb;
+}
+
+.dark #almanac table.celestial tr.celestial-row--item td {
+  background: var(--almanac-subcard-surface);
+  border-color: var(--almanac-subcard-border);
+  box-shadow: var(--almanac-subcard-shadow);
+}
+
+.dark #almanac table.celestial td.label,
+.dark #almanac .almanac_last_updated {
+  color: #9ca3af !important;
+}
+
+@media (max-width: 767px) {
+  #almanac .almanac-extras-modal-body {
+    padding: 12px 14px 10px;
+  }
+
+  #almanac #celestial_widget #celestial_details {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  #almanac .celestial_body {
+    padding: 10px 11px;
+  }
+
+  #almanac table.celestial th {
+    font-size: 18px;
+  }
+
+  #almanac table.celestial {
+    border-spacing: 0 8px;
+  }
+
+  #almanac table.celestial td {
+    padding: 7px 9px;
+  }
+
+  #almanac table.celestial td.label,
+  #almanac table.celestial td.data {
+    font-size: 13px;
+  }
 }
 
 /* Scroll issue in dark mode https://stackoverflow.com/a/54196631/1177153 */
@@ -2679,12 +2889,13 @@ table.celestial td.label {
 }
 
 .frontpage .homepage-card--almanac .almanac-main {
-  --almanac-diagram-width: 228px;
+  --almanac-diagram-width: 180px;
   --almanac-moon-size: 40px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto auto auto;
+  justify-content: center;
   align-items: stretch;
-  gap: 4px;
+  gap: 1px;
   width: 100%;
 }
 
@@ -2743,11 +2954,6 @@ table.celestial td.label {
 
 .frontpage .homepage-card--almanac .almanac-sun-stack--set .almanac-sun-time {
   justify-content: flex-start;
-}
-
-.frontpage .homepage-card--almanac .almanac-diagram-svg {
-  max-width: var(--almanac-diagram-width);
-  height: 90px;
 }
 
 .frontpage .homepage-card--almanac .sun,
@@ -2877,7 +3083,7 @@ table.celestial td.label {
 .frontpage .homepage-card--almanac .daylight-change {
   width: 100%;
   display: block;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.15;
   margin-top: -3px;
   margin-bottom: 2px;
@@ -3708,6 +3914,16 @@ table.celestial td.label {
     border-radius: 16px;
   }
 
+  /* Keep almanac vertically compact even when generic card padding increases
+     at this breakpoint. Generic .homepage-card padding is applied later in
+     cascade, so restate the almanac vertical padding here. */
+  .frontpage .homepage-card--almanac {
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
   .frontpage .homepage-card--earthquake {
     padding-bottom: 14px;
   }
@@ -3913,8 +4129,16 @@ table.celestial td.label {
   }
 
   .frontpage .homepage-card--almanac .almanac-main {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 4px;
+    /* iPhone/Safari: keep a guaranteed center column so the SVG diagram
+       cannot collapse or be pushed out of view by side timestamp columns. */
+    grid-template-columns: max-content minmax(136px, var(--almanac-diagram-width)) max-content;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-diagram {
+    min-width: 136px;
+    width: 100%;
   }
 
   .frontpage .homepage-card--almanac .almanac-sun-stack {
@@ -3928,6 +4152,21 @@ table.celestial td.label {
   .frontpage .homepage-card--almanac .almanac-sun-stack--rise .almanac-sun-time,
   .frontpage .homepage-card--almanac .almanac-sun-stack--set .almanac-sun-time {
     justify-content: flex-start;
+  }
+
+  /* Keep left/right time stacks visually attached to the diagram edges. */
+  .frontpage .homepage-card--almanac .almanac-sun-stack--rise {
+    align-items: flex-end;
+    justify-self: end;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-sun-stack--rise .almanac-sun-time {
+    justify-content: flex-end;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-sun-stack--set {
+    align-items: flex-start;
+    justify-self: start;
   }
 
   .frontpage .homepage-card--almanac .small-almanac {
@@ -4434,17 +4673,56 @@ span.highcharts-title {
 }
 
 .records .records-section-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: max-content;
+  min-width: 100%;
+}
+
+.records .records-section-card__table {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.records .records-section-card__period-header {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: minmax(112px, 120px) repeat(5, minmax(58px, 1fr));
+  gap: 6px;
+  align-items: end;
+  width: max-content;
+  min-width: 100%;
+  margin-bottom: 8px;
+}
+
+.records .records-section-card__period-header-spacer {
+  min-width: 0;
+}
+
+.records .records-section-card__period-header-cell {
+  min-width: 0;
+  padding: 0 2px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  color: #6b7280;
+  text-transform: none;
+}
+
+.dark .records .records-section-card__period-header-cell {
+  color: #cbd5e1;
 }
 
 .records .records-record-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(112px, 120px) repeat(5, minmax(58px, 1fr));
+  gap: 6px;
+  align-items: stretch;
+  width: max-content;
+  min-width: 100%;
+  padding: 0;
   border-radius: 16px;
   background: transparent !important;
   background-color: transparent !important;
@@ -4459,38 +4737,39 @@ span.highcharts-title {
   box-shadow: none;
 }
 
-.records .records-record-card__header {
+.records .records-record-card__title {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-height: 56px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-}
-
-.records .records-record-card__title {
+  justify-content: flex-start;
   margin: 0;
-  font-size: 18px;
-  line-height: 1.3;
-  text-align: center;
-}
-
-.records .records-record-card__body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  min-width: 0;
+  padding: 8px 4px;
+  border-radius: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  text-align: left;
 }
 
 .records .records-record-period {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  position: relative;
+  gap: 3px;
   min-width: 0;
-  padding: 14px;
-  border-radius: 14px;
+  padding: 8px 5px;
+  border-radius: 10px;
   background-color: rgba(255, 255, 255, 0.6);
   border: 1px solid var(--homepage-card-border);
   text-align: center;
+}
+
+.records .records-record-period--year,
+.records .records-record-period--alltime {
+  align-items: center;
 }
 
 .records .records-record-period--alltime {
@@ -4507,37 +4786,92 @@ span.highcharts-title {
 }
 
 .records .records-record-period__label {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  color: #6b7280;
-}
-
-.dark .records .records-record-period__label {
-  color: #cbd5e1;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .records .records-record-period__value {
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.2;
   word-break: break-word;
 }
 
+.records .records-record-period__value-main,
+.records .records-record-period__value-detail {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.records .records-record-period__value-detail {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: #475569;
+}
+
+.dark .records .records-record-period__value-detail {
+  color: #cbd5e1;
+}
+
 .records .records-record-period__date {
-  font-size: 14px;
-  line-height: 1.35;
-  color: #6b7280;
+  position: static;
+  width: 100%;
+  padding: 0;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.1;
+  max-width: 8ch;
+  margin-left: auto;
+  margin-right: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: #475569;
   word-break: break-word;
+}
+
+.records .records-record-period__date-line,
+.records .records-record-period__time-line {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.records .records-record-period__date-line {
+  white-space: nowrap;
+}
+
+.records .records-record-period__date.records-record-period__date--prefixed {
+  max-width: none;
+  width: auto;
+}
+
+.records .records-record-period--year .records-record-period__date,
+.records .records-record-period--alltime .records-record-period__date {
+  max-width: none;
+  width: 100%;
+}
+
+.records .records-record-period__date-line--prefixed {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.records .records-record-period__date::after {
+  display: none;
 }
 
 .dark .records .records-record-period__date {
   color: #cbd5e1;
-}
-
-.records .records-table.records-table--enhanced {
-  display: none;
 }
 
 .records table {
@@ -4693,8 +5027,12 @@ span.highcharts-title {
     width: 100%;
   }
 
-  .records .records-record-card__body {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .records .records-record-card {
+    grid-template-columns: minmax(108px, 114px) repeat(5, minmax(56px, 1fr));
+  }
+
+  .records .records-section-card__period-header {
+    grid-template-columns: minmax(108px, 114px) repeat(5, minmax(56px, 1fr));
   }
 }
 
@@ -4720,41 +5058,46 @@ span.highcharts-title {
     gap: 12px;
   }
 
-  .records .records-record-card__body {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
   .records .records-record-card {
-    padding: 14px;
-    gap: 12px;
+    gap: 6px;
+    grid-template-columns: minmax(100px, 106px) repeat(5, minmax(56px, 1fr));
   }
 
-  .records .records-record-card__header {
-    min-height: 44px;
-    padding-bottom: 8px;
+  .records .records-section-card__period-header {
+    gap: 6px;
+    grid-template-columns: minmax(100px, 106px) repeat(5, minmax(56px, 1fr));
+    margin-bottom: 6px;
+  }
+
+  .records .records-section-card__period-header-cell {
+    font-size: 9px;
+    padding: 0 1px;
   }
 
   .records .records-record-card__title {
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1.25;
     text-wrap: balance;
+    padding: 6px 4px;
   }
 
   .records .records-record-period {
-    padding: 12px 10px;
+    padding: 8px 4px;
   }
 
   .records .records-record-period__label {
-    font-size: 12px;
+    font-size: 9px;
   }
 
   .records .records-record-period__value {
-    font-size: 18px;
+    font-size: 14px;
   }
 
   .records .records-record-period__date {
-    font-size: 13px;
+    font-size: 10px;
+    min-width: 84px;
+    max-width: 132px;
+    padding: 5px 6px;
   }
 }
 

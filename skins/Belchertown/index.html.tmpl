@@ -5,6 +5,7 @@
 ## If you do this, you should also change the 'Content-Type' metadata below.
 #encoding UTF-8
 #import math
+#from user.belchertown import build_almanac_template_context
 ##
 #set global $page = "home"
 
@@ -347,61 +348,13 @@
                         <section class="homepage-card homepage-card--almanac">
                             <div class="homepage-card-body">
                                 <div class="almanac-main">
-                                #if $almanac.hasExtras
-                                <div class="almanac-sun-stack almanac-sun-stack--rise">
-                                    <div class="almanac-sun-time almanac-sun-time--rise almanac-time-row">
-                                        <span class="sunrise-value"></span><span class="sunrise-set-image sunrise-set-image--rise"><img src="$relative_url/images/sunrise.png"></span><!-- moment.js -->
-                                    </div>
-                                    <div class="almanac-sun-time almanac-sun-time--moonrise almanac-time-row">
-                                        <span class="moonrise-value"></span><span class="moonrise-set-image moonrise-set-image--rise" aria-hidden="true"></span><!-- moment.js -->
-                                    </div>
-                                </div>
-                                <div class="almanac-diagram"
-                                    data-sun-az="#echo '%.3f' % $almanac.sun.az#"
-                                    data-sun-alt="#if $almanac.sun.alt is not None##echo '%.3f' % $almanac.sun.alt##end if#"
-                                    data-moon-az="#echo '%.3f' % $almanac.moon.az#"
-                                    data-moon-alt="#echo '%.3f' % $almanac.moon.alt#"
-                                    data-sun-rise-az="#if $almanac.sun.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.rise.raw)).sun.az##end if#"
-                                    data-sun-rise-alt="#if $almanac.sun.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.rise.raw)).sun.alt##end if#"
-                                    data-sun-transit-az="#if $almanac.sun.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.transit.raw)).sun.az##end if#"
-                                    data-sun-transit-alt="#if $almanac.sun.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.transit.raw)).sun.alt##end if#"
-                                    data-sun-set-az="#if $almanac.sun.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.set.raw)).sun.az##end if#"
-                                    data-sun-set-alt="#if $almanac.sun.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.sun.set.raw)).sun.alt##end if#"
-                                    data-moon-rise-az="#if $almanac.moon.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.rise.raw)).moon.az##end if#"
-                                    data-moon-rise-alt="#if $almanac.moon.rise.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.rise.raw)).moon.alt##end if#"
-                                    data-moon-transit-az="#if $almanac.moon.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.transit.raw)).moon.az##end if#"
-                                    data-moon-transit-alt="#if $almanac.moon.transit.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.transit.raw)).moon.alt##end if#"
-                                    data-moon-set-az="#if $almanac.moon.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.set.raw)).moon.az##end if#"
-                                    data-moon-set-alt="#if $almanac.moon.set.raw is not None##echo '%.3f' % $almanac($almanac_time=int($almanac.moon.set.raw)).moon.alt##end if#">
-                                    <svg class="almanac-diagram-svg" viewBox="24 45 172 80" preserveAspectRatio="none" role="img" aria-label="$obs.label.sun_and_moon">
-                                        <path class="almanac-diagram-track almanac-diagram-track--sun" d=""></path>
-                                        <path class="almanac-diagram-track almanac-diagram-track--moon" d=""></path>
-                                        <line class="almanac-diagram-horizon" x1="24" y1="100" x2="196" y2="100"></line>
-
-                                        <g class="almanac-diagram-object almanac-diagram-object--sun">
-                                            <title></title>
-                                            <circle class="almanac-diagram-object-core" r="11.5"></circle>
-                                            <text class="almanac-diagram-object-symbol" text-anchor="middle" dy="0.35em">☀</text>
-                                        </g>
-
-                                        <g class="almanac-diagram-object almanac-diagram-object--moon">
-                                            <title></title>
-                                            <circle class="almanac-diagram-object-core" r="11.5"></circle>
-                                            <text class="almanac-diagram-object-symbol" text-anchor="middle" dy="0.35em">☾</text>
-                                        </g>
-                                    </svg>
-                                </div>
-                                <div class="almanac-sun-stack almanac-sun-stack--set">
-                                    <div class="almanac-sun-time almanac-sun-time--set almanac-time-row">
-                                        <span class="sunrise-set-image"><img src="$relative_url/images/sunset.png"></span><span class="sunset-value"></span><!-- moment.js -->
-                                    </div>
-                                    <div class="almanac-sun-time almanac-sun-time--moonset almanac-time-row">
-                                        <span class="moonrise-set-image moonrise-set-image--set" aria-hidden="true"></span><span class="moonset-value"></span><!-- moment.js -->
-                                    </div>
-                                </div>
+                                #set $almanac_diagram_context = build_almanac_template_context($almanac, $current.dateTime.raw, $almanac.hasExtras, $relative_url)
+                                #set $almanac_inline_markup_attr = $almanac_diagram_context.get("almanac_inline_markup_attr", "")
+                                #if $almanac.hasExtras or ($almanac_inline_markup_attr != "" and $almanac_inline_markup_attr != "None")
+                                $almanac_inline_markup_attr
                                 #end if
                                 </div>
-                                #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
+                                #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1'
                                 <div class="daylight-change">
                                     #include "daylight.inc"
                                 </div>

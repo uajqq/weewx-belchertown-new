@@ -188,6 +188,17 @@ jQuery(document).ready(function() {
     // #end if
 
     initializeAlmanacDiagramFromDOM();
+    // iPhone/Safari can occasionally compute the first almanac layout before
+    // final widths are settled. Force one follow-up render after first paint.
+    window.requestAnimationFrame(function() {
+        initializeAlmanacDiagramFromDOM();
+    });
+
+    // Style legacy celestial table markup as modern sub-cards in the extras modal.
+    enhanceAlmanacExtrasModal();
+    jQuery('#almanac').on('shown.bs.modal', function() {
+        enhanceAlmanacExtrasModal();
+    });
 
 });
 
@@ -645,183 +656,158 @@ function titleCase(str) {
     }).join(' ');
 }
 
-function almanacSkyCoordinates(azimuth, altitude) {
-    var az = parseFloat(azimuth);
+function almanacTrackXBounds() {
+    return {
+        minX: 0,
+        maxX: 1440
+    };
+}
+
+function almanacWrapDiagramX(xValue, xOffset) {
+    var x = parseFloat(xValue);
+    var offset = parseFloat(xOffset);
+    var bounds = almanacTrackXBounds();
+    var span = bounds.maxX - bounds.minX;
+
+    if (!isFinite(x)) {
+        return null;
+    }
+    if (!isFinite(offset)) {
+        offset = 0;
+    }
+    if (!isFinite(span) || span <= 0) {
+        return x;
+    }
+
+    return ((x - bounds.minX + offset) % span + span) % span + bounds.minX;
+}
+
+function almanacDiagramCenteringMode() {
+    var diagramEl = jQuery(".almanac-diagram").first();
+    var mode = String(diagramEl.attr("data-centering-mode") || diagramEl.data("centeringMode") || "off").toLowerCase();
+    if (mode === "now" || mode === "transit") {
+        return mode;
+    }
+    return "off";
+}
+
+function almanacBodyXOffsetInfo(bodyKey) {
+    var diagramEl = jQuery(".almanac-diagram").first();
+    var mode = almanacDiagramCenteringMode();
+    var attrName = bodyKey === "moon" ? "data-moon-x-offset" : "data-sun-x-offset";
+    var dataKey = bodyKey === "moon" ? "moonXOffset" : "sunXOffset";
+    var attrRaw;
+    var dataRaw;
+    var parsed;
+
+    if (mode === "off") {
+        return { value: 0, hasExplicit: false };
+    }
+
+    attrRaw = diagramEl.attr(attrName);
+    parsed = parseFloat(attrRaw);
+    if (attrRaw !== undefined && attrRaw !== null && String(attrRaw).trim() !== "" && isFinite(parsed)) {
+        return { value: parsed, hasExplicit: true };
+    }
+
+    dataRaw = diagramEl.data(dataKey);
+    parsed = parseFloat(dataRaw);
+    if (dataRaw !== undefined && dataRaw !== null && String(dataRaw).trim() !== "" && isFinite(parsed)) {
+        return { value: parsed, hasExplicit: true };
+    }
+
+    return { value: 0, hasExplicit: false };
+}
+
+function almanacCurrentTimeToDiagramX() {
+    var now = new Date();
+    var dayMinutes = (now.getHours() * 60) + now.getMinutes() + (now.getSeconds() / 60);
+    return Math.max(0, Math.min(1440, dayMinutes));
+}
+
+function almanacVerticalScale() {
+    var diagramEl = jQuery(".almanac-diagram").first();
+    var scale = parseFloat(diagramEl.attr("data-vertical-scale") || diagramEl.data("verticalScale"));
+
+    if (!isFinite(scale)) {
+        return 2.5;
+    }
+
+    return Math.max(0, scale);
+}
+
+function almanacAltitudeToDiagramY(altitude) {
     var alt = parseFloat(altitude);
-    var minX = 16;
-    var maxX = 204;
-    var horizonY = 100;
-    var maxAboveHorizon = 124;
-    var maxBelowHorizon = 16;
-
-    if (!isFinite(az) || !isFinite(alt)) {
+    if (!isFinite(alt)) {
         return null;
     }
 
-    var wrappedAzimuth = ((az % 360) + 360) % 360;
-    var x = minX + (wrappedAzimuth / 360) * (maxX - minX);
+    return -(Math.max(-90, Math.min(90, alt)) * almanacVerticalScale());
+}
 
-    var boundedAltitude = Math.max(-18, Math.min(90, alt));
-    var y;
-    if (boundedAltitude >= 0) {
-        y = horizonY - (boundedAltitude / 90) * maxAboveHorizon;
-    } else {
-        y = horizonY + (Math.abs(boundedAltitude) / 18) * maxBelowHorizon;
-    }
+function almanacDiagramViewBox() {
+    var xPadding = 120;
+    var yPadding = 20;
+    var scaledHalfHeight = (90 * almanacVerticalScale()) + yPadding;
 
     return {
-        x: x,
-        y: y,
-        belowHorizon: alt < 0
+        x: -xPadding,
+        y: -scaledHalfHeight,
+        width: 1440 + (xPadding * 2),
+        height: scaledHalfHeight * 2
     };
 }
 
-function almanacBodyGeometry(bodyData) {
-    var horizonY = 100;
-    var minX = 16;
-    var maxX = 204;
-    var defaultApexY = 2;
+function setAlmanacDiagramTrackBelowHorizon(selector, altitude) {
+    var track = jQuery(selector);
+    var alt = parseFloat(altitude);
 
-    var risePoint = almanacSkyCoordinates(bodyData && bodyData.rise && bodyData.rise.azimuth, bodyData && bodyData.rise && bodyData.rise.altitude);
-    var transitPoint = almanacSkyCoordinates(bodyData && bodyData.transit && bodyData.transit.azimuth, bodyData && bodyData.transit && bodyData.transit.altitude);
-    var setPoint = almanacSkyCoordinates(bodyData && bodyData.set && bodyData.set.azimuth, bodyData && bodyData.set && bodyData.set.altitude);
-    var currentPoint = almanacSkyCoordinates(bodyData && bodyData.azimuth, bodyData && bodyData.altitude);
-
-    var riseX = risePoint ? risePoint.x : 68;
-    var setX = setPoint ? setPoint.x : 152;
-    if (riseX > setX) {
-        var tmp = riseX;
-        riseX = setX;
-        setX = tmp;
-    }
-
-    var transitX = transitPoint ? transitPoint.x : ((riseX + setX) / 2);
-    var transitY = transitPoint ? transitPoint.y : (currentPoint ? currentPoint.y : defaultApexY);
-
-    var transitAlt = parseFloat(bodyData && bodyData.transit && bodyData.transit.altitude);
-    var transitIsBelowHorizon = isFinite(transitAlt) && transitAlt < 0;
-    transitY = transitIsBelowHorizon
-        ? Math.max(horizonY + 6, Math.min(124, transitY))
-        : Math.min(horizonY - 14, Math.max(-12, transitY));
-
-    var nightY = isFinite(transitAlt)
-        ? horizonY + Math.max(8, Math.min(18, Math.abs(transitAlt) * 0.22))
-        : 114;
-
-    return {
-        minX: minX,
-        maxX: maxX,
-        horizonY: horizonY,
-        riseX: Math.max(minX + 14, Math.min(maxX - 14, riseX)),
-        setX: Math.max(minX + 14, Math.min(maxX - 14, setX)),
-        transitX: Math.max(minX + 20, Math.min(maxX - 20, transitX)),
-        transitY: transitY,
-        nightY: Math.max(horizonY + 6, Math.min(124, nightY))
-    };
-}
-
-function almanacBodyPath(bodyData) {
-    var g = almanacBodyGeometry(bodyData);
-    var leftCtrlX = g.minX + ((g.riseX - g.minX) * 0.55);
-    var rightCtrlX = g.setX + ((g.maxX - g.setX) * 0.45);
-
-    return "M " + g.minX.toFixed(1) + " " + g.nightY.toFixed(1) +
-        " Q " + leftCtrlX.toFixed(1) + " " + g.nightY.toFixed(1) + " " + g.riseX.toFixed(1) + " " + g.horizonY.toFixed(1) +
-        " Q " + g.transitX.toFixed(1) + " " + g.transitY.toFixed(1) + " " + g.setX.toFixed(1) + " " + g.horizonY.toFixed(1) +
-        " Q " + rightCtrlX.toFixed(1) + " " + g.nightY.toFixed(1) + " " + g.maxX.toFixed(1) + " " + g.nightY.toFixed(1);
-}
-
-function almanacPathPointSamples(bodyData) {
-    var g = almanacBodyGeometry(bodyData);
-    var leftCtrlX = g.minX + ((g.riseX - g.minX) * 0.55);
-    var rightCtrlX = g.setX + ((g.maxX - g.setX) * 0.45);
-    var points = [];
-
-    for (var i = 0; i <= 40; i++) {
-        var t = i / 40;
-        var omt = 1 - t;
-        points.push({
-            x: (omt * omt * g.minX) + (2 * omt * t * leftCtrlX) + (t * t * g.riseX),
-            y: (omt * omt * g.nightY) + (2 * omt * t * g.nightY) + (t * t * g.horizonY)
-        });
-    }
-    for (var j = 1; j <= 80; j++) {
-        var u = j / 80;
-        var omu = 1 - u;
-        points.push({
-            x: (omu * omu * g.riseX) + (2 * omu * u * g.transitX) + (u * u * g.setX),
-            y: (omu * omu * g.horizonY) + (2 * omu * u * g.transitY) + (u * u * g.horizonY)
-        });
-    }
-    for (var k = 1; k <= 40; k++) {
-        var v = k / 40;
-        var omv = 1 - v;
-        points.push({
-            x: (omv * omv * g.setX) + (2 * omv * v * rightCtrlX) + (v * v * g.maxX),
-            y: (omv * omv * g.horizonY) + (2 * omv * v * g.nightY) + (v * v * g.nightY)
-        });
-    }
-
-    return points;
-}
-
-function almanacPathYForX(bodyData, targetX, targetY) {
-    if (!bodyData) {
-        return null;
-    }
-
-    var points = almanacPathPointSamples(bodyData);
-    if (!points.length) {
-        return null;
-    }
-
-    var nearest = null;
-    var bestScore = Number.POSITIVE_INFINITY;
-
-    points.forEach(function(p) {
-        var dx = Math.abs(p.x - targetX);
-        var dy = isFinite(targetY) ? Math.abs(p.y - targetY) : 0;
-        var score = (dx * 4) + dy;
-        if (score < bestScore) {
-            bestScore = score;
-            nearest = p;
-        }
-    });
-
-    return nearest ? nearest.y : null;
-}
-
-function setAlmanacDiagramPath(selector, d) {
-    var path = jQuery(selector);
-
-    if (!path.length) {
+    if (!track.length) {
         return;
     }
 
-    if (!d) {
-        path.attr("d", "").hide();
+    track.toggleClass("is-below-horizon", isFinite(alt) && alt < 0);
+}
+
+function setAlmanacDiagramHorizonBounds() {
+    var horizon = jQuery(".almanac-diagram-horizon");
+    var xBounds = almanacTrackXBounds();
+
+    if (!horizon.length) {
         return;
     }
 
-    path.attr("d", d).show();
+    horizon
+        .attr("x1", xBounds.minX.toFixed(1))
+        .attr("x2", xBounds.maxX.toFixed(1));
 }
 
-function setAlmanacDiagramPaths(diagramData) {
-    setAlmanacDiagramPath(".almanac-diagram-track--sun", almanacBodyPath(diagramData["sun"]));
-    setAlmanacDiagramPath(".almanac-diagram-track--moon", almanacBodyPath(diagramData["moon"]));
-
-    // Backward compatibility with older single-track markup.
-    if (!jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
-        setAlmanacDiagramPath(".almanac-diagram-track", almanacBodyPath(diagramData["sun"]));
-    }
-}
-
-function setAlmanacDiagramObject(selector, label, azimuth, altitude, bodyData) {
-    var point = almanacSkyCoordinates(azimuth, altitude);
+function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitude) {
+    var point = null;
+    var bodyKey = selector.indexOf("--moon") !== -1 ? "moon" : "sun";
+    var alt = parseFloat(altitude);
     var marker = jQuery(selector);
+    var projectedX;
+    var projectedY;
+    var bodyOffsetInfo = almanacBodyXOffsetInfo(bodyKey);
+    var bodyOffset = bodyOffsetInfo.value;
 
     if (!marker.length) {
         return;
+    }
+
+    // Python is authoritative for curve geometry. Marker position should be a
+    // direct projection of live altitude at current time using the same x-offset.
+    if (isFinite(alt)) {
+        projectedX = almanacWrapDiagramX(almanacCurrentTimeToDiagramX(), bodyOffset);
+        projectedY = almanacAltitudeToDiagramY(alt);
+        if (isFinite(projectedX) && isFinite(projectedY)) {
+            point = {
+                x: projectedX,
+                y: projectedY,
+                belowHorizon: alt < 0
+            };
+        }
     }
 
     if (!point) {
@@ -829,15 +815,10 @@ function setAlmanacDiagramObject(selector, label, azimuth, altitude, bodyData) {
         return;
     }
 
-    var snappedY = almanacPathYForX(bodyData, point.x, point.y);
-    if (snappedY !== null && isFinite(snappedY)) {
-        point.y = snappedY;
-    }
-
     marker
         .show()
         .attr("transform", "translate(" + point.x.toFixed(1) + " " + point.y.toFixed(1) + ")")
-        .toggleClass("is-below-horizon", point.belowHorizon);
+        .toggleClass("is-below-horizon", point.belowHorizon || (isFinite(alt) && alt < 0));
 
     marker.find("title").text(label);
 }
@@ -849,102 +830,109 @@ function fitAlmanacDiagramViewBox(diagramData) {
         return;
     }
 
-    var markerRadius = 15;
-    var sidePadding = 4;
-    var topPadding = 4;
-    var bottomPadding = 8;
-    var verticalShiftUpRatio = 0.2;
-
-    var minX = Number.POSITIVE_INFINITY;
-    var maxX = Number.NEGATIVE_INFINITY;
-    var minY = Number.POSITIVE_INFINITY;
-    var maxY = Number.NEGATIVE_INFINITY;
-
-    function includePoint(x, y, withMarkerPadding) {
-        if (!isFinite(x) || !isFinite(y)) {
-            return;
-        }
-
-        var pad = withMarkerPadding ? markerRadius : 0;
-        minX = Math.min(minX, x - pad);
-        maxX = Math.max(maxX, x + pad);
-        minY = Math.min(minY, y - pad);
-        maxY = Math.max(maxY, y + pad);
-    }
-
-    function includeBody(bodyDataItem) {
-        if (!bodyDataItem) {
-            return;
-        }
-
-        var g = almanacBodyGeometry(bodyDataItem);
-        includePoint(g.minX, g.nightY, false);
-        includePoint(g.riseX, g.horizonY, false);
-        includePoint(g.transitX, g.transitY, false);
-        includePoint(g.setX, g.horizonY, false);
-        includePoint(g.maxX, g.nightY, false);
-
-        var bodyPoint = almanacSkyCoordinates(bodyDataItem.azimuth, bodyDataItem.altitude);
-        if (bodyPoint) {
-            var snappedY = almanacPathYForX(bodyDataItem, bodyPoint.x, bodyPoint.y);
-            if (snappedY !== null && isFinite(snappedY)) {
-                bodyPoint.y = snappedY;
-            }
-            includePoint(bodyPoint.x, bodyPoint.y, true);
-        }
-    }
-
-    includeBody(diagramData["sun"]);
-    includeBody(diagramData["moon"]);
-
-    if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
-        return;
-    }
-
-    var contentHeight = Math.max(0, maxY - minY);
-    var shiftUpAmount = Math.round(contentHeight * verticalShiftUpRatio);
-
-    var viewBoxX = Math.max(0, Math.floor(minX - sidePadding));
-    var baseViewBoxY = Math.floor(minY - topPadding);
-    var viewBoxY = baseViewBoxY + shiftUpAmount;
-    var viewBoxWidth = Math.max(40, Math.ceil((maxX + sidePadding) - viewBoxX));
-    var viewBoxHeight = Math.max(28, Math.ceil((maxY + bottomPadding) - baseViewBoxY));
-
-    svg.attr("viewBox", viewBoxX + " " + viewBoxY + " " + viewBoxWidth + " " + viewBoxHeight);
+    // Python is authoritative for content-fit SVG framing and viewport sizing.
+    // Keep preserveAspectRatio aligned with server markup (no stretching).
+    svg.attr("preserveAspectRatio", "xMidYMid meet");
 }
 
-function renderAlmanacDiagram(diagramData) {
+jQuery(window).on("load orientationchange", function() {
+    initializeAlmanacDiagramFromDOM();
+});
+
+function renderAlmanacDiagram(diagramData, preserveViewBox) {
     var diagram = jQuery(".almanac-diagram");
+
+    setAlmanacDiagramHorizonBounds();
 
     if (!diagram.length) {
         return;
     }
 
-    if (!diagramData || diagramData["hasExtras"] !== true) {
-        diagram.addClass("almanac-diagram--inactive");
+    if (!diagramData) {
+        // Keep any already-rendered DOM diagram visible. Fresh JSON can be
+        // briefly unavailable/stale on first load, especially on desktop.
         return;
+    }
+
+    // Ensure server-generated path geometry is available during live MQTT updates.
+    if (!diagramData["sun"]) {
+        diagramData["sun"] = {};
+    }
+    if (!diagramData["moon"]) {
+        diagramData["moon"] = {};
+    }
+
+    // Keep DOM data-* and jQuery data cache in sync with the freshest values
+    // so MQTT incremental updates don't fall back to stale template-time values.
+    var sunAz = parseFloat(diagramData["sun"]["azimuth"]);
+    var sunAlt = parseFloat(diagramData["sun"]["altitude"]);
+    var moonAz = parseFloat(diagramData["moon"]["azimuth"]);
+    var moonAlt = parseFloat(diagramData["moon"]["altitude"]);
+    var sunXOffset = parseFloat(diagramData["sun"]["x_offset"]);
+    var moonXOffset = parseFloat(diagramData["moon"]["x_offset"]);
+    var centeringMode = String(diagramData["centering_mode"] || "off").toLowerCase();
+
+    if (isFinite(sunAz)) {
+        diagram.attr("data-sun-az", sunAz.toFixed(3));
+        diagram.data("sunAz", sunAz);
+    }
+    if (isFinite(sunAlt)) {
+        diagram.attr("data-sun-alt", sunAlt.toFixed(3));
+        diagram.data("sunAlt", sunAlt);
+    }
+    if (isFinite(moonAz)) {
+        diagram.attr("data-moon-az", moonAz.toFixed(3));
+        diagram.data("moonAz", moonAz);
+    }
+    if (isFinite(moonAlt)) {
+        diagram.attr("data-moon-alt", moonAlt.toFixed(3));
+        diagram.data("moonAlt", moonAlt);
+    }
+    if (isFinite(sunXOffset)) {
+        diagram.attr("data-sun-x-offset", sunXOffset.toFixed(3));
+        diagram.data("sunXOffset", sunXOffset);
+    }
+    if (isFinite(moonXOffset)) {
+        diagram.attr("data-moon-x-offset", moonXOffset.toFixed(3));
+        diagram.data("moonXOffset", moonXOffset);
+    }
+    if (centeringMode === "now" || centeringMode === "transit") {
+        diagram.attr("data-centering-mode", centeringMode);
+        diagram.data("centeringMode", centeringMode);
+    } else {
+        diagram.attr("data-centering-mode", "off");
+        diagram.data("centeringMode", "off");
     }
 
     diagram.removeClass("almanac-diagram--inactive");
 
-    setAlmanacDiagramPaths(diagramData);
+    // Python-authored SVG curves are authoritative. JS must never rewrite path d.
+    // Keep only dynamic state classes in sync during live updates.
+    setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--sun", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
+    setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--moon", diagramData && diagramData["moon"] && diagramData["moon"]["altitude"]);
+
+    if (!jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
+        setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
+    }
 
     setAlmanacDiagramObject(
         ".almanac-diagram-object--sun",
+        ".almanac-diagram-track--sun",
         "$obs.label.sun",
         diagramData["sun"]["azimuth"],
-        diagramData["sun"]["altitude"],
-        diagramData["sun"]
+        diagramData["sun"]["altitude"]
     );
     setAlmanacDiagramObject(
         ".almanac-diagram-object--moon",
+        ".almanac-diagram-track--moon",
         "$obs.label.moon",
         diagramData["moon"]["azimuth"],
-        diagramData["moon"]["altitude"],
-        diagramData["moon"]
+        diagramData["moon"]["altitude"]
     );
 
-    fitAlmanacDiagramViewBox(diagramData);
+    if (!preserveViewBox) {
+        fitAlmanacDiagramViewBox(diagramData);
+    }
 }
 
 function initializeAlmanacDiagramFromDOM() {
@@ -954,40 +942,34 @@ function initializeAlmanacDiagramFromDOM() {
         return;
     }
 
+    var readNumericAttr = function(attrName, dataKey) {
+        var attrRaw = diagram.attr(attrName);
+        var attrParsed = parseFloat(attrRaw);
+        if (isFinite(attrParsed)) {
+            return attrParsed;
+        }
+
+        var dataParsed = parseFloat(diagram.data(dataKey));
+        if (isFinite(dataParsed)) {
+            return dataParsed;
+        }
+
+        return null;
+    };
+
     renderAlmanacDiagram({
         hasExtras: true,
         sun: {
-            azimuth: diagram.data("sunAz"),
-            altitude: diagram.data("sunAlt"),
-            rise: {
-                azimuth: diagram.data("sunRiseAz"),
-                altitude: diagram.data("sunRiseAlt")
-            },
-            transit: {
-                azimuth: diagram.data("sunTransitAz"),
-                altitude: diagram.data("sunTransitAlt")
-            },
-            set: {
-                azimuth: diagram.data("sunSetAz"),
-                altitude: diagram.data("sunSetAlt")
-            }
+            azimuth: readNumericAttr("data-sun-az", "sunAz"),
+            altitude: readNumericAttr("data-sun-alt", "sunAlt"),
+            x_offset: readNumericAttr("data-sun-x-offset", "sunXOffset")
         },
         moon: {
-            azimuth: diagram.data("moonAz"),
-            altitude: diagram.data("moonAlt"),
-            rise: {
-                azimuth: diagram.data("moonRiseAz"),
-                altitude: diagram.data("moonRiseAlt")
-            },
-            transit: {
-                azimuth: diagram.data("moonTransitAz"),
-                altitude: diagram.data("moonTransitAlt")
-            },
-            set: {
-                azimuth: diagram.data("moonSetAz"),
-                altitude: diagram.data("moonSetAlt")
-            }
-        }
+            azimuth: readNumericAttr("data-moon-az", "moonAz"),
+            altitude: readNumericAttr("data-moon-alt", "moonAlt"),
+            x_offset: readNumericAttr("data-moon-x-offset", "moonXOffset")
+        },
+        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase()
     });
 }
 
@@ -1083,7 +1065,8 @@ function changeTheme(themeName, toggleOverride = false) {
 }
 
 async function ajaxweewx() {
-    resp = await fetch(get_relative_url() + "/json/weewx_data.json");
+    var url = get_relative_url() + "/json/weewx_data.json?_=" + Date.now();
+    resp = await fetch(url, {cache: "no-store"});
     if (!resp.ok) {
         throw new Error("HTTP error! Unable to load weewx_data.json");
     } else {
@@ -1096,6 +1079,166 @@ async function ajaxweewx() {
 var unit_rounding_array = "";
 var unit_label_array = "";
 var weewx_data = "";
+function enhanceAlmanacExtrasModal(almanacData) {
+    var modalBody = jQuery("#almanac .almanac-extras-modal-body");
+    var sourceRaw;
+    var sourceLabel;
+    var sourceNote;
+    var sourceNoteSmall;
+    var detailsContainer;
+    var daylightValue;
+    var sunriseEpoch;
+    var sunsetEpoch;
+    var totalDaylightLabel = "$obs.label.total_daylight".toLowerCase();
+
+    if (!modalBody.length) {
+        return;
+    }
+
+    modalBody.find("table.celestial").each(function() {
+        var table = jQuery(this);
+
+        table.find("tr").each(function() {
+            var row = jQuery(this);
+            var headerCells = row.children("th");
+            var cells = row.children("td");
+
+            row.removeClass("celestial-row celestial-row--header celestial-row--item");
+
+            if (headerCells.length) {
+                row.addClass("celestial-row celestial-row--header");
+                return;
+            }
+
+            if (cells.length < 2) {
+                return;
+            }
+
+            cells.removeClass("celestial-cell-label celestial-cell-value");
+
+            var labelCell = jQuery(cells[0]);
+            var valueCell = jQuery(cells[1]);
+            var labelText = labelCell.text().replace(/\u00a0/g, " ").trim();
+            var valueText = valueCell.text().replace(/\u00a0/g, " ").trim();
+
+            // Remove spacer rows coming from legacy table formatting.
+            if (!labelText && !valueText) {
+                row.remove();
+                return;
+            }
+
+            row.addClass("celestial-row celestial-row--item");
+            labelCell.addClass("celestial-cell-label");
+            valueCell.addClass("celestial-cell-value");
+
+            // Localize date/time-like values independent of UI language.
+            var looksLikeDateTime = /\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}/.test(valueText) && /\d{1,2}:\d{2}/.test(valueText);
+            if (looksLikeDateTime && valueText && valueText !== "--") {
+                var parsed = moment(
+                    valueText,
+                    [
+                        moment.ISO_8601,
+                        "MM/DD/YYYY HH:mm:ss",
+                        "M/D/YYYY H:mm:ss",
+                        "YYYY-MM-DD HH:mm:ss",
+                        "MM/DD/YYYY hh:mm:ss A",
+                        "M/D/YYYY h:mm:ss A"
+                    ],
+                    true
+                );
+                if (parsed.isValid()) {
+                    valueCell.text(parsed.locale(moment.locale()).format("L LTS"));
+                }
+            }
+        });
+    });
+
+    sourceRaw = ((almanacData && almanacData["source"]) || "").toString().toLowerCase();
+    if (!sourceRaw && weewx_data && weewx_data["almanac"]) {
+        sourceRaw = String(weewx_data["almanac"]["source"] || "").toLowerCase();
+    }
+    if (!sourceRaw) {
+        sourceRaw = "none";
+    }
+    if (sourceRaw === "none") {
+        // Promote to PyEphem when usable almanac signals exist.
+        var hasDiagramSignal = false;
+        if (almanacData && almanacData["diagram"]) {
+            var sunD = almanacData["diagram"]["sun"] || {};
+            var moonD = almanacData["diagram"]["moon"] || {};
+            hasDiagramSignal = !!(
+                (sunD["path_d"] && String(sunD["path_d"]).trim().length > 0) ||
+                (moonD["path_d"] && String(moonD["path_d"]).trim().length > 0) ||
+                (sunD["track_points"] && String(sunD["track_points"]).trim().length > 0) ||
+                (moonD["track_points"] && String(moonD["track_points"]).trim().length > 0) ||
+                isFinite(parseFloat(sunD["azimuth"])) ||
+                isFinite(parseFloat(moonD["azimuth"]))
+            );
+        }
+        var hasSunTimesSignal = false;
+        if (almanacData) {
+            hasSunTimesSignal = !!(
+                almanacData["sunrise_epoch"] ||
+                almanacData["sunset_epoch"] ||
+                (typeof almanacData["sunrise"] === "string" && almanacData["sunrise"].trim() !== "") ||
+                (typeof almanacData["sunset"] === "string" && almanacData["sunset"].trim() !== "")
+            );
+        }
+        if (hasDiagramSignal || hasSunTimesSignal) {
+            sourceRaw = "pyephem";
+        }
+    }
+    if (sourceRaw === "skyfield") {
+        sourceLabel = "Skyfield";
+    } else if (sourceRaw === "pyephem") {
+        sourceLabel = "PyEphem";
+    } else {
+        sourceLabel = "None";
+    }
+
+    sourceNote = modalBody.find(".celestial_source_note").first();
+    if (!sourceNote.length) {
+        sourceNote = jQuery('<div class="celestial_source_note"><small></small></div>');
+    }
+
+    sourceNoteSmall = sourceNote.find("small");
+    if (!sourceNoteSmall.length) {
+        sourceNoteSmall = jQuery("<small></small>");
+        sourceNote.empty().append(sourceNoteSmall);
+    }
+    sourceNoteSmall.html("Data source: <strong>" + sourceLabel + "</strong>");
+
+    detailsContainer = modalBody.find("#celestial_details").first();
+    if (detailsContainer.length) {
+        detailsContainer.append(sourceNote);
+    } else {
+        modalBody.append(sourceNote);
+    }
+
+    // If total daylight remained '--', compute a local fallback from sunrise/sunset.
+    daylightValue = null;
+    modalBody.find("table.celestial tr").each(function() {
+        var row = jQuery(this);
+        var tds = row.children("td");
+        if (tds.length >= 2) {
+            var lbl = jQuery(tds[0]).text().replace(/\u00a0/g, " ").trim().toLowerCase();
+            if (lbl === totalDaylightLabel || lbl.indexOf(totalDaylightLabel) !== -1) {
+                daylightValue = jQuery(tds[1]);
+            }
+        }
+    });
+    if (daylightValue && daylightValue.text().replace(/\u00a0/g, " ").trim() === "--") {
+        sunriseEpoch = parseFloat(almanacData && almanacData["sunrise_epoch"]);
+        sunsetEpoch = parseFloat(almanacData && almanacData["sunset_epoch"]);
+        if (isFinite(sunriseEpoch) && isFinite(sunsetEpoch) && sunsetEpoch >= sunriseEpoch) {
+            var total = Math.round(sunsetEpoch - sunriseEpoch);
+            var hours = Math.floor(total / 3600);
+            var mins = Math.floor((total % 3600) / 60);
+            var secs = total % 60;
+            daylightValue.text(hours + "h " + mins + "m " + secs + "s");
+        }
+    }
+}
 
 function getNestedValue(obj, path, fallback = "N/A") {
     try {
@@ -1211,11 +1354,18 @@ function update_weewx_data(data) {
     jQuery(".moon-container > .moon-icon").html(render_moon_icon_html(data));
     jQuery(".moon-phase").html(titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
     jQuery(".moon-visible").html("<strong>" + data["almanac"]["moon"]["moon_fullness"] + "%</strong> $obs.label.moon_visible");
+
+    // Do not synthesize daylight text in JS. Keep server-rendered daylight
+    // string authoritative (includes change-vs-yesterday when available).
+
     renderAlmanacDiagram(data["almanac"]["diagram"]);
     // #if $almanac.hasExtras
     // Close current modal if open
     jQuery('#almanac').modal('hide');
-    jQuery(".almanac-extras-modal-body").html(data["almanac"]["almanac_extras_modal_html"]);
+    if (data["almanac"] && typeof data["almanac"]["almanac_extras_modal_html"] === "string" && data["almanac"]["almanac_extras_modal_html"].length > 0) {
+        jQuery(".almanac-extras-modal-body").html(data["almanac"]["almanac_extras_modal_html"]);
+    }
+    enhanceAlmanacExtrasModal(data["almanac"]);
     try {
         almanac_updated = "$obs.label.header_last_updated " + tzAdjustedMoment(data["current"]["datetime_raw"]).format("$obs.label.time_last_updated");
         jQuery(".almanac_last_updated").html(almanac_updated);
@@ -2741,6 +2891,8 @@ function normalize_mqtt_payload(payload) {
 
     var aliases = {
         "beaufort_count": "beaufort",
+        "solarAzimuth_degree_angle": "solarAzimuth",
+        "lunarAzimuth_degree_angle": "lunarAzimuth",
         "solarAltitude_degree_angle": "solarAltitude",
         "lunarAltitude_degree_angle": "lunarAltitude",
         "solarDistance_mile": "solarDistance",
@@ -2776,17 +2928,23 @@ function update_almanac_diagram_from_mqtt(payload) {
     }
 
     var solarAz = parse_mqtt_number(payload, "solarAzimuth");
-    var solarAlt = parse_mqtt_number(payload, "solarAltitude");
     var lunarAz = parse_mqtt_number(payload, "lunarAzimuth");
+    var solarAlt = parse_mqtt_number(payload, "solarAltitude");
     var lunarAlt = parse_mqtt_number(payload, "lunarAltitude");
 
-    if (!isFinite(solarAz) && !isFinite(solarAlt) && !isFinite(lunarAz) && !isFinite(lunarAlt)) {
+    if (!isFinite(solarAz) && !isFinite(lunarAz) && !isFinite(solarAlt) && !isFinite(lunarAlt)) {
         return;
     }
 
     var getDiagramValue = function(dataKey) {
-        var value = parseFloat(diagram.data(dataKey));
-        return isFinite(value) ? value : null;
+        var attrName = "data-" + dataKey.replace(/([A-Z])/g, "-$1").toLowerCase();
+        var attrValue = parseFloat(diagram.attr(attrName));
+        if (isFinite(attrValue)) {
+            return attrValue;
+        }
+
+        var dataValue = parseFloat(diagram.data(dataKey));
+        return isFinite(dataValue) ? dataValue : null;
     };
 
     var diagramData = {
@@ -2794,35 +2952,14 @@ function update_almanac_diagram_from_mqtt(payload) {
         sun: {
             azimuth: getDiagramValue("sunAz"),
             altitude: getDiagramValue("sunAlt"),
-            rise: {
-                azimuth: getDiagramValue("sunRiseAz"),
-                altitude: getDiagramValue("sunRiseAlt")
-            },
-            transit: {
-                azimuth: getDiagramValue("sunTransitAz"),
-                altitude: getDiagramValue("sunTransitAlt")
-            },
-            set: {
-                azimuth: getDiagramValue("sunSetAz"),
-                altitude: getDiagramValue("sunSetAlt")
-            }
+            x_offset: getDiagramValue("sunXOffset")
         },
         moon: {
             azimuth: getDiagramValue("moonAz"),
             altitude: getDiagramValue("moonAlt"),
-            rise: {
-                azimuth: getDiagramValue("moonRiseAz"),
-                altitude: getDiagramValue("moonRiseAlt")
-            },
-            transit: {
-                azimuth: getDiagramValue("moonTransitAz"),
-                altitude: getDiagramValue("moonTransitAlt")
-            },
-            set: {
-                azimuth: getDiagramValue("moonSetAz"),
-                altitude: getDiagramValue("moonSetAlt")
-            }
-        }
+            x_offset: getDiagramValue("moonXOffset")
+        },
+        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase()
     };
 
     if (isFinite(solarAz)) {
@@ -2846,7 +2983,12 @@ function update_almanac_diagram_from_mqtt(payload) {
         diagram.attr("data-moon-alt", lunarAlt.toFixed(3));
     }
 
-    renderAlmanacDiagram(diagramData);
+    belchertown_debug(
+        "Almanac MQTT live update: sun(az=" + diagramData.sun.azimuth + ", alt=" + diagramData.sun.altitude +
+        "), moon(az=" + diagramData.moon.azimuth + ", alt=" + diagramData.moon.altitude + ")"
+    );
+
+    renderAlmanacDiagram(diagramData, true);
 }
 
 // Handle MQTT message
@@ -3785,9 +3927,22 @@ function showChart(json_file, prepend_renderTo = false) {
                 var gaugeRawPoint = options.series[0].data && options.series[0].data.length
                     ? options.series[0].data[options.series[0].data.length - 1]
                     : null;
-                var gaugeRawValue = (gaugeRawPoint && gaugeRawPoint.length >= 2)
-                    ? gaugeRawPoint[1]
-                    : null;
+                var gaugeRawValue = null;
+                if (Array.isArray(gaugeRawPoint)) {
+                    if (gaugeRawPoint.length >= 2) {
+                        gaugeRawValue = gaugeRawPoint[1];
+                    } else if (gaugeRawPoint.length === 1) {
+                        gaugeRawValue = gaugeRawPoint[0];
+                    }
+                } else if (gaugeRawPoint && typeof gaugeRawPoint === "object") {
+                    if (Object.prototype.hasOwnProperty.call(gaugeRawPoint, "y")) {
+                        gaugeRawValue = gaugeRawPoint.y;
+                    } else if (Object.prototype.hasOwnProperty.call(gaugeRawPoint, "value")) {
+                        gaugeRawValue = gaugeRawPoint.value;
+                    }
+                } else {
+                    gaugeRawValue = gaugeRawPoint;
+                }
                 var gaugeNumericValue = parseFloat(gaugeRawValue);
                 if (!isFinite(gaugeNumericValue)) {
                     throw new Error("Unavailable observation value for gauge: " + observation_type);
@@ -4019,8 +4174,22 @@ function showChart(json_file, prepend_renderTo = false) {
                 });
                 var range_min = Math.min(...minimum_flattened);
                 var range_max = Math.max(...maximum_flattened);
+                // Guard all-zero (or flat) datasets so yAxis math never produces
+                // tickInterval=0 / min==max, which can prevent chart rendering.
+                if (!isFinite(range_min)) {
+                    range_min = 0;
+                }
+                if (!isFinite(range_max)) {
+                    range_max = 0;
+                }
+                if (range_min === range_max) {
+                    range_max = range_min + 1;
+                }
 
-                var yAxis_tickInterval = Math.ceil(Math.round(range_max / 5) / 5) * 5; // Divide max outTemp by 5 and round it, then round that value up to the nearest 5th multiple. This gives clean yAxis tick lines. 
+                var yAxis_tickInterval = Math.ceil(Math.round(range_max / 5) / 5) * 5; // Divide max outTemp by 5 and round it, then round that value up to the nearest 5th multiple. This gives clean yAxis tick lines.
+                if (!isFinite(yAxis_tickInterval) || yAxis_tickInterval <= 0) {
+                    yAxis_tickInterval = 1;
+                }
 
                 options.yAxis = {
                     showFirstLabel: true,

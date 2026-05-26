@@ -8,6 +8,7 @@ Pat O'Brien, August 19, 2018
 
 import calendar
 import datetime
+import html
 import json
 import locale
 import logging
@@ -198,6 +199,1072 @@ def _validate_and_fix_legacy_options(extras_dict, label_generic_dict=None):
         )
 
     return extras_dict
+
+
+def _safe_float(value):
+    """Return float(value) when possible, else None."""
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_attr(value):
+    """Format numeric diagram attributes to 3 decimals, else empty string."""
+    v = _safe_float(value)
+    if v is None:
+        return ""
+    return f"{v:.3f}"
+
+
+ALMANAC_DIAGRAM_DEFAULTS = {
+    "min_x": 0.0,
+    "max_x": 1440.0,
+    "vertical_scale": 3.25,
+    "object_radius": 68.0,
+    "svg_width": 180.0,
+    "svg_height": 300.0,
+    "center_apex_mode": "transit",
+}
+
+# Baseline viewport used to normalize curve amplification behavior. When users
+# increase configured SVG height relative to width, vertical curve amplitude is
+# increased in Python rather than stretching via SVG aspect-ratio tricks.
+ALMANAC_BASELINE_SVG_WIDTH = 200.0
+ALMANAC_BASELINE_SVG_HEIGHT = 250.0
+
+
+def _apply_almanac_diagram_extras_overrides(extras_dict):
+    """Apply optional almanac diagram mode from [Extras]."""
+
+    if not isinstance(extras_dict, dict):
+        return
+
+    mode_raw = extras_dict.get("align_solar_path")
+    if mode_raw is None:
+        mode_raw = extras_dict.get("align_luminary_path")
+    if mode_raw is None:
+        mode_raw = extras_dict.get("align_sky_path")
+    if mode_raw is None:
+        legacy_mode_raw = extras_dict.get("almanac_diagram")
+        if legacy_mode_raw is not None:
+            legacy_mode = str(legacy_mode_raw).strip().lower()
+            if legacy_mode == "shared":
+                mode_raw = "now"
+            elif legacy_mode == "per_body":
+                mode_raw = "transit"
+            elif legacy_mode == "off":
+                mode_raw = "off"
+            else:
+                mode_raw = legacy_mode
+
+    if mode_raw is not None:
+        mode = str(mode_raw).strip().lower()
+        if mode in ("off", "now", "transit"):
+            ALMANAC_DIAGRAM_DEFAULTS["center_apex_mode"] = mode
+
+# Resolution for sampled day tracks used to build sun/moon SVG path geometry.
+# Smaller values produce denser curves that better align with live alt/az points.
+ALMANAC_DIAGRAM_SAMPLE_STEP_MINUTES = 30
+ALMANAC_DIAGRAM_MOON_SAMPLE_STEP_MINUTES = 30
+
+def get_almanac_diagram_defaults():
+    """Return centralized defaults for almanac diagram rendering."""
+
+    defaults = dict(ALMANAC_DIAGRAM_DEFAULTS)
+    defaults["sun_track_path_attr"] = _default_track_path()
+    defaults["moon_track_path_attr"] = _default_track_path()
+    defaults["almanac_svg_markup_attr"] = _build_almanac_svg_markup(
+        {
+            "sun_track_path_attr": defaults["sun_track_path_attr"],
+            "moon_track_path_attr": defaults["moon_track_path_attr"],
+            "sun_alt_attr": "",
+            "moon_alt_attr": "",
+            "diagram_vertical_scale_attr": _format_attr(defaults.get("vertical_scale")),
+            "diagram_object_radius_attr": _format_attr(defaults.get("object_radius")),
+            "sun_x_offset_attr": _format_attr(0.0),
+            "moon_x_offset_attr": _format_attr(0.0),
+            "diagram_centering_mode_attr": _get_apex_center_mode(),
+        },
+        current_ts=None,
+    )
+    return defaults
+
+
+def _get_apex_center_mode():
+    """Return configured apex-centering mode for almanac tracks."""
+
+    mode = str(ALMANAC_DIAGRAM_DEFAULTS.get("center_apex_mode", "off")).strip().lower()
+    if mode in ("off", "now", "transit"):
+        return mode
+    return "off"
+
+
+def _get_vertical_scale():
+    """Return vertical scaling for raw altitude plotting.
+
+    Scaling is amplified by configured SVG aspect ratio so increasing
+    ``svg_height`` (relative to ``svg_width``) increases curve height in
+    geometry space, not by stretched SVG rendering.
+    """
+
+    scale = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("vertical_scale", 1.0))
+    if scale is None:
+        return 1.0
+
+    svg_width = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_width", ALMANAC_BASELINE_SVG_WIDTH))
+    svg_height = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_height", ALMANAC_BASELINE_SVG_HEIGHT))
+    if svg_width is None or svg_height is None or svg_width <= 0:
+        return max(0.0, scale)
+
+    baseline_ratio = ALMANAC_BASELINE_SVG_HEIGHT / ALMANAC_BASELINE_SVG_WIDTH
+    ratio = svg_height / svg_width
+    amplification = ratio / baseline_ratio if baseline_ratio > 0 else 1.0
+
+    return max(0.0, scale * amplification)
+
+
+def _project_timealt_to_diagram(time_seconds, altitude):
+    """Project local-day time/altitude to true diagram coordinates.
+
+    X is minutes past midnight [0, 1440].
+    Y is raw altitude in degrees [-90, 90]. Horizon is exactly 0.
+    """
+
+    seconds = _safe_float(time_seconds)
+    alt = _safe_float(altitude)
+    if seconds is None or alt is None:
+        return None
+
+    min_x = ALMANAC_DIAGRAM_DEFAULTS["min_x"]
+    max_x = ALMANAC_DIAGRAM_DEFAULTS["max_x"]
+    vertical_scale = _get_vertical_scale()
+
+    bounded_seconds = max(0.0, min(86400.0, seconds))
+    x = min_x + (bounded_seconds / 60.0)
+    x = max(min_x, min(max_x, x))
+
+    bounded_alt = max(-90.0, min(90.0, alt))
+    y = -(bounded_alt * vertical_scale)
+
+    return x, y
+
+
+def _wrap_diagram_x(x_value, x_offset):
+    """Wrap an x coordinate into the diagram domain after applying offset."""
+
+    x = _safe_float(x_value)
+    offset = _safe_float(x_offset)
+    if x is None:
+        return None
+    if offset is None:
+        offset = 0.0
+
+    min_x = ALMANAC_DIAGRAM_DEFAULTS["min_x"]
+    max_x = ALMANAC_DIAGRAM_DEFAULTS["max_x"]
+    span = max_x - min_x
+    if span <= 0:
+        return x
+
+    return ((x - min_x + offset) % span) + min_x
+
+
+def _project_track_points(track_points):
+    """Project list of 'minute_of_day,alt' samples into diagram coordinates."""
+
+    projected_points = []
+    for sample in track_points or []:
+        try:
+            minute_str, alt_str = sample.split(",", 1)
+        except ValueError:
+            continue
+        minute_val = _safe_float(minute_str)
+        if minute_val is None:
+            continue
+        time_seconds = minute_val * 60.0
+        projected = _project_timealt_to_diagram(time_seconds, alt_str)
+        if projected is not None:
+            projected_points.append((minute_val, projected[0], projected[1]))
+
+    return projected_points
+
+
+def _compute_apex_x_offset(track_points):
+    """Compute x offset needed to center the highest point (apex) at mid-diagram."""
+
+    projected_points = _project_track_points(track_points)
+    if not projected_points:
+        return 0.0
+
+    apex = min(projected_points, key=lambda p: p[2])
+    min_x = ALMANAC_DIAGRAM_DEFAULTS["min_x"]
+    max_x = ALMANAC_DIAGRAM_DEFAULTS["max_x"]
+    center_x = (min_x + max_x) * 0.5
+    return center_x - apex[1]
+
+
+def _build_track_path_from_points(track_points, x_offset=0.0, wrap_x=False):
+    """Build SVG path string from list of 'minute_of_day,alt' samples."""
+
+    if not track_points:
+        return ""
+
+    projected_points = _project_track_points(track_points)
+
+    if len(projected_points) < 2:
+        return ""
+
+    if wrap_x and abs(_safe_float(x_offset) or 0.0) > 1e-9:
+        shifted_points = []
+        for minute_val, x_val, y_val in projected_points:
+            shifted_x = _wrap_diagram_x(x_val, x_offset)
+            shifted_points.append((minute_val, shifted_x, y_val))
+        # Draw left-to-right in wrapped coordinates.
+        ordered_points = sorted(shifted_points, key=lambda p: p[1])
+    else:
+        # Keep path in local-time order for a continuous 24-hour track.
+        ordered_points = projected_points
+
+    # Smooth the sampled polyline using open Catmull-Rom -> cubic Bézier
+    # conversion. This preserves point order while removing visual kinks.
+    segments = [f"M {ordered_points[0][1]:.1f} {ordered_points[0][2]:.1f}"]
+    if len(ordered_points) == 2:
+        _, curr_x, curr_y = ordered_points[1]
+        segments.append(f"L {curr_x:.1f} {curr_y:.1f}")
+        return " ".join(segments)
+
+    for i in range(0, len(ordered_points) - 1):
+        _, p1x, p1y = ordered_points[i]
+        _, p2x, p2y = ordered_points[i + 1]
+
+        if i > 0:
+            _, p0x, p0y = ordered_points[i - 1]
+        else:
+            p0x, p0y = p1x, p1y
+
+        if i + 2 < len(ordered_points):
+            _, p3x, p3y = ordered_points[i + 2]
+        else:
+            p3x, p3y = p2x, p2y
+
+        c1x = p1x + ((p2x - p0x) / 6.0)
+        c1y = p1y + ((p2y - p0y) / 6.0)
+        c2x = p2x - ((p3x - p1x) / 6.0)
+        c2y = p2y - ((p3y - p1y) / 6.0)
+
+        segments.append(
+            f"C {c1x:.1f} {c1y:.1f} {c2x:.1f} {c2y:.1f} {p2x:.1f} {p2y:.1f}"
+        )
+
+    return " ".join(segments)
+
+
+def _default_track_path():
+    """Return a neutral fallback track path on the horizon."""
+
+    min_x = ALMANAC_DIAGRAM_DEFAULTS["min_x"]
+    max_x = ALMANAC_DIAGRAM_DEFAULTS["max_x"]
+    return f"M {min_x:.1f} 0.0 L {max_x:.1f} 0.0"
+
+
+def _almanac_content_viewbox(
+    payload,
+    current_ts,
+    object_radius,
+    use_x_offsets,
+    sun_x_offset,
+    moon_x_offset,
+    vertical_scale,
+):
+    """Return a tight viewBox around curve geometry and object markers."""
+
+    if payload is None:
+        payload = {}
+
+    def _fallback_viewbox(scale_value):
+        scale = _safe_float(scale_value)
+        if scale is None:
+            scale = _get_vertical_scale()
+        scale = max(0.0, scale)
+
+        x_padding = 80.0
+        y_padding = 20.0
+        scaled_half_height = (90.0 * scale) + y_padding
+
+        return (
+            -x_padding,
+            -scaled_half_height,
+            1440.0 + (x_padding * 2.0),
+            scaled_half_height * 2.0,
+        )
+
+    sun_track_raw = str(payload.get("sun_track_points_attr", "") or "").strip()
+    moon_track_raw = str(payload.get("moon_track_points_attr", "") or "").strip()
+    sun_track = [p for p in sun_track_raw.split("|") if p] if sun_track_raw else []
+    moon_track = [p for p in moon_track_raw.split("|") if p] if moon_track_raw else []
+
+    points = []
+    for track_points, x_offset in ((sun_track, sun_x_offset), (moon_track, moon_x_offset)):
+        projected = _project_track_points(track_points)
+        if not projected:
+            continue
+        for _, x_val, y_val in projected:
+            x_out = x_val
+            if use_x_offsets:
+                wrapped = _wrap_diagram_x(x_out, x_offset)
+                if wrapped is not None:
+                    x_out = wrapped
+            points.append((x_out, y_val))
+
+    now_seconds = _seconds_since_local_midnight(current_ts)
+    for body_alt_attr, body_offset in (
+        (payload.get("sun_alt_attr"), sun_x_offset),
+        (payload.get("moon_alt_attr"), moon_x_offset),
+    ):
+        alt = _safe_float(body_alt_attr)
+        if alt is None:
+            continue
+        marker = _project_timealt_to_diagram(now_seconds, alt)
+        if marker is None:
+            continue
+        marker_x = marker[0]
+        if use_x_offsets:
+            wrapped = _wrap_diagram_x(marker_x, body_offset)
+            if wrapped is not None:
+                marker_x = wrapped
+        points.append((marker_x, marker[1]))
+
+    if not points:
+        return _fallback_viewbox(vertical_scale)
+
+    xs = [p[0] for p in points if p[0] is not None]
+    ys = [p[1] for p in points if p[1] is not None]
+    if not xs or not ys:
+        return _fallback_viewbox(vertical_scale)
+
+    min_x = min(xs)
+    max_x = max(xs)
+    min_y = min(ys)
+    max_y = max(ys)
+
+    x_padding = max(8.0, (object_radius * 0.2))
+    # Include object symbol/circle area and a small visual buffer.
+    y_padding = max(14.0, object_radius + 8.0)
+
+    width = max(1.0, (max_x - min_x) + (x_padding * 2.0))
+    height = max(1.0, (max_y - min_y) + (y_padding * 2.0))
+
+    return (
+        min_x - x_padding,
+        min_y - y_padding,
+        width,
+        height,
+    )
+
+
+def _seconds_since_local_midnight(current_ts):
+    """Return local seconds past midnight for an epoch timestamp."""
+
+    ts = _safe_float(current_ts)
+    if ts is None:
+        return 0.0
+
+    try:
+        now_local = datetime.datetime.fromtimestamp(int(ts))
+    except Exception:
+        return 0.0
+
+    return (
+        (now_local.hour * 3600)
+        + (now_local.minute * 60)
+        + now_local.second
+        + (now_local.microsecond / 1_000_000.0)
+    )
+
+
+def _build_almanac_marker_group(
+    body_name,
+    symbol,
+    altitude_attr,
+    object_radius,
+    current_ts,
+    x_offset=0.0,
+    wrap_x=False,
+):
+    """Build one SVG marker group (sun or moon)."""
+
+    marker_alt = _safe_float(altitude_attr)
+    marker_point = None
+    if marker_alt is not None:
+        marker_point = _project_timealt_to_diagram(
+            _seconds_since_local_midnight(current_ts), marker_alt
+        )
+
+    transform_attr = ""
+    style_attr = ""
+    below_horizon_class = ""
+    if marker_point is None:
+        style_attr = ' style="display:none"'
+    else:
+        marker_x = marker_point[0]
+        if wrap_x:
+            marker_x = _wrap_diagram_x(marker_x, x_offset)
+        transform_attr = (
+            f' transform="translate({marker_x:.1f} {marker_point[1]:.1f})"'
+        )
+        if marker_alt is not None and marker_alt < 0:
+            below_horizon_class = " is-below-horizon"
+
+    marker_class = (
+        f"almanac-diagram-object almanac-diagram-object--{body_name}{below_horizon_class}"
+    )
+
+    return (
+        f'<g class="{marker_class}"{transform_attr}{style_attr}>'
+        f"<title>{html.escape(body_name.title())}</title>"
+        f'<circle class="almanac-diagram-object-core" r="{object_radius:.3f}"></circle>'
+        f'<text class="almanac-diagram-object-symbol" text-anchor="middle">{html.escape(symbol)}</text>'
+        "</g>"
+    )
+
+
+def _build_almanac_svg_markup(payload, current_ts):
+    """Return authoritative inline SVG markup for the almanac diagram."""
+
+    if payload is None:
+        payload = {}
+
+    sun_path_d = str(payload.get("sun_track_path_attr", "") or "").strip()
+    moon_path_d = str(payload.get("moon_track_path_attr", "") or "").strip()
+    if not sun_path_d:
+        sun_path_d = _default_track_path()
+    if not moon_path_d:
+        moon_path_d = _default_track_path()
+
+    vertical_scale = _safe_float(payload.get("diagram_vertical_scale_attr"))
+    if vertical_scale is None:
+        vertical_scale = _get_vertical_scale()
+
+    object_radius = _safe_float(payload.get("diagram_object_radius_attr"))
+    if object_radius is None:
+        object_radius = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("object_radius", 8.0))
+    if object_radius is None:
+        object_radius = 8.0
+
+    centering_mode = str(payload.get("diagram_centering_mode_attr", "off")).strip().lower()
+    use_x_offsets = centering_mode in ("now", "transit")
+    sun_x_offset = _safe_float(payload.get("sun_x_offset_attr"))
+    moon_x_offset = _safe_float(payload.get("moon_x_offset_attr"))
+    if sun_x_offset is None:
+        sun_x_offset = 0.0
+    if moon_x_offset is None:
+        moon_x_offset = 0.0
+
+    svg_width = _safe_float(payload.get("diagram_svg_width_attr"))
+    if svg_width is None:
+        svg_width = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_width", 180.0))
+    if svg_width is None:
+        svg_width = 180.0
+
+    viewbox_x, viewbox_y, viewbox_w, viewbox_h = _almanac_content_viewbox(
+        payload,
+        current_ts,
+        object_radius,
+        use_x_offsets,
+        sun_x_offset,
+        moon_x_offset,
+        vertical_scale,
+    )
+    # Keep canvas tightly fit to the content-fit viewBox. Height should follow
+    # curve geometry, not a fixed configured canvas value.
+    if viewbox_w > 0:
+        svg_height = max(1.0, svg_width * (viewbox_h / viewbox_w))
+    else:
+        svg_height = _safe_float(payload.get("diagram_svg_height_attr"))
+        if svg_height is None:
+            svg_height = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_height", 300.0))
+        if svg_height is None:
+            svg_height = 300.0
+
+    min_x = ALMANAC_DIAGRAM_DEFAULTS["min_x"]
+    max_x = ALMANAC_DIAGRAM_DEFAULTS["max_x"]
+
+    moon_group = _build_almanac_marker_group(
+        "moon",
+        "☾",
+        payload.get("moon_alt_attr"),
+        object_radius,
+        current_ts,
+        x_offset=moon_x_offset,
+        wrap_x=use_x_offsets,
+    )
+    sun_group = _build_almanac_marker_group(
+        "sun",
+        "☀",
+        payload.get("sun_alt_attr"),
+        object_radius,
+        current_ts,
+        x_offset=sun_x_offset,
+        wrap_x=use_x_offsets,
+    )
+
+    return (
+        f'<svg class="almanac-diagram-svg" width="{svg_width:.1f}" height="{svg_height:.1f}" '
+        f'viewBox="{viewbox_x:.1f} {viewbox_y:.1f} {viewbox_w:.1f} {viewbox_h:.1f}" '
+        'preserveAspectRatio="xMidYMid meet" role="img" aria-label="Sun and moon">'
+        f'<line class="almanac-diagram-horizon" x1="{min_x:.1f}" y1="0" x2="{max_x:.1f}" y2="0"></line>'
+        f'<path class="almanac-diagram-track almanac-diagram-track--moon" d="{html.escape(moon_path_d)}"></path>'
+        f'<path class="almanac-diagram-track almanac-diagram-track--sun" d="{html.escape(sun_path_d)}"></path>'
+        f"{moon_group}"
+        f"{sun_group}"
+        "</svg>"
+    )
+
+
+def _build_almanac_inline_markup(payload, image_root="."):
+    """Return compact, template-ready almanac markup block.
+
+    Includes sunrise/sunset stacks, moonrise/moonset placeholders, and the
+    Python-authored SVG diagram container with required dynamic data attributes.
+    """
+
+    if payload is None:
+        payload = {}
+
+    svg_markup = str(payload.get("almanac_svg_markup_attr", "") or "").strip()
+    if not svg_markup or svg_markup == "None":
+        return ""
+
+    sun_az_attr = str(payload.get("sun_az_attr", "") or "")
+    sun_alt_attr = str(payload.get("sun_alt_attr", "") or "")
+    moon_az_attr = str(payload.get("moon_az_attr", "") or "")
+    moon_alt_attr = str(payload.get("moon_alt_attr", "") or "")
+    diagram_vertical_scale_attr = str(payload.get("diagram_vertical_scale_attr", "") or "")
+    sun_x_offset_attr = str(payload.get("sun_x_offset_attr", "0.000") or "0.000")
+    moon_x_offset_attr = str(payload.get("moon_x_offset_attr", "0.000") or "0.000")
+    diagram_centering_mode_attr = str(payload.get("diagram_centering_mode_attr", "off") or "off")
+
+    image_root_clean = str(image_root or ".").rstrip("/")
+    sunrise_image = f"{image_root_clean}/images/sunrise.png"
+    sunset_image = f"{image_root_clean}/images/sunset.png"
+
+    return (
+        '<div class="almanac-sun-stack almanac-sun-stack--rise">'
+        '<div class="almanac-sun-time almanac-sun-time--rise almanac-time-row">'
+        f'<span class="sunrise-value"></span><span class="sunrise-set-image sunrise-set-image--rise"><img src="{html.escape(sunrise_image)}"></span>'
+        '</div>'
+        '<div class="almanac-sun-time almanac-sun-time--moonrise almanac-time-row">'
+        '<span class="moonrise-value"></span><span class="moonrise-set-image moonrise-set-image--rise" aria-hidden="true"></span>'
+        '</div>'
+        '</div>'
+        '<div class="almanac-diagram" '
+        f'data-sun-az="{html.escape(sun_az_attr)}" '
+        f'data-sun-alt="{html.escape(sun_alt_attr)}" '
+        f'data-moon-az="{html.escape(moon_az_attr)}" '
+        f'data-moon-alt="{html.escape(moon_alt_attr)}" '
+        f'data-vertical-scale="{html.escape(diagram_vertical_scale_attr)}" '
+        f'data-sun-x-offset="{html.escape(sun_x_offset_attr)}" '
+        f'data-moon-x-offset="{html.escape(moon_x_offset_attr)}" '
+        f'data-centering-mode="{html.escape(diagram_centering_mode_attr)}">'
+        f'{svg_markup}'
+        '</div>'
+        '<div class="almanac-sun-stack almanac-sun-stack--set">'
+        '<div class="almanac-sun-time almanac-sun-time--set almanac-time-row">'
+        f'<span class="sunrise-set-image"><img src="{html.escape(sunset_image)}"></span><span class="sunset-value"></span>'
+        '</div>'
+        '<div class="almanac-sun-time almanac-sun-time--moonset almanac-time-row">'
+        '<span class="moonrise-set-image moonrise-set-image--set" aria-hidden="true"></span><span class="moonset-value"></span>'
+        '</div>'
+        '</div>'
+    )
+
+
+def _safe_getattr_chain(obj, chain):
+    """Safely resolve nested attributes like ('sun', 'rise', 'raw')."""
+    cur = obj
+    for name in chain:
+        try:
+            cur = getattr(cur, name)
+        except Exception:
+            return None
+    return cur
+
+
+def detect_almanac_source(almanac_obj, has_extras=None):
+    """Best-effort provider label for UI display."""
+
+    if almanac_obj is None:
+        return "none"
+
+    def _has_skyfield_marker(obj):
+        if obj is None:
+            return False
+        markers = []
+        try:
+            markers.append(str(obj.__class__.__name__).lower())
+        except Exception:
+            pass
+        try:
+            markers.append(str(obj.__class__.__module__).lower())
+        except Exception:
+            pass
+        try:
+            markers.append(str(obj).lower())
+        except Exception:
+            pass
+        return any("skyfield" in m for m in markers)
+
+    # Check almanac wrapper and known nested body objects.
+    if _has_skyfield_marker(almanac_obj):
+        return "skyfield"
+
+    sun_obj = _safe_getattr_chain(almanac_obj, ("sun",))
+    moon_obj = _safe_getattr_chain(almanac_obj, ("moon",))
+    if _has_skyfield_marker(sun_obj) or _has_skyfield_marker(moon_obj):
+        return "skyfield"
+
+    if has_extras is True:
+        return "pyephem"
+
+    # If basic solar tags are available, we still have usable almanac data.
+    sun_rise_raw = _safe_getattr_chain(almanac_obj, ("sun", "rise", "raw"))
+    sun_set_raw = _safe_getattr_chain(almanac_obj, ("sun", "set", "raw"))
+    if sun_rise_raw is not None or sun_set_raw is not None:
+        return "pyephem"
+
+    sunrise_raw = _safe_getattr_chain(almanac_obj, ("sunrise", "raw"))
+    sunset_raw = _safe_getattr_chain(almanac_obj, ("sunset", "raw"))
+    if sunrise_raw is not None or sunset_raw is not None:
+        return "pyephem"
+
+    next_solstice = _safe_getattr_chain(almanac_obj, ("next_solstice", "raw"))
+    next_equinox = _safe_getattr_chain(almanac_obj, ("next_equinox", "raw"))
+    if next_solstice is not None or next_equinox is not None:
+        return "pyephem"
+
+    sun_az = _safe_getattr_chain(almanac_obj, ("sun", "az"))
+    sun_alt = _safe_getattr_chain(almanac_obj, ("sun", "alt"))
+    if sun_az is not None or sun_alt is not None:
+        return "pyephem"
+
+    return "none"
+
+
+def build_daylight_change_string(
+    almanac_obj,
+    current_ts,
+    hour_short="h",
+    minute_short="m",
+    second_short="s",
+    more_than_yesterday_label="more than yesterday",
+    less_than_yesterday_label="less than yesterday",
+):
+    """Build daylight change-vs-yesterday string only."""
+
+    if almanac_obj is None:
+        return "Daylight: --"
+
+    sunrise_ts = _safe_getattr_chain(almanac_obj, ("sun", "rise", "raw"))
+    if sunrise_ts is None:
+        sunrise_ts = _safe_getattr_chain(almanac_obj, ("sunrise", "raw"))
+
+    sunset_ts = _safe_getattr_chain(almanac_obj, ("sun", "set", "raw"))
+    if sunset_ts is None:
+        sunset_ts = _safe_getattr_chain(almanac_obj, ("sunset", "raw"))
+
+    if sunrise_ts is None or sunset_ts is None:
+        # Polar fallback if sun altitude is available.
+        sun_alt = _safe_float(_safe_getattr_chain(almanac_obj, ("sun", "alt")))
+        if sun_alt is None:
+            return "Daylight: --"
+        if sun_alt < 0:
+            return f"Daylight: 0{hour_short} 0{minute_short} 0{second_short} less than yesterday"
+        return f"Daylight: 0{hour_short} 0{minute_short} 0{second_short} more than yesterday"
+
+    try:
+        today_daylight = int(round(float(sunset_ts) - float(sunrise_ts)))
+    except Exception:
+        return "Daylight: --"
+
+    if today_daylight < 0:
+        today_daylight = 0
+
+    try:
+        now_ts = int(current_ts)
+    except Exception:
+        now_ts = int(time.time())
+    yesterday_ts = now_ts - 86400
+
+    yesterday_snapshot = None
+    try:
+        yesterday_snapshot = almanac_obj(almanac_time=yesterday_ts)
+    except Exception:
+        yesterday_snapshot = None
+
+    if yesterday_snapshot is None:
+        return "Daylight: --"
+
+    y_sunrise = _safe_getattr_chain(yesterday_snapshot, ("sun", "rise", "raw"))
+    if y_sunrise is None:
+        y_sunrise = _safe_getattr_chain(yesterday_snapshot, ("sunrise", "raw"))
+
+    y_sunset = _safe_getattr_chain(yesterday_snapshot, ("sun", "set", "raw"))
+    if y_sunset is None:
+        y_sunset = _safe_getattr_chain(yesterday_snapshot, ("sunset", "raw"))
+
+    if y_sunrise is None or y_sunset is None:
+        return "Daylight: --"
+
+    try:
+        yesterday_daylight = int(round(float(y_sunset) - float(y_sunrise)))
+    except Exception:
+        return "Daylight: --"
+
+    difference = today_daylight - yesterday_daylight
+    if difference == 0:
+        return "Daylight: no change from yesterday"
+
+    delta = abs(difference)
+    amt_minutes = (delta % 3600) // 60
+    amt_seconds = delta % 60
+    amt_str = f"{amt_minutes}{minute_short} {amt_seconds}{second_short}"
+    if difference > 0:
+        delta_str = f"{amt_str} {more_than_yesterday_label}"
+    else:
+        delta_str = f"{amt_str} {less_than_yesterday_label}"
+
+    return f"Daylight: {delta_str}"
+
+
+def build_almanac_diagram_payload(
+    almanac_obj,
+    current_ts,
+    sample_step_minutes=ALMANAC_DIAGRAM_SAMPLE_STEP_MINUTES,
+    moon_sample_step_minutes=ALMANAC_DIAGRAM_MOON_SAMPLE_STEP_MINUTES,
+):
+    """Compute almanac diagram payload in Python.
+
+    Returns a dict with current body positions, rise/transit/set positions,
+    sampled track points, and prebuilt SVG path `d` strings for sun and moon.
+    """
+
+    payload = {
+        "sun_az_attr": "",
+        "sun_alt_attr": "",
+        "moon_az_attr": "",
+        "moon_alt_attr": "",
+        "sun_rise_az_attr": "",
+        "sun_rise_alt_attr": "",
+        "sun_transit_az_attr": "",
+        "sun_transit_alt_attr": "",
+        "sun_set_az_attr": "",
+        "sun_set_alt_attr": "",
+        "moon_rise_az_attr": "",
+        "moon_rise_alt_attr": "",
+        "moon_transit_az_attr": "",
+        "moon_transit_alt_attr": "",
+        "moon_set_az_attr": "",
+        "moon_set_alt_attr": "",
+        "sun_track_points_attr": "",
+        "moon_track_points_attr": "",
+        "sun_track_path_attr": "",
+        "moon_track_path_attr": "",
+        "diagram_vertical_scale_attr": _format_attr(_get_vertical_scale()),
+        "diagram_object_radius_attr": _format_attr(
+            ALMANAC_DIAGRAM_DEFAULTS.get("object_radius")
+        ),
+        "diagram_svg_width_attr": _format_attr(
+            ALMANAC_DIAGRAM_DEFAULTS.get("svg_width")
+        ),
+        "diagram_svg_height_attr": _format_attr(
+            ALMANAC_DIAGRAM_DEFAULTS.get("svg_height")
+        ),
+        "sun_x_offset_attr": _format_attr(0.0),
+        "moon_x_offset_attr": _format_attr(0.0),
+        "diagram_centering_mode_attr": _get_apex_center_mode(),
+        "almanac_svg_markup_attr": "",
+    }
+
+    if almanac_obj is None:
+        return payload
+
+    # Current body positions
+    try:
+        payload["sun_az_attr"] = _format_attr(getattr(almanac_obj.sun, "az", None))
+        payload["sun_alt_attr"] = _format_attr(getattr(almanac_obj.sun, "alt", None))
+    except Exception:
+        pass
+
+    try:
+        payload["moon_az_attr"] = _format_attr(getattr(almanac_obj.moon, "az", None))
+        payload["moon_alt_attr"] = _format_attr(getattr(almanac_obj.moon, "alt", None))
+    except Exception:
+        pass
+
+    # Event epochs with fallback between modern and legacy tags
+    sun_rise_raw = _safe_getattr_chain(almanac_obj, ("sun", "rise", "raw"))
+    if sun_rise_raw is None:
+        sun_rise_raw = _safe_getattr_chain(almanac_obj, ("sunrise", "raw"))
+
+    sun_set_raw = _safe_getattr_chain(almanac_obj, ("sun", "set", "raw"))
+    if sun_set_raw is None:
+        sun_set_raw = _safe_getattr_chain(almanac_obj, ("sunset", "raw"))
+
+    sun_transit_raw = _safe_getattr_chain(almanac_obj, ("sun", "transit", "raw"))
+    moon_rise_raw = _safe_getattr_chain(almanac_obj, ("moon", "rise", "raw"))
+    moon_set_raw = _safe_getattr_chain(almanac_obj, ("moon", "set", "raw"))
+    moon_transit_raw = _safe_getattr_chain(almanac_obj, ("moon", "transit", "raw"))
+
+    # Event alt/az snapshots
+    def _fill_event(prefix, ts_raw, body_name):
+        if ts_raw is None:
+            return
+        try:
+            snapshot = almanac_obj(almanac_time=ts_raw)
+            body = getattr(snapshot, body_name, None)
+            if body is None:
+                return
+            payload[f"{prefix}_az_attr"] = _format_attr(getattr(body, "az", None))
+            payload[f"{prefix}_alt_attr"] = _format_attr(getattr(body, "alt", None))
+        except Exception:
+            return
+
+    _fill_event("sun_rise", sun_rise_raw, "sun")
+    _fill_event("sun_transit", sun_transit_raw, "sun")
+    _fill_event("sun_set", sun_set_raw, "sun")
+    _fill_event("moon_rise", moon_rise_raw, "moon")
+    _fill_event("moon_transit", moon_transit_raw, "moon")
+    _fill_event("moon_set", moon_set_raw, "moon")
+
+    # Sample tracks at fixed cadence from local midnight.
+    sun_step = max(1, int(sample_step_minutes))
+    moon_step = max(1, int(moon_sample_step_minutes))
+    try:
+        day_start = datetime.datetime.fromtimestamp(int(current_ts)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+    except Exception:
+        day_start = datetime.datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
+    day_start_ts = int(day_start.timestamp())
+
+    sun_track_points = []
+    moon_track_points = []
+    sample_minutes = sorted(
+        set(range(0, 24 * 60, sun_step)) | set(range(0, 24 * 60, moon_step))
+    )
+    for minute_offset in sample_minutes:
+        sample_dt = day_start + datetime.timedelta(minutes=minute_offset)
+        sample_ts = int(sample_dt.timestamp())
+        try:
+            sample_snapshot = almanac_obj(almanac_time=sample_ts)
+        except Exception:
+            continue
+
+        if minute_offset % sun_step == 0:
+            try:
+                sample_sun = sample_snapshot.sun
+                saz = _safe_float(getattr(sample_sun, "az", None))
+                salt = _safe_float(getattr(sample_sun, "alt", None))
+                if saz is not None and salt is not None:
+                    sun_track_points.append(f"{minute_offset:.0f},{salt:.3f}")
+            except Exception:
+                pass
+
+        if minute_offset % moon_step == 0:
+            try:
+                sample_moon = sample_snapshot.moon
+                maz = _safe_float(getattr(sample_moon, "az", None))
+                malt = _safe_float(getattr(sample_moon, "alt", None))
+                if maz is not None and malt is not None:
+                    moon_track_points.append(f"{minute_offset:.0f},{malt:.3f}")
+            except Exception:
+                pass
+
+    centering_mode = _get_apex_center_mode()
+    use_x_offsets = centering_mode in ("now", "transit")
+    sun_x_offset = 0.0
+    moon_x_offset = 0.0
+
+    if centering_mode == "now":
+        candidate_offsets = []
+        if sun_track_points:
+            candidate_offsets.append(_compute_apex_x_offset(sun_track_points))
+        if moon_track_points:
+            candidate_offsets.append(_compute_apex_x_offset(moon_track_points))
+        if candidate_offsets:
+            shared_offset = sum(candidate_offsets) / float(len(candidate_offsets))
+            sun_x_offset = shared_offset
+            moon_x_offset = shared_offset
+    elif centering_mode == "transit":
+        if sun_track_points:
+            sun_x_offset = _compute_apex_x_offset(sun_track_points)
+        if moon_track_points:
+            moon_x_offset = _compute_apex_x_offset(moon_track_points)
+
+    payload["sun_x_offset_attr"] = _format_attr(sun_x_offset)
+    payload["moon_x_offset_attr"] = _format_attr(moon_x_offset)
+    payload["diagram_centering_mode_attr"] = centering_mode
+
+    payload["sun_track_points_attr"] = "|".join(sun_track_points)
+    payload["moon_track_points_attr"] = "|".join(moon_track_points)
+    payload["sun_track_path_attr"] = _build_track_path_from_points(
+        sun_track_points, x_offset=sun_x_offset, wrap_x=use_x_offsets
+    )
+    payload["moon_track_path_attr"] = _build_track_path_from_points(
+        moon_track_points, x_offset=moon_x_offset, wrap_x=use_x_offsets
+    )
+
+    if not payload["sun_track_path_attr"]:
+        payload["sun_track_path_attr"] = _default_track_path()
+    if not payload["moon_track_path_attr"]:
+        payload["moon_track_path_attr"] = _default_track_path()
+
+    payload["almanac_svg_markup_attr"] = _build_almanac_svg_markup(
+        payload, current_ts=current_ts
+    )
+
+    return payload
+
+
+def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, image_root="."):
+    """Return a template-ready almanac diagram context dictionary.
+
+    This centralizes all variables previously assembled in
+    ``almanac_diagram_data.inc`` so templates can consume a consistent set of
+    attributes without relying on an extra include file.
+    """
+
+    defaults = get_almanac_diagram_defaults()
+
+    context = {
+        "almanac_data_source": "none",
+        "sun_az_attr": "",
+        "sun_alt_attr": "",
+        "moon_az_attr": "",
+        "moon_alt_attr": "",
+        "sun_rise_az_attr": "",
+        "sun_rise_alt_attr": "",
+        "sun_transit_az_attr": "",
+        "sun_transit_alt_attr": "",
+        "sun_set_az_attr": "",
+        "sun_set_alt_attr": "",
+        "moon_rise_az_attr": "",
+        "moon_rise_alt_attr": "",
+        "moon_transit_az_attr": "",
+        "moon_transit_alt_attr": "",
+        "moon_set_az_attr": "",
+        "moon_set_alt_attr": "",
+        "sun_track_points_attr": "",
+        "moon_track_points_attr": "",
+        "sun_track_path_attr": str(defaults.get("sun_track_path_attr", "") or "").strip(),
+        "moon_track_path_attr": str(defaults.get("moon_track_path_attr", "") or "").strip(),
+        "diagram_vertical_scale_attr": str(defaults.get("vertical_scale", "") or "").strip(),
+        "diagram_object_radius_attr": str(defaults.get("object_radius", "") or "").strip(),
+        "almanac_svg_markup_attr": str(defaults.get("almanac_svg_markup_attr", "") or "").strip(),
+        "sun_x_offset_attr": "0.000",
+        "moon_x_offset_attr": "0.000",
+        "diagram_centering_mode_attr": str(defaults.get("center_apex_mode", "off") or "off").strip().lower(),
+        "almanac_inline_markup_attr": "",
+    }
+
+    if not context["diagram_vertical_scale_attr"] or context["diagram_vertical_scale_attr"] == "None":
+        context["diagram_vertical_scale_attr"] = "2.5"
+    if not context["diagram_object_radius_attr"] or context["diagram_object_radius_attr"] == "None":
+        context["diagram_object_radius_attr"] = "48.0"
+    if not context["sun_track_path_attr"]:
+        context["sun_track_path_attr"] = _default_track_path()
+    if not context["moon_track_path_attr"]:
+        context["moon_track_path_attr"] = _default_track_path()
+    if not context["almanac_svg_markup_attr"] or context["almanac_svg_markup_attr"] == "None":
+        context["almanac_svg_markup_attr"] = _build_almanac_svg_markup(context)
+    context["almanac_inline_markup_attr"] = _build_almanac_inline_markup(
+        context, image_root=image_root
+    )
+    if context["diagram_centering_mode_attr"] not in ("off", "now", "transit"):
+        context["diagram_centering_mode_attr"] = "off"
+
+    if has_extras is None:
+        has_extras = bool(getattr(almanac_obj, "hasExtras", False))
+
+    try:
+        context["almanac_data_source"] = detect_almanac_source(almanac_obj, has_extras)
+    except Exception:
+        context["almanac_data_source"] = "none"
+
+    if almanac_obj is None:
+        return context
+
+    payload = None
+    try:
+        payload = build_almanac_diagram_payload(almanac_obj, current_ts)
+    except Exception:
+        payload = None
+
+    if isinstance(payload, dict):
+        payload_keys = (
+            "sun_az_attr",
+            "sun_alt_attr",
+            "moon_az_attr",
+            "moon_alt_attr",
+            "sun_rise_az_attr",
+            "sun_rise_alt_attr",
+            "sun_transit_az_attr",
+            "sun_transit_alt_attr",
+            "sun_set_az_attr",
+            "sun_set_alt_attr",
+            "moon_rise_az_attr",
+            "moon_rise_alt_attr",
+            "moon_transit_az_attr",
+            "moon_transit_alt_attr",
+            "moon_set_az_attr",
+            "moon_set_alt_attr",
+            "sun_track_points_attr",
+            "moon_track_points_attr",
+            "sun_track_path_attr",
+            "moon_track_path_attr",
+            "diagram_vertical_scale_attr",
+            "diagram_object_radius_attr",
+            "almanac_svg_markup_attr",
+            "sun_x_offset_attr",
+            "moon_x_offset_attr",
+            "diagram_centering_mode_attr",
+            "almanac_inline_markup_attr",
+        )
+
+        for key in payload_keys:
+            if key in payload:
+                value = payload.get(key)
+                if value is None:
+                    continue
+                if isinstance(value, str):
+                    context[key] = value
+                else:
+                    context[key] = str(value)
+
+    if context["diagram_centering_mode_attr"] not in ("off", "now", "transit"):
+        context["diagram_centering_mode_attr"] = "off"
+
+    context["almanac_inline_markup_attr"] = _build_almanac_inline_markup(
+        context, image_root=image_root
+    )
+
+    if context["almanac_data_source"] == "none":
+        if (
+            context["sun_az_attr"]
+            or context["moon_az_attr"]
+            or context["sun_track_path_attr"]
+            or context["moon_track_path_attr"]
+            or context["sun_track_points_attr"]
+            or context["moon_track_points_attr"]
+        ):
+            context["almanac_data_source"] = "pyephem"
+
+    return context
 
 
 class getData(SearchList):
@@ -411,6 +1478,7 @@ class getData(SearchList):
         extras_dict = _validate_and_fix_legacy_options(
             extras_dict, label_generic_dict
         )
+        _apply_almanac_diagram_extras_overrides(extras_dict)
         
         db_binder = self.generator.db_binder
 
@@ -1107,7 +2175,14 @@ class getData(SearchList):
             else:
                 at_sunshineDur_highest_year = ["N/A", 0.0]
         except Exception as e:
-            log.debug(f"Skipping sunshine duration stats: {e}")
+            # Missing sunshine extension table is expected on systems without
+            # sunshineDur schema support.
+            if "archive_day_sunshineDur" in str(e):
+                log.debug(
+                    "Sunshine duration stats not available: archive_day_sunshineDur table not found."
+                )
+            else:
+                log.debug(f"Skipping sunshine duration stats: {e}")
             suniest_day = [
                 calendar.timegm(time.gmtime()),
                 locale.format_string("%.2f", 0),
@@ -1452,10 +2527,17 @@ class getData(SearchList):
                     def xweather_coded_weather(data):
                         """Convert Aeris/Xweather codes to human readable strings."""
                         # https://www.xweather.com/docs/weather-api/reference/weather-codes
+                        if not isinstance(data, str) or not data:
+                            return ""
+
+                        parts = data.split(":")
+                        if len(parts) < 3:
+                            return ""
+
                         output = ""
-                        coverage_code = data.split(":")[0]
-                        intensity_code = data.split(":")[1]
-                        weather_code = data.split(":")[2]
+                        coverage_code = parts[0]
+                        intensity_code = parts[1]
+                        weather_code = parts[2]
 
                         cloud_dict = {
                             "CL": label_dict["forecast_cloud_code_CL"],
@@ -1530,18 +2612,21 @@ class getData(SearchList):
 
                         # Add the coverage if it's present, and full observation
                         # forecast is requested
-                        if coverage_code:
+                        if coverage_code and coverage_code in coverage_dict:
                             output += coverage_dict[coverage_code] + " "
                         # Add the intensity if it's present
-                        if intensity_code:
+                        if intensity_code and intensity_code in intensity_dict:
                             output += intensity_dict[intensity_code] + " "
                         # Weather output
-                        output += weather_dict[weather_code]
-                        return output
+                        output += weather_dict.get(weather_code, "")
+                        return output.strip()
 
                     def xweather_icon(data):
                         """Get the Aeris/Xweather icon description from the icon list."""
                         # https://www.xweather.com/docs/weather-api/reference/icon-list
+                        if not isinstance(data, str) or not data:
+                            return "unknown"
+
                         iconlist_file_path = os.path.join(
                             config_dict["WEEWX_ROOT"],
                             skin_dict["SKIN_ROOT"],
@@ -1552,7 +2637,7 @@ class getData(SearchList):
                             icon_name = data.split(".")[0]  # Remove .png
                             with open(iconlist_file_path, "r", encoding="utf-8") as icon_fh:
                                 icon_dict = json.load(icon_fh)
-                            return icon_dict[icon_name]
+                            return icon_dict.get(icon_name, "unknown")
                         else:
                             log.error(
                                 f"aeris-icon-list.json is missing in {iconlist_file_path}"

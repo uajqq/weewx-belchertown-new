@@ -231,7 +231,6 @@ files = [
             "skins/Belchertown/celestial.inc",
             "skins/Belchertown/daylight.inc",
             "skins/Belchertown/almanac_daylight_data.inc",
-            "skins/Belchertown/almanac_diagram_data.inc",
             "skins/Belchertown/charts.conf.example",
             "skins/Belchertown/page-header.inc",
             "skins/Belchertown/manifest.json.tmpl",
@@ -253,7 +252,12 @@ files = [
         ],
     ),
     ("skins/Belchertown/pi", ["skins/Belchertown/pi/index.html.tmpl"]),
-    ("skins/Belchertown/records", ["skins/Belchertown/records/index.html.tmpl"]),
+    (
+        "skins/Belchertown/records",
+        [
+            "skins/Belchertown/records/index.html.tmpl",
+        ],
+    ),
     ("skins/Belchertown/reports", ["skins/Belchertown/reports/index.html.tmpl"]),
     (
         "skins/Belchertown/js",
