@@ -263,6 +263,10 @@ files = [
         "skins/Belchertown/js",
         [
             "skins/Belchertown/js/belchertown.js.tmpl",
+            "skins/Belchertown/js/belchertown-utils.js.tmpl",
+            "skins/Belchertown/js/belchertown-forecast.js.tmpl",
+            "skins/Belchertown/js/belchertown-mqtt.js.tmpl",
+            "skins/Belchertown/js/belchertown-charts.js.tmpl",
             "skins/Belchertown/js/index.html",
             "skins/Belchertown/js/responsive-menu.js",
         ],

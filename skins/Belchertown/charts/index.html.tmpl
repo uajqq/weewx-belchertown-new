@@ -15,15 +15,27 @@
                     chart = "$Extras.chart_page_default_chartgroup";
                 }
                 var thisPageCharts = chartgroups_raw[chart];
+                var renderedChartGroups = {};
+
+                function renderChartGroupOnce(chartgroup, prependRenderTo) {
+                    if (renderedChartGroups[chartgroup]) {
+                        return;
+                    }
+
+                    renderedChartGroups[chartgroup] = true;
+                    showChart(chartgroup, prependRenderTo);
+                }
 
                 jQuery(document).ready(function() {
                     if (chart == "all") {
-                        // Build all charts
+                        // Build all chart sections first, then lazy-render by visibility.
                         var i = 0;
-                        for (var chartgroup in chartgroups_raw) {
-                            // Rename the chart-outer div to remove CSS
-                            jQuery(".chart-outer").attr("class", "chart-outer-all");
+                        var chartGroupEntries = [];
 
+                        // Rename the chart-outer div to remove CSS
+                        jQuery(".chart-outer").attr("class", "chart-outer-all");
+
+                        for (var chartgroup in chartgroups_raw) {
                             var page_content = "";
                             if (chartpage_content[chartgroup]) {
                                 page_content = chartpage_content[chartgroup];
@@ -49,11 +61,36 @@
                                 jQuery("." + chartgroup).append('<div class="col-sm-6"><div id="' + chartgroup + "_" + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
                             });
 
-                            // Render the charts with the prepend_renderTo set to true
-                            showChart(chartgroup, true);
+                            chartGroupEntries.push({
+                                chartgroup: chartgroup,
+                                element: jQuery("." + chartgroup + "_outer").get(0),
+                            });
 
                             i++;
                         };
+
+                        // Render first chart group immediately for fast first paint.
+                        if (chartGroupEntries.length > 0) {
+                            renderChartGroupOnce(chartGroupEntries[0].chartgroup, true);
+                        }
+
+                        // For remaining groups, register visibility observers progressively.
+                        var deferredObserverTasks = chartGroupEntries.slice(1).map(function(entry) {
+                            return function() {
+                                belchertown_run_when_visible(entry.element, function() {
+                                    renderChartGroupOnce(entry.chartgroup, true);
+                                }, {
+                                    rootMargin: "500px 0px",
+                                    threshold: 0.01,
+                                    fallbackDelayMs: 15000,
+                                });
+                            };
+                        });
+                        belchertown_progressive_queue(deferredObserverTasks, {
+                            batchSize: 2,
+                            delayMs: 30,
+                            useIdleCallback: true,
+                        });
                     } else {
                         // Loop through the chart group for this page and add the chart divs to the page
                         try {
@@ -67,8 +104,14 @@
                             // Set page content
                             jQuery(".chartpage-content").html(chartpage_content[chart]);
 
-                            // Render the charts
-                            showChart(chart);
+                            // Render when the chart area is near viewport.
+                            belchertown_run_when_visible(".chart-outer", function() {
+                                renderChartGroupOnce(chart, false);
+                            }, {
+                                rootMargin: "450px 0px",
+                                threshold: 0.01,
+                                fallbackDelayMs: 6000,
+                            });
                         } catch (err) {
                             console.log("ERROR: Cannot add charts from [" + chart + "] chart group: " + err.message);
                         }

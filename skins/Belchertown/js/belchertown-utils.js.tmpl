@@ -1,0 +1,50 @@
+/*
+Cheetah template code starts with #.
+That code is commented out in this file so that code
+editors can error check and format the JavaScript.
+Code that starts with # is evaluated by the Cheetah
+generator even if within a comment.
+
+#encoding "UTF-8"
+*/
+
+var pages = ["charts", "records", "reports", "about", "pi"];
+var pageName = "";
+
+// If this page we're on now is listed as a subpage, use ".." to get to the relative root
+function get_relative_url() {
+    var sPath = window.location.pathname.replace(/\/$/, "");
+    pageName = sPath.substring(sPath.lastIndexOf('/') + 1);
+    const relative_url = pages.includes(pageName) ? ".." : ".";
+
+    // belchertown_debug is defined in belchertown.js.tmpl and may not exist yet
+    // when this utility file is parsed.
+    if (typeof belchertown_debug === "function") {
+        belchertown_debug("URL: Relative URL is: " + relative_url);
+    }
+
+    return relative_url;
+}
+
+// Get the URL variables. Source: https://stackoverflow.com/a/26744533/1177153
+function getURLvar(k) {
+    var p = {};
+    location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(s, k, v) {p[k] = v});
+    return k ? p[k] : p;
+}
+
+// Title case strings. https://stackoverflow.com/a/45253072/1177153
+function titleCase(str) {
+    return str.toLowerCase().split(' ').map(function(word) {
+        return word.replace(word[0], word[0].toUpperCase());
+    }).join(' ');
+}
+
+function tzAdjustedMoment(input) {
+    let tz = "$moment_js_tz";
+    if (!tz) {
+        return moment.unix(input).utcOffset($moment_js_utc_offset);
+    } else {
+        return moment.unix(input).tz(tz);
+    }
+}

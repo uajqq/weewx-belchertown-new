@@ -46,6 +46,13 @@
 #set global $relative_url = ".."
 #end if
 
+## Stable asset version for browser caching (avoid per-request cache busting)
+#if str($belchertown_version).strip() != ""
+#set $asset_version = $belchertown_version
+#else
+#set $asset_version = "1"
+#end if
+
 
 <!DOCTYPE html>
 <html lang="$system_locale_js" prefix="og: http://ogp.me/ns# fb: http://ogp.me/ns/fb#">
@@ -80,13 +87,13 @@
         <link rel='stylesheet' href='//stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css' type='text/css' media='all' />
         <link rel='stylesheet' href='//cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/css/weather-icons.min.css?ver=4.7.4' type='text/css' media='all' />
         <link rel='stylesheet' href='//stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css' type='text/css' media='all' />
-        <link rel='stylesheet' href='$relative_url/style.css?ver=#echo int( time.time() ) #' type='text/css' media='all' id="belchertownStyle" />
-        <link rel='stylesheet' href='$relative_url/belchertown-dark.min.css?ver=#echo int( time.time() ) #' type='text/css' media='all' id="belchertownStyle" />
+        <link rel='stylesheet' href='$relative_url/style.css?ver=$asset_version' type='text/css' media='all' id="belchertownStyle" />
+        <link rel='stylesheet' href='$relative_url/belchertown-dark.min.css?ver=$asset_version' type='text/css' media='all' id="belchertownStyle" />
         #if $page == "kiosk"
-        <link rel='stylesheet' href='$relative_url/kiosk.css?ver=#echo int( time.time() ) #' type='text/css' media='all' id="belchertownCustomStyle" />
+        <link rel='stylesheet' href='$relative_url/kiosk.css?ver=$asset_version' type='text/css' media='all' id="belchertownCustomStyle" />
         #end if
         #if $custom_css_exists
-        <link rel='stylesheet' href='$relative_url/custom.css?ver=#echo int( time.time() ) #' type='text/css' media='all' id="belchertownCustomStyle" />
+        <link rel='stylesheet' href='$relative_url/custom.css?ver=$asset_version' type='text/css' media='all' id="belchertownCustomStyle" />
         #end if
 
         <link rel="manifest" href="$relative_url/manifest.json" crossorigin="use-credentials">
@@ -103,21 +110,28 @@
         <![endif]-->
         <script type='text/javascript' src="//ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
         <script type='text/javascript' src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment-with-locales.min.js"></script>
+        #if $moment_js_tz and str($moment_js_tz).strip() != ""
         <script type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.33/moment-timezone-with-data.min.js"></script>
-        #if $page == "pi" or $page == "home" or $page == "kiosk" and $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
+        #end if
+        #if ($page == "pi" or $page == "home" or $page == "kiosk") and $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
         <script type='text/javascript' src="//cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
         #end if
-        #if $page != "kiosk"
+        #if $page != "kiosk" and $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1' and ($page == "home" or $page == "charts")
         <script type='text/javascript' src='//code.highcharts.com/stock/12.6/highstock.js'></script>
         <script type='text/javascript' src='//code.highcharts.com/12.6/highcharts-more.js'></script>
-        <script type='text/javascript' src='//code.highcharts.com/12.6/modules/exporting.js'></script>
-        <script type='text/javascript' src="//code.highcharts.com/12.6/modules/export-data.js"></script>
-        <script type='text/javascript' src="//code.highcharts.com/12.6/modules/accessibility.js"></script>
-        <script type='text/javascript' src='//code.highcharts.com/12.6/modules/solid-gauge.js'></script>
-        <script type='text/javascript' src='//code.highcharts.com/12.6/modules/windbarb.js'></script>
         #end if
         <script type='text/javascript' src='//stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js'></script>
-        <script type='text/javascript' src='$relative_url/js/belchertown.js?#echo int( time.time() )#'></script>
+        <script type='text/javascript' src='$relative_url/js/belchertown-utils.js?ver=$asset_version'></script>
+        <script type='text/javascript' src='$relative_url/js/belchertown.js?ver=$asset_version'></script>
+        #if ($page == "home" or $page == "pi" or $page == "kiosk") and $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
+        <script type='text/javascript' src='$relative_url/js/belchertown-forecast.js?ver=$asset_version'></script>
+        #end if
+        #if ($page == "home" or $page == "pi" or $page == "kiosk") and $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
+        <script type='text/javascript' src='$relative_url/js/belchertown-mqtt.js?ver=$asset_version'></script>
+        #end if
+        #if $page != "kiosk" and $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1' and ($page == "home" or $page == "charts")
+        <script type='text/javascript' src='$relative_url/js/belchertown-charts.js?ver=$asset_version'></script>
+        #end if
         #if $page == "pi"
         <script>
             // Set the session variables for the theme

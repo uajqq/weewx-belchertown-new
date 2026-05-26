@@ -21,6 +21,16 @@
     moment.locale(moment_locale);
 
     var homepage_chartgroup = "$Extras.highcharts_homepage_chartgroup";
+    var homepageChartsInitialized = false;
+
+    function renderHomepageCharts(forceRender = false) {
+        if (!forceRender && homepageChartsInitialized) {
+            return;
+        }
+
+        showChart(homepage_chartgroup);
+        homepageChartsInitialized = true;
+    }
 
     function autoRefreshPage() {
         location.reload();
@@ -80,7 +90,14 @@
                 thisPageCharts.forEach(chartID => {
                     jQuery(".chart-outer").append('<div class="homepage-chart-panel"><div id="' + chartID + '" style="width:100%;height:100%;"></div></div>');
                 });
-                showChart(homepage_chartgroup);
+
+                belchertown_run_when_visible(".homepage-card--charts", function() {
+                    renderHomepageCharts(false);
+                }, {
+                    rootMargin: "350px 0px",
+                    threshold: 0.01,
+                    fallbackDelayMs: 8000,
+                });
             } catch (err) {
                 console.log("ERROR: Cannot add charts from [" + homepage_chartgroup + "] chart group: " + err.message);
             }
@@ -103,7 +120,7 @@
                         ajaximages(); // Update radar and home page hook "img src" if present
                         connect(); // Restart mqtt after WeeWX data's re-loaded
                         // #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
-                        showChart(homepage_chartgroup);
+                        renderHomepageCharts(true);
                         // #end if
                     }).catch(function(e) {
                         console.log(e);

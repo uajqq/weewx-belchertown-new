@@ -1,0 +1,1494 @@
+if (typeof Highcharts !== "undefined") {
+    Highcharts.setOptions({
+        time: {
+            timezoneOffset: $highcharts_timezoneoffset
+        },
+        chart: {
+            style: {
+                fontFamily: 'Roboto, sans-serif',
+                fontSize: '14px',
+                fontWeight: '500'
+            }
+        },
+        title: {
+            style: {
+                fontFamily: 'Roboto, sans-serif',
+                fontSize: '20px'
+            }
+        },
+        subtitle: {
+            style: {
+                fontFamily: 'Roboto, sans-serif',
+                fontWeight: '300'
+            }
+        },
+        lang: {
+            months: moment.months(),
+            shortMonths: moment.monthsShort(),
+            weekdays: moment.weekdays(),
+            shortWeekdays: moment.weekdaysShort(),
+            decimalPoint: "$highcharts_decimal",
+            thousandsSep: "$highcharts_thousands"
+        }
+    });
+}
+
+function belchertown_is_element_near_viewport(element, rootMarginPx = 0) {
+    if (!element || !element.getBoundingClientRect) {
+        return true;
+    }
+
+    var rect = element.getBoundingClientRect();
+    var margin = parseInt(rootMarginPx, 10);
+    if (!isFinite(margin)) {
+        margin = 0;
+    }
+
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    return rect.top <= (viewportHeight + margin) && rect.bottom >= (0 - margin);
+}
+
+function belchertown_run_when_visible(target, onVisible, config = {}) {
+    var rootMargin = typeof config.rootMargin === "string" ? config.rootMargin : "400px 0px";
+    var threshold = typeof config.threshold === "number" ? config.threshold : 0.01;
+    var fallbackDelayMs = typeof config.fallbackDelayMs === "number" ? config.fallbackDelayMs : 3000;
+    var element = (typeof target === "string") ? document.querySelector(target) : target;
+    var done = false;
+    var observer = null;
+    var fallbackTimer = null;
+
+    var complete = function() {
+        if (done) {
+            return;
+        }
+        done = true;
+
+        if (observer && observer.disconnect) {
+            observer.disconnect();
+        }
+        if (fallbackTimer) {
+            clearTimeout(fallbackTimer);
+        }
+
+        try {
+            onVisible();
+        } catch (err) {
+            belchertown_debug("LazyLoad: onVisible callback failed: " + err.message);
+        }
+    };
+
+    if (!element) {
+        complete();
+        return {
+            disconnect: function() {},
+            triggerNow: complete,
+        };
+    }
+
+    // Immediate fast-path if already near viewport.
+    var rootMarginPx = parseInt(String(rootMargin).split("px")[0], 10);
+    if (belchertown_is_element_near_viewport(element, isFinite(rootMarginPx) ? rootMarginPx : 0)) {
+        complete();
+        return {
+            disconnect: function() {},
+            triggerNow: complete,
+        };
+    }
+
+    if ("IntersectionObserver" in window) {
+        observer = new IntersectionObserver(function(entries) {
+            for (var i = 0; i < entries.length; i++) {
+                if (entries[i].isIntersecting || entries[i].intersectionRatio > 0) {
+                    complete();
+                    break;
+                }
+            }
+        }, {
+            root: null,
+            rootMargin: rootMargin,
+            threshold: threshold,
+        });
+        observer.observe(element);
+    }
+
+    // Safety fallback: eventually render even if observer is unavailable or never fires.
+    fallbackTimer = setTimeout(function() {
+        complete();
+    }, Math.max(0, fallbackDelayMs));
+
+    return {
+        disconnect: function() {
+            if (observer && observer.disconnect) {
+                observer.disconnect();
+            }
+            if (fallbackTimer) {
+                clearTimeout(fallbackTimer);
+            }
+        },
+        triggerNow: complete,
+    };
+}
+
+function belchertown_progressive_queue(tasks, config = {}) {
+    var queue = Array.isArray(tasks) ? tasks.slice() : [];
+    var batchSize = parseInt(config.batchSize, 10);
+    var delayMs = parseInt(config.delayMs, 10);
+    var useIdleCallback = (typeof config.useIdleCallback === "boolean") ? config.useIdleCallback : true;
+
+    if (!isFinite(batchSize) || batchSize < 1) {
+        batchSize = 1;
+    }
+    if (!isFinite(delayMs) || delayMs < 0) {
+        delayMs = 0;
+    }
+
+    var runBatch = function() {
+        var count = 0;
+        while (queue.length > 0 && count < batchSize) {
+            var task = queue.shift();
+            try {
+                if (typeof task === "function") {
+                    task();
+                }
+            } catch (err) {
+                belchertown_debug("LazyLoad: progressive task failed: " + err.message);
+            }
+            count++;
+        }
+
+        if (queue.length > 0) {
+            scheduleNext();
+        }
+    };
+
+    var scheduleNext = function() {
+        if (useIdleCallback && typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(function() {
+                runBatch();
+            }, {timeout: Math.max(1, delayMs || 1)});
+        } else {
+            setTimeout(runBatch, delayMs);
+        }
+    };
+
+    scheduleNext();
+
+    return {
+        remaining: function() {
+            return queue.length;
+        },
+        flush: function() {
+            while (queue.length > 0) {
+                var task = queue.shift();
+                if (typeof task === "function") {
+                    task();
+                }
+            }
+        },
+    };
+}
+
+var belchertown_highcharts_module_promises = {};
+
+function belchertown_load_script_once(moduleKey, moduleUrl) {
+    if (belchertown_highcharts_module_promises[moduleKey]) {
+        return belchertown_highcharts_module_promises[moduleKey];
+    }
+
+    belchertown_highcharts_module_promises[moduleKey] = new Promise(function(resolve, reject) {
+        var existing = document.querySelector('script[data-belchertown-module="' + moduleKey + '"]');
+        if (existing) {
+            if (existing.getAttribute("data-loaded") === "1") {
+                resolve();
+                return;
+            }
+            existing.addEventListener("load", function() {
+                existing.setAttribute("data-loaded", "1");
+                resolve();
+            }, {once: true});
+            existing.addEventListener("error", function() {
+                reject(new Error("Failed loading module " + moduleKey));
+            }, {once: true});
+            return;
+        }
+
+        var script = document.createElement("script");
+        script.src = moduleUrl;
+        script.async = false;
+        script.setAttribute("data-belchertown-module", moduleKey);
+        script.onload = function() {
+            script.setAttribute("data-loaded", "1");
+            resolve();
+        };
+        script.onerror = function() {
+            reject(new Error("Failed loading module " + moduleKey));
+        };
+        document.head.appendChild(script);
+    });
+
+    return belchertown_highcharts_module_promises[moduleKey];
+}
+
+function belchertown_detect_highcharts_modules(chartData) {
+    var modules = new Set();
+
+    if (!chartData || typeof chartData !== "object") {
+        return modules;
+    }
+
+    jQuery.each(chartData, function(plotname, plotData) {
+        if (!plotData || typeof plotData !== "object" || !plotData.options) {
+            return true;
+        }
+
+        if (plotData.options.type === "gauge") {
+            modules.add("solid-gauge");
+        }
+
+        if (String(plotData.options.exporting).toLowerCase() === "true") {
+            modules.add("exporting");
+            modules.add("export-data");
+            modules.add("accessibility");
+        }
+
+        if (plotData.series && typeof plotData.series === "object") {
+            jQuery.each(plotData.series, function(seriesName, seriesData) {
+                if (seriesData && seriesData.obsType === "windBarb") {
+                    modules.add("windbarb");
+                }
+                return true;
+            });
+        }
+
+        return true;
+    });
+
+    return modules;
+}
+
+function belchertown_ensure_highcharts_modules(moduleSet) {
+    if (typeof Highcharts === "undefined") {
+        return Promise.reject(new Error("Highcharts core is not available"));
+    }
+
+    var modules = Array.from(moduleSet || []);
+    if (modules.length === 0) {
+        return Promise.resolve();
+    }
+
+    var moduleBase = "//code.highcharts.com/12.6/modules/";
+    var loaderPromises = modules.map(function(moduleKey) {
+        return belchertown_load_script_once(moduleKey, moduleBase + moduleKey + ".js");
+    });
+
+    return Promise.all(loaderPromises);
+}
+
+function showChart(json_file, prepend_renderTo = false) {
+
+    // Relative URL by finding what page we're on currently.
+    jQuery.getJSON(get_relative_url() + '/json/' + json_file + '.json', function(data) {
+
+        var renderCharts = function() {
+
+        // Loop through each chart name (e.g. chart1, chart2, chart3)
+        jQuery.each(data, function(plotname, obsname) {
+            var observation_type = undefined;
+            xAxis_categories = [];
+            plot_tooltip_date_format = undefined;
+
+            try {
+
+            // Ignore the Belchertown Version since this "plot" has no other options
+            if (plotname == "belchertown_version") {
+                return true;
+            }
+
+            // Ignore the generated timestamp since this "plot" has no other options
+            if (plotname == "generated_timestamp") {
+                return true;
+            }
+
+            // Ignore the chartgroup_title since this "plot" has no other options
+            if (plotname == "chartgroup_title") {
+                return true;
+            }
+
+            // Set the chart's tooltip date time format, then return since this "plot" has no other options
+            if (plotname == "tooltip_date_format") {
+                tooltip_date_format = obsname;
+                return true;
+            }
+
+            // Set the chart colors, then return right away since this "plot" has no other options
+            if (plotname == "colors") {
+                colors = obsname.split(",");
+                return true;
+            }
+
+            // Set the chart credits, then return right away since this "plot" has no other options
+            if (plotname == "credits") {
+                credits = obsname.split(",")[0];
+                return true;
+            }
+
+            // Set the chart credits url, then return right away since this "plot" has no other options
+            if (plotname == "credits_url") {
+                credits_url = obsname.split(",")[0];
+                return true;
+            }
+
+            // Set the chart credits position, then return right away since this "plot" has no other options
+            if (plotname == "credits_position") {
+                credits_position = obsname;
+                return true;
+            }
+
+            // Loop through each chart options
+            jQuery.each(data[plotname]["options"], function(optionName, optionVal) {
+                switch (optionName) {
+                    case "type":
+                        type = optionVal;
+                        break;
+                    case "renderTo":
+                        renderTo = optionVal;
+                        break;
+                    case "title":
+                        title = optionVal;
+                        break;
+                    case "subtitle":
+                        subtitle = optionVal;
+                        break;
+                    case "yAxis_label":
+                        yAxis_label = optionVal;
+                        break;
+                    case "chart_group":
+                        chart_group = optionVal;
+                        break;
+                    case "gapsize":
+                        gapsize = optionVal;
+                        break;
+                    case "connectNulls":
+                        connectNulls = optionVal;
+                        break;
+                    case "rounding":
+                        rounding = optionVal;
+                        break;
+                    case "xAxis_categories":
+                        xAxis_categories = optionVal;
+                        break;
+                    case "plot_tooltip_date_format":
+                        plot_tooltip_date_format = optionVal;
+                        break;
+                    case "css_class":
+                        css_class = optionVal;
+                        break;
+                    case "css_height":
+                        css_height = optionVal;
+                        break;
+                    case "css_width":
+                        css_width = optionVal;
+                        break;
+                    case "legend":
+                        legend_enabled = optionVal;
+                        break;
+                    case "exporting":
+                        exporting_enabled = optionVal;
+                        break;
+                }
+            });
+
+            // Handle any per-chart date time format override
+            if (typeof plot_tooltip_date_format !== "undefined") {
+                var tooltip_date_format = plot_tooltip_date_format;
+            }
+
+            var options = {
+                chart: {
+                    renderTo: '',
+                    spacing: [5, 10, 10, 10],
+                    type: '',
+                    zooming: {
+                        mouseWheel: {
+                            enabled: false
+                        }
+                    }
+                },
+
+                exporting: {
+                    chartOptions: {
+                        chart: {
+                            events: {
+                                load: function() {
+                                    this.title.update({style: {color: '#e5554e'}});
+
+                                    if (sessionStorage.getItem('currentTheme') === 'dark') {
+                                        var darktheme_textcolor = '#fff';
+                                        for (var i = this.yAxis.length - 1; i >= 0; i--) {
+                                            this.yAxis[i].update({
+                                                title: {style: {color: darktheme_textcolor}},
+                                                labels: {style: {color: darktheme_textcolor}},
+                                                gridLineColor: '#707073',
+                                                tickColor: '#707073'
+                                            });
+                                        }
+
+                                        for (var i = this.xAxis.length - 1; i >= 0; i--) {
+                                            this.xAxis[i].update({
+                                                title: {style: {color: darktheme_textcolor}},
+                                                labels: {style: {color: darktheme_textcolor}},
+                                                gridLineColor: '#707073',
+                                                tickColor: '#707073'
+                                            });
+                                        }
+
+                                        this.legend.update({itemStyle: {color: darktheme_textcolor}});
+
+                                        //this.credits.update({style:{color: darktheme_textcolor}});
+
+                                        this.subtitle.update({style: {color: darktheme_textcolor}});
+
+                                        this.chartBackground.attr({fill: jQuery(".highcharts-background").css("fill")});
+                                    } else {
+                                        var lighttheme_textcolor = '#666666';
+                                        for (var i = this.yAxis.length - 1; i >= 0; i--) {
+                                            this.yAxis[i].update({
+                                                title: {style: {color: lighttheme_textcolor}},
+                                                labels: {style: {color: lighttheme_textcolor}},
+                                            });
+                                        }
+
+                                        for (var i = this.xAxis.length - 1; i >= 0; i--) {
+                                            this.xAxis[i].update({
+                                                title: {style: {color: lighttheme_textcolor}},
+                                                labels: {style: {color: lighttheme_textcolor}},
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    // scale: 1,
+                    // width: 1000,
+                    // sourceWidth: 1000,
+                    enabled: JSON.parse(String(exporting_enabled)) // Convert string to bool
+                },
+
+                title: {
+                    useHTML: true,
+                    text: ''
+                },
+
+                subtitle: {
+                    text: ''
+                },
+
+                legend: {
+                    enabled: JSON.parse(String(legend_enabled)) // Convert string to bool
+                },
+
+                xAxis: {
+                    dateTimeLabelFormats: {
+                        day: '%e %b',
+                        week: '%e %b',
+                        month: '%b %e',
+                    },
+                    lineColor: '#555',
+                    minRange: 900000,
+                    minTickInterval: 900000,
+                    title: {
+                        style: {
+                            font: 'bold 12px Lucida Grande, Lucida Sans Unicode, Verdana, Arial, Helvetica, sans-serif'
+                        }
+                    },
+                    ordinal: false,
+                    type: 'datetime',
+                    units: [
+                        ['minute', [1, 2, 5, 10, 15, 30]],
+                        ['hour',   [1, 2, 3, 4, 6, 8, 12]],
+                        ['day',    [1]],
+                        ['week',   [1]],
+                        ['month',  [1]],
+                        ['year',   null]
+                    ]
+                },
+
+                yAxis: [{
+                    endOnTick: true,
+                    lineColor: '#555',
+                    minorGridLineWidth: 0,
+                    startOnTick: true,
+                    showLastLabel: true,
+                    title: {
+                    },
+                    opposite: false
+                }],
+
+                plotOptions: {
+                    area: {
+                        lineWidth: 2,
+                        gapSize: '',
+                        gapUnit: 'value',
+                        marker: {
+                            enabled: false,
+                            radius: 2
+                        },
+                        threshold: null,
+                        softThreshold: true
+                    },
+                    line: {
+                        lineWidth: 2,
+                        gapSize: '',
+                        gapUnit: 'value',
+                        marker: {
+                            enabled: false,
+                            radius: 2
+                        },
+                    },
+                    spline: {
+                        lineWidth: 2,
+                        gapSize: '',
+                        gapUnit: 'value',
+                        marker: {
+                            enabled: false,
+                            radius: 2
+                        },
+                    },
+                    areaspline: {
+                        lineWidth: 2,
+                        gapSize: '',
+                        gapUnit: 'value',
+                        marker: {
+                            enabled: false,
+                            radius: 2
+                        },
+                        threshold: null,
+                        softThreshold: true
+                    },
+                    scatter: {
+                        gapSize: '',
+                        gapUnit: 'value',
+                        marker: {
+                            radius: 2
+                        },
+                    },
+                },
+
+                // Highstock is needed for gapsize. Disable these 3 to make it look like standard Highcharts
+                scrollbar: {
+                    enabled: false
+                },
+                navigator: {
+                    enabled: false
+                },
+                rangeSelector: {
+                    enabled: false
+                },
+
+                tooltip: {
+                    enabled: true,
+                    crosshairs: true,
+                    dateTimeLabelFormats: {
+                        hour: '%e %b %H:%M'
+                    },
+                    // For locale control with moment.js
+                    formatter: function(tooltip) {
+                        try {
+                            // The first returned item is the header, subsequent items are the points.
+                            // Mostly applies to line style charts (line, spline, area)
+                            return [tzAdjustedMoment(this.x / 1000).format(tooltip_date_format)].concat(
+                                this.points.map(function(point) {
+                                    // If observation_type is in the series array, use that otherwise use the obsType
+                                    var point_obsType = point.series.userOptions.observation_type ? point.series.userOptions.observation_type : point.series.userOptions.obsType;
+                                    var rounding = point.series.userOptions.rounding;
+                                    var mirrored = point.series.userOptions.mirrored_value;
+                                    var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
+                                    return "<span style='color:" + point.series.color + "'>●</span> " + point.series.name + ': ' + highcharts_tooltip_factory(point.y, point_obsType, true, rounding, mirrored, numberFormat);
+                                })
+                            );
+                        } catch (e) {
+                            // There's an error so check if it's windDir to apply wind direction label, or if it's a scatter. If none of those revert back to default tooltip.
+                            if (this.series.userOptions.obsType == "windDir" || this.series.userOptions.observation_type == "windDir") {
+                                // If observation_type is in the series array, use that otherwise use the obsType
+                                var point_obsType = this.series.userOptions.observation_type ? this.series.userOptions.observation_type : this.series.userOptions.obsType;
+                                var rounding = this.series.userOptions.rounding;
+                                var mirrored = this.series.userOptions.mirrored_value;
+                                return tzAdjustedMoment(this.x / 1000).format(tooltip_date_format) + '<br><b>' + highcharts_tooltip_factory(this.point.y, point_obsType, true, rounding, mirrored);
+                            } else if (this.series.userOptions.type == "scatter") {
+                                // Catch anything else that might be a scatter plot. Scatter plots will just show x,y coordinates without this.
+                                return "<span style='color:" + this.series.color + "'>●</span> " + this.series.name + ': ' + Highcharts.numberFormat(this.y);
+                            } else {
+                                return tooltip.defaultFormatter.call(this, tooltip);
+                            }
+                        }
+                    },
+                    split: true,
+                },
+
+                credits: {},
+
+                series: [{}]
+
+            };
+
+            // Default options completed, build overrides from JSON and charts.conf
+
+            // Set the chart render div and title
+            if (prepend_renderTo) {
+                options.chart.renderTo = json_file + "_" + renderTo;
+            } else {
+                options.chart.renderTo = renderTo;
+            }
+
+            belchertown_debug(options.chart.renderTo + ": building a " + type + " chart");
+
+            if (css_class) {
+                jQuery("#" + options.chart.renderTo).addClass(css_class);
+                belchertown_debug(options.chart.renderTo + ": div id is " + options.chart.renderTo + " and adding CSS class: " + css_class);
+            }
+
+            options.chart.type = type;
+            options.title.text = "<a href='#" + options.chart.renderTo + "'>" + title + "</a>"; // Anchor link to chart for direct linking
+            options.subtitle.text = subtitle;
+            options.plotOptions.area.gapSize = gapsize;
+            options.plotOptions.line.gapSize = gapsize;
+            options.plotOptions.spline.gapSize = gapsize;
+            options.plotOptions.scatter.gapSize = gapsize;
+            if (connectNulls == "true") {
+                options.plotOptions.series = {connectNulls: connectNulls};
+            }
+            options.colors = colors;
+
+            // If we have xAxis categories, reset xAxis and populate it from these options. Also need to reset tooltip since there's no datetime for moment.js to use.
+            if (xAxis_categories.length >= 1) {
+                belchertown_debug(options.chart.renderTo + ": has " + xAxis_categories.length + " xAxis categories. Resetting xAxis and tooltips for grouping");
+                options.xAxis = {
+                    type: 'category',
+                    categories: xAxis_categories
+                };
+                options.tooltip = {
+                    enabled: true,
+                    crosshairs: true,
+                    shared: true,
+                    split: false,
+                    formatter: function() {
+                        // The first returned item is the header, subsequent items are the points
+                        return [this.x].concat(
+                            this.points.map(function(point) {
+                                // If observation_type is in the series array, use that otherwise use the obsType
+                                var point_obsType = point.series.userOptions.observation_type ? point.series.userOptions.observation_type : point.series.userOptions.obsType;
+                                var rounding = point.series.userOptions.rounding;
+                                var mirrored = point.series.userOptions.mirrored_value;
+                                var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
+                                return "<span style='color:" + point.series.color + "'>●</span> " + point.series.name + ': ' + highcharts_tooltip_factory(point.y, point_obsType, true, rounding, mirrored, numberFormat);
+                            })
+                        );
+                    },
+                };
+            }
+
+            // Reset the series everytime we loop.
+            options.series = [];
+
+            // Build the series
+            var i = 0;
+            jQuery.each(data[plotname]["series"], function(seriesName, seriesVal) {
+                observation_type = data[plotname]["series"][seriesName]["obsType"];
+                options.series[i] = data[plotname]["series"][seriesName];
+                i++;
+            });
+
+            // Validate every series has usable data. If any configured
+            // observation is unavailable, skip this chart and let the
+            // placeholder logic in catch() handle the container.
+            var isFiniteNumber = function(v) {
+                return v !== null && v !== "" && isFinite(parseFloat(v));
+            };
+
+            var seriesHasUsableData = function(series) {
+                if (!series || !Array.isArray(series.data) || series.data.length === 0) {
+                    return false;
+                }
+
+                var obsType = series.obsType || series.observation_type || "";
+
+                return series.data.some(function(point) {
+                    if (point === null || typeof point === "undefined") {
+                        return false;
+                    }
+
+                    if (obsType === "windRose") {
+                        // windRose is repacked later; presence of data is enough here.
+                        return true;
+                    }
+
+                    if (obsType === "weatherRange" || obsType === "haysChart") {
+                        if (Array.isArray(point)) {
+                            return isFiniteNumber(point[1]) || isFiniteNumber(point[2]) || isFiniteNumber(point[3]);
+                        }
+                        return isFiniteNumber(point.low) || isFiniteNumber(point.high) || isFiniteNumber(point.average);
+                    }
+
+                    if (obsType === "windBarb") {
+                        if (Array.isArray(point)) {
+                            return isFiniteNumber(point[1]);
+                        }
+                        return isFiniteNumber(point.value);
+                    }
+
+                    // Default timeseries point style: [ts, value] or {y: value}
+                    if (Array.isArray(point)) {
+                        return isFiniteNumber(point[1]);
+                    }
+                    if (typeof point === "object") {
+                        return isFiniteNumber(point.y);
+                    }
+
+                    return isFiniteNumber(point);
+                });
+            };
+
+            var missingSeries = options.series.find(function(series) {
+                return !seriesHasUsableData(series);
+            });
+            if (missingSeries) {
+                var missingObs = missingSeries.obsType || missingSeries.observation_type || missingSeries.name || "unknown observation";
+                throw new Error("Unavailable observation value for chart series: " + missingObs);
+            }
+
+            /* yAxis customization handler and label handling
+            Take the following example. 
+            yAxis is in observation 0 (rainTotal), so that label is caught and set by yAxis1_active. 
+            If you move yAxis to observation 1 (rainRate), then the label is caught and set by yAxis_index.
+            There may be a more efficient way to do this. If so, please submit a pull request :)
+            [[[chart3]]]
+                title = Rain
+                [[[[rainTotal]]]]
+                    name = Rain Total
+                    yAxis = 1
+                [[[[rainRate]]]]
+            */
+
+            var yAxis1_active = undefined;
+
+            // Find if any series have yAxis = 1. If so, save the array number so we can set labels correctly.
+            // We really care if yAxis is in array 1+, so we can go back and set yAxis 0 to the right label.
+            var yAxis_index = options.series.findIndex(function(item) {return item.yAxis == 1})
+
+            // Handle series specific data, overrides and non-Highcharts options that we passed through
+            options.series.forEach(s => {
+                if (s.yAxis == "1") {
+                    // If yAxis = 1 is set for the observation, add a new yAxis and associate that observation to the right side of the chart
+                    yAxis1_active = true;
+                    options.yAxis.push({ // Secondary yAxis
+                        opposite: true,
+                        showLastLabel: true,
+                        title: {
+                            text: s.yAxis_label,
+                        },
+                    }),
+                        // Associate this series to the new yAxis 1
+                        s.yAxis = 1
+
+                    // We may have already passed through array 0 in the series without setting the "multi axis label", go back and explicitly define it.
+                    if (yAxis_index >= 1) {
+                        options.yAxis[0].title.text = options.series[0].yAxis_label;
+                    }
+                } else {
+                    if (yAxis1_active) {
+                        // This yAxis is first in the data series, so we can set labels without needing to double back
+                        options.yAxis[0].title.text = s.yAxis_label;
+                    } else {
+                        // Apply the normal yAxis 0's label without observation name
+                        options.yAxis[0].title.text = s.yAxis_label;
+                    }
+                    // Associate this series to yAxis 1
+                    s.yAxis = 0;
+                }
+
+                // Run yAxis customizations
+                this_yAxis = s.yAxis;
+
+                belchertown_debug(options.chart.renderTo + ": " + s.obsType + " is on yAxis " + this_yAxis);
+
+                // Some charts may require a defined min/max on the yAxis
+                options.yAxis[this_yAxis].min = s.yAxis_min !== "undefined" ? s.yAxis_min : null;
+                options.yAxis[this_yAxis].max = s.yAxis_max !== "undefined" ? s.yAxis_max : null;
+
+                // Some charts may require a defined soft min/max on the yAxis
+                options.yAxis[this_yAxis].softMin = s.yAxis_softMin !== "undefined" ? parseInt(s.yAxis_softMin) : null;
+                options.yAxis[this_yAxis].softMax = s.yAxis_softMax !== "undefined" ? parseInt(s.yAxis_softMax) : null;
+
+                // Set the yAxis tick interval. Mostly used for barometer. 
+                if (s.yAxis_tickInterval) {
+                    options.yAxis[this_yAxis].tickInterval = s.yAxis_tickInterval;
+                }
+
+                // Set yAxis minorTicks. This is a chart-wide setting so setting it for any of the yAxis will set it for the chart itself
+                if (s.yAxis_minorTicks) {
+                    options.yAxis[this_yAxis].minorTicks = true;
+                }
+
+                // Barometer chart plots get a higher precision yAxis tick
+                if (s.obsType == "barometer") {
+                    // Define yAxis label float format if rounding is defined. Default to 2 decimals if nothing defined
+                    if (typeof s.rounding !== "undefined") {
+                        options.yAxis[this_yAxis].labels = {format: '{value:.' + s.rounding + 'f}'}
+                    } else {
+                        options.yAxis[this_yAxis].labels = {format: '{value:.2f}'}
+                    }
+                }
+
+                // Rain, RainRate and rainTotal (special Belchertown skin observation) get yAxis precision
+                if (s.obsType == "rain" || s.obsType == "rainRate" || s.obsType == "rainTotal") {
+                    options.yAxis[this_yAxis].min = 0;
+                    options.yAxis[this_yAxis].minRange = 0.01;
+                    options.yAxis[this_yAxis].minorGridLineWidth = 1;
+                }
+
+                if (s.obsType == "windDir") {
+                    options.yAxis[this_yAxis].min = 0;
+                    options.yAxis[this_yAxis].max = 360;
+                    options.yAxis[this_yAxis].startOnTick = false;
+                    options.yAxis[this_yAxis].endOnTick = false;
+                    options.yAxis[this_yAxis].tickPositions = [0, 90, 180, 270, 360];
+                    options.yAxis[this_yAxis].labels = {
+                        useHTML: true,
+                        formatter: function() {if (this.value === 360) return ''; var value = weatherdirection[this.value]; return typeof value !== 'undefined' ? value : this.value;}
+                    }
+                }
+
+                // Check if this series has a gapsize override
+                if (s.gapsize) {
+                    options.plotOptions.area.gapSize = s.gapsize;
+                    options.plotOptions.line.gapSize = s.gapsize;
+                    options.plotOptions.spline.gapSize = s.gapsize;
+                    options.plotOptions.scatter.gapSize = s.gapsize;
+                }
+
+                // If this chart is a mirrored chart, make the yAxis labels non-negative
+                if (s.mirrored_value) {
+                    belchertown_debug(options.chart.renderTo + ": mirrored chart due to mirrored_value = true");
+                    options.yAxis[s.yAxis].labels = {formatter: function() {return Math.abs(this.value);}}
+                }
+
+                // Lastly, apply any numberFormat label overrides
+                if (typeof s.numberFormat !== "undefined" && Object.keys(s.numberFormat).length >= 1) {
+                    var {decimals, decimalPoint, thousandsSep} = s.numberFormat
+                    options.yAxis[this_yAxis].labels = {formatter: function() {return Highcharts.numberFormat(this.value, decimals, decimalPoint, thousandsSep);}}
+                }
+
+            });
+
+            // If windRose is present, configure a special chart to show that data
+            if (observation_type == "windRose") {
+                var categories = $windrose_categories;
+                options.chart.className = "highcharts-windRose"; // Used for dark mode
+                options.chart.type = "column";
+                options.chart.polar = true;
+                options.chart.alignTicks = false;
+                options.pane = {size: '80%'}
+                // Reset xAxis and rebuild
+                options.xAxis = {}
+                options.xAxis.crosshair = true;
+                options.xAxis.categories = categories;
+                options.xAxis.labels = {formatter: function() { return typeof this.value === 'string' ? this.value : ''; }}
+                //options.legend.align = "right";
+                options.legend.verticalAlign = "top";
+                options.legend.x = 210;
+                options.legend.y = 119;
+                options.legend.layout = "vertical";
+                options.legend.floating = true;
+                options.yAxis[0].min = 0;
+                options.yAxis[0].endOnTick = false;
+                options.yAxis[0].reversedStacks = false;
+                options.yAxis[0].title.text = "$charts_windrose_frequency_label (%)";
+                options.yAxis[0].gridLineWidth = 0;
+                options.yAxis[0].labels = {enabled: false}
+                options.plotOptions = {
+                    column: {
+                        stacking: 'normal',
+                        shadow: false,
+                        groupPadding: 0,
+                        pointPlacement: 'on',
+                    }
+                }
+                // Reset the tooltip
+                options.tooltip = {}
+                options.tooltip.shared = true;
+                options.tooltip.valueSuffix = '%';
+                options.tooltip.followPointer = true;
+                options.tooltip.useHTML = true;
+
+                // Since wind rose is a special observation, I did not re-do the JSON arrays to accomodate it as a separate array.
+                // So we need to grab the data array within the series and save it to a temporary array, delete the entire chart series, 
+                // and reapply the windrose data back to the series.
+                var newSeries = options.series[0].data;
+                options.series = [];
+                newSeries.forEach(ns => {
+                    options.series.push(ns);
+                });
+            }
+
+            // Configure gauge chart formatting
+            if (options.chart.type == "gauge") {
+                var gaugeRawPoint = options.series[0].data && options.series[0].data.length
+                    ? options.series[0].data[options.series[0].data.length - 1]
+                    : null;
+                var gaugeRawValue = null;
+                if (Array.isArray(gaugeRawPoint)) {
+                    if (gaugeRawPoint.length >= 2) {
+                        gaugeRawValue = gaugeRawPoint[1];
+                    } else if (gaugeRawPoint.length === 1) {
+                        gaugeRawValue = gaugeRawPoint[0];
+                    }
+                } else if (gaugeRawPoint && typeof gaugeRawPoint === "object") {
+                    if (Object.prototype.hasOwnProperty.call(gaugeRawPoint, "y")) {
+                        gaugeRawValue = gaugeRawPoint.y;
+                    } else if (Object.prototype.hasOwnProperty.call(gaugeRawPoint, "value")) {
+                        gaugeRawValue = gaugeRawPoint.value;
+                    }
+                } else {
+                    gaugeRawValue = gaugeRawPoint;
+                }
+                var gaugeNumericValue = parseFloat(gaugeRawValue);
+                if (!isFinite(gaugeNumericValue)) {
+                    throw new Error("Unavailable observation value for gauge: " + observation_type);
+                }
+
+                // Highcharts does not allow the guage background to have rounded ends. To get around
+                // this, define a "dummy" series that fills the gauge with the appropriate color.
+                // This way, the ends are rounded if the user specifies.
+                //
+                // Gauge chart works best with only one data point, so the most recent (last) data point
+                // is used
+                options.series[0].data = [{
+                    y: 9999999,
+                    color: '#e6e6e6',
+                    className: 'highcharts-pane',
+                    zIndex: 0,
+                    dataLabels: {enabled: false}
+                }, {
+                    y: gaugeNumericValue,
+                    color: options.series[0].color,
+                }]
+                options.chart.type = "solidgauge"
+                options.pane = {
+                    startAngle: -140,
+                    endAngle: 140,
+                    background: [{
+                        outerRadius: 0,
+                        innerRadius: 0,
+                    }]
+                }
+
+                // Set up yAxis min/max first — needed before color stop fraction calculation
+                options.yAxis = {
+                    min: 0,
+                    max: 100,
+                    lineColor: null,
+                    tickPositions: []
+                }
+                if (options.series[0].yAxis_max) {
+                    options.yAxis.max = parseFloat(options.series[0].yAxis_max);
+                }
+                if (options.series[0].yAxis_min) {
+                    options.yAxis.min = parseFloat(options.series[0].yAxis_min);
+                }
+                options.yAxis.title = {
+                    text: null,
+                    enabled: false,
+                }
+
+                var gaugeUnitLabel = options.series[0].yAxis_label_unit;
+                if (!gaugeUnitLabel && options.series[0].yAxis_label) {
+                    var gaugeUnitMatch = String(options.series[0].yAxis_label).match(/\(([^)]+)\)\s*$/);
+                    if (gaugeUnitMatch) {
+                        gaugeUnitLabel = gaugeUnitMatch[1];
+                    }
+                }
+                if (observation_type == "aqi" && !gaugeUnitLabel) {
+                    gaugeUnitLabel = "$obs.label.aqi_unknown";
+                }
+
+                // Build color stops from colorX / colorX_position pairs if defined
+                var customColorStops = [];
+                for (var ci = 1; ci <= 20; ci++) {
+                    var cPos = options.series[0]["color" + ci + "_position"];
+                    var cVal = options.series[0]["color" + ci];
+                    if (cPos === undefined || cVal === undefined) break;
+                    // Strip any surrounding quotes added by charts.conf string quoting
+                    var cColor = String(cVal).replace(/^["']|["']$/g, '');
+                    customColorStops.push([parseFloat(cPos), cColor]);
+                }
+
+                if (customColorStops.length > 0) {
+                    // Determine which color applies to the current value
+                    var currentVal = options.series[0].data[1]["y"];
+                    var currentColor = customColorStops[0][1];
+                    for (var si = 0; si < customColorStops.length; si++) {
+                        if (currentVal >= customColorStops[si][0]) {
+                            currentColor = customColorStops[si][1];
+                        }
+                    }
+                    options.series[0].data[1].color = currentColor;
+                } else if (options.series[0].colors_enabled) {
+                    // Fall back to rainbow gradient coloring
+                    options.series[0].data[1].color = new_gradient_temp(options.series[0].data[1]["y"], options.series[0].yAxis_min, options.series[0].yAxis_max)
+                }
+
+                // Always resolve a concrete gauge color for both the gauge and
+                // data labels, even if no custom color thresholds are defined.
+                if (!options.series[0].data[1].color) {
+                    options.series[0].data[1].color = options.series[0].color || (options.colors && options.colors[0]) || '#7cb5ec';
+                }
+
+                var gaugeDecimals = options.series[0].rounding >= 0 ? parseInt(options.series[0].rounding, 10) : 0;
+                var gaugeDisplayColor = options.series[0].data[1].color;
+                var gaugeDataLabelFormat = '<span style="display:block;text-align:center;color:' + gaugeDisplayColor + ' !important;">{y:.' + gaugeDecimals + 'f}</span>';
+                var gaugeDataLabelYOffset = -22;
+                var gaugeDataLabelLineHeight = '0.9em';
+                if (gaugeUnitLabel) {
+                    gaugeDataLabelFormat = gaugeDataLabelFormat + '<span style="display:block;font-size:17px;line-height:1em;margin-top:2px;text-align:center;color:' + gaugeDisplayColor + ' !important;">' + gaugeUnitLabel + '</span>';
+                    gaugeDataLabelYOffset = -24;
+                    gaugeDataLabelLineHeight = '0.95em';
+                }
+
+                options.plotOptions = {
+                    solidgauge: {
+                        dataLabels: {
+                            useHTML: true,
+                            enabled: true,
+                            y: gaugeDataLabelYOffset,
+                            borderWidth: 0,
+                            format: gaugeDataLabelFormat,
+                            style: {
+                                fontWeight: 'bold',
+                                lineHeight: gaugeDataLabelLineHeight,
+                                textAlign: 'center',
+                                fontSize: '50px',
+                                // Match color if set by user
+                                color: gaugeDisplayColor,
+                                textOutline: 'none'
+                            }
+                        },
+                    }
+                }
+                options.tooltip.enabled = false
+                options.xAxis.crosshair = false
+            }
+
+            // If Hays chart is present, configure a special chart to show that data
+            if (observation_type == "haysChart") {
+                options.chart.type = "arearange"
+                options.chart.polar = true;
+                options.plotOptions = {
+                    turboThreshold: 0,
+                    series: {
+                        marker: {
+                            enabled: false
+                        }
+                    }
+                };
+                // Find min and max of the series data for the yAxis min and max
+                var maximum_flattened = [];
+                options.series[0].data.forEach(seriesData => {
+                    maximum_flattened.push(seriesData[2]);
+                });
+                var range_max = Math.max(...maximum_flattened);
+                if (options.series[0].yAxis_softMax) {
+                    var range_max = options.series[0].yAxis_softMax;
+                }
+                options.legend = {"enabled": false}
+                options.yAxis = {
+                    showFirstLabel: false,
+                    tickInterval: 2,
+                    tickmarkPlacement: 'on',
+                    min: -1,
+                    softMax: range_max,
+                    title: {
+                        text: options.series[0].yAxis_label,
+                    },
+                    labels: {
+                        align: 'center',
+                        x: 0,
+                        y: 0
+                    },
+                }
+                options.tooltip = {
+                    split: false,
+                    shared: true,
+                    followPointer: true,
+                    useHTML: true,
+                    formatter: function(tooltip) {
+                        return this.points.map(function(point) {
+                            var rounding = point.series.userOptions.rounding;
+                            var mirrored = point.series.userOptions.mirrored_value;
+                            var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
+                            return "<strong>" + tzAdjustedMoment(point.x / 1000).format(tooltip_date_format) + "</strong><br><span style='color:" + options.series[0].color + "'>●</span> $obs.label.highest_temperature: " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + options.series[0].color + "'>●</span> $obs.label.lowest_temperature: " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat);
+                        });
+                    }
+                }
+                var currentSeries = options.series;
+                var currentSeriesData = options.series[0].data;
+                var range_unit = options.series[0].range_unit;
+                var rounding = options.series[0].rounding;
+                var newSeriesData = [];
+                var currentSeriesColor = options.series[0].color;
+                currentSeriesData.forEach(seriesData => {
+                    newSeriesData.push({
+                        x: seriesData[0],
+                        low: seriesData[1],
+                        high: seriesData[2],
+                    });
+                });
+                options.series = [];
+                options.series.push({
+                    data: newSeriesData,
+                    obsType: "haysChart",
+                    obsUnit: range_unit,
+                    rounding: rounding,
+                    color: currentSeriesColor,
+                    fillColor: currentSeriesColor,
+                    connectEnds: false,
+                });
+            }
+
+            // If weather range is present, configure a special chart to show that data
+            // https://www.highcharts.com/blog/tutorials/209-the-art-of-the-chart-weather-radials/
+            if (observation_type == "weatherRange") {
+                if (options.series[0].area_display) {
+                    options.chart.type = "arearange";
+                } else {
+                    options.chart.type = "columnrange";
+                }
+
+                // If polar is defined, use it and add a special dark mode CSS class
+                if (JSON.parse(String(options.series[0].polar.toLowerCase()))) {
+                    options.chart.polar = true; // Make sure the option is a string, then convert to bool
+                    options.chart.className = "highcharts-weatherRange belchertown-polar"; // Used for dark mode
+                } else {
+                    options.chart.className = "highcharts-weatherRange"; // Used for dark mode
+                }
+
+                options.legend = {"enabled": false}
+
+                // Find min and max of the series data for the yAxis min and max
+                var minimum_flattened = [];
+                var maximum_flattened = [];
+                options.series[0].data.forEach(seriesData => {
+                    minimum_flattened.push(seriesData[1]);
+                    maximum_flattened.push(seriesData[2]);
+                });
+                var range_min = Math.min(...minimum_flattened);
+                var range_max = Math.max(...maximum_flattened);
+                // Guard all-zero (or flat) datasets so yAxis math never produces
+                // tickInterval=0 / min==max, which can prevent chart rendering.
+                if (!isFinite(range_min)) {
+                    range_min = 0;
+                }
+                if (!isFinite(range_max)) {
+                    range_max = 0;
+                }
+                if (range_min === range_max) {
+                    range_max = range_min + 1;
+                }
+
+                var yAxis_tickInterval = Math.ceil(Math.round(range_max / 5) / 5) * 5; // Divide max outTemp by 5 and round it, then round that value up to the nearest 5th multiple. This gives clean yAxis tick lines.
+                if (!isFinite(yAxis_tickInterval) || yAxis_tickInterval <= 0) {
+                    yAxis_tickInterval = 1;
+                }
+
+                options.yAxis = {
+                    showFirstLabel: true,
+                    tickInterval: yAxis_tickInterval,
+                    min: range_min,
+                    max: range_max,
+                    title: {
+                        text: options.series[0].yAxis_label,
+                    },
+                }
+
+                options.xAxis = {
+                    dateTimeLabelFormats: {
+                        day: '%e %b',
+                        week: '%e %b',
+                        month: '%b %e',
+                    },
+                    showLastLabel: true,
+                    crosshair: true,
+                    type: "datetime",
+                    units: [
+                        ['minute', [1, 2, 5, 10, 15, 30]],
+                        ['hour',   [1, 2, 3, 4, 6, 8, 12]],
+                        ['day',    [1]],
+                        ['week',   [1]],
+                        ['month',  [1]],
+                        ['year',   null]
+                    ],
+                    labels: xAxis_categories.length >= 1 ? {
+                        formatter: function() {
+                            return xAxis_categories[new Date(this.value).getMonth()];
+                        }
+                    } : {}
+                };
+
+                options.plotOptions = {}
+                options.plotOptions = {
+                    series: {
+                        turboThreshold: 0,
+                        showInLegend: false,
+                        borderWidth: 0,
+                        marker: {
+                            enabled: false,
+                        },
+                    }
+                }
+
+                if (options.series[0].area_display) {
+                    if (options.series[0].range_unit == "degree_F") {
+                        options.plotOptions.series.zones = [
+                            {value: 0, color: "#1278c8"},
+                            {value: 25, color: "#30bfef"},
+                            {value: 32, color: "#1fafdd"},
+                            {value: 40, color: "rgba(0,172,223,1)"},
+                            {value: 50, color: "#71bc3c"},
+                            {value: 55, color: "rgba(90,179,41,0.8)"},
+                            {value: 65, color: "rgba(131,173,45,1)"},
+                            {value: 70, color: "rgba(206,184,98,1)"},
+                            {value: 75, color: "rgba(255,174,0,0.9)"},
+                            {value: 80, color: "rgba(255,153,0,0.9)"},
+                            {value: 85, color: "rgba(255,127,0,1)"},
+                            {value: 90, color: "rgba(255,79,0,0.9)"},
+                            {value: 95, color: "rgba(255,69,69,1)"},
+                            {value: 110, color: "rgba(255,104,104,1)"},
+                            {color: "rgba(218,113,113,1)"},
+                        ]
+                    } else {
+                        options.plotOptions.series.zones = [
+                            {value: -5, color: "#1278c8"},
+                            {value: -3.8, color: "#30bfef"},
+                            {value: 0, color: "#1fafdd"},
+                            {value: 4.4, color: "rgba(0,172,223,1)"},
+                            {value: 10, color: "#71bc3c"},
+                            {value: 12.7, color: "rgba(90,179,41,0.8)"},
+                            {value: 18.3, color: "rgba(131,173,45,1)"},
+                            {value: 21.1, color: "rgba(206,184,98,1)"},
+                            {value: 23.8, color: "rgba(255,174,0,0.9)"},
+                            {value: 26.6, color: "rgba(255,153,0,0.9)"},
+                            {value: 29.4, color: "rgba(255,127,0,1)"},
+                            {value: 32.2, color: "rgba(255,79,0,0.9)"},
+                            {value: 35, color: "rgba(255,69,69,1)"},
+                            {value: 43.3, color: "rgba(255,104,104,1)"},
+                            {color: "rgba(218,113,113,1)"},
+                        ]
+                    }
+                } else {
+                    options.plotOptions.series.stacking = "normal"
+                }
+
+                options.tooltip = {
+                    split: false,
+                    shared: true,
+                    followPointer: true,
+                    useHTML: true,
+                    formatter: function(tooltip) {
+                        return this.points.map(function(point) {
+                            var rounding = point.series.userOptions.rounding;
+                            var mirrored = point.series.userOptions.mirrored_value;
+                            var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
+                            var header = (xAxis_categories.length >= 1)
+                                ? xAxis_categories[point.x]
+                                : tzAdjustedMoment(point.x / 1000).format(tooltip_date_format);
+                            return "<strong>" + header + "</strong><br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.high, true) + "'>●</span> $obs.label.highest_temperature: " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.low, true) + "'>●</span> $obs.label.lowest_temperature: " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.average, true) + "'>●</span> $obs.label.average_temperature: " + highcharts_tooltip_factory(point.point.average, observation_type, true, rounding, mirrored, numberFormat);
+                        });
+                    }
+                }
+
+                // Update data
+                var currentSeries = options.series;
+                var currentSeriesData = options.series[0].data;
+                var range_unit = options.series[0].range_unit;
+                var rounding = options.series[0].rounding;
+                var newSeriesData = [];
+                currentSeriesData.forEach(seriesData => {
+                    if (options.series[0].color) {
+                        var color = options.series[0].color;
+                    } else {
+                        // Set color of the column based on the average temperature, or return default if not temperature
+                        if (seriesData[3] == null) {
+                            console.log("Requesting " + seriesData[0] + ". Value is " + seriesData[3])
+                        }
+                        var color = get_outTemp_color(range_unit, seriesData[3], true);
+                    }
+                    newSeriesData.push({
+                        x: seriesData[0],
+                        low: seriesData[1],
+                        high: seriesData[2],
+                        average: seriesData[3],
+                        color: color
+                    });
+                });
+                options.series = [];
+                options.series.push({
+                    data: newSeriesData,
+                    obsType: "weatherRange",
+                    obsUnit: range_unit,
+                    rounding: rounding
+                });
+            }
+
+            // Apply any width, height CSS overrides to the parent div of the chart
+            if (css_height != "") {
+                jQuery("#" + options.chart.renderTo).parent().css({
+                    'height': css_height,
+                    'padding': '0px 15px',
+                    'margin-bottom': '20px'
+                });
+            }
+            if (css_width != "") {
+                jQuery("#" + options.chart.renderTo).parent().css('width', css_width);
+            }
+
+            if (credits != "highcharts_default") {
+                options.credits.text = credits;
+            }
+
+            if (credits_url != "highcharts_default") {
+                options.credits.href = credits_url;
+            }
+
+            if (credits_position != "highcharts_default") {
+                options.credits.position = JSON.parse(credits_position);
+            }
+
+            // Finally all options are done, now show the chart
+            // Wind rose and category charts must use Highcharts.chart(), not stockChart()
+            // Highstock forces a datetime axis internally and ignores type: 'category'
+            // weatherRange always uses datetime data even when xAxis_categories provides custom labels
+
+            // Wind barb chart: mirrors https://www.highcharts.com/samples/highcharts/demo/windbarb-series
+            // A line series shows wind speed; a windbarb series shows direction/Beaufort.
+            // shared:true tooltip combines both rows into one popup automatically.
+            // Search all series for the windBarb one so its position in charts.conf does not matter.
+            var windBarbSeries = null;
+            for (var wbj = 0; wbj < options.series.length; wbj++) {
+                if (options.series[wbj].obsType === "windBarb") {
+                    windBarbSeries = options.series[wbj];
+                    break;
+                }
+            }
+            if (windBarbSeries) {
+                // Build timestamp → direction lookup from raw data before it is converted.
+                var wbDataMap = {};
+                windBarbSeries.data.forEach(function(d) {
+                    if (d[2] !== null) {
+                        wbDataMap[d[0]] = d[2]; // d[0]=ts, d[2]=direction
+                    }
+                });
+
+                // Wind speed line series — carry rounding/obsType so the default formatter works
+                options.series.push({
+                    type: "line",
+                    id: "windbarb-windspeed",
+                    name: windBarbSeries.name,
+                    data: windBarbSeries.windspeedData,
+                    color: windBarbSeries.color,
+                    obsType: windBarbSeries.obsType,
+                    rounding: windBarbSeries.rounding,
+                    numberFormat: windBarbSeries.numberFormat,
+                    showInLegend: true,
+                    states: {
+                        inactive: { opacity: 1 }
+                    }
+                });
+
+                // Reconfigure as a Highcharts windbarb series
+                windBarbSeries.type = "windbarb";
+                windBarbSeries.showInLegend = false;
+                windBarbSeries.vectorLength = 24;
+                windBarbSeries.enableMouseTracking = false;
+                delete windBarbSeries.tooltip;
+
+                // Convert [[ts, m/s, dir], ...] to [{x: , value: , direction: }, ...]
+                // Keep calm points (<2.5 knots) even when direction is null; Highcharts
+                // windbarb renders a circle for calm conditions.
+                var calmThresholdMs = 2.5 * 0.514444;
+                windBarbSeries.data = windBarbSeries.data
+                    .filter(function(d) { return d[1] !== null && (d[2] !== null || d[1] < calmThresholdMs); })
+                    .map(function(d) { return {x: d[0], value: d[1], direction: d[2] !== null ? d[2] : 0}; });
+
+                // Custom tooltip: show wind speed (respecting rounding) plus direction.
+                // The windbarb series is excluded from this.points (enableMouseTracking:false),
+                // so direction is appended via wbDataMap instead.
+                options.tooltip = {
+                    split: true,
+                    formatter: function() {
+                        var header = tzAdjustedMoment(this.x / 1000).format(tooltip_date_format);
+                        var direction = wbDataMap[this.x];
+                        var rows = this.points.map(function(point) {
+                            var point_obsType = point.series.userOptions.observation_type ? point.series.userOptions.observation_type : point.series.userOptions.obsType;
+                            var rounding = point.series.userOptions.rounding;
+                            var mirrored = point.series.userOptions.mirrored_value;
+                            var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
+                            var row = "<span style='color:" + point.series.color + "'>●</span> " +
+                                point.series.name + ": " +
+                                highcharts_tooltip_factory(point.y, point_obsType, true, rounding, mirrored, numberFormat);
+                            if (typeof direction !== "undefined") {
+                                row += "<br/>" + highcharts_tooltip_factory(direction, "windDir", true, 0, false, "");
+                            }
+                            return row;
+                        });
+                        return [header].concat(rows);
+                    }
+                };
+
+                options.xAxis.type = "datetime";
+                options.xAxis.offset = 40;
+            }
+
+            var useStockChart = (observation_type !== "windRose") && !windBarbSeries && (xAxis_categories.length === 0 || observation_type === "weatherRange");
+            var chart = useStockChart ? Highcharts.stockChart(options) : Highcharts.chart(options);
+
+            // If using debug, show a copy paste debug for use with jsfiddle
+            belchertown_debug(options);
+            belchertown_debug("Highcharts.chart('container', " + JSON.stringify(options) + ");");
+
+            } catch (e) {
+                // Keep rendering other charts even if one chart has invalid
+                // series/observation data.
+
+                // Add a visible placeholder for the skipped chart so users
+                // know why this chart is empty.
+                if (typeof options !== "undefined" && options.chart && options.chart.renderTo) {
+                    var failedChart = jQuery("#" + options.chart.renderTo);
+                    if (failedChart.length) {
+                        var unavailableObs = observation_type || plotname || "unknown observation";
+                        failedChart.html(
+                            '<div class="chart-unavailable" style="padding:14px 10px;text-align:center;color:#888;">' +
+                            '<div>Chart unavailable (missing or invalid observation)</div>' +
+                            '<div style="margin-top:6px;font-weight:500;">Observation: ' + unavailableObs + '</div>' +
+                            '</div>'
+                        );
+                    }
+                }
+
+                return true;
+            }
+
+        });
+
+        };
+
+        var requiredModules = belchertown_detect_highcharts_modules(data);
+        belchertown_ensure_highcharts_modules(requiredModules).then(function() {
+            renderCharts();
+        }).catch(function(err) {
+            belchertown_debug("Highcharts module preload error: " + err.message + ". Continuing render with available modules.");
+            renderCharts();
+        });
+
+    });
+
+};
