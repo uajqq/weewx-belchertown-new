@@ -3633,6 +3633,9 @@ class getData(SearchList):
 
                     forecast_alerts_url = f"https://data.api.xweather.com/alerts/{forecast_place}?format=json&limit={forecast_alert_limit}&lang={forecast_lang}&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
 
+                    # Avoid potential unbound-local access
+                    forecast_file_result = None
+
                     # File is stale, download a new copy
                     if forecast_is_stale:
                         forecast_file_result = None
@@ -3641,7 +3644,11 @@ class getData(SearchList):
                                 # Hidden option to use a pre-downloaded forecast file
                                 # rather than using API calls for no reason
                                 dev_forecast_file = extras_dict["forecast_dev_file"]
-                                req = Request(dev_forecast_file, None, headers)
+                                req = Request(
+                                    dev_forecast_file,
+                                    None,
+                                    HTTP_HEADERS["AERIS_WEATHER"],
+                                )
                                 with urlopen(
                                     req, timeout=DEFAULT_HTTP_TIMEOUT
                                 ) as response:
