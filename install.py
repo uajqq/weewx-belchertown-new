@@ -4,6 +4,8 @@
 import configobj
 from setup import ExtensionInstaller
 from io import StringIO
+import os
+import sys
 
 # -------- extension info -----------
 
@@ -21,6 +23,764 @@ def loader():
 
 
 class BelchertownInstaller(ExtensionInstaller):
+    _SKIN_CONF_REL_PATH = ("skins", "Belchertown", "skin.conf")
+    _BELCHERTOWN_ROOT_KEYS = {
+        "skin": "Belchertown",
+        "HTML_ROOT": "belchertown",
+        "enable": "true",
+    }
+    _EXTRAS_PLACEHOLDER_KEY = "required_section_placeholder"
+    _LEGACY_PLACEHOLDER_KEYS = ("work_around_ConfigObj_limitations",)
+    _LABEL_TYPO_NORMALIZATIONS = {
+        "Servere": "Severe",
+        "Hazadous": "Hazardous",
+        " For ": " for ",
+    }
+    _LEGACY_EXTRAS_MAPPING = {
+        "graph_page_show_all_button": "chart_page_show_all_button",
+        "graph_page_default_graphgroup": "chart_page_default_chartgroup",
+        "highcharts_homepage_graphgroup": "highcharts_homepage_chartgroup",
+    }
+    _LEGACY_LABELS_GENERIC_MAPPING = {
+        "nav_graphs": "nav_charts",
+        "graphs_page_header": "charts_page_header",
+        "homepage_graphs_link": "homepage_charts_link",
+        "graphs_page_all_button": "charts_page_all_button",
+        "graphs_windrose_frequency": "charts_windrose_frequency",
+        "graphs_windDir_ordinals": "charts_windDir_ordinals",
+    }
+    _SKIN_DEFAULTS_CACHE = None
+
+    @staticmethod
+    def _section_to_dict(section):
+        """Convert a ConfigObj section to a plain nested dict."""
+        if not isinstance(section, (dict, configobj.Section)):
+            return {}
+
+        result = {}
+        for key, value in section.items():
+            if isinstance(value, (dict, configobj.Section)):
+                result[key] = BelchertownInstaller._section_to_dict(value)
+            else:
+                result[key] = value
+        return result
+
+    @staticmethod
+    def _leading_spaces(text):
+        """Return the number of leading spaces in text."""
+        return len(text) - len(text.lstrip(" "))
+
+    @classmethod
+    def _format_config_value(cls, value):
+        """Format a Python/ConfigObj value back into config syntax."""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, str):
+            escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+            return '"%s"' % escaped
+        if isinstance(value, (list, tuple)):
+            return ", ".join(cls._format_config_value(item) for item in value)
+        return str(value)
+
+    @staticmethod
+    def _split_value_comment(value_text):
+        """Split a config value from an inline comment, if present."""
+        in_single = False
+        in_double = False
+
+        for index, char in enumerate(value_text):
+            if char == '"' and not in_single:
+                in_double = not in_double
+            elif char == "'" and not in_double:
+                in_single = not in_single
+            elif char == "#" and not in_single and not in_double:
+                return value_text[:index].rstrip(), value_text[index:].rstrip()
+
+        return value_text.rstrip(), ""
+
+    @classmethod
+    def _parse_config_value(cls, value_text):
+        """Parse a raw config value string using ConfigObj semantics."""
+        try:
+            parsed = configobj.ConfigObj(StringIO("x = %s" % value_text), encoding="utf-8")
+            return parsed.get("x")
+        except Exception:
+            return value_text
+
+    @classmethod
+    def _guess_weewx_config_path(cls, engine, current_config):
+        """Best-effort path lookup for weewx.conf used by the installer."""
+        candidates = []
+
+        if hasattr(current_config, "filename"):
+            candidates.append(getattr(current_config, "filename"))
+
+        for attr in ("config_path", "config_file", "config_filename", "config_fn"):
+            if hasattr(engine, attr):
+                candidates.append(getattr(engine, attr))
+
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate and os.path.isfile(candidate):
+                return candidate
+
+        return None
+
+    @classmethod
+    def _extract_skin_section_lines(cls, skin_lines, top_level_name, nested_name=None):
+        """Extract raw lines for a top-level or nested section from skin.conf."""
+        collected = []
+        current_top = None
+        inside_nested = nested_name is None
+
+        for line in skin_lines:
+            stripped = line.strip()
+
+            if stripped.startswith("[") and not stripped.startswith("[["):
+                current_top = stripped[1:-1].strip()
+                if current_top != top_level_name and collected:
+                    break
+                inside_nested = nested_name is None
+                continue
+
+            if current_top != top_level_name:
+                continue
+
+            if nested_name is None:
+                collected.append(line)
+                continue
+
+            if stripped.startswith("[[") and stripped.endswith("]]"):
+                nested_section = stripped[2:-2].strip()
+                if nested_section == nested_name:
+                    inside_nested = True
+                    continue
+                if inside_nested and collected:
+                    break
+                inside_nested = False
+                continue
+
+            if inside_nested:
+                collected.append(line)
+
+        return collected
+
+    @classmethod
+    def _extract_commented_extra_overrides(cls, engine, current_config):
+        """Extract commented-out Extras options that differ from skin.conf defaults."""
+        default_extras, _ = cls._get_skin_defaults()
+        if not default_extras:
+            return {}
+
+        config_path = cls._guess_weewx_config_path(engine, current_config)
+        if not config_path:
+            return {}
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except Exception:
+            return {}
+
+        in_stdreport = False
+        in_belchertown = False
+        in_extras = False
+        commented_overrides = {}
+
+        for raw_line in lines:
+            line = raw_line.rstrip("\n")
+            stripped = line.strip()
+
+            if not stripped:
+                continue
+
+            if stripped.startswith("[") and stripped.endswith("]"):
+                if stripped.startswith("[[["):
+                    section_name = stripped[3:-3].strip()
+                    in_extras = in_belchertown and section_name == "Extras"
+                    continue
+
+                if stripped.startswith("[["):
+                    section_name = stripped[2:-2].strip()
+                    in_belchertown = in_stdreport and section_name == "Belchertown"
+                    in_extras = False
+                    continue
+
+                section_name = stripped[1:-1].strip()
+                in_stdreport = section_name == "StdReport"
+                in_belchertown = False
+                in_extras = False
+                continue
+
+            if not in_extras:
+                continue
+
+            content = stripped
+            if not content.startswith("#"):
+                continue
+
+            content = content[1:].lstrip()
+            if not content or content.startswith("#"):
+                continue
+            if "=" not in content:
+                continue
+
+            key_part, raw_value = content.split("=", 1)
+            key = key_part.strip()
+            if not key or cls._is_placeholder_key(key):
+                continue
+
+            parsed_value_text, inline_comment = cls._split_value_comment(raw_value)
+            parsed_value = cls._parse_config_value(parsed_value_text)
+            if key not in default_extras:
+                continue
+
+            default_value = default_extras[key]
+            if parsed_value != default_value:
+                commented_overrides[key] = (parsed_value, inline_comment)
+
+        return commented_overrides
+
+    @classmethod
+    def _skin_conf_path(cls):
+        """Return the canonical absolute path to skins/Belchertown/skin.conf."""
+        return os.path.join(os.path.dirname(__file__), *cls._SKIN_CONF_REL_PATH)
+
+    @classmethod
+    def _get_skin_defaults(cls):
+        """Load and cache skin.conf defaults for Extras and Labels/Generic."""
+        if cls._SKIN_DEFAULTS_CACHE is not None:
+            return cls._SKIN_DEFAULTS_CACHE
+
+        skin_path = cls._skin_conf_path()
+        if not os.path.isfile(skin_path):
+            cls._SKIN_DEFAULTS_CACHE = ({}, {})
+            return cls._SKIN_DEFAULTS_CACHE
+
+        try:
+            skin_defaults = configobj.ConfigObj(skin_path, encoding="utf-8")
+            default_extras = cls._section_to_dict(skin_defaults.get("Extras", {}))
+            default_generic = cls._section_to_dict(
+                skin_defaults.get("Labels", {}).get("Generic", {})
+            )
+        except Exception:
+            cls._SKIN_DEFAULTS_CACHE = ({}, {})
+            return cls._SKIN_DEFAULTS_CACHE
+
+        cls._SKIN_DEFAULTS_CACHE = (default_extras, default_generic)
+        return cls._SKIN_DEFAULTS_CACHE
+
+    @classmethod
+    def _render_skin_lines(
+        cls,
+        source_lines,
+        target_indent,
+        restored_values,
+        placeholder_key,
+        commented_value_overrides=None,
+        legacy_value_overrides=None,
+        legacy_insert_before=None,
+        legacy_insert_end=None,
+    ):
+        """Render skin.conf lines as commented defaults plus restored active values."""
+        rendered = []
+        commented_value_overrides = commented_value_overrides or {}
+        legacy_value_overrides = legacy_value_overrides or {}
+        legacy_insert_before = legacy_insert_before or {}
+        legacy_insert_end = legacy_insert_end or []
+        non_empty_lines = [line for line in source_lines if line.strip()]
+        base_indent = min(
+            (cls._leading_spaces(line) for line in non_empty_lines),
+            default=0,
+        )
+
+        for raw_line in source_lines:
+            line = raw_line.rstrip("\n")
+
+            if base_indent and len(line) >= base_indent:
+                content = line[base_indent:]
+            else:
+                content = line.lstrip(" ")
+
+            stripped = content.strip()
+            if not stripped:
+                rendered.append("")
+                continue
+
+            if stripped.startswith("#"):
+                rendered.append(target_indent + stripped)
+                continue
+
+            if stripped.startswith("["):
+                continue
+
+            if "=" not in content:
+                rendered.append(target_indent + stripped)
+                continue
+
+            key_part, raw_value = content.split("=", 1)
+            key = key_part.strip()
+
+            if key == placeholder_key:
+                continue
+
+            legacy_before_keys = legacy_insert_before.get(key, [])
+            for legacy_key in legacy_before_keys:
+                if legacy_key in legacy_value_overrides:
+                    legacy_line = "%s = %s" % (
+                        legacy_key,
+                        cls._format_config_value(legacy_value_overrides[legacy_key]),
+                    )
+                    rendered.append(target_indent + legacy_line)
+
+            _, inline_comment = cls._split_value_comment(raw_value)
+            active_value = restored_values.get(key)
+
+            if active_value is None:
+                commented_override = commented_value_overrides.get(key)
+                if commented_override is not None:
+                    commented_value, commented_inline = commented_override
+                    commented_line = "%s = %s" % (
+                        key_part.rstrip(),
+                        cls._format_config_value(commented_value),
+                    )
+                    chosen_inline = commented_inline or inline_comment
+                    if chosen_inline:
+                        commented_line = "%s  %s" % (commented_line, chosen_inline)
+                    rendered.append(target_indent + "# " + commented_line)
+                    continue
+
+                rendered.append(target_indent + "# " + stripped)
+                continue
+
+            restored_line = "%s = %s" % (
+                key_part.rstrip(),
+                cls._format_config_value(active_value),
+            )
+            if inline_comment:
+                restored_line = "%s  %s" % (restored_line, inline_comment)
+
+            rendered.append(target_indent + restored_line)
+
+        for legacy_key in legacy_insert_end:
+            if legacy_key in legacy_value_overrides:
+                legacy_line = "%s = %s" % (
+                    legacy_key,
+                    cls._format_config_value(legacy_value_overrides[legacy_key]),
+                )
+                rendered.append(target_indent + legacy_line)
+        return rendered
+
+    @classmethod
+    def _build_belchertown_template(
+        cls,
+        current_report,
+        commented_extra_overrides=None,
+        legacy_extra_overrides=None,
+        legacy_insert_before=None,
+        legacy_insert_end=None,
+    ):
+        """Build a fresh Belchertown section from skin.conf and old Extras values."""
+        current_report = current_report if isinstance(current_report, (dict, configobj.Section)) else {}
+        current_extras = cls._extract_extra_overrides(current_report.get("Extras", {}))
+
+        skin_path = cls._skin_conf_path()
+        if not os.path.isfile(skin_path):
+            return None
+
+        with open(skin_path, "r", encoding="utf-8") as skin_file:
+            skin_lines = skin_file.readlines()
+
+        extras_lines = cls._extract_skin_section_lines(skin_lines, "Extras")
+
+        root_values = {}
+        for key, default_value in cls._BELCHERTOWN_ROOT_KEYS.items():
+            root_values[key] = current_report.get(key, default_value)
+
+        template_lines = [
+            "[StdReport]",
+            "",
+            "    [[Belchertown]]",
+            '        skin = %s' % cls._format_config_value(root_values["skin"]),
+            '        HTML_ROOT = %s' % cls._format_config_value(root_values["HTML_ROOT"]),
+            '        enable = %s' % cls._format_config_value(root_values["enable"]),
+            "",
+            "        [[[Extras]]]",
+            "",
+        ]
+        template_lines.extend(
+            cls._render_skin_lines(
+                extras_lines,
+                "            ",
+                current_extras,
+                cls._EXTRAS_PLACEHOLDER_KEY,
+                commented_extra_overrides,
+                legacy_extra_overrides,
+                legacy_insert_before,
+                legacy_insert_end,
+            )
+        )
+        template_lines.append("")
+
+        return configobj.ConfigObj(StringIO("\n".join(template_lines)), encoding="utf-8")
+
+    @classmethod
+    def _extract_extra_overrides(cls, extras_section):
+        """Return only user Extras overrides that differ from skin.conf defaults."""
+        current_extras = cls._section_to_dict(extras_section)
+        if not current_extras:
+            return {}
+
+        default_extras, _ = cls._get_skin_defaults()
+        if not default_extras:
+            # If defaults cannot be loaded, preserve existing extras to avoid data loss.
+            return current_extras
+
+        extra_overrides = {}
+        for key, value in current_extras.items():
+            if cls._is_placeholder_key(key):
+                continue
+
+            if key not in default_extras or default_extras[key] != value:
+                extra_overrides[key] = value
+
+        return extra_overrides
+
+    @classmethod
+    def _is_placeholder_key(cls, key):
+        """Return True if key is current or legacy placeholder sentinel."""
+        return key == cls._EXTRAS_PLACEHOLDER_KEY or key in cls._LEGACY_PLACEHOLDER_KEYS
+
+    @classmethod
+    def _normalize_placeholder_in_section(cls, section):
+        """Replace legacy placeholder keys with the current sentinel key in a section."""
+        if not isinstance(section, (dict, configobj.Section)):
+            return
+
+        for legacy_key in cls._LEGACY_PLACEHOLDER_KEYS:
+            if legacy_key not in section:
+                continue
+
+            if cls._EXTRAS_PLACEHOLDER_KEY not in section:
+                section[cls._EXTRAS_PLACEHOLDER_KEY] = section[legacy_key]
+
+            del section[legacy_key]
+
+    @classmethod
+    def _normalize_placeholder_keys_in_report(cls, current_report):
+        """Normalize legacy placeholder keys in Extras and Labels/Generic."""
+        if not isinstance(current_report, (dict, configobj.Section)):
+            return
+
+        extras = current_report.get("Extras")
+        cls._normalize_placeholder_in_section(extras)
+
+        labels = current_report.get("Labels")
+        if isinstance(labels, (dict, configobj.Section)):
+            generic = labels.get("Generic")
+            cls._normalize_placeholder_in_section(generic)
+
+    @classmethod
+    def _detect_legacy_keys(cls, current_report):
+        """Detect legacy key usage in Extras and Labels/Generic."""
+        if not isinstance(current_report, (dict, configobj.Section)):
+            return {"extras": {}, "labels_generic": {}}
+
+        extras = cls._section_to_dict(current_report.get("Extras", {}))
+        labels = current_report.get("Labels", {})
+        labels_generic = {}
+        if isinstance(labels, (dict, configobj.Section)):
+            labels_generic = cls._section_to_dict(labels.get("Generic", {}))
+
+        return {
+            "extras": {
+                key: cls._LEGACY_EXTRAS_MAPPING[key]
+                for key in cls._LEGACY_EXTRAS_MAPPING
+                if key in extras
+            },
+            "labels_generic": {
+                key: cls._LEGACY_LABELS_GENERIC_MAPPING[key]
+                for key in cls._LEGACY_LABELS_GENERIC_MAPPING
+                if key in labels_generic
+            },
+        }
+
+    @staticmethod
+    def _legacy_prompt_choice(prompt_text):
+        """Prompt user and return True for yes, False for no (default no)."""
+        try:
+            reply = input(prompt_text)
+        except EOFError:
+            return False
+        except Exception:
+            return False
+
+        normalized = str(reply).strip().lower()
+        return normalized in ("y", "yes")
+
+    @classmethod
+    def _should_migrate_legacy_keys(cls, detected_legacy):
+        """Offer legacy-key migration to users with a downgrade advisory."""
+        has_extras = bool(detected_legacy.get("extras"))
+        has_labels = bool(detected_legacy.get("labels_generic"))
+        if not has_extras and not has_labels:
+            return False
+
+        if not (hasattr(sys, "stdin") and sys.stdin and sys.stdin.isatty()):
+            print("", flush=True)
+            print("Belchertown installer: legacy keys detected.", flush=True)
+            print(
+                "Belchertown installer: non-interactive mode; "
+                "skipping automatic migration to preserve downgrade compatibility.",
+                flush=True,
+            )
+            print("", flush=True)
+            return False
+
+        print("\nBelchertown installer: detected deprecated key names in weewx.conf:\n")
+        if has_extras:
+            print("  [StdReport][Belchertown][Extras]")
+            for legacy_key, new_key in detected_legacy["extras"].items():
+                print("    %s -> %s" % (legacy_key, new_key))
+        if has_labels:
+            print("  [StdReport][Belchertown][Labels][Generic]")
+            for legacy_key, new_key in detected_legacy["labels_generic"].items():
+                print("    %s -> %s" % (legacy_key, new_key))
+
+        print("\nWARNING: Migrating legacy keys updates your config to newer names.")
+        print("WARNING: This can make downgrading to older Belchertown versions harder.\n")
+
+        return cls._legacy_prompt_choice(
+            "Update these legacy keys to current names now? [y/N]: "
+        )
+
+    @classmethod
+    def _migrate_legacy_keys_in_report(cls, current_report):
+        """Migrate legacy key names in-place for Extras and Labels/Generic."""
+        if not isinstance(current_report, (dict, configobj.Section)):
+            return
+
+        extras = current_report.get("Extras")
+        if isinstance(extras, (dict, configobj.Section)):
+            for legacy_key, new_key in cls._LEGACY_EXTRAS_MAPPING.items():
+                if legacy_key in extras:
+                    extras[new_key] = extras[legacy_key]
+                    del extras[legacy_key]
+
+        labels = current_report.get("Labels")
+        if isinstance(labels, (dict, configobj.Section)):
+            generic = labels.get("Generic")
+            if isinstance(generic, (dict, configobj.Section)):
+                for legacy_key, new_key in cls._LEGACY_LABELS_GENERIC_MAPPING.items():
+                    if legacy_key in generic:
+                        generic[new_key] = generic[legacy_key]
+                        del generic[legacy_key]
+
+    @classmethod
+    def _extract_label_overrides(cls, labels_section):
+        """Return only user label overrides that differ from skin.conf defaults."""
+        if not isinstance(labels_section, (dict, configobj.Section)):
+            return None
+
+        _, default_generic = cls._get_skin_defaults()
+        if not default_generic:
+            # If defaults cannot be loaded, preserve existing labels to avoid data loss.
+            return cls._section_to_dict(labels_section)
+
+        current_labels = cls._section_to_dict(labels_section)
+        current_generic = cls._section_to_dict(current_labels.get("Generic", {}))
+
+        generic_overrides = {}
+        for key, value in current_generic.items():
+            if cls._is_placeholder_key(key):
+                continue
+
+            if key not in default_generic:
+                generic_overrides[key] = value
+                continue
+
+            if default_generic[key] == value:
+                continue
+
+            normalized_value = value
+            if isinstance(value, str):
+                normalized_value = value
+                for old, new in cls._LABEL_TYPO_NORMALIZATIONS.items():
+                    normalized_value = normalized_value.replace(old, new)
+
+            if default_generic[key] == normalized_value:
+                continue
+
+            generic_overrides[key] = value
+
+        filtered_labels = {}
+        for key, value in current_labels.items():
+            if key == "Generic":
+                continue
+            filtered_labels[key] = value
+
+        if generic_overrides:
+            filtered_labels["Generic"] = generic_overrides
+
+        return filtered_labels or None
+
+    @classmethod
+    def _build_legacy_extras_insert_plan(
+        cls,
+        extras_section,
+        legacy_keys,
+        known_default_keys,
+        legacy_mapping,
+    ):
+        """Plan where to insert legacy keys based on their original Extras order."""
+        insert_before = {}
+        insert_end = []
+
+        if not isinstance(extras_section, (dict, configobj.Section)):
+            return insert_before, insert_end
+
+        ordered_keys = list(extras_section.keys())
+        legacy_set = set(legacy_keys)
+        known_set = set(known_default_keys)
+
+        for idx, key in enumerate(ordered_keys):
+            if key not in legacy_set:
+                continue
+
+            mapped_key = legacy_mapping.get(key)
+            if mapped_key in known_set and mapped_key not in legacy_set:
+                insert_before.setdefault(mapped_key, []).append(key)
+                continue
+
+            anchor_key = None
+            for candidate in ordered_keys[idx + 1 :]:
+                if candidate in known_set and candidate not in legacy_set:
+                    anchor_key = candidate
+                    break
+
+            if anchor_key is None:
+                insert_end.append(key)
+                continue
+
+            insert_before.setdefault(anchor_key, []).append(key)
+
+        return insert_before, insert_end
+
+    @classmethod
+    def _build_bootstrap_config(cls):
+        """Build minimal installer config with empty nested sections.
+
+        Fallback placeholder keys are added only if ConfigObj round-tripping
+        proves empty sections are dropped in this runtime.
+        """
+        config = configobj.ConfigObj(encoding="utf-8")
+        std_report = config.setdefault("StdReport", {})
+        belchertown = std_report.setdefault("Belchertown", {})
+
+        for key, default_value in cls._BELCHERTOWN_ROOT_KEYS.items():
+            belchertown[key] = default_value
+
+        extras = belchertown.setdefault("Extras", {})
+        labels = belchertown.setdefault("Labels", {})
+        generic = labels.setdefault("Generic", {})
+
+        if not cls._empty_sections_survive_round_trip(config):
+            extras[cls._EXTRAS_PLACEHOLDER_KEY] = "true"
+            generic[cls._EXTRAS_PLACEHOLDER_KEY] = "true"
+
+        return config
+
+    @classmethod
+    def _empty_sections_survive_round_trip(cls, config):
+        """Return True if ConfigObj preserves empty nested sections when written/read."""
+        try:
+            stream = StringIO()
+            config.write(stream)
+            stream.seek(0)
+            reparsed = configobj.ConfigObj(stream, encoding="utf-8")
+        except Exception:
+            return False
+
+        std_report = reparsed.get("StdReport", {})
+        belchertown = (
+            std_report.get("Belchertown", {})
+            if isinstance(std_report, (dict, configobj.Section))
+            else {}
+        )
+        extras = (
+            belchertown.get("Extras")
+            if isinstance(belchertown, (dict, configobj.Section))
+            else None
+        )
+        labels = (
+            belchertown.get("Labels")
+            if isinstance(belchertown, (dict, configobj.Section))
+            else None
+        )
+        generic = labels.get("Generic") if isinstance(labels, (dict, configobj.Section)) else None
+
+        return (
+            isinstance(extras, (dict, configobj.Section))
+            and isinstance(labels, (dict, configobj.Section))
+            and isinstance(generic, (dict, configobj.Section))
+        )
+
+    def configure(self, engine):
+        """Rebuild Belchertown root/Extras from skin.conf, preserving only label overrides."""
+        current_config = engine.config_dict
+        commented_extra_overrides = self._extract_commented_extra_overrides(
+            engine,
+            current_config,
+        )
+        std_report = current_config.setdefault("StdReport", {})
+        current_report = std_report.get("Belchertown", {})
+        self._normalize_placeholder_keys_in_report(current_report)
+        detected_legacy = self._detect_legacy_keys(current_report)
+        migrate_legacy = self._should_migrate_legacy_keys(detected_legacy)
+        if migrate_legacy:
+            self._migrate_legacy_keys_in_report(current_report)
+
+        preserved_legacy_extras = {}
+        legacy_insert_before = {}
+        legacy_insert_end = []
+        if not migrate_legacy and isinstance(current_report, (dict, configobj.Section)):
+            extras_section = current_report.get("Extras", {})
+            existing_extras = self._section_to_dict(extras_section)
+            for legacy_key in self._LEGACY_EXTRAS_MAPPING:
+                if legacy_key in existing_extras:
+                    preserved_legacy_extras[legacy_key] = existing_extras[legacy_key]
+
+            default_extras, _ = self._get_skin_defaults()
+            legacy_insert_before, legacy_insert_end = self._build_legacy_extras_insert_plan(
+                extras_section,
+                preserved_legacy_extras.keys(),
+                default_extras.keys(),
+                self._LEGACY_EXTRAS_MAPPING,
+            )
+
+        preserved_labels = None
+        if isinstance(current_report, (dict, configobj.Section)):
+            preserved_labels = self._extract_label_overrides(current_report.get("Labels"))
+
+        fresh_config = self._build_belchertown_template(
+            current_report,
+            commented_extra_overrides,
+            preserved_legacy_extras,
+            legacy_insert_before,
+            legacy_insert_end,
+        )
+        if fresh_config is None:
+            return False
+
+        if "Belchertown" in std_report:
+            del std_report["Belchertown"]
+
+        current_config.merge(fresh_config)
+
+        if isinstance(preserved_labels, dict) and preserved_labels:
+            std_report["Belchertown"]["Labels"] = preserved_labels
+
+        return True
+
     def __init__(self):
         super(BelchertownInstaller, self).__init__(
             version=VERSION,
@@ -37,182 +797,10 @@ class BelchertownInstaller(ExtensionInstaller):
 #         config stanza
 # ----------------------------------
 
-extension_config = """
-[StdReport]
-
-    [[Belchertown]]
-        skin = "Belchertown"
-        HTML_ROOT = "belchertown"
-        enable = "true" 
-
-        [[[Extras]]]
-
-            # For help refer to the docs at https://github.com/uajqq/weewx-belchertown-new
-            # and consult skin.conf for the configurable elements and their hierarchy
-
-            #---General Site Defaults---
-            # belchertown_debug    = 0
-            # belchertown_locale   = "auto"
-            # theme                = "light"
-            # theme_toggle_enabled = 1
-            # site_title           = "My Weather Website"
-            # logo_image           = ""
-            # logo_image_dark      = ""
-            # radar_html           = ""
-            # radar_html_dark      = ""
-            # radar_width          = 650
-            # radar_height         = 360
-            # radar_marker         = 0
-
-            #---Forecast unit of measures---
-            # radar_rain     = "default" # default, mm, in
-            # radar_temp     = "default" # default, C,  F
-            # radar_wind     = "default" # default, kt, m/s, km/h, mph, bft
-            # aeris_map      = 0
-            # almanac_extras = 1
-
-            #---Station Observations---
-            # station_observations = "barometer", "dewpoint", "outHumidity", "rainWithRainRate"
-
-            #---Manifest Settings for Mobile Phones---
-            # manifest_name       = "My Weather Website"
-            # manifest_short_name = "MWW"
-
-            #---Highcharts settings---
-            # highcharts_enabled             = 1
-            # chart_page_show_all_button     = 1
-            # chart_page_default_chartgroup  = "day"
-            # highcharts_homepage_chartgroup = "homepage"
-            # highcharts_decimal             = "auto"
-            # highcharts_thousands           = "auto"
-
-            #---MQTT Websockets defaults---
-            # mqtt_websockets_enabled         = 0
-            # mqtt_websockets_host            = ""
-            # mqtt_websockets_port            = 1883
-            # mqtt_websockets_ssl             = 0
-            # mqtt_websockets_topic           = ""
-            # mqtt_websockets_username        = ""
-            # mqtt_websockets_password        = ""
-            # disconnect_live_website_visitor = 1800000
-            # show_last_updated_alert         = 0
-            # last_updated_alert_threshold    = 1800
-            # webpage_autorefresh             = 0
-
-            #---Image Reload Section---
-            # reload_hook_images     = 0
-            # reload_images_radar    = 300
-            # reload_images_hook_asi = -1
-            # reload_images_hook_af  = -1
-            # reload_images_hook_as  = -1
-            # reload_images_hook_ac  = -1
-
-            #---Forecast defaults---
-            # forecast_enabled  = 0
-            # forecast_provider = "nws"   # nws (default, no API key), open-meteo (no API key), aeris (Aeris/XWeather), or pirateweather
-            
-            #---forecast API configuration---
-            # forecast_api_id                      = "" # Aeris/XWeather Client ID or Pirate Weather API Key
-            # forecast_api_secret                  = "" # Only for Aeris/XWeather
-            # forecast_units                       = "us"
-            # forecast_interval_hours              = 24
-            # forecast_lang                        = "en"
-            # forecast_stale                       = 3540 # 59 minutes
-            # current_conditions_stale             = 3540 # 59 minutes
-            # forecast_aeris_use_metar             = 1
-            # forecast_alert_enabled               = 0
-            # forecast_alert_limit                 = 1
-            # forecast_show_daily_forecast_link    = 0
-            # forecast_daily_forecast_link         = ""
-            # forecast_show_humidity_dewpoint      = 0
-            # forecast_place                       = "" # defaults to station lat/lon
-            # current_conditions                   = "obs"
-            # current_conditions_timestamp_enabled = 0
-
-            #---Air Quality Index (AQI) defaults for Aeris/Xweather---
-            # aqi_enabled          = 0
-            # aqi_location_enabled = 0
-
-            #---Show Beaufort wind scale category under wind table---
-            # beaufort_category       = 0
-            # beaufort_category_gusts = 0
-
-            #---Earthquake defaults---
-            # earthquake_enabled     = 0
-            # earthquake_maxradiuskm = 1000
-            # earthquake_stale       = 10740
-            # earthquake_server      = USGS
-            # earthquake_minmag      = 2
-
-            #---Social Share Button Defaults. Define the text below under Labels---
-            # facebook_enabled  = 0
-            # twitter_enabled   = 0
-            # social_share_html = ""
-
-            #---Google Analytics---
-            # googleAnalyticsId = ""
-
-            # This is the display of the Pi Kiosk which is in the /pi folder
-            # pi_kiosk_bold = "false"
-            # pi_theme      = "auto"
-
-            # This is the display of the kiosk page which is kiosk.html
-            # radar_html_kiosk              = ""
-            # radar_width_kiosk             = 490
-            # radar_height_kiosk            = 362
-            # mqtt_websockets_host_kiosk    = ""
-            # mqtt_websockets_port_kiosk    = ""
-            # mqtt_websockets_ssl_kiosk     = ""
-            # forecast_interval_hours_kiosk = 24
-            # aqi_enabled_kiosk             = 0
-
-            # Display a Back To Top Button
-            # back_to_top_button_enabled  = 0
-            # back_to_top_button_position = 0
-            # back_to_top_button_opacity  = 0.8
-
-            #---CSS / JS minifying -- requires rcssmin and rjsmin --
-            # minify = 1
-
-            #-------------------------------------------------------------
-            #---
-            #--- python's ConfigObj has a limitation in how it processes
-            #--- comments, so we need to define an 'unused' variable below
-            #--- to ensure that this whole stanza makes it into weewx.conf
-            #--- 
-            #--- please ignore the following 'unused' variable
-            #---
-            #-------------------------------------------------------------
-            work_around_ConfigObj_limitations = "true"
-
-            [[[Labels]]]
-                [[[[Generic]]]]
-                    #-- Footer information --
-                    # footer_copyright_text  = "My Weather Website"
-                    # footer_disclaimer_text = "Never make important decisions based on info from this website."
-
-                    #-- Default page headers --
-                    # home_page_header    = "My Station Weather Conditions"
-                    # charts_page_header  = "Weather Observation Charts"
-                    # reports_page_header = "Weather Observation Reports"
-                    # records_page_header = "Weather Observation Records"
-                    # about_page_header   = "About This Site"
-                    # powered_by          = 'Observations are powered by a <a href="/about" target="_blank">Personal Weather Station</a>'
-
-                    #-- Twitter Social Share --
-                    # twitter_text     = "Check out my website: My Weather Website Weather Conditions"
-                    # twitter_owner    = "YourTwitterUsernameHere"
-                    # twitter_hashtags = "WeeWX #weather"
-
-                    #---------------------------------------------------------
-                    #---
-                    #--- ConfigObj can drop fully-commented sections, so keep
-                    #--- one inert key to ensure this stanza is written.
-                    #---
-                    #---------------------------------------------------------
-                    work_around_ConfigObj_limitations = "true"
-"""
-config_dict = configobj.ConfigObj(StringIO(extension_config))
+# Keep this bootstrap config intentionally minimal.
+# Canonical Belchertown option defaults live in skins/Belchertown/skin.conf,
+# and configure() rebuilds [[[Extras]]] from that file.
+config_dict = BelchertownInstaller._build_bootstrap_config()
 
 # ----------------------------------
 #        files stanza
