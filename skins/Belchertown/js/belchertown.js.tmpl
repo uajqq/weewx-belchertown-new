@@ -7,6 +7,7 @@ generator even if within a comment.
 
 #encoding "UTF-8"
 #import datetime
+#from user.belchertown import build_almanac_template_context
 
 #if "-" in str($station.stn_info.latitude_f)
 #set global $hemisphere = "southern-hemisphere"
@@ -19,6 +20,28 @@ generator even if within a comment.
 #set global $sunset_minute = datetime.datetime.fromtimestamp($almanac.sunset.raw).strftime('%-M')
 #set global $sunrise_hour = datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%-H')
 #set global $sunrise_minute = datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%-M')
+#end if
+
+#set $almanac_js_context = build_almanac_template_context($almanac, $current.dateTime.raw, $almanac.hasExtras)
+#set global $moon_tilt_template_fallback = "null"
+#set $moon_tilt_attr = $almanac_js_context.get("moon_tilt_attr", "")
+#if $moon_tilt_attr != ""
+    #try
+    #set $moon_tilt_template_fallback = "%.6f" % float($moon_tilt_attr)
+    #except
+    #set $moon_tilt_template_fallback = "null"
+    #end try
+#end if
+#if $moon_tilt_template_fallback == "null"
+#try
+#set $moon_tilt_template_fallback = "%.6f" % float($moon_tilt)
+#except
+    #try
+    #set $moon_tilt_template_fallback = "%.6f" % float($almanac.moon_tilt)
+    #except
+    #set $moon_tilt_template_fallback = "null"
+    #end try
+#end try
 #end if
 */
 
@@ -37,6 +60,7 @@ moment.locale(moment_locale);
 var chartgroups_raw = $charts;
 var chartgroups_titles = $chartpage_titles;
 var chartpage_content = $chartpage_content;
+var moon_tilt_template_fallback = $moon_tilt_template_fallback;
 
 //  declare icon_dict as global variable
 var icon_dict = {};
@@ -1064,6 +1088,9 @@ function enhanceAlmanacExtrasModal(almanacData) {
     var sunriseEpoch;
     var sunsetEpoch;
     var totalDaylightLabel = "$obs.label.total_daylight".toLowerCase();
+    var phaseLabel = "$obs.label.phase".toLowerCase();
+    var moonAgeValue = "";
+    var moonAgeLabel = "Moon age";
 
     if (!modalBody.length) {
         return;
@@ -1126,6 +1153,44 @@ function enhanceAlmanacExtrasModal(almanacData) {
             }
         });
     });
+
+    if (almanacData && almanacData["moon"]) {
+        moonAgeValue = String(almanacData["moon"]["moon_age"] || "").replace(/\u00a0/g, " ").trim();
+    }
+    if (!moonAgeValue && weewx_data && weewx_data["almanac"] && weewx_data["almanac"]["moon"]) {
+        moonAgeValue = String(weewx_data["almanac"]["moon"]["moon_age"] || "").replace(/\u00a0/g, " ").trim();
+    }
+    if (moonAgeValue && moonAgeValue !== "--") {
+        var moonTable = modalBody.find("table.celestial").eq(1);
+        if (moonTable.length) {
+            var moonAgeRow = moonTable.find("tr[data-row='moon-age']").first();
+            if (!moonAgeRow.length) {
+                moonAgeRow = jQuery("<tr class='celestial-row celestial-row--item' data-row='moon-age'><td class='label celestial-cell-label'></td><td class='data celestial-cell-value'></td></tr>");
+                moonAgeRow.find("td").eq(0).text(moonAgeLabel);
+
+                var phaseRow = jQuery();
+                moonTable.find("tr").each(function() {
+                    var row = jQuery(this);
+                    var tds = row.children("td");
+                    if (tds.length >= 2) {
+                        var lbl = jQuery(tds[0]).text().replace(/\u00a0/g, " ").trim().toLowerCase();
+                        if (lbl === phaseLabel || lbl.indexOf(phaseLabel) !== -1) {
+                            phaseRow = row;
+                            return false;
+                        }
+                    }
+                });
+
+                if (phaseRow.length) {
+                    moonAgeRow.insertBefore(phaseRow);
+                } else {
+                    moonTable.append(moonAgeRow);
+                }
+            }
+
+            moonAgeRow.find("td").eq(1).text(moonAgeValue);
+        }
+    }
 
     sourceRaw = ((almanacData && almanacData["source"]) || "").toString().toLowerCase();
     if (!sourceRaw && weewx_data && weewx_data["almanac"]) {
@@ -1365,15 +1430,34 @@ function moon_illumination_fraction(moonData) {
     return Math.max(0, Math.min(1, fullness / 100));
 }
 
-function moon_is_waxing(moonData) {
-    var index = parseInt(moonData && moonData["moon_index"], 10);
-    if (!isFinite(index)) {
+function moon_tilt_degrees(moonData) {
+    var tilt = parseFloat(moonData && moonData["moon_tilt"]);
+    if (!isFinite(tilt)) {
         return null;
     }
-    return index > 0 && index < 4;
+    return tilt;
 }
 
-function moon_limb_orientation_degrees(almanacData) {
+function moon_tilt_template_degrees() {
+    var tilt = parseFloat(moon_tilt_template_fallback);
+    if (!isFinite(tilt)) {
+        return null;
+    }
+    return tilt;
+}
+
+function moon_tilt_to_icon_rotation(tiltDegrees) {
+    var tilt = parseFloat(tiltDegrees);
+    if (!isFinite(tilt)) {
+        return null;
+    }
+
+    // Skyfield moon_tilt uses the opposite sign convention from our SVG
+    // screen-space rotation, so flip sign for display.
+    return -tilt;
+}
+
+function moon_lit_direction_degrees(almanacData) {
     var diagram = almanacData && almanacData["diagram"];
     var sun = diagram && diagram["sun"];
     var moon = diagram && diagram["moon"];
@@ -1384,19 +1468,97 @@ function moon_limb_orientation_degrees(almanacData) {
     var moonAlt = to_radians(moon && moon["altitude"]);
 
     if (!isFinite(sunAz) || !isFinite(sunAlt) || !isFinite(moonAz) || !isFinite(moonAlt)) {
-        return 0;
+        return null;
     }
 
-    var deltaAz = sunAz - moonAz;
-    var numerator = Math.sin(deltaAz);
-    var denominator = (Math.tan(sunAlt) * Math.cos(moonAlt)) - (Math.sin(moonAlt) * Math.cos(deltaAz));
-    var angle = Math.atan2(numerator, denominator);
+    // ENU unit vectors from apparent topocentric horizontal coordinates.
+    // azimuth convention: 0°=north, 90°=east (WeeWX almanac).
+    function horizontalUnitVector(az, alt) {
+        var cosAlt = Math.cos(alt);
+        return {
+            x: cosAlt * Math.sin(az), // east
+            y: cosAlt * Math.cos(az), // north
+            z: Math.sin(alt),         // up
+        };
+    }
+
+    function dot(a, b) {
+        return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+    }
+
+    function subtract(a, b) {
+        return {
+            x: a.x - b.x,
+            y: a.y - b.y,
+            z: a.z - b.z,
+        };
+    }
+
+    function scale(a, s) {
+        return {
+            x: a.x * s,
+            y: a.y * s,
+            z: a.z * s,
+        };
+    }
+
+    function norm(a) {
+        return Math.sqrt(dot(a, a));
+    }
+
+    function normalize(a) {
+        var n = norm(a);
+        if (!isFinite(n) || n <= 0) {
+            return null;
+        }
+        return scale(a, 1 / n);
+    }
+
+    function projectOntoPlane(v, normal) {
+        return subtract(v, scale(normal, dot(v, normal)));
+    }
+
+    function cross(a, b) {
+        return {
+            x: (a.y * b.z) - (a.z * b.y),
+            y: (a.z * b.x) - (a.x * b.z),
+            z: (a.x * b.y) - (a.y * b.x),
+        };
+    }
+
+    var sunVec = horizontalUnitVector(sunAz, sunAlt);
+    var moonVec = horizontalUnitVector(moonAz, moonAlt);
+
+    // Direction to Sun on the Moon's apparent disk (projected tangent plane).
+    var litDir = normalize(projectOntoPlane(sunVec, moonVec));
+    if (!litDir) {
+        return null;
+    }
+
+    // "Up" on the apparent disk is zenith projected onto the same plane.
+    var zenith = {x: 0, y: 0, z: 1};
+    var upVec = normalize(projectOntoPlane(zenith, moonVec));
+    if (!upVec) {
+        // Fallback if Moon is at zenith: use local north projected to plane.
+        upVec = normalize(projectOntoPlane({x: 0, y: 1, z: 0}, moonVec));
+    }
+    if (!upVec) {
+        return null;
+    }
+
+    var rightVec = normalize(cross(upVec, moonVec));
+    if (!rightVec) {
+        return null;
+    }
+
+    // Angle of illuminated direction (toward Sun) on the disk;
+    // 0° means lit side points to local "up" on sky view.
+    var angle = Math.atan2(dot(litDir, rightVec), dot(litDir, upVec));
 
     if (!isFinite(angle)) {
-        return 0;
+        return null;
     }
 
-    // Convert to CSS/SVG rotation where 0 keeps horns vertical.
     return angle * 180 / Math.PI;
 }
 
@@ -1472,14 +1634,24 @@ function render_moon_icon_html(data) {
     var almanac = data && data["almanac"];
     var moon = almanac && almanac["moon"];
     var illumination = moon_illumination_fraction(moon);
-    var waxing = moon_is_waxing(moon);
+    var templateTilt = moon_tilt_template_degrees();
+    var templateTiltRotation = moon_tilt_to_icon_rotation(templateTilt);
+    var litDirection = templateTiltRotation;
+    var hasFiniteNumber = function(value) {
+        return (typeof value === "number") && isFinite(value);
+    };
 
-    if (!isFinite(illumination) || waxing === null) {
+    if (!hasFiniteNumber(litDirection)) {
+        litDirection = moon_lit_direction_degrees(almanac);
+    }
+
+    if (!hasFiniteNumber(illumination) || !hasFiniteNumber(litDirection)) {
         return moon_icon(moon && moon["moon_index"]);
     }
 
-    var orientation = moon_limb_orientation_degrees(almanac);
-    return render_oriented_moon_svg(illumination, waxing, orientation);
+    // Keep shape model fixed to "bright on right", then rotate using
+    // ephemeris-derived illuminated-direction angle.
+    return render_oriented_moon_svg(illumination, true, litDirection);
 }
 
 //  function returns html for moon-icon according to moonphase value and currentTheme setting

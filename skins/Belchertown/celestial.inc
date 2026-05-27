@@ -12,6 +12,10 @@
 #set $moon_altitude = "--"
 #set $moon_ra = "--"
 #set $moon_dec = "--"
+#set $moon_age_label = "Moon age"
+#set $moon_age_days = None
+#set $moon_age_display = "--"
+#set $synodic_month_days = 29.530588853
 #set $sun_altitude_for_display = None
 #set $sun_altitude = "--"
 #try
@@ -21,6 +25,36 @@
 #end try
 #if $sun_altitude_for_display is None
   #set $sun_altitude_for_display = -90.0
+#end if
+#try
+  #if $obs.label.moon_age != "moon_age"
+    #set $moon_age_label = $obs.label.moon_age
+  #end if
+#except
+  #set $unused_moon_age_label = None
+#end try
+#set $next_new_moon_raw = None
+#set $now_raw = None
+#try
+  #set $next_new_moon_raw = $almanac.next_new_moon.raw
+#except
+  #set $next_new_moon_raw = None
+#end try
+#try
+  #set $now_raw = $current.dateTime.raw
+#except
+  #set $now_raw = None
+#end try
+#if $next_new_moon_raw is not None and $now_raw is not None
+  #set $days_to_next_new = (float($next_new_moon_raw) - float($now_raw)) / 86400.0
+  #set $moon_age_days = $synodic_month_days - $days_to_next_new
+  #while $moon_age_days < 0
+    #set $moon_age_days = $moon_age_days + $synodic_month_days
+  #end while
+  #while $moon_age_days >= $synodic_month_days
+    #set $moon_age_days = $moon_age_days - $synodic_month_days
+  #end while
+  #set $moon_age_display = "%.1f days" % $moon_age_days
 #end if
 #include "almanac_daylight_data.inc"
 #if $almanac.hasExtras
@@ -49,4 +83,5 @@
 #else
 <tr> <td class='label'>$obs.label.new_moon</td> <td class='data'>$almanac.next_new_moon</td> </tr> <tr> <td class='label'>$obs.label.full_moon</td> <td class='data'>$almanac.next_full_moon</td> </tr>#slurp
 #end if
+<tr> <td class='label'>$moon_age_label</td> <td class='data'>$moon_age_display</td> </tr>
 <tr> <td class='label'>$obs.label.phase</td> <td class='data'>$almanac.moon_phase<br/> $almanac.moon_fullness% $obs.label.full</td> </tr> </table> </div> </div> </div> </div> <div class='clear'></div><div class='almanac_last_updated'></div>

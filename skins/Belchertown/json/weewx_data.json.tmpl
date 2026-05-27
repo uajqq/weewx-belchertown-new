@@ -1,5 +1,6 @@
 #encoding UTF-8
 #import datetime
+#import math
 #from user.belchertown import build_almanac_template_context
 #errorCatcher Echo
 
@@ -13,6 +14,11 @@
 #set $moon_altitude = "--"
 #set $moon_ra = "--"
 #set $moon_dec = "--"
+#set $moon_age_label = "Moon age"
+#set $moon_age_days = None
+#set $moon_age_display = "--"
+#set $moon_tilt_degrees = None
+#set $synodic_month_days = 29.530588853
 #set $sun_altitude_raw = None
 #set $sun_altitude = "--"
 #try
@@ -22,6 +28,39 @@
 #end try
 #if $sun_altitude_raw is None
     #set $sun_altitude_raw = -90.0
+#end if
+#try
+    #if $obs.label.moon_age != "moon_age"
+        #set $moon_age_label = $obs.label.moon_age
+    #end if
+#except
+    #set $unused_moon_age_label = None
+#end try
+#set $next_new_moon_raw = None
+#set $now_raw = None
+#try
+    #set $next_new_moon_raw = $almanac.next_new_moon.raw
+#except
+    #set $next_new_moon_raw = None
+#end try
+#try
+    #set $now_raw = $current.dateTime.raw
+#except
+    #set $now_raw = None
+#end try
+#if $next_new_moon_raw is not None and $now_raw is not None
+    #set $days_to_next_new = (float($next_new_moon_raw) - float($now_raw)) / 86400.0
+    #set $moon_age_days = $synodic_month_days - $days_to_next_new
+    #while $moon_age_days < 0
+        #set $moon_age_days = $moon_age_days + $synodic_month_days
+    #end while
+    #while $moon_age_days >= $synodic_month_days
+        #set $moon_age_days = $moon_age_days - $synodic_month_days
+    #end while
+    #set $moon_age_display = "%.1f days" % $moon_age_days
+#end if
+#if $moon_age_days is not None and not math.isfinite($moon_age_days)
+    #set $moon_age_days = None
 #end if
 #include "almanac_daylight_data.inc"
 ## If extended almanac information is available, do extra calculations.
@@ -62,7 +101,19 @@
 #set $diagram_centering_mode_attr = $almanac_diagram_context.get("diagram_centering_mode_attr", "off")
 #set $sun_x_offset_attr = $almanac_diagram_context.get("sun_x_offset_attr", "0.000")
 #set $moon_x_offset_attr = $almanac_diagram_context.get("moon_x_offset_attr", "0.000")
+#set $moon_tilt_attr = $almanac_diagram_context.get("moon_tilt_attr", "")
 #set $almanac_svg_markup_attr = $almanac_diagram_context.get("almanac_svg_markup_attr", "")
+
+#if $moon_tilt_attr != ""
+    #try
+        #set $moon_tilt_degrees = float($moon_tilt_attr)
+    #except
+        #set $moon_tilt_degrees = None
+    #end try
+#end if
+#if $moon_tilt_degrees is not None and not math.isfinite($moon_tilt_degrees)
+    #set $moon_tilt_degrees = None
+#end if
 
 #if $almanac_data_source == "none"
     #if $sun_az_attr != "" or $moon_az_attr != "" or $sun_track_path_attr != "" or $moon_track_path_attr != ""
@@ -769,6 +820,9 @@
             "moon_fullness": "$almanac.moon_fullness",
             "moon_phase": "$almanac.moon_phase",
             "moon_index": "$almanac.moon_index",
+            "moon_tilt": #if $moon_tilt_degrees is not None##echo "%.6f" % $moon_tilt_degrees##else#null#end if#,
+            "moon_age": "$moon_age_display",
+            "moon_age_days": #if $moon_age_days is not None##echo "%.6f" % $moon_age_days##else#null#end if#,
             "moon_rise": "$almanac.moon.rise",
             "moon_rise_epoch": "$almanac.moon.rise.raw",
             "moon_set": "$almanac.moon.set",
