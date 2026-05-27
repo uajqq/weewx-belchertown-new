@@ -2392,9 +2392,12 @@ class getData(SearchList):
         # Find the beginning of the current year
         now = datetime.datetime.now()
         year_start_epoch = int(datetime.datetime(now.year, 1, 1, 0, 0).timestamp())
+        month_start_epoch = int(datetime.datetime(now.year, now.month, 1, 0, 0).timestamp())
         today_start_epoch = int(
             datetime.datetime(now.year, now.month, now.day, 0, 0).timestamp()
         )
+        week_start_epoch = today_start_epoch - (7 * 86400)
+        yesterday_start_epoch = today_start_epoch - 86400
 
         # Setup the converter
         # Get the target unit nickname (something like 'US' or 'METRIC'):
@@ -2419,6 +2422,24 @@ class getData(SearchList):
         year_outTemp_min_range_query = wx_manager.getSql(
             temp_range_sql.format(order="ASC"), (year_start_epoch, today_start_epoch)
         )
+        month_outTemp_max_range_query = wx_manager.getSql(
+            temp_range_sql.format(order="DESC"), (month_start_epoch, today_start_epoch)
+        )
+        month_outTemp_min_range_query = wx_manager.getSql(
+            temp_range_sql.format(order="ASC"), (month_start_epoch, today_start_epoch)
+        )
+        week_outTemp_max_range_query = wx_manager.getSql(
+            temp_range_sql.format(order="DESC"), (week_start_epoch, today_start_epoch)
+        )
+        week_outTemp_min_range_query = wx_manager.getSql(
+            temp_range_sql.format(order="ASC"), (week_start_epoch, today_start_epoch)
+        )
+        yesterday_outTemp_max_range_query = wx_manager.getSql(
+            temp_range_sql.format(order="DESC"), (yesterday_start_epoch, today_start_epoch)
+        )
+        yesterday_outTemp_min_range_query = wx_manager.getSql(
+            temp_range_sql.format(order="ASC"), (yesterday_start_epoch, today_start_epoch)
+        )
         at_outTemp_max_range_query = wx_manager.getSql(
             temp_range_sql.format(order="DESC"), (0, today_start_epoch)
         )
@@ -2439,113 +2460,39 @@ class getData(SearchList):
             skin_outTemp_unit, "%.1f"
         )
 
-        # Largest Daily Temperature Range Conversions
-        if year_outTemp_max_range_query is not None:
-            max_val = self._convert_temperature(
-                year_outTemp_max_range_query[3], outTemp_unit, outTemp_round
-            )
-            min_val = self._convert_temperature(
-                year_outTemp_max_range_query[2], outTemp_unit, outTemp_round
-            )
+        default_outTemp_range = [
+            calendar.timegm(time.gmtime()),
+            locale.format_string("%.1f", 0),
+            locale.format_string("%.1f", 0),
+            locale.format_string("%.1f", 0),
+        ]
+
+        def _convert_temp_range_result(query_row):
+            if query_row is None:
+                return list(default_outTemp_range)
+
+            max_val = self._convert_temperature(query_row[3], outTemp_unit, outTemp_round)
+            min_val = self._convert_temperature(query_row[2], outTemp_unit, outTemp_round)
             total = outTemp_round % (float(max_val) - float(min_val))
-            year_outTemp_range_max = [
-                year_outTemp_max_range_query[0],
+
+            return [
+                query_row[0],
                 locale.format_string("%g", float(total)),
                 locale.format_string("%g", float(min_val)),
                 locale.format_string("%g", float(max_val)),
             ]
-        else:
-            year_outTemp_range_max = [
-                calendar.timegm(time.gmtime()),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-            ]
 
-        if year_outTemp_min_range_query is not None:
-            max_val = self._convert_temperature(
-                year_outTemp_min_range_query[3], outTemp_unit, outTemp_round
-            )
-            min_val = self._convert_temperature(
-                year_outTemp_min_range_query[2], outTemp_unit, outTemp_round
-            )
-            total = outTemp_round % (float(max_val) - float(min_val))
-            year_outTemp_range_min = [
-                year_outTemp_min_range_query[0],
-                locale.format_string("%g", float(total)),
-                locale.format_string("%g", float(min_val)),
-                locale.format_string("%g", float(max_val)),
-            ]
-        else:
-            year_outTemp_range_min = [
-                calendar.timegm(time.gmtime()),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-            ]
-
-        if at_outTemp_max_range_query is not None:
-            max_val = self._convert_temperature(
-                at_outTemp_max_range_query[3], outTemp_unit, outTemp_round
-            )
-            min_val = self._convert_temperature(
-                at_outTemp_max_range_query[2], outTemp_unit, outTemp_round
-            )
-            total = outTemp_round % (float(max_val) - float(min_val))
-            at_outTemp_range_max = [
-                at_outTemp_max_range_query[0],
-                locale.format_string("%g", float(total)),
-                locale.format_string("%g", float(min_val)),
-                locale.format_string("%g", float(max_val)),
-            ]
-        else:
-            at_outTemp_range_max = [
-                calendar.timegm(time.gmtime()),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-            ]
-
-        # All Time - Smallest Daily Temperature Range Conversions
-        # Max temperature for this day
-        if at_outTemp_min_range_query is not None:
-            at_outTemp_min_range_max_tuple = (
-                at_outTemp_min_range_query[3],
-                outTemp_unit,
-                "group_temperature",
-            )
-            at_outTemp_min_range_max = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_min_range_max_tuple)[0]
-            )
-            # Min temperature for this day
-            at_outTemp_min_range_min_tuple = (
-                at_outTemp_min_range_query[2],
-                outTemp_unit,
-                "group_temperature",
-            )
-            at_outTemp_min_range_min = (
-                outTemp_round
-                % self.generator.converter.convert(at_outTemp_min_range_min_tuple)[0]
-            )
-            # Smallest Daily Temperature Range total
-            at_outTemp_min_range_total = outTemp_round % (
-                float(at_outTemp_min_range_max) - float(at_outTemp_min_range_min)
-            )
-            # Replace the SQL Query output with the converted values
-            at_outTemp_range_min = [
-                at_outTemp_min_range_query[0],
-                locale.format_string("%g", float(at_outTemp_min_range_total)),
-                locale.format_string("%g", float(at_outTemp_min_range_min)),
-                locale.format_string("%g", float(at_outTemp_min_range_max)),
-            ]
-        else:
-            at_outTemp_range_min = [
-                calendar.timegm(time.gmtime()),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-                locale.format_string("%.1f", 0),
-            ]
+        # Daily temperature-range records for each displayed period.
+        year_outTemp_range_max = _convert_temp_range_result(year_outTemp_max_range_query)
+        year_outTemp_range_min = _convert_temp_range_result(year_outTemp_min_range_query)
+        month_outTemp_range_max = _convert_temp_range_result(month_outTemp_max_range_query)
+        month_outTemp_range_min = _convert_temp_range_result(month_outTemp_min_range_query)
+        week_outTemp_range_max = _convert_temp_range_result(week_outTemp_max_range_query)
+        week_outTemp_range_min = _convert_temp_range_result(week_outTemp_min_range_query)
+        yesterday_outTemp_range_max = _convert_temp_range_result(yesterday_outTemp_max_range_query)
+        yesterday_outTemp_range_min = _convert_temp_range_result(yesterday_outTemp_min_range_query)
+        at_outTemp_range_max = _convert_temp_range_result(at_outTemp_max_range_query)
+        at_outTemp_range_min = _convert_temp_range_result(at_outTemp_min_range_query)
 
         rain_unit = converter.group_unit_dict["group_rain"]
 
@@ -2613,7 +2560,7 @@ class getData(SearchList):
                 GROUP BY month, year ORDER BY total DESC LIMIT 1;
             """
             year_rain_data_sql = """
-                SELECT dateTime, sum FROM archive_day_rain
+                SELECT dateTime, sum, count FROM archive_day_rain
                 WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?;
             """
             at_rain_highest_year_sql = """
@@ -2634,7 +2581,7 @@ class getData(SearchList):
                 GROUP BY month, year ORDER BY total DESC LIMIT 1;
             """
             year_rain_data_sql = """
-                SELECT dateTime, ROUND(sum, 2) FROM archive_day_rain
+                SELECT dateTime, ROUND(sum, 2), count FROM archive_day_rain
                 WHERE year(FROM_UNIXTIME(dateTime)) = ?;
             """
             at_rain_highest_year_sql = """
@@ -2875,63 +2822,82 @@ class getData(SearchList):
             at_suniest_month = ["N/A", 0.0]
             at_sunshineDur_highest_year = ["N/A", 0.0]
 
-        # Consecutive days with/without rainfall
-        # Track running max inline instead of storing all values in dicts
-        year_days_with_rain_total = 0
-        year_days_without_rain_total = 0
-        year_days_with_rain = None
-        year_days_without_rain = None
-        year_rain_query = wx_manager.genSql(year_rain_data_sql, (current_year,))
-        for row in year_rain_query:
-            if row[1] != 0:
-                year_days_with_rain_total += 1
-                year_days_without_rain_total = 0
-            else:
-                year_days_without_rain_total += 1
-                year_days_with_rain_total = 0
-            if year_days_with_rain is None or year_days_with_rain_total > year_days_with_rain[0]:
-                year_days_with_rain = (year_days_with_rain_total, row[0])
-            if year_days_without_rain is None or year_days_without_rain_total > year_days_without_rain[0]:
-                year_days_without_rain = (year_days_without_rain_total, row[0])
+        # Consecutive days with/without rainfall (best streak in each period window).
+        period_rain_data_sql = """
+            SELECT dateTime, ROUND(sum, 2), count
+            FROM archive_day_rain
+            WHERE dateTime >= ? AND dateTime < ?
+            ORDER BY dateTime;
+        """
 
-        if year_days_with_rain is None:
-            year_days_with_rain = [
-                locale.format_string("%.1f", 0),
-                calendar.timegm(time.gmtime()),
-            ]
+        def _compute_consecutive_rain_streaks(rows):
+            best_with = (0, 0)
+            best_without = (0, 0)
+            streak_with = 0
+            streak_without = 0
+            prev_day = None
 
-        if year_days_without_rain is None:
-            year_days_without_rain = [
-                locale.format_string("%.1f", 0),
-                calendar.timegm(time.gmtime()),
-            ]
+            for row in rows:
+                day_index = round((row[0] / 86400))
+                has_gap = prev_day is not None and (day_index - prev_day) != 1
+                has_count = len(row) > 2 and row[2] is not None and row[2] != 0
 
-        # All-time consecutive days with/without rain
-        # Track running max inline instead of storing all values in dicts
-        epoch_prev = 0
-        at_days_with_rain_total = 0
-        at_days_without_rain_total = 0
-        at_days_with_rain = (0, 0)
-        at_days_without_rain = (0, 0)
-        at_rain_query = wx_manager.genSql(
-            "SELECT dateTime, ROUND( sum, 2 ), count FROM archive_day_rain;"
+                if has_gap or not has_count:
+                    streak_with = 0
+                    streak_without = 0
+
+                prev_day = day_index
+
+                if row[1] != 0:
+                    streak_with += 1
+                    streak_without = 0
+                else:
+                    streak_without += 1
+                    streak_with = 0
+
+                if streak_with > best_with[0]:
+                    best_with = (streak_with, row[0])
+                if streak_without > best_without[0]:
+                    best_without = (streak_without, row[0])
+
+            return best_with, best_without
+
+        def _normalize_streak_result(streak_pair):
+            if streak_pair[0] > 0:
+                return [int(streak_pair[0]), int(streak_pair[1])]
+            return [0, calendar.timegm(time.gmtime())]
+
+        year_streaks = _compute_consecutive_rain_streaks(
+            list(wx_manager.genSql(year_rain_data_sql, (current_year,)))
         )
-        for row in at_rain_query:
-            if round((row[0] / 86400)) - epoch_prev != 1 or row[2] == 0:
-                at_days_with_rain_total = 0
-                at_days_without_rain_total = 0
-            epoch_prev = round((row[0] / 86400))
-            # Original MySQL way: CASE WHEN sum!=0 THEN @total+1 ELSE 0 END
-            if row[1] != 0:
-                at_days_with_rain_total += 1
-                at_days_without_rain_total = 0
-            else:
-                at_days_without_rain_total += 1
-                at_days_with_rain_total = 0
-            if at_days_with_rain_total > at_days_with_rain[0]:
-                at_days_with_rain = (at_days_with_rain_total, row[0])
-            if at_days_without_rain_total > at_days_without_rain[0]:
-                at_days_without_rain = (at_days_without_rain_total, row[0])
+        year_days_with_rain = _normalize_streak_result(year_streaks[0])
+        year_days_without_rain = _normalize_streak_result(year_streaks[1])
+
+        month_streaks = _compute_consecutive_rain_streaks(
+            list(wx_manager.genSql(period_rain_data_sql, (month_start_epoch, today_start_epoch)))
+        )
+        month_days_with_rain = _normalize_streak_result(month_streaks[0])
+        month_days_without_rain = _normalize_streak_result(month_streaks[1])
+
+        week_streaks = _compute_consecutive_rain_streaks(
+            list(wx_manager.genSql(period_rain_data_sql, (week_start_epoch, today_start_epoch)))
+        )
+        week_days_with_rain = _normalize_streak_result(week_streaks[0])
+        week_days_without_rain = _normalize_streak_result(week_streaks[1])
+
+        yesterday_streaks = _compute_consecutive_rain_streaks(
+            list(wx_manager.genSql(period_rain_data_sql, (yesterday_start_epoch, today_start_epoch)))
+        )
+        yesterday_days_with_rain = _normalize_streak_result(yesterday_streaks[0])
+        yesterday_days_without_rain = _normalize_streak_result(yesterday_streaks[1])
+
+        at_streaks = _compute_consecutive_rain_streaks(
+            list(wx_manager.genSql(
+                "SELECT dateTime, ROUND(sum, 2), count FROM archive_day_rain ORDER BY dateTime;"
+            ))
+        )
+        at_days_with_rain = _normalize_streak_result(at_streaks[0])
+        at_days_without_rain = _normalize_streak_result(at_streaks[1])
 
         # This portion is right from the WeeWX sample
         # http://www.weewx.com/docs/customizing.htm
@@ -4523,7 +4489,7 @@ class getData(SearchList):
         # Determine if the file exists
         custom_css_exists = os.path.isfile(custom_css_file)
 
-        minify_requested = to_bool(extras_dict.get("minify", "1"))
+        minify_requested = to_bool(extras_dict.get("minify", "0"))
         asset_suffix = ""
         if minify_requested:
             minify_deps_ok, missing_modules = _get_minifier_dependency_status()
@@ -4558,6 +4524,12 @@ class getData(SearchList):
             "chartpage_content": json.dumps(chartpage_content),
             "chart_page_buttons": chart_page_buttons,
             "alltime": all_stats,
+            "yesterday_outTemp_range_max": yesterday_outTemp_range_max,
+            "yesterday_outTemp_range_min": yesterday_outTemp_range_min,
+            "week_outTemp_range_max": week_outTemp_range_max,
+            "week_outTemp_range_min": week_outTemp_range_min,
+            "month_outTemp_range_max": month_outTemp_range_max,
+            "month_outTemp_range_min": month_outTemp_range_min,
             "year_outTemp_range_max": year_outTemp_range_max,
             "year_outTemp_range_min": year_outTemp_range_min,
             "at_outTemp_range_max": at_outTemp_range_max,
@@ -4572,6 +4544,12 @@ class getData(SearchList):
             "at_suniest_month": at_suniest_month,
             "at_rain_highest_year": at_rain_highest_year,
             "at_sunshineDur_highest_year": at_sunshineDur_highest_year,
+            "yesterday_days_with_rain": yesterday_days_with_rain,
+            "yesterday_days_without_rain": yesterday_days_without_rain,
+            "week_days_with_rain": week_days_with_rain,
+            "week_days_without_rain": week_days_without_rain,
+            "month_days_with_rain": month_days_with_rain,
+            "month_days_without_rain": month_days_without_rain,
             "year_days_with_rain": year_days_with_rain,
             "year_days_without_rain": year_days_without_rain,
             "at_days_with_rain": at_days_with_rain,
@@ -4666,7 +4644,7 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
 
     def run(self):
         extras = self.skin_dict.get("Extras", {})
-        minify_requested = to_bool(extras.get("minify", "1"))
+        minify_requested = to_bool(extras.get("minify", "0"))
         if not minify_requested:
             log.debug("Belchertown minify: disabled by Extras.minify")
             return
