@@ -5,6 +5,8 @@
 #include "header.html.tmpl"
 
 <script>
+    (function() {
+    function initReportsPage() {
     jQuery(document).ready(function() {
         var month = getURLvar("mo");
         var year = getURLvar("yr");
@@ -43,6 +45,15 @@
         xhr.open('GET', url);
         xhr.send();
     }
+
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initReportsPage);
+    } else {
+        initReportsPage();
+    }
+    })();
 </script>
 
 <div class="site-inner">

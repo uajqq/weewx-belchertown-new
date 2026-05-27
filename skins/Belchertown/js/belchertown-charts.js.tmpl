@@ -1,4 +1,10 @@
-if (typeof Highcharts !== "undefined") {
+var belchertown_highcharts_defaults_applied = false;
+
+function belchertown_configure_highcharts_defaults() {
+    if (belchertown_highcharts_defaults_applied || typeof Highcharts === "undefined") {
+        return;
+    }
+
     Highcharts.setOptions({
         time: {
             timezoneOffset: $highcharts_timezoneoffset
@@ -31,6 +37,8 @@ if (typeof Highcharts !== "undefined") {
             thousandsSep: "$highcharts_thousands"
         }
     });
+
+    belchertown_highcharts_defaults_applied = true;
 }
 
 function belchertown_is_element_near_viewport(element, rootMarginPx = 0) {
@@ -1483,9 +1491,11 @@ function showChart(json_file, prepend_renderTo = false) {
 
         var requiredModules = belchertown_detect_highcharts_modules(data);
         belchertown_ensure_highcharts_modules(requiredModules).then(function() {
+            belchertown_configure_highcharts_defaults();
             renderCharts();
         }).catch(function(err) {
             belchertown_debug("Highcharts module preload error: " + err.message + ". Continuing render with available modules.");
+            belchertown_configure_highcharts_defaults();
             renderCharts();
         });
 

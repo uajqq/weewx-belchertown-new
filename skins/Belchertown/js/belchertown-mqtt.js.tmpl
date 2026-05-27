@@ -45,9 +45,32 @@ function ajaximages(section = false, reload_timer_interval_seconds = false) {
 
 var reconnect_using_inactive_timestamp = false;
 var inactive_timestamp = "";
+var mqtt_connect_retry_count = 0;
+var mqtt_max_connect_retries = 20;
 
 // MQTT connect
 function connect() {
+    if (typeof window.Paho === "undefined" || typeof window.Paho.Client !== "function") {
+        mqtt_connect_retry_count++;
+        belchertown_debug("MQTT: Paho library not ready (attempt " + mqtt_connect_retry_count + "). Retrying shortly.");
+        if (mqtt_connect_retry_count <= mqtt_max_connect_retries) {
+            setTimeout(connect, 500);
+        } else {
+            console.error("MQTT: Paho library failed to load after retries. Aborting connect.");
+            jQuery(".onlineMarker").hide();
+            jQuery(".offlineMarker").show();
+            jQuery(".loadingMarker").hide();
+            jQuery(".updated").html("$obs.label.mqtt_websockets_failed $obs.label.header_last_updated " + tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated"));
+        }
+        return;
+    }
+
+    mqtt_connect_retry_count = 0;
+
+    var clientId = (typeof mqttclient !== "undefined" && mqttclient)
+        ? mqttclient
+        : (window.mqttclient || (window.mqttclient = "website" + Math.floor(Math.random() * 999999999)));
+
     belchertown_debug("MQTT: [" + new Date().toISOString() + "] Starting connection sequence");
     if (reconnect_using_inactive_timestamp) {
         updated = tzAdjustedMoment(inactive_timestamp).format("$obs.label.time_last_updated");
@@ -73,7 +96,7 @@ function connect() {
         var useSSL = false;
         // #end if
         belchertown_debug("MQTT: Creating Paho MQTT client for kiosk page");
-        client = new Paho.Client("$Extras.mqtt_websockets_host_kiosk", $mqtt_websockets_port_kiosk, mqttclient);
+        client = new Paho.Client("$Extras.mqtt_websockets_host_kiosk", $mqtt_websockets_port_kiosk, clientId);
     }
     else {
         // #if $Extras.has_key("mqtt_websockets_ssl") and $Extras.mqtt_websockets_ssl == '1'
@@ -84,7 +107,7 @@ function connect() {
         var useSSL = false;
         // #end if
         belchertown_debug("MQTT: Creating Paho MQTT client for standard page");
-        client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, mqttclient);
+        client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, clientId);
     }
     // #else
     // #if $Extras.has_key("mqtt_websockets_ssl") and $Extras.mqtt_websockets_ssl == '1'
@@ -95,7 +118,7 @@ function connect() {
     var useSSL = false;
     // #end if
     belchertown_debug("MQTT: Creating Paho MQTT client (fallback configuration)");
-    client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, mqttclient);
+    client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, clientId);
     // #end if
     client.onConnectionLost = onConnectionLost;
     client.onMessageArrived = onMessageArrived;
@@ -498,7 +521,15 @@ function update_current_wx(data) {
                 if (typeof renderHomepageCharts === "function") {
                     renderHomepageCharts(true);
                 } else if (typeof homepage_chartgroup !== "undefined" && homepage_chartgroup !== "") {
-                    showChart(homepage_chartgroup);
+                    if (typeof belchertownEnsureHighcharts === "function") {
+                        belchertownEnsureHighcharts().then(function() {
+                            showChart(homepage_chartgroup);
+                        }).catch(function(err) {
+                            belchertown_debug("MQTT: Failed loading Highcharts assets: " + err.message);
+                        });
+                    } else {
+                        showChart(homepage_chartgroup);
+                    }
                 }
             }, 30000); // Load updated charts.
         }

@@ -12,13 +12,23 @@
     <!-- end of header -->
 
 <script type="text/javascript">
-    var finalRotation;
+    (function() {
+    function initKioskPage() {
+    window.finalRotation = window.finalRotation || 0;
     // #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
-    var mqttMsg;
-    var mqttclient = "website" + Math.floor(Math.random() * 999999999);
+    window.mqttMsg = window.mqttMsg || null;
+    window.mqttclient = "website" + Math.floor(Math.random() * 999999999);
     // #end if
-    var moment_locale = "$system_locale_js";
-    moment.locale(moment_locale);
+    var defaultForecastInterval = 24;
+    // #if $Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk == '1'
+    defaultForecastInterval = 1;
+    // #elif $Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk == '3'
+    defaultForecastInterval = 3;
+    // #elif $Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk == '24'
+    defaultForecastInterval = 24;
+    // #end if
+    window.moment_locale = "$system_locale_js";
+    moment.locale(window.moment_locale);
 
     function autoRefreshPage() {
         location.reload();
@@ -144,6 +154,9 @@
             // #end if
 
             //  display the relevant forecast; a new session will display the default forecast, a reloaded session the currently displayed forecast
+            if (typeof forecast_default === "function") {
+                forecast_default(defaultForecastInterval);
+            }
             if (sessionStorage.getItem("forecastInterval")) {
                 interval = sessionStorage.getItem("forecastInterval");
                 sessionStorage.setItem("forecastInterval", null);
@@ -156,6 +169,15 @@
     }).catch(function(e) {
         console.log(e);
     });
+
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initKioskPage);
+    } else {
+        initKioskPage();
+    }
+    })();
 
 </script>
 
@@ -411,26 +433,17 @@
                 </div>
 
                 #if $Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk != '0'
-                #if $Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk == '1'
-                <script>forecast_default(1);</script>
-                #end if
                 <div id="1hour-selected-forecast" style="display: none;">
                     <!-- 1hour Forecast -->
                     <div class="col-lg-12 row onehr_forecasts row-no-padding"></div><!-- JS -->
                 </div>
                 #end if
 
-                #if $Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk == '3'
-                <script>forecast_default(3);</script>
-                #end if
                 <div id="3hour-selected-forecast" style="display: none;">
                     <!-- 3hour-Forecast -->
                     <div class="col-lg-12 row threehr_forecasts row-no-padding"></div><!-- JS -->
                 </div>
 
-                #if ($Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk == '24') or not ($Extras.has_key("forecast_interval_hours_kiosk"))
-                <script>forecast_default(24);</script>
-                #end if
                 <div id="24hour-selected-forecast" style="display: none;">
                     <!-- 24hour-Forecast -->
                     <div class="col-lg-12 row day_forecasts row-no-padding"></div><!-- JS -->

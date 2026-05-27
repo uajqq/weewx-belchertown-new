@@ -8,6 +8,8 @@
 #include "header.html.tmpl"
 
 <script type="text/javascript">
+    (function() {
+    function initRecordsPage() {
     var moment_locale = "$system_locale_js";
     moment.locale(moment_locale);
 
@@ -671,6 +673,15 @@
         }
 
     });
+
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initRecordsPage);
+    } else {
+        initRecordsPage();
+    }
+    })();
 </script>
 
 <div class="site-inner">

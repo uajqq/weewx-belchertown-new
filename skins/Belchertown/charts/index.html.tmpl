@@ -9,6 +9,8 @@
         <article class="weewx charts" itemscope itemtype="https://schema.org/CreativeWork">
 
             <script type="text/javascript">
+                (function() {
+                function initChartsPage() {
                 var chart = getURLvar("chart");
                 if (chart === undefined) {
                     // If no URL VAR, default to the chart group defined in Extras
@@ -22,8 +24,21 @@
                         return;
                     }
 
-                    renderedChartGroups[chartgroup] = true;
-                    showChart(chartgroup, prependRenderTo);
+                    var renderNow = function() {
+                        renderedChartGroups[chartgroup] = true;
+                        showChart(chartgroup, prependRenderTo);
+                    };
+
+                    if (typeof belchertownEnsureHighcharts === "function") {
+                        belchertownEnsureHighcharts().then(function() {
+                            renderNow();
+                        }).catch(function(err) {
+                            console.log("ERROR: Failed loading Highcharts assets: " + err.message);
+                        });
+                        return;
+                    }
+
+                    renderNow();
                 }
 
                 jQuery(document).ready(function() {
@@ -117,6 +132,14 @@
                         }
                     }
                 });
+                }
+
+                if (document.readyState === "loading") {
+                    document.addEventListener("DOMContentLoaded", initChartsPage);
+                } else {
+                    initChartsPage();
+                }
+                })();
             </script>
 
             #include "page-header.inc"

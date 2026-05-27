@@ -12,25 +12,48 @@
 #include "header.html.tmpl"
 
 <script type="text/javascript">
-    var finalRotation;
+    (function() {
+    function initHomePage() {
+    window.finalRotation = window.finalRotation || 0;
     // #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
-    var mqttMsg;
-    var mqttclient = "website" + Math.floor(Math.random() * 999999999);
+    window.mqttMsg = window.mqttMsg || null;
+    window.mqttclient = "website" + Math.floor(Math.random() * 999999999);
     // #end if
-    var moment_locale = "$system_locale_js";
-    moment.locale(moment_locale);
+    var defaultForecastInterval = 24;
+    // #if $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours == '1'
+    defaultForecastInterval = 1;
+    // #elif $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours == '3'
+    defaultForecastInterval = 3;
+    // #elif $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours == '24'
+    defaultForecastInterval = 24;
+    // #end if
+    window.moment_locale = "$system_locale_js";
+    moment.locale(window.moment_locale);
 
-    var homepage_chartgroup = "$Extras.highcharts_homepage_chartgroup";
-    var homepageChartsInitialized = false;
+    window.homepage_chartgroup = "$Extras.highcharts_homepage_chartgroup";
+    window.homepageChartsInitialized = false;
 
-    function renderHomepageCharts(forceRender = false) {
-        if (!forceRender && homepageChartsInitialized) {
+    window.renderHomepageCharts = function(forceRender = false) {
+        if (!forceRender && window.homepageChartsInitialized) {
             return;
         }
 
-        showChart(homepage_chartgroup);
-        homepageChartsInitialized = true;
-    }
+        var renderChartsNow = function() {
+            showChart(window.homepage_chartgroup);
+            window.homepageChartsInitialized = true;
+        };
+
+        if (typeof belchertownEnsureHighcharts === "function") {
+            belchertownEnsureHighcharts().then(function() {
+                renderChartsNow();
+            }).catch(function(err) {
+                console.log("ERROR: Failed loading Highcharts assets: " + err.message);
+            });
+            return;
+        }
+
+        renderChartsNow();
+    };
 
     function autoRefreshPage() {
         location.reload();
@@ -84,7 +107,7 @@
 
             // #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
             var chartgroups_raw = $charts; // All charts and IDs
-            var thisPageCharts = chartgroups_raw[homepage_chartgroup]; // Filter all charts down to the ones we want for this page
+            var thisPageCharts = chartgroups_raw[window.homepage_chartgroup]; // Filter all charts down to the ones we want for this page
             // Loop through the chart groups for this page and add the chart divs to the page
             try {
                 thisPageCharts.forEach(chartID => {
@@ -92,14 +115,14 @@
                 });
 
                 belchertown_run_when_visible(".homepage-card--charts", function() {
-                    renderHomepageCharts(false);
+                    window.renderHomepageCharts(false);
                 }, {
                     rootMargin: "350px 0px",
                     threshold: 0.01,
                     fallbackDelayMs: 8000,
                 });
             } catch (err) {
-                console.log("ERROR: Cannot add charts from [" + homepage_chartgroup + "] chart group: " + err.message);
+                console.log("ERROR: Cannot add charts from [" + window.homepage_chartgroup + "] chart group: " + err.message);
             }
             // #end if
 
@@ -120,7 +143,7 @@
                         ajaximages(); // Update radar and home page hook "img src" if present
                         connect(); // Restart mqtt after WeeWX data's re-loaded
                         // #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
-                        renderHomepageCharts(true);
+                        window.renderHomepageCharts(true);
                         // #end if
                     }).catch(function(e) {
                         console.log(e);
@@ -179,6 +202,9 @@
             // #end if
 
             //  display the relevant forecast; a new session will display the default forecast, a reloaded session the currently displayed forecast
+            if (typeof forecast_default === "function") {
+                forecast_default(defaultForecastInterval);
+            }
             if (sessionStorage.getItem("forecastInterval")) {
                 interval = sessionStorage.getItem("forecastInterval");
                 sessionStorage.setItem("forecastInterval", null);
@@ -191,6 +217,15 @@
     }).catch(function(e) {
         console.log(e);
     });
+
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initHomePage);
+    } else {
+        initHomePage();
+    }
+    })();
 
 </script>
 
@@ -451,24 +486,15 @@
                 </div>
                 <div class="row forecastrow">
                     #if $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours != '0'
-                    #if $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours == '1'
-                    <script>forecast_default(1);</script>
-                    #end if
                     <div id="1hour-selected-forecast" style="display: none;">
                         <div class="col-lg-12 row onehr_forecasts row-no-padding"></div><!-- JS -->
                     </div>
                     #end if
 
-                    #if $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours == '3'
-                    <script>forecast_default(3);</script>
-                    #end if
                     <div id="3hour-selected-forecast" style="display: none;">
                         <div class="col-lg-12 row threehr_forecasts row-no-padding"></div><!-- JS -->
                     </div>
 
-                    #if ($Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours == '24') or not ($Extras.has_key("forecast_interval_hours"))
-                    <script>forecast_default(24);</script>
-                    #end if
                     <div id="24hour-selected-forecast" style="display: none;">
                         <div class="col-lg-12 row day_forecasts row-no-padding"></div><!-- JS -->
                     </div>

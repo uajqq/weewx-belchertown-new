@@ -12,13 +12,15 @@
 #include "header.html.tmpl"
 
 <script type="text/javascript">
-    var finalRotation;
+    (function() {
+    function initPiPage() {
+    window.finalRotation = window.finalRotation || 0;
     //#if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
-    var mqttMsg;
-    var mqttclient = "website" + Math.floor(Math.random() * 999999999);
+    window.mqttMsg = window.mqttMsg || null;
+    window.mqttclient = "website" + Math.floor(Math.random() * 999999999);
     //#end if
-    var moment_locale = "$system_locale_js";
-    moment.locale(moment_locale);
+    window.moment_locale = "$system_locale_js";
+    moment.locale(window.moment_locale);
 
     ajaxweewx(); // Initial call to load from WeeWX (date, daily high, low, etc)
 
@@ -46,6 +48,15 @@
 
         // #end if
     });
+
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initPiPage);
+    } else {
+        initPiPage();
+    }
+    })();
 
 </script>
 
