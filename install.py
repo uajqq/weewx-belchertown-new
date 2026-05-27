@@ -171,6 +171,9 @@ extension_config = """
             # back_to_top_button_position = 0
             # back_to_top_button_opacity  = 0.8
 
+            #---CSS / JS minifying -- requires rcssmin and rjsmin --
+            # minify_assets = 1
+
             #-------------------------------------------------------------
             #---
             #--- python's ConfigObj has a limitation in how it processes

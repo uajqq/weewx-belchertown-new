@@ -13,6 +13,7 @@ import json
 import locale
 import logging
 import os
+import fnmatch
 import time
 from urllib.request import Request, urlopen
 import urllib.error
@@ -80,6 +81,10 @@ AQI_OBS_MAP = {
     "so2": {"pollutant": "so2", "value_key": "valuePPB"},
 }
 
+# Cached minifier dependency status: (all_available: bool, missing: tuple[str, ...])
+_MINIFIER_DEPS_STATUS = None
+_MINIFIER_DEPS_MISSING_LOGGED = False
+
 
 # Module-level helper functions for HTTP and JSON processing
 
@@ -89,6 +94,39 @@ def _http_get_json(url, timeout=DEFAULT_HTTP_TIMEOUT):
     req = Request(url, headers=HTTP_HEADERS["PIRATE_WEATHER"])
     with urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def _get_minifier_dependency_status():
+    """Return minifier dependency status, cached for this process."""
+
+    global _MINIFIER_DEPS_STATUS
+    if _MINIFIER_DEPS_STATUS is not None:
+        return _MINIFIER_DEPS_STATUS
+
+    missing = []
+    for module_name in ("rjsmin", "rcssmin"):
+        try:
+            __import__(module_name)
+        except Exception:
+            missing.append(module_name)
+
+    _MINIFIER_DEPS_STATUS = (len(missing) == 0, tuple(missing))
+    return _MINIFIER_DEPS_STATUS
+
+
+def _log_minifier_missing_error_once(missing_modules):
+    """Log a single error when minification is enabled but deps are missing."""
+
+    global _MINIFIER_DEPS_MISSING_LOGGED
+    if _MINIFIER_DEPS_MISSING_LOGGED:
+        return
+
+    module_list = ", ".join(missing_modules)
+    log.error(
+        "Belchertown minify: required package(s) not installed: "
+        f"{module_list}. Falling back to no minifying."
+    )
+    _MINIFIER_DEPS_MISSING_LOGGED = True
 
 
 def _extract_fields(source, fields):
@@ -2380,6 +2418,13 @@ class getData(SearchList):
                 # Setup variables common to both forecast sources
                 forecast_file = f"{html_root}/json/forecast.json"
                 current_conditions_file = f"{html_root}/json/current_conditions.json"
+                forecast_json_dir = os.path.dirname(forecast_file)
+                try:
+                    os.makedirs(forecast_json_dir, exist_ok=True)
+                except Exception as e:
+                    log.error(
+                        f"Unable to create forecast json directory {forecast_json_dir}: {e}"
+                    )
 
                 forecast_api_id = extras_dict["forecast_api_id"]
                 forecast_api_secret = extras_dict["forecast_api_secret"]
@@ -2686,6 +2731,7 @@ class getData(SearchList):
 
                     # File is stale, download a new copy
                     if forecast_is_stale:
+                        forecast_file_result = None
                         try:
                             if "forecast_dev_file" in extras_dict:
                                 # Hidden option to use a pre-downloaded forecast file
@@ -2780,25 +2826,31 @@ class getData(SearchList):
 
                         # Save forecast data to file. w+ creates the file if it doesn't
                         # exist, and truncates the file and re-writes it everytime
-                        try:
-                            with open(forecast_file, "wb+") as file:
-                                file.write(forecast_file_result.encode("utf-8"))
+                        if forecast_file_result is not None:
+                            try:
+                                with open(forecast_file, "wb+") as file:
+                                    file.write(forecast_file_result.encode("utf-8"))
+                                    log.info(
+                                        f"New forecast file downloaded to {forecast_file}"
+                                    )
+                            except FileNotFoundError:
                                 log.info(
-                                    f"New forecast file downloaded to {forecast_file}"
+                                    "Belchertown JSON folder does not exist. Usually this "
+                                    "is an error that only occurs on the first run. If it "
+                                    "is appearing repeatedly, check file permissions."
                                 )
-                        except FileNotFoundError:
+                            except IOError as e:
+                                log.error(
+                                    f"Error writing forecast info to {forecast_file}. Reason: {e}"
+                                )
+                        else:
                             log.info(
-                                "Belchertown JSON folder does not exist. Usually this "
-                                "is an error that only occurs on the first run. If it "
-                                "is appearing repeatedly, check file permissions."
-                            )
-                        except IOError as e:
-                            log.error(
-                                f"Error writing forecast info to {forecast_file}. Reason: {e}"
+                                "Forecast download failed; keeping existing forecast file if present."
                             )
 
                     # File is stale, download a new copy
                     if current_conditions_is_stale:
+                        forecast_file_result = None
                         try:
                             if "current_conditions_dev_file" in extras_dict:
                                 # Hidden option to use a pre-downloaded forecast file
@@ -2898,25 +2950,30 @@ class getData(SearchList):
 
                         # Save forecast Current Conditions data to file. w+ creates the file if it doesn't
                         # exist, and truncates the file and re-writes it everytime
-                        try:
-                            with open(current_conditions_file, "wb+") as file:
-                                file.write(forecast_file_result.encode("utf-8"))
+                        if forecast_file_result is not None:
+                            try:
+                                with open(current_conditions_file, "wb+") as file:
+                                    file.write(forecast_file_result.encode("utf-8"))
+                                    log.info(
+                                        f"New forecast Current Conditions file downloaded to {current_conditions_file}"
+                                    )
+                            except FileNotFoundError:
                                 log.info(
-                                    f"New forecast Current Conditions file downloaded to {current_conditions_file}"
+                                    "Belchertown JSON folder does not exist. Usually this "
+                                    "is an error that only occurs on the first run. If it "
+                                    "is appearing repeatedly, check file permissions."
                                 )
-                        except FileNotFoundError:
+                            except IOError as e:
+                                log.error(
+                                    "Error writing forecast Current Conditions info to "
+                                    f"{current_conditions_file}. Reason: {e}"
+                                )
+                            except Exception as e:
+                                log.error(f"Current Conditions error: {e}")
+                        else:
                             log.info(
-                                "Belchertown JSON folder does not exist. Usually this "
-                                "is an error that only occurs on the first run. If it "
-                                "is appearing repeatedly, check file permissions."
+                                "Current conditions download failed; keeping existing current conditions file if present."
                             )
-                        except IOError as e:
-                            log.error(
-                                "Error writing forecast Current Conditions info to "
-                                f"{current_conditions_file}. Reason: {e}"
-                            )
-                        except Exception as e:
-                            log.error(f"Current Conditions error: {e}")
 
                     # Read the forecast Current Conditions file
                     with open(current_conditions_file, "r", encoding="utf-8") as read_file:
@@ -3552,9 +3609,19 @@ class getData(SearchList):
         # Determine if the file exists
         custom_css_exists = os.path.isfile(custom_css_file)
 
+        minify_assets_requested = to_bool(extras_dict.get("minify_assets", "1"))
+        asset_suffix = ""
+        if minify_assets_requested:
+            minify_deps_ok, missing_modules = _get_minifier_dependency_status()
+            if minify_deps_ok:
+                asset_suffix = ".min"
+            else:
+                _log_minifier_missing_error_once(missing_modules)
+
         # Build the search list with the new values
         search_list_extension = {
             "belchertown_version": VERSION,
+            "asset_suffix": asset_suffix,
             "belchertown_debug": belchertown_debug,
             "moment_js_utc_offset": moment_js_utc_offset,
             "moment_js_tz": moment_js_tz,
@@ -3659,6 +3726,129 @@ class getData(SearchList):
         }
         # Finally, return our extension as a list:
         return [search_list_extension]
+
+
+# ======================================================================================
+# PostRenderMinifyGenerator
+# ======================================================================================
+
+
+class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
+    """Generate minified JS/CSS assets after templates are rendered.
+
+    This keeps repository source files readable while producing optimized
+    runtime assets in HTML_ROOT.
+    """
+
+    DEFAULT_INCLUDE_GLOBS = (
+        "js/*.js",
+        "*.css",
+    )
+
+    DEFAULT_EXCLUDE_GLOBS = (
+        "*.min.js",
+        "*.min.css",
+    )
+
+    def run(self):
+        extras = self.skin_dict.get("Extras", {})
+        minify_assets_requested = to_bool(extras.get("minify_assets", "1"))
+        if not minify_assets_requested:
+            log.debug("Belchertown minify: disabled by Extras.minify_assets")
+            return
+
+        minify_deps_ok, missing_modules = _get_minifier_dependency_status()
+        if not minify_deps_ok:
+            _log_minifier_missing_error_once(missing_modules)
+            return
+
+        html_root = os.path.join(
+            self.config_dict["WEEWX_ROOT"],
+            self.skin_dict["HTML_ROOT"],
+        )
+
+        self._jsmin_func = __import__("rjsmin").jsmin
+        self._cssmin_func = __import__("rcssmin").cssmin
+
+        if not os.path.isdir(html_root):
+            log.debug(f"Belchertown minify: HTML_ROOT does not exist yet: {html_root}")
+            return
+
+        include_globs = list(self.DEFAULT_INCLUDE_GLOBS)
+        exclude_globs = list(self.DEFAULT_EXCLUDE_GLOBS)
+
+        processed = 0
+        errors = 0
+
+        for root, _dirs, files in os.walk(html_root):
+            for filename in files:
+                source_path = os.path.join(root, filename)
+
+                relative_path = os.path.relpath(source_path, html_root).replace("\\", "/")
+
+                if not self._matches_any(relative_path, include_globs):
+                    continue
+                if self._matches_any(relative_path, exclude_globs):
+                    continue
+
+                base, ext = os.path.splitext(source_path)
+                ext = ext.lower()
+                if ext not in (".js", ".css"):
+                    continue
+
+                minified_path = f"{base}.min{ext}"
+
+                try:
+                    with open(source_path, "r", encoding="utf-8") as src_fh:
+                        source_text = src_fh.read()
+
+                    if ext == ".js":
+                        minified_text = self._minify_js(source_text)
+                    else:
+                        minified_text = self._minify_css(source_text)
+
+                    if not isinstance(minified_text, str) or not minified_text:
+                        minified_text = source_text
+
+                    with open(minified_path, "w", encoding="utf-8") as dst_fh:
+                        dst_fh.write(minified_text)
+
+                    processed += 1
+                except Exception as e:
+                    errors += 1
+                    log.error(
+                        f"Belchertown minify failed for {source_path}: {e}"
+                    )
+
+        if errors:
+            log.warning(
+                f"Belchertown minify finished with {errors} errors; {processed} files processed"
+            )
+        else:
+            log.info(f"Belchertown minify processed {processed} files")
+
+    def _matches_any(self, relative_path, globs):
+        if not globs:
+            return False
+        return any(fnmatch.fnmatch(relative_path, pattern) for pattern in globs)
+
+    def _minify_js(self, source_text):
+        """Minify JavaScript text.
+
+        Prefer rjsmin when available; otherwise apply a safe whitespace-only
+        fallback that preserves semantics.
+        """
+
+        return self._jsmin_func(source_text)
+
+    def _minify_css(self, source_text):
+        """Minify CSS text.
+
+        Prefer rcssmin when available; otherwise apply a safe whitespace-only
+        fallback that preserves semantics.
+        """
+
+        return self._cssmin_func(source_text)
 
 
 # ======================================================================================
