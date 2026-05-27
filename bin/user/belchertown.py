@@ -245,46 +245,8 @@ def _safe_float(value):
         if value is None:
             return None
         return float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, AttributeError, OverflowError):
         return None
-
-
-def _safe_angle_float(value):
-    """Return numeric angle from common WeeWX helper/value formats."""
-
-    direct = _safe_float(value)
-    if direct is not None:
-        return direct
-
-    raw_value = _safe_getattr_chain(value, ("raw",))
-    raw_float = _safe_float(raw_value)
-    if raw_float is not None:
-        return raw_float
-
-    text = str(value).strip() if value is not None else ""
-    if not text:
-        return None
-
-    # Strip common degree formatting from helper-rendered values.
-    text = text.replace("&deg;", "").replace("°", "").replace("deg", "")
-    m = match(r"^\s*([+-]?\d+(?:\.\d+)?)", text)
-    if m:
-        try:
-            return float(m.group(1))
-        except Exception:
-            return None
-
-    return None
-
-
-def extract_moon_tilt_degrees(almanac_obj):
-    """Extract moon tilt degrees from the Skyfield-defined moon_tilt tag."""
-
-    if almanac_obj is None:
-        return None
-
-    value = _safe_getattr_chain(almanac_obj, ("moon_tilt",))
-    return _safe_angle_float(value)
 
 
 def _format_attr(value):
@@ -1244,7 +1206,6 @@ def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, ima
         "almanac_svg_markup_attr": str(defaults.get("almanac_svg_markup_attr", "") or "").strip(),
         "sun_x_offset_attr": "0.000",
         "moon_x_offset_attr": "0.000",
-        "moon_tilt_attr": "",
         "diagram_centering_mode_attr": str(defaults.get("center_apex_mode", "off") or "off").strip().lower(),
         "almanac_inline_markup_attr": "",
     }
@@ -1275,10 +1236,6 @@ def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, ima
 
     if almanac_obj is None:
         return context
-
-    moon_tilt = extract_moon_tilt_degrees(almanac_obj)
-    if moon_tilt is not None:
-        context["moon_tilt_attr"] = _format_attr(moon_tilt)
 
     payload = None
     try:

@@ -101,16 +101,13 @@
 #set $diagram_centering_mode_attr = $almanac_diagram_context.get("diagram_centering_mode_attr", "off")
 #set $sun_x_offset_attr = $almanac_diagram_context.get("sun_x_offset_attr", "0.000")
 #set $moon_x_offset_attr = $almanac_diagram_context.get("moon_x_offset_attr", "0.000")
-#set $moon_tilt_attr = $almanac_diagram_context.get("moon_tilt_attr", "")
 #set $almanac_svg_markup_attr = $almanac_diagram_context.get("almanac_svg_markup_attr", "")
 
-#if $moon_tilt_attr != ""
-    #try
-        #set $moon_tilt_degrees = float($moon_tilt_attr)
-    #except
-        #set $moon_tilt_degrees = None
-    #end try
-#end if
+#try
+    #set $moon_tilt_degrees = float($almanac.moon.moon_tilt.raw)
+#except
+    #set $moon_tilt_degrees = None
+#end try
 #if $moon_tilt_degrees is not None and not math.isfinite($moon_tilt_degrees)
     #set $moon_tilt_degrees = None
 #end if

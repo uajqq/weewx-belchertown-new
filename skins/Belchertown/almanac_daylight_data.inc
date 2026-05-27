@@ -54,6 +54,56 @@
   #set $sun_None="<i>(%s)</i>" % $obs.label.sun_always_up
   #set $daylight_str = "24%s 0%s 0%s" % ($hour_short, $minute_short, $second_short)
 #end if
+#set $use_visible_tags = False
+#set $visible_seconds = None
+#set $visible_change_seconds = None
+#if $varExists("almanac.sun.visible")
+  #try
+    #set $visible_seconds = $almanac.sun.visible.raw
+  #except
+    #set $visible_seconds = None
+  #end try
+  #try
+    #set $visible_change_seconds = $almanac.sun.visible_change.raw
+  #except
+    #set $visible_change_seconds = None
+  #end try
+#end if
+#if $visible_seconds is not None
+  #set $use_visible_tags = True
+  #set $today_daylight = int(round(float($visible_seconds)))
+  #if $today_daylight < 0
+    #set $today_daylight = 0
+  #end if
+  #set $seconds = $today_daylight
+  #set $hours = $seconds // 3600
+  #set $seconds %= 3600
+  #set $minutes = $seconds // 60
+  #set $seconds %= 60
+  #if $hours > 0
+    #set $daylight_str = "%d%s %d%s %d%s" % ($hours, $hour_short, $minutes, $minute_short, $seconds, $second_short)
+  #else
+    #set $daylight_str = "%d%s %d%s" % ($minutes, $minute_short, $seconds, $second_short)
+  #end if
+
+  #if $visible_change_seconds is not None
+    #set $difference = int(round(float($visible_change_seconds)))
+    #if $difference
+      #set $delta = abs($difference)
+      #set $amt_minutes = (int($delta) % 3600) // 60
+      #set $amt_seconds = int($delta) % 60
+      #set $amt_str = "%d%s %d%s" % ($amt_minutes, $minute_short, $amt_seconds, $second_short)
+      #if $difference > 0
+        #set $delta_str = "%s %s" % ( $amt_str, $more_than_yesterday_label )
+      #else
+        #set $delta_str = "%s %s" % ( $amt_str, $less_than_yesterday_label )
+      #end if
+      #set $daylight_str = "%s<br/>%s" % ($daylight_str, $delta_str)
+    #end if
+  #end if
+#end if
+
+#if not $use_visible_tags
 #set $sunrise_ts = None
 #set $sunset_ts = None
 #try
@@ -136,4 +186,5 @@
       #set $daylight_str = "%s<br/>%s" % ($daylight_str, $delta_str)
     #end if
   #end if
+#end if
 #end if
