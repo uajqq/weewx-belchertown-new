@@ -2163,17 +2163,47 @@ p.entry-meta {
 }
 
 .dark .almanac-diagram-object--moon .almanac-diagram-object-core {
-  fill: rgba(197, 208, 230, 0.4);
-  stroke: rgba(196, 207, 226, 0.68);
+  fill: rgba(197, 208, 230, 0.62);
+  stroke: rgba(226, 232, 245, 0.9);
+  stroke-width: 4.8;
+}
+
+.dark .almanac-diagram-object--sun .almanac-diagram-object-core {
+  fill: rgba(251, 191, 36, 0.72);
+  stroke: rgba(252, 211, 77, 0.94);
   stroke-width: 4.8;
 }
 
 .almanac-diagram-object-symbol {
   font-size: 74px;
   font-weight: 600;
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "Apple Symbols", "Arial Unicode MS", sans-serif;
+  fill: rgba(31, 41, 55, 0.9);
   dominant-baseline: middle;
   alignment-baseline: central;
   pointer-events: none;
+}
+
+.almanac-diagram-object--sun .almanac-diagram-object-symbol {
+  fill: rgba(146, 64, 14, 0.95);
+}
+
+.almanac-diagram-object--moon .almanac-diagram-object-symbol {
+  fill: rgba(71, 85, 105, 0.95);
+}
+
+.dark .almanac-diagram-object--sun .almanac-diagram-object-symbol {
+  fill: rgba(255, 248, 225, 0.96);
+}
+
+.dark .almanac-diagram-object--moon .almanac-diagram-object-symbol {
+  fill: rgba(241, 245, 249, 0.96);
+}
+
+.dark .almanac-diagram-object-symbol {
+  stroke: rgba(15, 23, 42, 0.45);
+  stroke-width: 0.6;
+  paint-order: stroke fill;
 }
 
 .page .sun-moon-modal a {

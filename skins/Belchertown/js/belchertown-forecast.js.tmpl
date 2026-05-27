@@ -30,7 +30,10 @@ function ajaxforecast() {
     forecast_data = {};
     current_conditions_data = {};
 
-    const provider = "$Extras.forecast_provider";
+    let provider = "$Extras.forecast_provider";
+    if (provider === "openmeteo" || provider === "open_meteo") {
+        provider = "open-meteo";
+    }
 
     const pCurrent = jQuery.getJSON(get_relative_url() + "/json/current_conditions.json", function(current_conditions) {
         current_conditions_data = current_conditions;
@@ -384,28 +387,42 @@ function show_forcast_alert(data, forecast_provider) {
     jQuery(".wx-stn-alert-text").empty();
 
     if (forecast_provider == "darksky") {
-        if (data['alerts']) {
+        if (Array.isArray(data['alerts'])) {
             for (i = 0; i < data['alerts'].length; i++) {
-                forecast_alert_title = data['alerts'][i]['title'];
-                forecast_alert_body = data['alerts'][i]['description'].replace(/\n/g, '<br>');
-                forecast_alert_link = data['alerts'][i]['title'];
-                forecast_alert_expires = tzAdjustedMoment(data['alerts'][i]['expires']).format('$obs.label.time_forecast_alert_expires');
+                const alertObj = data['alerts'][i] || {};
+                const alertDescription = (alertObj['description'] == null)
+                    ? ""
+                    : String(alertObj['description']);
+                forecast_alert_title = (alertObj['title'] == null)
+                    ? "Alert"
+                    : String(alertObj['title']);
+                forecast_alert_body = alertDescription.replace(/\n/g, '<br>');
+                forecast_alert_link = forecast_alert_title;
+                forecast_alert_expires = (alertObj['expires'] != null)
+                    ? tzAdjustedMoment(alertObj['expires']).format('$obs.label.time_forecast_alert_expires')
+                    : "";
                 forecast_alerts.push({"title": forecast_alert_title, "body": forecast_alert_body, "link": forecast_alert_link, "expires": forecast_alert_expires});
             }
         }
     } else if (forecast_provider == "aeris") {
-        if (data['alerts'][0]['response'][0]) {
+        if (data['alerts'] && data['alerts'][0] && data['alerts'][0]['response'] && data['alerts'][0]['response'][0]) {
             for (i = 0; i < data['alerts'][0]['response'].length; i++) {
                 //forecast_alert_title = data['alerts'][0]['response'][i]['details']['name'];
-                forecast_alert_title = aeris_coded_alerts(data['alerts'][0]['response'][i]['details']['type']);
+                const aerisAlert = data['alerts'][0]['response'][i] || {};
+                const aerisDetails = aerisAlert['details'] || {};
+                const aerisTimestamps = aerisAlert['timestamps'] || {};
+
+                forecast_alert_title = aeris_coded_alerts(aerisDetails['type']);
                 if (typeof forecast_alert_title === "undefined") {
                     // If the type can't be decoded then use the raw name in the alert. I have seen this for "Hurricane Local Statement" not matching a coded weather value
-                    forecast_alert_title = data['alerts'][0]['response'][i]['details']['name'];
+                    forecast_alert_title = aerisDetails['name'] || "Alert";
                 }
-                forecast_alert_body = data['alerts'][0]['response'][i]['details']['body'].replace(/\n/g, '<br>');
+                forecast_alert_body = String(aerisDetails['body'] || "").replace(/\n/g, '<br>');
                 //forecast_alert_link = data['alerts'][0]['response'][i]['details']['name'];
-                forecast_alert_link = data['alerts'][0]['response'][i]['details']['type'];
-                forecast_alert_expires = tzAdjustedMoment(data['alerts'][0]['response'][i]['timestamps']['expires']).format('$obs.label.time_forecast_alert_expires');
+                forecast_alert_link = aerisDetails['type'] || forecast_alert_title;
+                forecast_alert_expires = (aerisTimestamps['expires'] != null)
+                    ? tzAdjustedMoment(aerisTimestamps['expires']).format('$obs.label.time_forecast_alert_expires')
+                    : "";
                 forecast_alerts.push({"title": forecast_alert_title, "body": forecast_alert_body, "link": forecast_alert_link, "expires": forecast_alert_expires});
             }
         }
@@ -460,6 +477,9 @@ function aeris_aqi_translate(data) {
 
 function update_current_conditions(data) {
     forecast_provider = "$Extras.forecast_provider";
+    if (forecast_provider == "openmeteo" || forecast_provider == "open_meteo") {
+        forecast_provider = "open-meteo";
+    }
     current_conditions = "$Extras.current_conditions";
     belchertown_debug("Current Conditions: Provider is " + forecast_provider);
     belchertown_debug("Current Conditions: Determination via " + current_conditions);
@@ -537,7 +557,7 @@ function update_current_conditions(data) {
         }
     }
 
-    else if (forecast_provider == "pirateweather") {
+    else if (forecast_provider == "pirateweather" || forecast_provider == "nws" || forecast_provider == "open-meteo") {
 
         // data shape: { timestamp, current: [ {summary, icon, visibility, cloudCover, ...} ] }
         try {
@@ -584,6 +604,9 @@ function update_current_conditions(data) {
 
 function update_forecast_data(data) {
     forecast_provider = "$Extras.forecast_provider";
+    if (forecast_provider == "openmeteo" || forecast_provider == "open_meteo") {
+        forecast_provider = "open-meteo";
+    }
     belchertown_debug("Forecast: Provider is " + forecast_provider);
     belchertown_debug("Forecast: Updating data");
     belchertown_debug(data);
@@ -888,7 +911,7 @@ function update_forecast_data(data) {
     }
 
 
-    else if (forecast_provider == "pirateweather") {
+    else if (forecast_provider == "pirateweather" || forecast_provider == "nws" || forecast_provider == "open-meteo") {
         // PW shape: current, hourly[], daily[], alerts[]
         try {
             const daily = Array.isArray(data["daily"]) ? data["daily"] : [];

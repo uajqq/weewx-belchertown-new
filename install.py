@@ -109,7 +109,7 @@ extension_config = """
 
             #---Forecast defaults---
             # forecast_enabled  = 0
-            # forecast_provider = "aeris"   # aeris (Aeris/XWeather) or pirateweather (Pirate Weather)
+            # forecast_provider = "nws"   # nws (default, no API key), open-meteo (no API key), aeris (Aeris/XWeather), or pirateweather
             
             #---forecast API configuration---
             # forecast_api_id                      = "" # Aeris/XWeather Client ID or Pirate Weather API Key
@@ -172,7 +172,7 @@ extension_config = """
             # back_to_top_button_opacity  = 0.8
 
             #---CSS / JS minifying -- requires rcssmin and rjsmin --
-            # minify_assets = 1
+            # minify = 1
 
             #-------------------------------------------------------------
             #---
