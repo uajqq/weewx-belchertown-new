@@ -400,6 +400,7 @@ class BelchertownInstaller(ExtensionInstaller):
             "[StdReport]",
             "",
             "    [[Belchertown]]",
+            "        # See wiki for configuration help: https://github.com/uajqq/weewx-belchertown-new/wiki",
             '        skin = %s' % cls._format_config_value(root_values["skin"]),
             '        HTML_ROOT = %s' % cls._format_config_value(root_values["HTML_ROOT"]),
             '        enable = %s' % cls._format_config_value(root_values["enable"]),
