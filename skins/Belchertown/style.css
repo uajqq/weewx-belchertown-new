@@ -3207,6 +3207,14 @@ table.celestial td.label {
   container-name: forecast-card;
 }
 
+.frontpage .homepage-card--forecast,
+.frontpage .homepage-secondary-row,
+.frontpage .homepage-card--charts,
+.frontpage .homepage-hook {
+  content-visibility: auto;
+  contain-intrinsic-size: 720px;
+}
+
 .frontpage .homepage-card--forecast .homepage-card-header {
   justify-content: space-between;
   flex-wrap: wrap;
@@ -4126,11 +4134,19 @@ table.celestial td.label {
     display: flex;
     flex-wrap: nowrap;
     gap: 8px;
+    min-width: 100%;
+  }
+
+  .frontpage .homepage-card--records .homepage-card-body {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 
   .frontpage .homepage-card--records .stn-quick-stats {
     width: 50%;
-    flex: 1 1 0;
+    flex: 1 0 180px;
+    min-width: 180px;
     float: none;
     padding-left: 0;
     padding-right: 0;
@@ -4667,11 +4683,15 @@ span.highcharts-title {
   display: grid;
   gap: 24px;
   margin: 0 0 24px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .records .records-section-card {
   border-radius: 18px;
   padding: 24px;
+  min-width: 0;
+  max-width: 100%;
   background: transparent !important;
   background-color: transparent !important;
   border: 0;
@@ -4717,6 +4737,9 @@ span.highcharts-title {
 }
 
 .records .records-section-card__table {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;

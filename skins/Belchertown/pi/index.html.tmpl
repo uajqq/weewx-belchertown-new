@@ -92,7 +92,7 @@
 
                         <div class="col-xs-6 temp-observation">
                             <div class="obs-group">
-                                <img id="wxicon" src="$relative_url/images/$current_obs_icon"><!-- AJAX -->
+                                <img id="wxicon" src="$relative_url/images/$current_obs_icon" alt="Current conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high"><!-- AJAX -->
                                 <div class="outtemp_outer"><span class="outtemp">$current.outTemp.formatted</span><sup
                                         class="outtempunitlabelsuper">$unit.label.outTemp</sup></div><!-- AJAX -->
                                 <div class="current-obs-text">$current_obs_summary</div><!-- AJAX -->
@@ -222,9 +222,9 @@
                                         <td colspan="2">
                                             <div class="row small-almanac">
                                                 <div class="col-sm-5 sun">
-                                                    <span class="sunrise-value">$almanac.sunrise.format("%-I:%M%p")</span><span class="sunrise-set-image sunrise-set-image--rise"><img src="../images/sunrise.png"></span><!-- AJAX -->
+                                                    <span class="sunrise-value">$almanac.sunrise.format("%-I:%M%p")</span><span class="sunrise-set-image sunrise-set-image--rise"><img src="../images/sunrise.png" alt="" width="20" height="10" loading="lazy" decoding="async"></span><!-- AJAX -->
                                                     &nbsp;
-                                                    <span class="sunrise-set-image"><img src="../images/sunset.png"></span><span class="sunset-value">$almanac.sunset.format("%-I:%M%p")</span><!-- AJAX -->
+                                                    <span class="sunrise-set-image"><img src="../images/sunset.png" alt="" width="20" height="10" loading="lazy" decoding="async"></span><span class="sunset-value">$almanac.sunset.format("%-I:%M%p")</span><!-- AJAX -->
                                                 </div>
                                                 <div class="col-sm-7 moon">
                                                     <div class="moon-container">

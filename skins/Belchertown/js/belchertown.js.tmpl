@@ -239,9 +239,9 @@ function belchertown_debug(message) {
 jQuery(document).ready(function() {
 
     // Bootstrap hover tooltips
-    jQuery(function() {
+    if (jQuery.fn.tooltip) {
         jQuery('[data-toggle="tooltip"]').tooltip()
-    })
+    }
 
     // If the visitor has overridden the theme, keep that theme going throughout the full site and their visit.
     if (sessionStorage.getItem('theme') == "toggleOverride") {
@@ -332,19 +332,12 @@ jQuery(document).ready(function() {
 });
 
 // #if $Extras.has_key("theme") and $Extras.theme == 'auto'
-// Run this on every page for dark mode if skin theme is auto
-ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
-    update_weewx_data(weewx_data); // Initial call to update (date, daily high, low, etc)
-    belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
-}).catch(function(e) {
-    console.log(e);
-});
+// Run this on every page for dark mode if skin theme is auto, without fetching
+// full weather JSON on non-weather pages.
+// #if $almanac.sunrise.raw is not None and $almanac.sunset.raw is not None
+autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
 // #end if
-
-// Disable AJAX caching
-jQuery.ajaxSetup({
-    cache: false
-});
+// #end if
 
 // http://stackoverflow.com/a/14887961/1177153
 var weatherdirection = $charts_windDir_ordinals_label;
@@ -1135,6 +1128,20 @@ function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     }
 }
 
+function ensureDarkThemeStylesheet() {
+    if (document.getElementById("belchertownDarkStyle")) {
+        return;
+    }
+
+    var darkStylesheet = document.createElement("link");
+    darkStylesheet.id = "belchertownDarkStyle";
+    darkStylesheet.rel = "stylesheet";
+    darkStylesheet.type = "text/css";
+    darkStylesheet.media = "all";
+    darkStylesheet.href = get_relative_url() + "/belchertown-dark.min.css?ver=$belchertown_version";
+    document.head.appendChild(darkStylesheet);
+}
+
 function changeTheme(themeName, toggleOverride = false) {
     belchertown_debug("Theme: Changing to " + themeName);
     // If the configured theme is auto, but the user toggles light/dark, remove the auto option.
@@ -1147,6 +1154,7 @@ function changeTheme(themeName, toggleOverride = false) {
         belchertown_debug("Theme: sessionStorage.getItem('theme') is now: " + sessionStorage.getItem('theme'));
     }
     if (themeName == "dark") {
+        ensureDarkThemeStylesheet();
         // Apply dark theme
         // #if $radar_html_dark != "None"
         jQuery('.radar_image').html('$radar_html_dark');
@@ -1180,8 +1188,8 @@ function changeTheme(themeName, toggleOverride = false) {
 }
 
 async function ajaxweewx() {
-    var url = get_relative_url() + "/json/weewx_data.json?_=" + Date.now();
-    resp = await fetch(url, {cache: "no-store"});
+    var url = get_relative_url() + "/json/weewx_data.json";
+    var resp = await fetch(url, {cache: "no-cache"});
     if (!resp.ok) {
         throw new Error("HTTP error! Unable to load weewx_data.json");
     } else {
@@ -1553,7 +1561,9 @@ function update_weewx_data(data) {
     renderAlmanacDiagram(data["almanac"]["diagram"]);
     // #if $almanac.hasExtras
     // Close current modal if open
-    jQuery('#almanac').modal('hide');
+    if (jQuery.fn.modal && jQuery('#almanac').length) {
+        jQuery('#almanac').modal('hide');
+    }
     if (data["almanac"] && typeof data["almanac"]["almanac_extras_modal_html"] === "string" && data["almanac"]["almanac_extras_modal_html"].length > 0) {
         jQuery(".almanac-extras-modal-body").html(data["almanac"]["almanac_extras_modal_html"]);
     }
@@ -1767,4 +1777,3 @@ function forecast_time(i, interval, daytime) {
 
 
 // Charts implementation moved to: js/belchertown-charts.js.tmpl
-

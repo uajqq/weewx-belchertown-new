@@ -1,5 +1,17 @@
 var belchertown_highcharts_defaults_applied = false;
 
+function belchertown_ensure_highcharts_core() {
+    if (typeof Highcharts !== "undefined") {
+        return Promise.resolve(Highcharts);
+    }
+
+    if (typeof window.belchertownEnsureHighcharts === "function") {
+        return window.belchertownEnsureHighcharts();
+    }
+
+    return Promise.reject(new Error("Highcharts loader is not available"));
+}
+
 function belchertown_configure_highcharts_defaults() {
     if (belchertown_highcharts_defaults_applied || typeof Highcharts === "undefined") {
         return;
@@ -295,7 +307,11 @@ function belchertown_ensure_highcharts_modules(moduleSet) {
 function showChart(json_file, prepend_renderTo = false) {
 
     // Relative URL by finding what page we're on currently.
-    jQuery.getJSON(get_relative_url() + '/json/' + json_file + '.json', function(data) {
+    jQuery.ajax({
+        url: get_relative_url() + '/json/' + json_file + '.json',
+        dataType: 'json',
+        headers: {'Cache-Control': 'no-cache'},
+    }).done(function(data) {
 
         var renderCharts = function() {
 
@@ -1490,10 +1506,17 @@ function showChart(json_file, prepend_renderTo = false) {
         };
 
         var requiredModules = belchertown_detect_highcharts_modules(data);
-        belchertown_ensure_highcharts_modules(requiredModules).then(function() {
+        belchertown_ensure_highcharts_core().then(function() {
+            return belchertown_ensure_highcharts_modules(requiredModules);
+        }).then(function() {
             belchertown_configure_highcharts_defaults();
             renderCharts();
         }).catch(function(err) {
+            if (typeof Highcharts === "undefined") {
+                belchertown_debug("Highcharts load error: " + err.message + ". Skipping chart render.");
+                return;
+            }
+
             belchertown_debug("Highcharts module preload error: " + err.message + ". Continuing render with available modules.");
             belchertown_configure_highcharts_defaults();
             renderCharts();

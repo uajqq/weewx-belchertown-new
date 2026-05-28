@@ -35,18 +35,35 @@ function ajaxforecast() {
         provider = "open-meteo";
     }
 
-    const pCurrent = jQuery.getJSON(get_relative_url() + "/json/current_conditions.json", function(current_conditions) {
-        current_conditions_data = current_conditions;
-    });
+    const pCurrent = jQuery
+        .ajax({
+            url: get_relative_url() + "/json/current_conditions.json",
+            dataType: "json",
+            headers: {"Cache-Control": "no-cache"},
+        })
+        .done(function(current_conditions) {
+            current_conditions_data = current_conditions;
+        });
 
-    const pForecast = jQuery.getJSON(get_relative_url() + "/json/forecast.json", function(forecast) {
-        forecast_data = forecast;
-    });
+    const pForecast = jQuery
+        .ajax({
+            url: get_relative_url() + "/json/forecast.json",
+            dataType: "json",
+            headers: {"Cache-Control": "no-cache"},
+        })
+        .done(function(forecast) {
+            forecast_data = forecast;
+        });
 
     let promises;
     if (provider === "aeris") {
         const pIconMap = jQuery
-            .getJSON(get_relative_url() + "/images/aeris-icon-list.json", function(iconlist) {
+            .ajax({
+                url: get_relative_url() + "/images/aeris-icon-list.json?ver=$belchertown_version",
+                dataType: "json",
+                cache: true,
+            })
+            .done(function(iconlist) {
                 icon_dict = iconlist;
             })
             .fail(function(err) {
@@ -800,7 +817,7 @@ function update_forecast_data(data) {
                     output_html += parseInt((highTemp - forecast_row[i]["avgTemp"] + offset) * 100 / (rangeTemp)) + 'px';
                     // #end if
                     output_html += '<div class="forecast-image">';
-                    output_html += '<img id="icon" src="' + forecast_row[i]["image_url"] + '">';
+                    output_html += '<img id="icon" src="' + forecast_row[i]["image_url"] + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
                     output_html += '</div>';
                     output_html += parseFloat(forecast_row[i]["avgTemp"]).toFixed(0) + '&deg;</div>';
                     output_html += '</div>';
@@ -814,7 +831,7 @@ function update_forecast_data(data) {
                     if (forecast_row[i]["snow_depth"] > 0) {
                         output_html += '<div class="snow-precip">';
                         // output_html += '<img src="'+get_relative_url()+'/images/snowflake-icon-15px.png"> <span>';
-                        output_html += '<img src="' + get_relative_url() + '/images/snowflake-icon-15px.png"> <span>' + parseFloat(forecast_row[i]["snow_depth"]).toFixed(0) + '<span> ' + forecast_row[i]["snow_unit"];
+                        output_html += '<img src="' + get_relative_url() + '/images/snowflake-icon-15px.png" alt="" width="15" height="15" loading="lazy" decoding="async"> <span>' + parseFloat(forecast_row[i]["snow_depth"]).toFixed(0) + '<span> ' + forecast_row[i]["snow_unit"];
                         output_html += '</div>';
                     } else if (forecast_row[i]["precip"] > 0) {
                         output_html += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(forecast_row[i]["precip"]).toFixed(0) + '%</span>';
@@ -851,7 +868,7 @@ function update_forecast_data(data) {
                     output_html += '<span id="weekday">' + forecast_time(i, forecast_interval, forecast_row[i]["weekday"]) + '</span>';
                     output_html += '<br>';
                     output_html += '<div class="forecast-conditions">';
-                    output_html += '<img id="icon" src="' + forecast_row[i]["image_url"] + '">';
+                    output_html += '<img id="icon" src="' + forecast_row[i]["image_url"] + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
                     output_html += '<br>';
                     output_html += '<span class="forecast-condition-text">' + forecast_row[i]["condition_text"] + '</span>';
                     output_html += '</div>';
@@ -865,7 +882,7 @@ function update_forecast_data(data) {
                     // #end if
                     if (forecast_row[i]["snow_depth"] > 0) {
                         output_html += '<div class="snow-precip">';
-                        output_html += '<img src="' + get_relative_url() + '/images/snowflake-icon-15px.png"> <span>' + parseFloat(forecast_row[i]["snow_depth"]).toFixed(0) + '<span> ' + forecast_row[i]["snow_unit"];
+                        output_html += '<img src="' + get_relative_url() + '/images/snowflake-icon-15px.png" alt="" width="15" height="15" loading="lazy" decoding="async"> <span>' + parseFloat(forecast_row[i]["snow_depth"]).toFixed(0) + '<span> ' + forecast_row[i]["snow_unit"];
                         output_html += '</div>';
                     } else if (forecast_row[i]["precip"] > 0) {
                         output_html += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + parseFloat(forecast_row[i]["precip"]).toFixed(0) + '%</span>';
@@ -998,7 +1015,7 @@ function update_forecast_data(data) {
                 html24 += '<div class="forecast-day forecast-24hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
                 html24 += '<span id="weekday">' + dayMoment + '</span><br>';
                 html24 += '<div class="forecast-conditions">';
-                html24 += '<img id="icon" src="' + image_url + '">';
+                html24 += '<img id="icon" src="' + image_url + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
                 html24 += '<br>';
                 html24 += '<span class="forecast-condition-text">' + condition_text + '</span>';
                 html24 += '</div>';
@@ -1043,7 +1060,7 @@ function update_forecast_data(data) {
                     html += '<div class="forecast-day ' + tileClass + ' pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/' + maxTiles + '); max-width:calc(100%/' + maxTiles + ');">';
                     html += '<span id="weekday">' + ts + '</span><br>';
                     html += '<div class="forecast-conditions">';
-                    html += '<img id="icon" src="' + image_url + '"><br>';
+                    html += '<img id="icon" src="' + image_url + '" alt="" width="128" height="101" loading="lazy" decoding="async"><br>';
                     html += '<span class="forecast-condition-text">' + (h["summary"] || "") + '</span>';
                     html += '</div>';
 

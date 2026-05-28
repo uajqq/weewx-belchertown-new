@@ -7,24 +7,25 @@
 <script>
     (function() {
     function initReportsPage() {
-    jQuery(document).ready(function() {
-        var month = getURLvar("mo");
-        var year = getURLvar("yr");
-        if ((year !== undefined) && (month !== undefined)) {
+        var params = new URLSearchParams(window.location.search);
+        var month = params.get("mo");
+        var year = params.get("yr");
+        var url;
+        if (year !== null && month !== null) {
             url = '$relative_url/NOAA/NOAA-' + year + '-' + month + '.txt';
-        } else if (year !== undefined) {
+        } else if (year !== null) {
             url = '$relative_url/NOAA/NOAA-' + year + '.txt';
         } else {
             url = '$relative_url/NOAA/$default_noaa_file';
         }
 
-        // Load the file into the pre
-        //jQuery('#noaa_contents').load( url );
         populatePre(url);
 
         // Change the direct href link
-        jQuery(".noaa_direct_link").attr("href", url);
-    });
+        var directLink = document.querySelector(".noaa_direct_link");
+        if (directLink) {
+            directLink.setAttribute("href", url);
+        }
 
     // Change the div to the right NOAA file
     // I normally use PHP for this, but JavaScript seems to work well for the skin
@@ -32,15 +33,15 @@
     function populatePre(url) {
         var xhr = new XMLHttpRequest();
         xhr.onload = function() {
-            raw_content = this.responseText;
-            updated_content = raw_content
+            var rawContent = this.responseText;
+            var updatedContent = rawContent
                 .replace(/<sup>/g, '')
                 .replace(/<\/sup>/g, '')
                 .replace(/&deg;/g, '\u00b0')
                 .replace(/&amp;/g, '&')
                 .replace(/&lt;/g, '<')
                 .replace(/&gt;/g, '>');
-            document.getElementById('noaa_contents').textContent = updated_content;
+            document.getElementById('noaa_contents').textContent = updatedContent;
         };
         xhr.open('GET', url);
         xhr.send();

@@ -2452,7 +2452,11 @@ class getData(SearchList):
         width = extras_dict.get("radar_width_kiosk", "")
         height = extras_dict.get("radar_height_kiosk", "")
         src = skin_dict.get("Extras", {}).get("radar_html_kiosk", "")
-        return f'<iframe width="{width}px" height="{height}px" src="{src}" frameborder="0"></iframe>'
+        return (
+            f'<iframe width="{width}px" height="{height}px" '
+            f'src="{html.escape(str(src), quote=True)}" frameborder="0" '
+            f'loading="lazy" title="Radar map"></iframe>'
+        )
 
     def _build_aeris_radar(self, extras_dict, width, height, lat, lon, zoom, dark=False):
         """Build Aeris API radar embed HTML."""
@@ -2468,7 +2472,8 @@ class getData(SearchList):
             f'counties:60,rivers,interstates:60,admin-cities{city_suffix},'
             f'alerts-severe:50:blend({blend}),radar:blend({blend})/'
             f'{width}x{height}/{lat},{lon},{zoom}/current.png" '
-            f'referrerpolicy="no-referrer"></img>'
+            f'alt="Radar map" loading="lazy" decoding="async" '
+            f'fetchpriority="low" referrerpolicy="no-referrer"></img>'
         )
 
     def _build_windy_radar(self, width, height, lat, lon, zoom, rain, wind, temp, marker, overlay):
@@ -2483,7 +2488,8 @@ class getData(SearchList):
             f'&marker={marker_str}&calendar=&pressure=&type=map'
             f'&location=coordinates&detail=&detailLat={lat}&detailLon={lon}'
             f'&metricRain={rain}&metricWind={wind}&metricTemp={temp}'
-            f'&radarRange=-1" frameborder="0"></iframe>'
+            f'&radarRange=-1" frameborder="0" loading="lazy" '
+            f'title="Radar map"></iframe>'
         )
 
     def _convert_temperature(self, value, from_unit, formatter):
@@ -2779,7 +2785,15 @@ class getData(SearchList):
         if extras_dict.get("radar_html_kiosk") != "":
             radar_width_kiosk = extras_dict["radar_width_kiosk"]
             radar_height_kiosk = extras_dict["radar_height_kiosk"]
-            radar_html_kiosk = f'<iframe width="{radar_width_kiosk}px" height="{radar_height_kiosk}px" src="{skin_dict["Extras"]["radar_html_kiosk"]}" frameborder="0"></iframe>'
+            radar_kiosk_src = html.escape(
+                str(skin_dict["Extras"]["radar_html_kiosk"]),
+                quote=True,
+            )
+            radar_html_kiosk = (
+                f'<iframe width="{radar_width_kiosk}px" '
+                f'height="{radar_height_kiosk}px" src="{radar_kiosk_src}" '
+                f'frameborder="0" loading="lazy" title="Radar map"></iframe>'
+            )
 
         # ==============================================================================
         # Build the all time stats.
