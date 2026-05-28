@@ -48,9 +48,9 @@
 
 ## Stable asset version for browser caching (avoid per-request cache busting)
 #if str($belchertown_version).strip() != ""
-#set $asset_version = $belchertown_version
+#set global $asset_version = $belchertown_version
 #else
-#set $asset_version = "1"
+#set global $asset_version = "1"
 #end if
 
 ## Page-level JavaScript loading. Keep heavy runtime files off simple pages.
