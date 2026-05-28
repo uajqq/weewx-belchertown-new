@@ -1492,7 +1492,7 @@ p.entry-meta {
 ---------------------------------------------------------------------------------------------------- */
 @media only screen and (max-width: 768px) {
 
-  .genesis-nav-menu.responsive-menu>.menu-item>.sub-menu,
+  .genesis-nav-menu.responsive-menu .menu-item>.sub-menu,
   .genesis-nav-menu.responsive-menu {
     display: none;
   }
@@ -1526,7 +1526,7 @@ p.entry-meta {
     margin-right: 60px;
   }
 
-  .genesis-nav-menu.responsive-menu>.menu-item-has-children:before {
+  .genesis-nav-menu.responsive-menu .menu-item-has-children:before {
     content: "\f347";
     float: right;
     font: normal 16px/1 "dashicons";

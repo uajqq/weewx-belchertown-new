@@ -13,19 +13,32 @@
         return !isOpen;
     }
 
+    function directSubMenu(item) {
+        for (var i = 0; i < item.children.length; i++) {
+            if (item.children[i].classList && item.children[i].classList.contains("sub-menu")) {
+                return item.children[i];
+            }
+        }
+        return null;
+    }
+
     function normalizeSubMenus(menu) {
-        Array.prototype.slice.call(menu.children).forEach(function(child) {
-            if (!child.classList || !child.classList.contains("sub-menu")) {
-                return;
-            }
+        var containers = [menu].concat(Array.prototype.slice.call(menu.querySelectorAll(".sub-menu")));
 
-            var previousItem = child.previousElementSibling;
-            if (!previousItem || !previousItem.classList || !previousItem.classList.contains("menu-item")) {
-                return;
-            }
+        containers.forEach(function(container) {
+            Array.prototype.slice.call(container.children).forEach(function(child) {
+                if (!child.classList || !child.classList.contains("sub-menu")) {
+                    return;
+                }
 
-            previousItem.appendChild(child);
-            previousItem.classList.add("menu-item-has-children");
+                var previousItem = child.previousElementSibling;
+                if (!previousItem || !previousItem.classList || !previousItem.classList.contains("menu-item")) {
+                    return;
+                }
+
+                previousItem.appendChild(child);
+                previousItem.classList.add("menu-item-has-children");
+            });
         });
 
         menu.querySelectorAll(".menu-item > .sub-menu").forEach(function(submenu) {
@@ -78,18 +91,21 @@
                     element.removeAttribute("style");
                 });
 
-            document.querySelectorAll(".responsive-menu > .menu-item").forEach(function(item) {
+            document.querySelectorAll(".responsive-menu .menu-item-has-children").forEach(function(item) {
                 item.classList.remove("menu-open");
             });
         });
 
         document.addEventListener("click", function(event) {
-            var item = event.target.closest(".responsive-menu > .menu-item");
+            var item = event.target.closest(".responsive-menu .menu-item-has-children");
             if (!item || event.target !== item) {
                 return;
             }
+            if (window.innerWidth > 768) {
+                return;
+            }
 
-            var submenu = item.querySelector(".sub-menu");
+            var submenu = directSubMenu(item);
             if (!submenu) {
                 return;
             }
