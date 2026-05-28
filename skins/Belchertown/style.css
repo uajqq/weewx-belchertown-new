@@ -3590,18 +3590,49 @@ table.celestial td.label {
   background: #e5e7eb;
 }
 
+.frontpage .homepage-card--earthquake .earthquake-map-link {
+  display: block;
+  width: 100%;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-map-link,
+.frontpage .homepage-card--earthquake .earthquake-map-link:hover,
+.frontpage .homepage-card--earthquake .earthquake-map-link:focus,
+.frontpage .homepage-card--earthquake .earthquake-map-link:active {
+  text-decoration: none;
+}
+
 .frontpage .homepage-card--earthquake .earthquake-map {
   display: block;
   position: relative;
   width: 100%;
   height: clamp(160px, 26vw, 190px);
   min-height: 160px;
-  object-fit: cover;
   margin-top: 0;
   margin-bottom: 0;
   opacity: 1;
   visibility: visible;
   border: 0;
+  overflow: hidden;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-map-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.frontpage .homepage-card--earthquake .earthquake-map-tile {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .frontpage .homepage-card--earthquake .earthquake-map-marker {
