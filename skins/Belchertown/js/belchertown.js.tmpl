@@ -679,10 +679,10 @@ function update_wind_compass_marker(payload) {
     var windSpeedKnots = knots_from_mqtt_payload(payload, "windSpeed");
     var windGustKnots = knots_from_mqtt_payload(payload, "windGust");
 
-    if (!isFinite(windSpeedKnots)) {
+    if (windSpeedKnots === null || !isFinite(windSpeedKnots)) {
         windSpeedKnots = live_wind_compass_state.windSpeedKnots;
     }
-    if (!isFinite(windGustKnots)) {
+    if (windGustKnots === null || !isFinite(windGustKnots)) {
         windGustKnots = live_wind_compass_state.windGustKnots;
     }
 
@@ -909,7 +909,7 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     if (isFinite(alt)) {
         projectedX = almanacWrapDiagramX(almanacCurrentTimeToDiagramX(), bodyOffset);
         projectedY = almanacAltitudeToDiagramY(alt);
-        if (isFinite(projectedX) && isFinite(projectedY)) {
+        if (projectedX !== null && projectedY !== null) {
             point = {
                 x: projectedX,
                 y: projectedY,
@@ -1687,15 +1687,12 @@ function render_moon_icon_html(data) {
     var templateTilt = moon_tilt_template_degrees();
     var templateTiltRotation = moon_tilt_to_icon_rotation(templateTilt);
     var litDirection = 0;
-    var hasFiniteNumber = function(value) {
-        return (typeof value === "number") && isFinite(value);
-    };
 
-    if (hasFiniteNumber(templateTiltRotation)) {
+    if (templateTiltRotation !== null) {
         litDirection = templateTiltRotation;
     }
 
-    if (!hasFiniteNumber(illumination) || !hasFiniteNumber(litDirection)) {
+    if (illumination === null || litDirection === null) {
         return moon_icon(moon && moon["moon_index"]);
     }
 

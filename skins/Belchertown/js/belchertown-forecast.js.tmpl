@@ -1023,11 +1023,11 @@ function update_forecast_data(data) {
                 html24 += '<br>';
                 html24 += '<div class="forecast-precip">';
                 // #if $Extras.has_key("forecast_show_humidity_dewpoint") and $Extras.forecast_show_humidity_dewpoint == '1'
-                if (humidityNum != null && isFinite(humidityNum)) {
+                if (humidityNum !== null && isFinite(humidityNum)) {
                     html24 += '<i class="wi wi-humidity rain-precip"></i> <span>' + humidityNum.toFixed(0) + '%</span> | ';
                 }
                 // #elif $Extras.has_key("forecast_show_humidity_dewpoint") and $Extras.forecast_show_humidity_dewpoint == '2'
-                if (dewPointNum != null && isFinite(dewPointNum)) {
+                if (dewPointNum !== null && isFinite(dewPointNum)) {
                     html24 += '<i class="wi wi-raindrops rain-precip"></i> <span>' + dewPointNum.toFixed(0) + '&deg;</span> | ';
                 }
                 // #end if

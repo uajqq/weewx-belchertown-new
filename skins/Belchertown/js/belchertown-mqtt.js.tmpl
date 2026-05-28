@@ -420,7 +420,7 @@ function update_almanac_diagram_from_mqtt(payload) {
     var solarAlt = parse_mqtt_number(payload, "solarAltitude");
     var lunarAlt = parse_mqtt_number(payload, "lunarAltitude");
 
-    if (!isFinite(solarAz) && !isFinite(lunarAz) && !isFinite(solarAlt) && !isFinite(lunarAlt)) {
+    if (solarAz === null && lunarAz === null && solarAlt === null && lunarAlt === null) {
         return;
     }
 
@@ -450,22 +450,22 @@ function update_almanac_diagram_from_mqtt(payload) {
         centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase()
     };
 
-    if (isFinite(solarAz)) {
+    if (solarAz !== null) {
         diagramData.sun.azimuth = solarAz;
         diagram.data("sunAz", solarAz);
         diagram.attr("data-sun-az", solarAz.toFixed(3));
     }
-    if (isFinite(solarAlt)) {
+    if (solarAlt !== null) {
         diagramData.sun.altitude = solarAlt;
         diagram.data("sunAlt", solarAlt);
         diagram.attr("data-sun-alt", solarAlt.toFixed(3));
     }
-    if (isFinite(lunarAz)) {
+    if (lunarAz !== null) {
         diagramData.moon.azimuth = lunarAz;
         diagram.data("moonAz", lunarAz);
         diagram.attr("data-moon-az", lunarAz.toFixed(3));
     }
-    if (isFinite(lunarAlt)) {
+    if (lunarAlt !== null) {
         diagramData.moon.altitude = lunarAlt;
         diagram.data("moonAlt", lunarAlt);
         diagram.attr("data-moon-alt", lunarAlt.toFixed(3));
