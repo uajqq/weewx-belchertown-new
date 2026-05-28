@@ -856,7 +856,12 @@ img.alignright {
   position: static;
 }
 
-.genesis-nav-menu .menu-item:hover>.sub-menu {
+.genesis-nav-menu .menu-item:hover>.sub-menu,
+.genesis-nav-menu .menu-item:focus-within>.sub-menu,
+.genesis-nav-menu .menu-item:hover+.sub-menu,
+.genesis-nav-menu .menu-item:focus-within+.sub-menu,
+.genesis-nav-menu .sub-menu:hover,
+.genesis-nav-menu .sub-menu:focus-within {
   left: auto;
   opacity: 1;
 }

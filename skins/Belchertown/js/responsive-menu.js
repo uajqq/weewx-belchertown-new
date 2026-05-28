@@ -13,6 +13,26 @@
         return !isOpen;
     }
 
+    function normalizeSubMenus(menu) {
+        Array.prototype.slice.call(menu.children).forEach(function(child) {
+            if (!child.classList || !child.classList.contains("sub-menu")) {
+                return;
+            }
+
+            var previousItem = child.previousElementSibling;
+            if (!previousItem || !previousItem.classList || !previousItem.classList.contains("menu-item")) {
+                return;
+            }
+
+            previousItem.appendChild(child);
+            previousItem.classList.add("menu-item-has-children");
+        });
+
+        menu.querySelectorAll(".menu-item > .sub-menu").forEach(function(submenu) {
+            submenu.parentElement.classList.add("menu-item-has-children");
+        });
+    }
+
     onReady(function() {
         var menus = document.querySelectorAll("header .genesis-nav-menu, .nav-primary .genesis-nav-menu");
 
@@ -20,6 +40,8 @@
             if (menu.dataset.responsiveMenuBound === "1") {
                 return;
             }
+
+            normalizeSubMenus(menu);
 
             menu.dataset.responsiveMenuBound = "1";
             menu.classList.add("responsive-menu");
