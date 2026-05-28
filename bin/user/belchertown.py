@@ -171,12 +171,18 @@ def _pw_transform_to_belch(pw):
     daily_list = (pw.get("daily") or {}).get("data", [])
     alerts_list = pw.get("alerts") or []
 
+    hourly_all = [_extract_fields(h, HOURLY_FIELDS) for h in hourly_list]
+    hourly = _slice_from_current_period(hourly_all, 1)
+    daily = [_extract_fields(d, DAILY_FIELDS) for d in daily_list]
+
     return {
         "current": _extract_fields(current_data, CURRENT_FIELDS),
-        "hourly": [_extract_fields(h, HOURLY_FIELDS) for h in hourly_list],
-        "daily": [_extract_fields(d, DAILY_FIELDS) for d in daily_list],
+        "hourly": hourly,
+        "threeHourly": _pick_three_hourly_from_current_period(hourly_all),
+        "daily": daily,
         "alerts": [_extract_fields(a, ALERT_FIELDS) for a in alerts_list],
         "provider": "pirateweather",
+        "schema": "belchertown.forecast.v1",
         "generated_at": int(time.time()),
     }
 
@@ -826,12 +832,16 @@ def _nws_transform_to_belch(
     forecast_units,
 ):
     """Map NWS responses to the compact structure this skin uses."""
+    hourly_all = _nws_build_hourly(hourly_payload, forecast_units)
+    hourly = _slice_from_current_period(hourly_all, 1)
     return {
         "current": _nws_build_current(observation_payload, forecast_units),
-        "hourly": _nws_build_hourly(hourly_payload, forecast_units),
+        "hourly": hourly,
+        "threeHourly": _pick_three_hourly_from_current_period(hourly_all),
         "daily": _nws_build_daily(forecast_payload, forecast_units),
         "alerts": _nws_build_alerts(alerts_payload),
         "provider": "nws",
+        "schema": "belchertown.forecast.v1",
         "generated_at": int(time.time()),
     }
 
@@ -1205,10 +1215,12 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
 
     return {
         "current": current,
-        "hourly": hourly,
+        "hourly": _slice_from_current_period(hourly, 1),
+        "threeHourly": _pick_three_hourly_from_current_period(hourly),
         "daily": daily,
         "alerts": [],
         "provider": "open-meteo",
+        "schema": "belchertown.forecast.v1",
         "generated_at": int(time.time()),
     }
 
@@ -1289,6 +1301,401 @@ def _safe_float(value):
         return float(value)
     except (TypeError, ValueError, AttributeError, OverflowError):
         return None
+
+
+def _safe_epoch(value):
+    """Return an integer epoch value when possible, else None."""
+    epoch_value = _safe_float(value)
+    if epoch_value is None:
+        return None
+    return int(epoch_value)
+
+
+def _local_hour_is_divisible(ts, divisor):
+    """Return True when an epoch's local hour is divisible by divisor."""
+    try:
+        return datetime.datetime.fromtimestamp(ts).hour % divisor == 0
+    except Exception:
+        return False
+
+
+def _current_period_start_index(rows, period_hours, now=None, hour_divisor=None):
+    """Return the row index for the active forecast period."""
+    if not isinstance(rows, list) or not rows:
+        return 0
+
+    now_epoch = _safe_epoch(now)
+    if now_epoch is None:
+        now_epoch = int(time.time())
+
+    period_seconds = int(period_hours * 3600)
+    first_future = None
+    found_timestamp = False
+    found_aligned_timestamp = hour_divisor is None
+
+    for idx, row in enumerate(rows):
+        ts = _safe_epoch((row or {}).get("time"))
+        if ts is None:
+            continue
+
+        found_timestamp = True
+        if hour_divisor is not None:
+            if not _local_hour_is_divisible(ts, hour_divisor):
+                continue
+            found_aligned_timestamp = True
+
+        if ts <= now_epoch < ts + period_seconds:
+            return idx
+        if ts >= now_epoch and first_future is None:
+            first_future = idx
+
+    if first_future is not None:
+        return first_future
+
+    if found_aligned_timestamp:
+        return len(rows) if found_timestamp else 0
+
+    return _current_period_start_index(rows, period_hours, now)
+
+
+def _slice_from_current_period(rows, period_hours, now=None, hour_divisor=None):
+    """Return forecast rows starting at the active period."""
+    if not isinstance(rows, list) or not rows:
+        return []
+    start_index = _current_period_start_index(rows, period_hours, now, hour_divisor)
+    return rows[start_index:]
+
+
+def _pick_three_hourly_from_current_period(hourly_rows):
+    """Return every third hourly row, starting with the active 3-hour period."""
+    hourly_rows = _slice_from_current_period(hourly_rows, 3, hour_divisor=3)
+    return hourly_rows[::3]
+
+
+def _load_aeris_icon_map(config_dict, skin_dict):
+    """Load Aeris/Xweather icon mappings to Belchertown icon names."""
+    iconlist_file_path = os.path.join(
+        config_dict["WEEWX_ROOT"],
+        skin_dict["SKIN_ROOT"],
+        skin_dict.get("skin", ""),
+        "images/aeris-icon-list.json",
+    )
+    try:
+        with open(iconlist_file_path, "r", encoding="utf-8") as icon_fh:
+            return json.load(icon_fh)
+    except Exception as e:
+        log.error(f"aeris-icon-list.json is missing or unreadable in {iconlist_file_path}: {e}")
+        return {}
+
+
+def _aeris_icon_to_belch(icon_value, icon_map):
+    """Map an Aeris/Xweather icon filename to the skin icon base name."""
+    if not isinstance(icon_value, str) or not icon_value:
+        return "unknown"
+    icon_name = icon_value.split(".")[0]
+    return icon_map.get(icon_name, "unknown")
+
+
+def _aeris_coded_weather(data, label_dict, full_observation=False):
+    """Convert Aeris/Xweather coded weather to a localized summary."""
+    if not isinstance(data, str) or not data:
+        return ""
+
+    parts = data.split(":")
+    if len(parts) < 3:
+        return ""
+
+    coverage_code = parts[0]
+    intensity_code = parts[1]
+    weather_code = parts[2]
+
+    cloud_dict = {
+        "CL": label_dict["forecast_cloud_code_CL"],
+        "FW": label_dict["forecast_cloud_code_FW"],
+        "SC": label_dict["forecast_cloud_code_SC"],
+        "BK": label_dict["forecast_cloud_code_BK"],
+        "OV": label_dict["forecast_cloud_code_OV"],
+    }
+
+    coverage_dict = {
+        "AR": label_dict["forecast_coverage_code_AR"],
+        "BR": label_dict["forecast_coverage_code_BR"],
+        "C": label_dict["forecast_coverage_code_C"],
+        "D": label_dict["forecast_coverage_code_D"],
+        "FQ": label_dict["forecast_coverage_code_FQ"],
+        "IN": label_dict["forecast_coverage_code_IN"],
+        "IS": label_dict["forecast_coverage_code_IS"],
+        "L": label_dict["forecast_coverage_code_L"],
+        "NM": label_dict["forecast_coverage_code_NM"],
+        "O": label_dict["forecast_coverage_code_O"],
+        "PA": label_dict["forecast_coverage_code_PA"],
+        "PD": label_dict["forecast_coverage_code_PD"],
+        "S": label_dict["forecast_coverage_code_S"],
+        "SC": label_dict["forecast_coverage_code_SC"],
+        "VC": label_dict["forecast_coverage_code_VC"],
+        "WD": label_dict["forecast_coverage_code_WD"],
+    }
+
+    intensity_dict = {
+        "VL": label_dict["forecast_intensity_code_VL"],
+        "L": label_dict["forecast_intensity_code_L"],
+        "H": label_dict["forecast_intensity_code_H"],
+        "VH": label_dict["forecast_intensity_code_VH"],
+    }
+
+    weather_dict = {
+        "A": label_dict["forecast_weather_code_A"],
+        "BD": label_dict["forecast_weather_code_BD"],
+        "BN": label_dict["forecast_weather_code_BN"],
+        "BR": label_dict["forecast_weather_code_BR"],
+        "BS": label_dict["forecast_weather_code_BS"],
+        "BY": label_dict["forecast_weather_code_BY"],
+        "F": label_dict["forecast_weather_code_F"],
+        "FR": label_dict["forecast_weather_code_FR"],
+        "H": label_dict["forecast_weather_code_H"],
+        "IC": label_dict["forecast_weather_code_IC"],
+        "IF": label_dict["forecast_weather_code_IF"],
+        "IP": label_dict["forecast_weather_code_IP"],
+        "K": label_dict["forecast_weather_code_K"],
+        "L": label_dict["forecast_weather_code_L"],
+        "R": label_dict["forecast_weather_code_R"],
+        "RW": label_dict["forecast_weather_code_RW"],
+        "RS": label_dict["forecast_weather_code_RS"],
+        "SI": label_dict["forecast_weather_code_SI"],
+        "WM": label_dict["forecast_weather_code_WM"],
+        "S": label_dict["forecast_weather_code_S"],
+        "SW": label_dict["forecast_weather_code_SW"],
+        "T": label_dict["forecast_weather_code_T"],
+        "UP": label_dict["forecast_weather_code_UP"],
+        "VA": label_dict["forecast_weather_code_VA"],
+        "WP": label_dict["forecast_weather_code_WP"],
+        "ZF": label_dict["forecast_weather_code_ZF"],
+        "ZL": label_dict["forecast_weather_code_ZL"],
+        "ZR": label_dict["forecast_weather_code_ZR"],
+        "ZY": label_dict["forecast_weather_code_ZY"],
+    }
+
+    if weather_code in cloud_dict:
+        return cloud_dict[weather_code]
+
+    output = ""
+    if full_observation and coverage_code in coverage_dict:
+        output += coverage_dict[coverage_code] + " "
+    if intensity_code in intensity_dict:
+        output += intensity_dict[intensity_code] + " "
+    output += weather_dict.get(weather_code, "")
+    return output.strip()
+
+
+def _aeris_temp_value(period, forecast_units, key_prefix):
+    """Return an Aeris temperature value in the configured forecast unit."""
+    if forecast_units in ("si", "ca", "uk2"):
+        return _safe_float(period.get(key_prefix + "C"))
+    return _safe_float(period.get(key_prefix + "F"))
+
+
+def _aeris_wind_values(period, forecast_units):
+    """Return Aeris wind speed and gust in the configured forecast unit."""
+    if forecast_units == "ca":
+        return (_safe_float(period.get("windSpeedKPH")), _safe_float(period.get("windGustKPH")))
+    if forecast_units == "si":
+        speed = _safe_float(period.get("windSpeedKPH"))
+        gust = _safe_float(period.get("windGustKPH"))
+        return (
+            speed / 3.6 if speed is not None else None,
+            gust / 3.6 if gust is not None else None,
+        )
+    return (_safe_float(period.get("windSpeedMPH")), _safe_float(period.get("windGustMPH")))
+
+
+def _aeris_snow_values(period, forecast_units):
+    """Return Aeris snow depth and display unit."""
+    if forecast_units in ("si", "ca", "uk2"):
+        return (_safe_float(period.get("snowCM")) or 0, "cm")
+    return (_safe_float(period.get("snowIN")) or 0, "in")
+
+
+def _aeris_period_to_common(period, interval, forecast_units, label_dict, icon_map):
+    """Normalize one Aeris/Xweather forecast period."""
+    period = period or {}
+    wind_speed, wind_gust = _aeris_wind_values(period, forecast_units)
+    snow_depth, snow_unit = _aeris_snow_values(period, forecast_units)
+
+    row = {
+        "time": _safe_epoch(period.get("timestamp")) or int(time.time()),
+        "summary": _aeris_coded_weather(
+            period.get("weatherPrimaryCoded"), label_dict, False
+        ),
+        "icon": _aeris_icon_to_belch(period.get("icon"), icon_map),
+        "windSpeed": wind_speed,
+        "windGust": wind_gust,
+        "windBearing": _safe_float(period.get("windDirDEG")),
+        "precipProbability": _probability_fraction(period.get("pop")),
+        "humidity": _probability_fraction(period.get("humidity"), default=None),
+        "dewPoint": _aeris_temp_value(period, forecast_units, "dewpoint"),
+        "snowDepth": snow_depth,
+        "snowUnit": snow_unit,
+        "weatherCode": period.get("weatherPrimaryCoded"),
+    }
+
+    if interval == "forecast_24hr":
+        row["temperatureHigh"] = _aeris_temp_value(period, forecast_units, "maxTemp")
+        row["temperatureLow"] = _aeris_temp_value(period, forecast_units, "minTemp")
+    else:
+        row["temperature"] = _aeris_temp_value(period, forecast_units, "avgTemp")
+        row["temperatureHigh"] = _aeris_temp_value(period, forecast_units, "maxTemp")
+        row["temperatureLow"] = _aeris_temp_value(period, forecast_units, "minTemp")
+
+    return row
+
+
+def _aeris_alerts_to_common(alerts_payload, label_dict):
+    """Normalize Aeris/Xweather alert payload to the common alert schema."""
+    alerts_response = (
+        ((alerts_payload or {}).get("alerts") or [{}])[0].get("response") or []
+    )
+    output = []
+    for alert in alerts_response:
+        details = (alert or {}).get("details") or {}
+        timestamps = (alert or {}).get("timestamps") or {}
+        alert_type = details.get("type") or ""
+        label_key = "forecast_alert_code_" + alert_type.replace(".", "_")
+        output.append(
+            {
+                "title": label_dict.get(label_key) or details.get("name") or "Alert",
+                "expires": timestamps.get("expires"),
+                "description": details.get("body") or "",
+                "severity": details.get("severity") or "",
+                "uri": alert_type,
+            }
+        )
+    return output
+
+
+def _aeris_transform_to_belch(aeris_payload, forecast_units, label_dict, icon_map):
+    """Map Aeris/Xweather forecast responses to the common forecast schema."""
+    aeris_payload = aeris_payload or {}
+
+    def _periods(interval):
+        try:
+            return (
+                aeris_payload.get(interval, [{}])[0]
+                .get("response", [{}])[0]
+                .get("periods", [])
+            )
+        except Exception:
+            return []
+
+    hourly = _slice_from_current_period(
+        [
+            _aeris_period_to_common(
+                p, "forecast_1hr", forecast_units, label_dict, icon_map
+            )
+            for p in _periods("forecast_1hr")
+        ],
+        1,
+    )
+    three_hourly = _slice_from_current_period(
+        [
+            _aeris_period_to_common(
+                p, "forecast_3hr", forecast_units, label_dict, icon_map
+            )
+            for p in _periods("forecast_3hr")
+        ],
+        3,
+        hour_divisor=3,
+    )
+    daily = [
+        _aeris_period_to_common(p, "forecast_24hr", forecast_units, label_dict, icon_map)
+        for p in _periods("forecast_24hr")
+    ]
+
+    return {
+        "current": [],
+        "hourly": hourly,
+        "threeHourly": three_hourly,
+        "daily": daily,
+        "alerts": _aeris_alerts_to_common(aeris_payload, label_dict),
+        "aqi": aeris_payload.get("aqi", []),
+        "provider": "aeris",
+        "schema": "belchertown.forecast.v1",
+        "generated_at": _safe_epoch(aeris_payload.get("timestamp")) or int(time.time()),
+    }
+
+
+def _aeris_current_to_common(current_payload, current_conditions, forecast_units, label_dict, icon_map):
+    """Map Aeris/Xweather current-condition response to the common current schema."""
+    current_payload = current_payload or {}
+    response = ((current_payload.get("current") or [{}])[0]).get("response")
+    current_data = None
+
+    if current_conditions == "obs" and isinstance(response, dict):
+        current_data = response.get("ob")
+    elif current_conditions == "conds" and isinstance(response, list):
+        current_data = (((response[0] or {}).get("periods") or [{}])[0] if response else None)
+    elif current_conditions == "obs-on-fail-conds":
+        if isinstance(response, dict):
+            current_data = response.get("ob")
+        if current_data is None and isinstance(response, list) and response:
+            current_data = ((response[0] or {}).get("periods") or [{}])[0]
+
+    current_data = current_data or {}
+    visibility = (
+        _safe_float(current_data.get("visibilityKM"))
+        if forecast_units in ("si", "ca")
+        else _safe_float(current_data.get("visibilityMI"))
+    )
+    temp = (
+        _safe_float(current_data.get("tempC"))
+        if forecast_units in ("si", "ca", "uk2")
+        else _safe_float(current_data.get("tempF"))
+    )
+    dewpoint = (
+        _safe_float(current_data.get("dewpointC"))
+        if forecast_units in ("si", "ca", "uk2")
+        else _safe_float(current_data.get("dewpointF"))
+    )
+    feels_like = (
+        _safe_float(current_data.get("feelslikeC"))
+        if forecast_units in ("si", "ca", "uk2")
+        else _safe_float(current_data.get("feelslikeF"))
+    )
+    wind_speed_key = "windSpeedKPH" if forecast_units in ("si", "ca") else "windSpeedMPH"
+    wind_gust_key = "windGustKPH" if forecast_units in ("si", "ca") else "windGustMPH"
+
+    current = {
+        "time": _safe_epoch(current_data.get("timestamp")) or int(time.time()),
+        "summary": _aeris_coded_weather(
+            current_data.get("weatherPrimaryCoded"), label_dict, True
+        ),
+        "icon": _aeris_icon_to_belch(current_data.get("icon"), icon_map),
+        "temperature": temp,
+        "apparentTemperature": feels_like,
+        "windSpeed": _safe_float(current_data.get(wind_speed_key)),
+        "windGust": _safe_float(current_data.get(wind_gust_key)),
+        "windBearing": _safe_float(current_data.get("windDirDEG")),
+        "humidity": _probability_fraction(current_data.get("humidity"), default=None),
+        "pressure": _safe_float(current_data.get("pressureMB")),
+        "visibility": visibility,
+        "dewPoint": dewpoint,
+        "precipIntensity": _safe_float(current_data.get("precipMM" if forecast_units in ("si", "ca") else "precipIN")),
+        "precipProbability": None,
+        "cloudCover": _safe_float(current_data.get("sky")),
+        "weatherCode": current_data.get("weatherPrimaryCoded"),
+    }
+
+    if forecast_units == "si":
+        if current["windSpeed"] is not None:
+            current["windSpeed"] = current["windSpeed"] / 3.6
+        if current["windGust"] is not None:
+            current["windGust"] = current["windGust"] / 3.6
+
+    return {
+        "timestamp": _safe_epoch(current_payload.get("timestamp")) or int(time.time()),
+        "provider": "aeris",
+        "schema": "belchertown.current.v1",
+        "current": [current],
+    }
 
 
 def _format_attr(value):
@@ -3902,126 +4309,7 @@ class getData(SearchList):
                         _refresh_openmeteo_aqi_fallback(force=forecast_is_stale)
                         _apply_aqi_globals_from_forecast()
                 elif forecast_provider not in ("pirateweather", "nws"):
-
-                    def xweather_coded_weather(data):
-                        """Convert Aeris/Xweather codes to human readable strings."""
-                        # https://www.xweather.com/docs/weather-api/reference/weather-codes
-                        if not isinstance(data, str) or not data:
-                            return ""
-
-                        parts = data.split(":")
-                        if len(parts) < 3:
-                            return ""
-
-                        output = ""
-                        coverage_code = parts[0]
-                        intensity_code = parts[1]
-                        weather_code = parts[2]
-
-                        cloud_dict = {
-                            "CL": label_dict["forecast_cloud_code_CL"],
-                            "FW": label_dict["forecast_cloud_code_FW"],
-                            "SC": label_dict["forecast_cloud_code_SC"],
-                            "BK": label_dict["forecast_cloud_code_BK"],
-                            "OV": label_dict["forecast_cloud_code_OV"],
-                        }
-
-                        coverage_dict = {
-                            "AR": label_dict["forecast_coverage_code_AR"],
-                            "BR": label_dict["forecast_coverage_code_BR"],
-                            "C": label_dict["forecast_coverage_code_C"],
-                            "D": label_dict["forecast_coverage_code_D"],
-                            "FQ": label_dict["forecast_coverage_code_FQ"],
-                            "IN": label_dict["forecast_coverage_code_IN"],
-                            "IS": label_dict["forecast_coverage_code_IS"],
-                            "L": label_dict["forecast_coverage_code_L"],
-                            "NM": label_dict["forecast_coverage_code_NM"],
-                            "O": label_dict["forecast_coverage_code_O"],
-                            "PA": label_dict["forecast_coverage_code_PA"],
-                            "PD": label_dict["forecast_coverage_code_PD"],
-                            "S": label_dict["forecast_coverage_code_S"],
-                            "SC": label_dict["forecast_coverage_code_SC"],
-                            "VC": label_dict["forecast_coverage_code_VC"],
-                            "WD": label_dict["forecast_coverage_code_WD"],
-                        }
-
-                        intensity_dict = {
-                            "VL": label_dict["forecast_intensity_code_VL"],
-                            "L": label_dict["forecast_intensity_code_L"],
-                            "H": label_dict["forecast_intensity_code_H"],
-                            "VH": label_dict["forecast_intensity_code_VH"],
-                        }
-
-                        weather_dict = {
-                            "A": label_dict["forecast_weather_code_A"],
-                            "BD": label_dict["forecast_weather_code_BD"],
-                            "BN": label_dict["forecast_weather_code_BN"],
-                            "BR": label_dict["forecast_weather_code_BR"],
-                            "BS": label_dict["forecast_weather_code_BS"],
-                            "BY": label_dict["forecast_weather_code_BY"],
-                            "F": label_dict["forecast_weather_code_F"],
-                            "FR": label_dict["forecast_weather_code_FR"],
-                            "H": label_dict["forecast_weather_code_H"],
-                            "IC": label_dict["forecast_weather_code_IC"],
-                            "IF": label_dict["forecast_weather_code_IF"],
-                            "IP": label_dict["forecast_weather_code_IP"],
-                            "K": label_dict["forecast_weather_code_K"],
-                            "L": label_dict["forecast_weather_code_L"],
-                            "R": label_dict["forecast_weather_code_R"],
-                            "RW": label_dict["forecast_weather_code_RW"],
-                            "RS": label_dict["forecast_weather_code_RS"],
-                            "SI": label_dict["forecast_weather_code_SI"],
-                            "WM": label_dict["forecast_weather_code_WM"],
-                            "S": label_dict["forecast_weather_code_S"],
-                            "SW": label_dict["forecast_weather_code_SW"],
-                            "T": label_dict["forecast_weather_code_T"],
-                            "UP": label_dict["forecast_weather_code_UP"],
-                            "VA": label_dict["forecast_weather_code_VA"],
-                            "WP": label_dict["forecast_weather_code_WP"],
-                            "ZF": label_dict["forecast_weather_code_ZF"],
-                            "ZL": label_dict["forecast_weather_code_ZL"],
-                            "ZR": label_dict["forecast_weather_code_ZR"],
-                            "ZY": label_dict["forecast_weather_code_ZY"],
-                        }
-
-                        # Check if the weather_code is in the cloud_dict and use that
-                        # if it's there. If not then it's a combined weather code.
-                        if weather_code in cloud_dict:
-                            return cloud_dict[weather_code]
-
-                        # Add the coverage if it's present, and full observation
-                        # forecast is requested
-                        if coverage_code and coverage_code in coverage_dict:
-                            output += coverage_dict[coverage_code] + " "
-                        # Add the intensity if it's present
-                        if intensity_code and intensity_code in intensity_dict:
-                            output += intensity_dict[intensity_code] + " "
-                        # Weather output
-                        output += weather_dict.get(weather_code, "")
-                        return output.strip()
-
-                    def xweather_icon(data):
-                        """Get the Aeris/Xweather icon description from the icon list."""
-                        # https://www.xweather.com/docs/weather-api/reference/icon-list
-                        if not isinstance(data, str) or not data:
-                            return "unknown"
-
-                        iconlist_file_path = os.path.join(
-                            config_dict["WEEWX_ROOT"],
-                            skin_dict["SKIN_ROOT"],
-                            skin_dict.get("skin", ""),
-                            "images/aeris-icon-list.json",
-                        )
-                        if os.path.exists(iconlist_file_path):
-                            icon_name = data.split(".")[0]  # Remove .png
-                            with open(iconlist_file_path, "r", encoding="utf-8") as icon_fh:
-                                icon_dict = json.load(icon_fh)
-                            return icon_dict.get(icon_name, "unknown")
-                        else:
-                            log.error(
-                                f"aeris-icon-list.json is missing in {iconlist_file_path}"
-                            )
-                            return "unknown"
+                    aeris_icon_map = _load_aeris_icon_map(config_dict, skin_dict)
 
                     current_conditions = extras_dict["current_conditions"]
                     if current_conditions == "obs":
@@ -4083,6 +4371,18 @@ class getData(SearchList):
                                     req, timeout=DEFAULT_HTTP_TIMEOUT
                                 ) as response:
                                     forecast_file_result = response.read()
+                                dev_payload = _parse_aeris_json(forecast_file_result)
+                                if dev_payload.get("schema") == "belchertown.forecast.v1":
+                                    forecast_file_result = json.dumps(dev_payload)
+                                else:
+                                    forecast_file_result = json.dumps(
+                                        _aeris_transform_to_belch(
+                                            dev_payload,
+                                            forecast_units,
+                                            label_dict,
+                                            aeris_icon_map,
+                                        )
+                                    )
                             else:
                                 # 24hr forecast (was Forecast)
                                 req = Request(
@@ -4161,7 +4461,14 @@ class getData(SearchList):
                                 }
                                 if extras_dict.get("forecast_alert_enabled") == "1":
                                     data["alerts"] = [_parse_aeris_json(alerts_page)]
-                                forecast_file_result = json.dumps(data)
+                                forecast_file_result = json.dumps(
+                                    _aeris_transform_to_belch(
+                                        data,
+                                        forecast_units,
+                                        label_dict,
+                                        aeris_icon_map,
+                                    )
+                                )
                         except Exception as e:
                             log.error(f"Error downloading forecast data: {e}")
 
@@ -4208,6 +4515,19 @@ class getData(SearchList):
                                     req, timeout=DEFAULT_HTTP_TIMEOUT
                                 ) as response:
                                     forecast_file_result = response.read()
+                                current_payload = _parse_aeris_json(forecast_file_result)
+                                if current_payload.get("schema") == "belchertown.current.v1":
+                                    forecast_file_result = json.dumps(current_payload)
+                                else:
+                                    forecast_file_result = json.dumps(
+                                        _aeris_current_to_common(
+                                            current_payload,
+                                            current_conditions,
+                                            forecast_units,
+                                            label_dict,
+                                            aeris_icon_map,
+                                        )
+                                    )
                             else:
                                 # Current conditions
                                 if current_conditions == "obs":
@@ -4245,9 +4565,12 @@ class getData(SearchList):
                                     ) as response:
                                         current_page = response.read()
                                     try:  # Obs okay?
-                                        current_conditions_data = data["current"][0][
-                                            "response"
-                                        ]["ob"]
+                                        obs_payload = _parse_aeris_json(current_page)
+                                        if not (
+                                            isinstance(obs_payload.get("response"), dict)
+                                            and obs_payload["response"].get("ob")
+                                        ):
+                                            raise ValueError("No usable observation data")
                                     except Exception:  # Nope, try Conds
                                         if belchertown_debug > 0:
                                             log.info("No good Obs data, using Conds")
@@ -4265,7 +4588,15 @@ class getData(SearchList):
                                     "timestamp": int(time.time()),
                                     "current": [_parse_aeris_json(current_page)],
                                 }
-                                forecast_file_result = json.dumps(data)
+                                forecast_file_result = json.dumps(
+                                    _aeris_current_to_common(
+                                        data,
+                                        current_conditions,
+                                        forecast_units,
+                                        label_dict,
+                                        aeris_icon_map,
+                                    )
+                                )
                         except Exception as e:
                             if current_conditions == "obs":
                                 log.error(
@@ -4316,56 +4647,29 @@ class getData(SearchList):
                                 "Current conditions download failed; keeping existing current conditions file if present."
                             )
 
-                    # Read the forecast Current Conditions file
-                    with open(current_conditions_file, "r", encoding="utf-8") as read_file:
-                        data = json.load(read_file)
-
-                    # We prefer using an observation (actual) over conditions (an interpolation)
                     try:
-                        if current_conditions == "obs":
-                            current_conditions_data_len = len(
-                                data["current"][0]["response"]
-                            )
-                            current_conditions_data = data["current"][0]["response"][
-                                "ob"
-                            ]
-                        elif current_conditions == "conds":
-                            current_conditions_data_len = len(
-                                data["current"][0]["response"]
-                            )
-                            current_conditions_data = data["current"][0]["response"][0][
-                                "periods"
-                            ][0]
-                        else:  # current_conditions == "obs-on-fail-conds"
-                            try:  # Obs
-                                current_conditions_data_len = len(
-                                    data["current"][0]["response"]
-                                )
-                                current_conditions_data = data["current"][0][
-                                    "response"
-                                ]["ob"]
-                            except Exception:  # Conds
-                                if belchertown_debug > 0:
-                                    log.info("No good Obs data, using Conds")
-                                current_conditions_data_len = len(
-                                    data["current"][0]["response"]
-                                )
-                                current_conditions_data = data["current"][0][
-                                    "response"
-                                ][0]["periods"][0]
-                        current_conditions_data_len = len(
-                            current_conditions_data
+                        (
+                            current_obs_icon,
+                            current_obs_summary,
+                            visibility,
+                            visibility_unit,
+                            cloud_cover,
+                        ) = _load_normalized_current_conditions(
+                            current_conditions_file,
+                            forecast_units,
+                            cloud_cover_scale=1.0,
                         )
-                    except Exception:
-                        current_conditions_data_len = 0
+                    except Exception as e:
+                        (
+                            current_obs_icon,
+                            current_obs_summary,
+                            visibility,
+                            visibility_unit,
+                            cloud_cover,
+                        ) = _default_current_conditions_values()
+                        log.error(f"Aeris/Xweather current-conditions parse error: {e}")
 
-                    try:
-                        cloud_cover = f"""{current_conditions_data["sky"]}"""
-                    except Exception:
-                        log.info("No cloud cover data from Xweather weather")
-                        cloud_cover = ""
-
-                    # Process the forecast file and the Current Conditions data
+                    # Process the normalized forecast file.
                     with open(forecast_file, "r", encoding="utf-8") as read_file:
                         data = json.load(read_file)
 
@@ -4392,48 +4696,6 @@ class getData(SearchList):
                             f"Error getting AQI from Xweather weather. The error was: {e}. Data: {data['aqi']}"
                         )
                         pass
-
-                    # For forecasts/ endpoint and METAR != 0, no visibilty seems to be available
-                    # (used Los Angeles as test case)
-                    if current_conditions_data_len > 0:
-                        current_obs_summary = xweather_coded_weather(
-                            current_conditions_data["weatherPrimaryCoded"]
-                        )
-                        current_obs_icon = (
-                            xweather_icon(current_conditions_data["icon"]) + ".png"
-                        )
-
-                        if forecast_units in ("si", "ca"):
-                            if current_conditions_data["visibilityKM"] is not None:
-                                visibility = locale.format_string(
-                                    "%g",
-                                    float(current_conditions_data["visibilityKM"]),
-                                )
-                                visibility_unit = "km"
-                            else:
-                                visibility = "N/A"
-                                visibility_unit = ""
-                        else:
-                            # us, uk2 and default to miles per hour
-                            if current_conditions_data["visibilityMI"] is not None:
-                                visibility = locale.format_string(
-                                    "%g",
-                                    float(current_conditions_data["visibilityMI"]),
-                                )
-                                visibility_unit = "miles"
-                            else:
-                                visibility = "N/A"
-                                visibility_unit = ""
-                    else:
-                        # If there's no data in the ob array then it's probably because of an error.
-                        # Example:
-                        # "code": "warn_no_data",
-                        # "description": "Valid request. No results available based on
-                        # your query parameters."
-                        current_obs_summary = ""
-                        current_obs_icon = ""
-                        visibility = "N/A"
-                        visibility_unit = ""
             else:
                 current_obs_icon = ""
                 current_obs_summary = ""

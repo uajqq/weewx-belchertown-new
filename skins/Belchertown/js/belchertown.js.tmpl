@@ -46,10 +46,7 @@ var chartgroups_titles = $chartpage_titles;
 var chartpage_content = $chartpage_content;
 var moon_tilt_template_value = $moon_tilt_template_value;
 
-//  declare icon_dict as global variable
-var icon_dict = {};
-
-// ---- Pirate Weather helpers (Dark Sky icons) ----
+// ---- Forecast icon helpers (Dark Sky-style icon names) ----
 const DS_ICON_TO_W34 = {
     'clear-day': 'clear-day',
     'clear-night': 'clear-night',
@@ -73,24 +70,14 @@ const DS_ICON_TO_W34 = {
 
 /*
 Resolve an icon name to the Weather34 icon base (without .png).
-- Aeris: input like "xx.png" -> look up in icon_dict
-- Pirate Weather: Dark Sky-style names -> DS_ICON_TO_W34 map
+- Normalized forecast JSON uses Dark Sky-style names -> DS_ICON_TO_W34 map
  */
 
 function resolveIconForProvider(iconRaw, provider) {
     const raw = String(iconRaw || '');
     const normalized = raw.trim();
 
-    if (provider === 'aeris') {
-        try {
-            // Aeris sometimes returns "partly_cloudy.png" or similar with dot + extension
-            const iconName = normalized.split('.')[0]; // remove extension
-            const mapped = icon_dict[iconName];
-            return mapped || 'unknown';
-        } catch {
-            return 'unknown';
-        }
-    } else if (provider === 'pirateweather') {
+    if (provider === 'pirateweather') {
         // Pirate Weather uses Dark Sky–style identifiers like "partly-cloudy-day"
         const key = normalized.toLowerCase(); // DS mapping is lowercase keys
         const mapped = DS_ICON_TO_W34[key];
@@ -1750,24 +1737,20 @@ function forecast_default(interval) {
     sessionStorage.setItem("defaultInterval", interval);
 }
 
-//  function adjusts daytime format for forecast_1hr & _3hr; assumes "ddd LT" format for daytime
-function forecast_time(i, interval, daytime) {
+//  function removes weekdays from forecast_1hr & _3hr labels except at day changes
+function forecast_time(i, interval, daytime, showDay) {
     if ((daytime.indexOf(" ") == -1) || (interval == "forecast_24hr")) return daytime;
-    var output = daytime
     var strday = daytime.substr(0, daytime.indexOf(" "));
     var strtime = daytime.substr(daytime.indexOf(" ") + 1);
-    if (interval == "forecast_1hr") {
-        if ((i == 0) || (strtime == "00:00") || (strtime == "12:00 AM")) {
-            output = strtime + "<br>" + strday;
-        } else {
-            output = strtime + "<br>";
+
+    if (interval == "forecast_1hr" || interval == "forecast_3hr") {
+        if (showDay) {
+            return strtime + '<br><span class="forecast-rollover-day">' + strday + '</span>';
         }
-    } else if (interval == "forecast_3hr") {
-        if ((i != 0) && ((strtime > "02:59") || (strtime > "02:59 AM"))) {
-            output = strtime;
-        }
+        return strtime;
     }
-    return output;
+
+    return daytime;
 }
 
 // MQTT/live implementation moved to: js/belchertown-mqtt.js.tmpl
