@@ -251,11 +251,107 @@ def _normalize_current_conditions_values(
     )
 
 
+def _load_normalized_current_conditions(
+    current_conditions_file, forecast_units, cloud_cover_scale=1.0
+):
+    """Read current_conditions.json and return normalized template values."""
+    with open(current_conditions_file, "r", encoding="utf-8") as read_file:
+        data = json.load(read_file)
+
+    current_conditions_data = data["current"][0]
+    return _normalize_current_conditions_values(
+        current_conditions_data,
+        forecast_units,
+        cloud_cover_scale=cloud_cover_scale,
+    )
+
+
 def _nws_quantity_value(quantity):
     """Extract numeric value from NWS quantity object."""
     if not isinstance(quantity, dict):
         return None
-    return _safe_float(quantity.get("value"))
+    value = _safe_float(quantity.get("value"))
+    if value is not None:
+        return value
+
+    # Some NWS payloads provide only bounds while primary value is null.
+    for fallback_key in ("minValue", "maxValue"):
+        fallback_value = _safe_float(quantity.get(fallback_key))
+        if fallback_value is not None:
+            return fallback_value
+
+    return None
+
+
+def _nws_parse_metar_visibility_m(raw_message):
+    """Parse visibility in meters from a METAR rawMessage token like 10SM or 1 1/2SM."""
+    if not raw_message:
+        return None
+
+    text = str(raw_message).upper().strip()
+    if not text:
+        return None
+
+    tokens = text.split()
+
+    def _parse_num_or_fraction(value_text):
+        value_text = str(value_text).strip()
+        if not value_text:
+            return None
+
+        numeric = _safe_float(value_text)
+        if numeric is not None:
+            return numeric
+
+        if "/" in value_text:
+            parts = value_text.split("/", 1)
+            if len(parts) == 2:
+                numerator = _safe_float(parts[0])
+                denominator = _safe_float(parts[1])
+                if numerator is not None and denominator not in (None, 0):
+                    return numerator / denominator
+
+        return None
+
+    for idx, token in enumerate(tokens):
+        if not token.endswith("SM"):
+            continue
+
+        core = token[:-2].strip()
+        if not core:
+            continue
+
+        is_less_than = core.startswith("M")
+        is_greater_than = core.startswith("P")
+        if is_less_than or is_greater_than:
+            core = core[1:].strip()
+
+        # Handle mixed-number visibility where integer and fraction are split
+        # into separate tokens, e.g. "1 1/2SM".
+        miles = None
+        if "/" in core and idx > 0:
+            whole = _parse_num_or_fraction(tokens[idx - 1])
+            fraction = _parse_num_or_fraction(core)
+            if whole is not None and fraction is not None:
+                miles = whole + fraction
+
+        if miles is None:
+            miles = _parse_num_or_fraction(core)
+
+        if miles is None:
+            continue
+
+        # "M" means less-than; preserve a sane numeric approximation.
+        if is_less_than:
+            miles = max(miles, 0.0)
+
+        # "P" means greater-than; represent as the threshold value.
+        if is_greater_than:
+            miles = max(miles, 0.0)
+
+        return miles * 1609.344
+
+    return None
 
 
 NWS_FORECAST_TARGET_TEMP_UNIT = {
@@ -266,11 +362,6 @@ NWS_FORECAST_TARGET_TEMP_UNIT = {
 NWS_FORECAST_TARGET_SPEED_UNIT = {
     "si": "meter_per_second",
     "ca": "km_per_hour",
-}
-
-NWS_FORECAST_TARGET_DISTANCE_UNIT = {
-    "si": "km",
-    "ca": "km",
 }
 
 
@@ -340,6 +431,78 @@ def _nws_parse_wind_speed_string(speed_text, forecast_units):
     return (low_out, high_out)
 
 
+def _convert_unit_value(value, source_unit, target_unit, unit_group):
+    """Convert a numeric WeeWX unit value, returning None if unavailable."""
+    value_float = _safe_float(value)
+    if value_float is None:
+        return None
+    try:
+        return weewx.units.convert(
+            (value_float, source_unit, unit_group), target_unit
+        )[0]
+    except Exception:
+        return None
+
+
+def _probability_fraction(percent_value, default=0):
+    """Convert provider percentage values to the compact 0..1 probability."""
+    percent_float = _safe_float(percent_value)
+    return percent_float / 100.0 if percent_float is not None else default
+
+
+def _visibility_m_to_forecast_units(visibility_m, forecast_units):
+    """Convert visibility in meters to the forecast distance unit used by the skin."""
+    visibility_m_float = _safe_float(visibility_m)
+    if visibility_m_float is None:
+        return None
+    if forecast_units in ("si", "ca"):
+        return visibility_m_float / 1000.0
+    return visibility_m_float / 1609.344
+
+
+def _precip_mm_to_forecast_units(precip_mm, forecast_units):
+    """Convert a precipitation amount in millimeters to configured forecast units."""
+    precip_mm_float = _safe_float(precip_mm)
+    if precip_mm_float is None:
+        return None
+    if forecast_units in ("si", "ca"):
+        return precip_mm_float
+    return precip_mm_float / 25.4
+
+
+def _pressure_pa_to_hpa(pressure_pa):
+    """Convert NWS observation pressure from pascals to hPa/mbar."""
+    pressure_float = _safe_float(pressure_pa)
+    if pressure_float is None:
+        return None
+    return pressure_float / 100.0 if pressure_float > 2000 else pressure_float
+
+
+def _nws_cloud_cover_fraction(cloud_layers):
+    """Estimate cloud cover from NWS/METAR cloud layer amount codes."""
+    if not isinstance(cloud_layers, list):
+        return None
+
+    amount_map = {
+        "CLR": 0.0,
+        "SKC": 0.0,
+        "FEW": 0.25,
+        "SCT": 0.5,
+        "BKN": 0.75,
+        "OVC": 1.0,
+        "VV": 1.0,
+    }
+    values = []
+    for layer in cloud_layers:
+        if not isinstance(layer, dict):
+            continue
+        amount = str(layer.get("amount") or "").upper()
+        if amount in amount_map:
+            values.append(amount_map[amount])
+
+    return max(values) if values else None
+
+
 def _nws_icon_to_darksky(icon_value, is_daytime=True):
     """Map NWS icon url/code to Dark Sky-style icon keys used by this skin."""
     icon = str(icon_value or "").lower()
@@ -388,11 +551,17 @@ def _nws_build_current(obs_payload, forecast_units):
 
     temp_c = _nws_quantity_value(props.get("temperature"))
     dewpoint_c = _nws_quantity_value(props.get("dewpoint"))
+    apparent_c = _nws_quantity_value(props.get("heatIndex"))
+    if apparent_c is None:
+        apparent_c = _nws_quantity_value(props.get("windChill"))
     humidity_pct = _nws_quantity_value(props.get("relativeHumidity"))
     visibility_m = _nws_quantity_value(props.get("visibility"))
+    if visibility_m is None:
+        visibility_m = _nws_parse_metar_visibility_m(props.get("rawMessage"))
     wind_mps = _nws_quantity_value(props.get("windSpeed"))
     gust_mps = _nws_quantity_value(props.get("windGust"))
     pressure_pa = _nws_quantity_value(props.get("barometricPressure"))
+    precip_last_hour_mm = _nws_quantity_value(props.get("precipitationLastHour"))
     wind_dir_payload = props.get("windDirection")
     if isinstance(wind_dir_payload, dict):
         wind_dir_value = wind_dir_payload.get("value")
@@ -411,88 +580,42 @@ def _nws_build_current(obs_payload, forecast_units):
     speed_target_unit = NWS_FORECAST_TARGET_SPEED_UNIT.get(
         forecast_units, "mile_per_hour"
     )
-    dist_target_unit = NWS_FORECAST_TARGET_DISTANCE_UNIT.get(
-        forecast_units, "mile"
+    temp_out = _convert_unit_value(
+        temp_c, "degree_C", temp_target_unit, "group_temperature"
     )
-
-    try:
-        temp_out = (
-            weewx.units.convert(
-                (_safe_float(temp_c), "degree_C", "group_temperature"),
-                temp_target_unit,
-            )[0]
-            if _safe_float(temp_c) is not None
-            else None
-        )
-    except Exception:
-        temp_out = None
-
-    try:
-        dewpoint_out = (
-            weewx.units.convert(
-                (_safe_float(dewpoint_c), "degree_C", "group_temperature"),
-                temp_target_unit,
-            )[0]
-            if _safe_float(dewpoint_c) is not None
-            else None
-        )
-    except Exception:
-        dewpoint_out = None
-
-    try:
-        wind_out = (
-            weewx.units.convert(
-                (_safe_float(wind_mps), "km_per_hour", "group_speed"),
-                speed_target_unit,
-            )[0]
-            if _safe_float(wind_mps) is not None
-            else None
-        )
-    except Exception:
-        wind_out = None
-
-    try:
-        gust_out = (
-            weewx.units.convert(
-                (_safe_float(gust_mps), "km_per_hour", "group_speed"),
-                speed_target_unit,
-            )[0]
-            if _safe_float(gust_mps) is not None
-            else None
-        )
-    except Exception:
-        gust_out = None
-
-    try:
-        visibility_out = (
-            weewx.units.convert(
-                (_safe_float(visibility_m), "meter", "group_distance"),
-                dist_target_unit,
-            )[0]
-            if _safe_float(visibility_m) is not None
-            else None
-        )
-    except Exception:
-        visibility_out = None
+    apparent_out = _convert_unit_value(
+        apparent_c, "degree_C", temp_target_unit, "group_temperature"
+    )
+    dewpoint_out = _convert_unit_value(
+        dewpoint_c, "degree_C", temp_target_unit, "group_temperature"
+    )
+    wind_out = _convert_unit_value(
+        wind_mps, "meter_per_second", speed_target_unit, "group_speed"
+    )
+    gust_out = _convert_unit_value(
+        gust_mps, "meter_per_second", speed_target_unit, "group_speed"
+    )
 
     return {
         "time": _iso_to_epoch(props.get("timestamp")) or int(time.time()),
         "summary": props.get("textDescription") or "",
         "icon": _nws_icon_to_darksky(icon_raw, is_daytime=is_day),
         "temperature": temp_out,
-        "apparentTemperature": None,
+        "apparentTemperature": apparent_out,
         "windSpeed": wind_out,
         "windGust": gust_out,
         "windBearing": _nws_parse_wind_direction(wind_dir_value),
-        "humidity": (
-            _safe_float(humidity_pct) / 100.0 if _safe_float(humidity_pct) is not None else None
-        ),
-        "pressure": pressure_pa,
-        "visibility": visibility_out,
+        "humidity": _probability_fraction(humidity_pct, default=None),
+        "pressure": _pressure_pa_to_hpa(pressure_pa),
+        "visibility": _visibility_m_to_forecast_units(visibility_m, forecast_units),
         "dewPoint": dewpoint_out,
-        "precipIntensity": None,
+        "precipIntensity": _precip_mm_to_forecast_units(
+            precip_last_hour_mm, forecast_units
+        ),
         "precipProbability": None,
-        "cloudCover": None,
+        "cloudCover": _nws_cloud_cover_fraction(props.get("cloudLayers")),
+        "station": props.get("station") or "",
+        "rawMessage": props.get("rawMessage") or "",
     }
 
 
@@ -507,21 +630,17 @@ def _nws_build_hourly(hourly_payload, forecast_units):
 
     for p in periods:
         temp = _safe_float(p.get("temperature"))
-
         pop_pct = _nws_quantity_value(p.get("probabilityOfPrecipitation"))
+        humidity_pct = _nws_quantity_value(p.get("relativeHumidity"))
+        dewpoint_c = _nws_quantity_value(p.get("dewpoint"))
         wind_speed, wind_gust = _nws_parse_wind_speed_string(p.get("windSpeed"), forecast_units)
 
-        try:
-            temp_out = (
-                weewx.units.convert(
-                    (_safe_float(temp), "degree_F", "group_temperature"),
-                    temp_target_unit,
-                )[0]
-                if _safe_float(temp) is not None
-                else None
-            )
-        except Exception:
-            temp_out = None
+        temp_out = _convert_unit_value(
+            temp, "degree_F", temp_target_unit, "group_temperature"
+        )
+        dewpoint_out = _convert_unit_value(
+            dewpoint_c, "degree_C", temp_target_unit, "group_temperature"
+        )
 
         output.append(
             {
@@ -534,12 +653,10 @@ def _nws_build_hourly(hourly_payload, forecast_units):
                 "windGust": wind_gust,
                 "windBearing": _nws_parse_wind_direction(p.get("windDirection")),
                 "precipIntensity": None,
-                "precipProbability": (
-                    _safe_float(pop_pct) / 100.0 if _safe_float(pop_pct) is not None else 0
-                ),
+                "precipProbability": _probability_fraction(pop_pct),
                 "cloudCover": None,
-                "humidity": None,
-                "dewPoint": None,
+                "humidity": _probability_fraction(humidity_pct, default=None),
+                "dewPoint": dewpoint_out,
             }
         )
 
@@ -564,20 +681,18 @@ def _nws_build_daily(forecast_payload, forecast_units):
         key = dt_local.strftime("%Y-%m-%d")
 
         temp = _safe_float(p.get("temperature"))
-        try:
-            temp_out = (
-                weewx.units.convert(
-                    (_safe_float(temp), "degree_F", "group_temperature"),
-                    temp_target_unit,
-                )[0]
-                if _safe_float(temp) is not None
-                else None
-            )
-        except Exception:
-            temp_out = None
+        temp_out = _convert_unit_value(
+            temp, "degree_F", temp_target_unit, "group_temperature"
+        )
 
         pop_pct = _nws_quantity_value(p.get("probabilityOfPrecipitation"))
+        humidity_pct = _nws_quantity_value(p.get("relativeHumidity"))
+        dewpoint_c = _nws_quantity_value(p.get("dewpoint"))
+        dewpoint_out = _convert_unit_value(
+            dewpoint_c, "degree_C", temp_target_unit, "group_temperature"
+        )
         wind_speed, wind_gust = _nws_parse_wind_speed_string(p.get("windSpeed"), forecast_units)
+        precip_probability = _probability_fraction(pop_pct)
 
         bucket = day_buckets.get(key)
         if bucket is None:
@@ -593,10 +708,10 @@ def _nws_build_daily(forecast_payload, forecast_units):
                 "windGust": wind_gust,
                 "windBearing": _nws_parse_wind_direction(p.get("windDirection")),
                 "precipIntensity": None,
-                "precipProbability": (
-                    _safe_float(pop_pct) / 100.0 if _safe_float(pop_pct) is not None else 0
-                ),
+                "precipProbability": precip_probability,
                 "cloudCover": None,
+                "humidity": _probability_fraction(humidity_pct, default=None),
+                "dewPoint": dewpoint_out,
             }
             day_buckets[key] = bucket
         else:
@@ -608,6 +723,20 @@ def _nws_build_daily(forecast_payload, forecast_units):
             if p.get("isDaytime") and p.get("shortForecast"):
                 bucket["summary"] = p.get("shortForecast")
                 bucket["icon"] = _nws_icon_to_darksky(p.get("icon"), is_daytime=True)
+            if precip_probability > bucket.get("precipProbability", 0):
+                bucket["precipProbability"] = precip_probability
+            if wind_speed is not None and (
+                bucket["windSpeed"] is None or wind_speed > bucket["windSpeed"]
+            ):
+                bucket["windSpeed"] = wind_speed
+            if wind_gust is not None and (
+                bucket["windGust"] is None or wind_gust > bucket["windGust"]
+            ):
+                bucket["windGust"] = wind_gust
+            if bucket["humidity"] is None:
+                bucket["humidity"] = _probability_fraction(humidity_pct, default=None)
+            if bucket["dewPoint"] is None:
+                bucket["dewPoint"] = dewpoint_out
 
     return list(day_buckets.values())
 
@@ -680,6 +809,167 @@ def _openmeteo_weather_to_icon_summary(code, is_daytime=True):
     return ("Unknown", "unknown")
 
 
+def _aqi_category_from_us_aqi(aqi_value):
+    """Return the existing AQI category key for a US AQI numeric value."""
+    aqi_float = _safe_float(aqi_value)
+    if aqi_float is None:
+        return ""
+    if aqi_float <= 50:
+        return "good"
+    if aqi_float <= 100:
+        return "moderate"
+    if aqi_float <= 150:
+        return "usg"
+    if aqi_float <= 200:
+        return "unhealthy"
+    if aqi_float <= 300:
+        return "very unhealthy"
+    return "hazardous"
+
+
+def _openmeteo_air_quality_to_aeris_payload(payload):
+    """Normalize Open-Meteo Air Quality data to the existing AQI fallback shape."""
+    current = (payload or {}).get("current") or {}
+    current_time = _iso_to_epoch(current.get("time")) or int(time.time())
+
+    pollutant_map = (
+        ("pm2.5", "pm2_5", "valueUGM3"),
+        ("pm10", "pm10", "valueUGM3"),
+        ("o3", "ozone", "valuePPB"),
+        ("co", "carbon_monoxide", "valuePPB"),
+        ("no2", "nitrogen_dioxide", "valuePPB"),
+        ("so2", "sulphur_dioxide", "valuePPB"),
+    )
+
+    pollutants = []
+    for pollutant_type, openmeteo_key, value_key in pollutant_map:
+        value = _safe_float(current.get(openmeteo_key))
+        if value is None:
+            continue
+        pollutants.append(
+            {
+                "type": pollutant_type,
+                value_key: value,
+                "valueUGM3": value,
+            }
+        )
+
+    aqi_value = _safe_float(current.get("us_aqi"))
+    period = {
+        "timestamp": current_time,
+        "aqi": aqi_value,
+        "category": _aqi_category_from_us_aqi(aqi_value),
+        "pollutants": pollutants,
+    }
+
+    return {
+        "success": aqi_value is not None or bool(pollutants),
+        "error": None,
+        "response": [
+            {
+                "place": {"name": "Open-Meteo"},
+                "periods": [period],
+            }
+        ],
+        "provider": "open-meteo",
+    }
+
+
+def _fetch_openmeteo_aqi_payload(latitude, longitude):
+    """Fetch Open-Meteo Air Quality as the common AQI fallback payload."""
+    aqi_url = (
+        "https://air-quality-api.open-meteo.com/v1/air-quality"
+        f"?latitude={latitude}&longitude={longitude}"
+        "&current=us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,"
+        "sulphur_dioxide,ozone"
+        "&timezone=auto"
+    )
+    aqi_raw = _http_get_json(aqi_url, headers=HTTP_HEADERS["OPEN_METEO"])
+    return _openmeteo_air_quality_to_aeris_payload(aqi_raw)
+
+
+def _merge_aqi_payload_into_forecast_file(forecast_file, aqi_payload):
+    """Attach an AQI payload to forecast.json without disturbing forecast data."""
+    if not aqi_payload or not os.path.isfile(forecast_file):
+        return False
+
+    with open(forecast_file, "r", encoding="utf-8") as fh:
+        forecast_data = json.load(fh)
+
+    forecast_data["aqi"] = [aqi_payload]
+    _write_json_file(forecast_file, forecast_data)
+    return True
+
+
+def _load_aqi_payload_from_forecast_file(forecast_file, require_success=False):
+    """Load the first cached AQI payload from forecast.json."""
+    try:
+        if not os.path.isfile(forecast_file):
+            return None
+        with open(forecast_file, "r", encoding="utf-8") as fh:
+            forecast_data = json.load(fh)
+        aqi_array = forecast_data.get("aqi") or []
+        aqi_payload = aqi_array[0] if aqi_array else None
+        if require_success and not (aqi_payload and aqi_payload.get("success")):
+            return None
+        return aqi_payload
+    except Exception:
+        return None
+
+
+def _resolve_forecast_lat_lon(latitude, longitude, forecast_place):
+    """Return forecast coordinates, allowing a lat,lon forecast_place override."""
+    lat = _safe_float(latitude)
+    lon = _safe_float(longitude)
+    if forecast_place and "," in forecast_place:
+        try:
+            lat_raw, lon_raw = forecast_place.split(",", 1)
+            parsed_lat = _safe_float(lat_raw.strip())
+            parsed_lon = _safe_float(lon_raw.strip())
+            if parsed_lat is not None and parsed_lon is not None:
+                lat = parsed_lat
+                lon = parsed_lon
+        except Exception:
+            pass
+    return lat, lon
+
+
+def _localized_aqi_category(category, label_dict):
+    """Translate a provider AQI category key with skin labels."""
+    aqi_category_labels = {
+        "good": "aqi_good",
+        "moderate": "aqi_moderate",
+        "usg": "aqi_usg",
+        "unhealthy": "aqi_unhealthy",
+        "very unhealthy": "aqi_very_unhealthy",
+        "hazardous": "aqi_hazardous",
+    }
+    label_key = aqi_category_labels.get(category, "aqi_unknown")
+    return label_dict[label_key]
+
+
+def _extract_aqi_globals_from_payload(aqi_payload, label_dict):
+    """Return display AQI globals from the common AQI payload shape."""
+    try:
+        if not aqi_payload or not aqi_payload.get("success"):
+            return ("No Data", label_dict["aqi_unknown"], "", "")
+
+        response = aqi_payload.get("response") or []
+        first_response = response[0] if response else {}
+        periods = first_response.get("periods") or []
+        period = periods[0] if periods else {}
+        aqi_value = period.get("aqi")
+        if aqi_value is None:
+            return ("No Data", label_dict["aqi_unknown"], "", "")
+
+        category = _localized_aqi_category(period.get("category"), label_dict)
+        place = (first_response.get("place") or {}).get("name", "")
+        point_time = period.get("timestamp", "")
+        return (aqi_value, category, place.title() if place else "", point_time)
+    except Exception:
+        return ("No Data", label_dict["aqi_unknown"], "", "")
+
+
 def _openmeteo_transform_to_belch(payload, forecast_units):
     """Map Open-Meteo response to Belchertown compact forecast schema."""
 
@@ -690,20 +980,11 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
     hourly_raw = payload.get("hourly") or {}
     daily_raw = payload.get("daily") or {}
 
-    # Visibility from Open-Meteo is meters. Convert to user-facing distance unit.
-    visibility_m = _safe_float(current_raw.get("visibility"))
-    if visibility_m is not None:
-        if forecast_units in ("si", "ca"):
-            visibility_out = visibility_m / 1000.0
-        else:
-            visibility_out = visibility_m / 1609.344
-    else:
-        visibility_out = None
-
     current_is_day = bool(to_int(current_raw.get("is_day")) == 1)
     current_summary, current_icon = _openmeteo_weather_to_icon_summary(
         current_raw.get("weather_code"), is_daytime=current_is_day
     )
+    current_humidity_pct = _safe_float(current_raw.get("relative_humidity_2m"))
     current = {
         "time": _iso_to_epoch(current_raw.get("time")) or int(time.time()),
         "summary": current_summary,
@@ -714,16 +995,23 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
         "windGust": _safe_float(current_raw.get("wind_gusts_10m")),
         "windBearing": _safe_float(current_raw.get("wind_direction_10m")),
         "humidity": (
-            _safe_float(current_raw.get("relative_humidity_2m")) / 100.0
-            if _safe_float(current_raw.get("relative_humidity_2m")) is not None
+            current_humidity_pct / 100.0
+            if current_humidity_pct is not None
             else None
         ),
         "pressure": _safe_float(current_raw.get("surface_pressure")),
-        "visibility": visibility_out,
+        "pressureMSL": _safe_float(current_raw.get("pressure_msl")),
+        "visibility": _visibility_m_to_forecast_units(
+            current_raw.get("visibility"), forecast_units
+        ),
         "dewPoint": _safe_float(current_raw.get("dew_point_2m")),
         "precipIntensity": _safe_float(current_raw.get("precipitation")),
         "precipProbability": None,
         "cloudCover": _safe_float(current_raw.get("cloud_cover")),
+        "rain": _safe_float(current_raw.get("rain")),
+        "showers": _safe_float(current_raw.get("showers")),
+        "snowfall": _safe_float(current_raw.get("snowfall")),
+        "weatherCode": to_int(current_raw.get("weather_code")),
     }
 
     hourly = []
@@ -736,8 +1024,14 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
     h_gust = hourly_raw.get("wind_gusts_10m") or []
     h_bearing = hourly_raw.get("wind_direction_10m") or []
     h_precip = hourly_raw.get("precipitation") or []
+    h_rain = hourly_raw.get("rain") or []
+    h_showers = hourly_raw.get("showers") or []
+    h_snowfall = hourly_raw.get("snowfall") or []
     h_precip_prob = hourly_raw.get("precipitation_probability") or []
     h_cloud = hourly_raw.get("cloud_cover") or []
+    h_visibility = hourly_raw.get("visibility") or []
+    h_pressure = hourly_raw.get("surface_pressure") or []
+    h_pressure_msl = hourly_raw.get("pressure_msl") or []
     h_rh = hourly_raw.get("relative_humidity_2m") or []
     h_dew = hourly_raw.get("dew_point_2m") or []
 
@@ -748,6 +1042,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
             is_daytime=is_day,
         )
         precip_prob = _safe_float(h_precip_prob[i]) if i < len(h_precip_prob) else None
+        humidity_pct = _safe_float(h_rh[i]) if i < len(h_rh) else None
         hourly.append(
             {
                 "time": _iso_to_epoch(time_value) or int(time.time()),
@@ -759,14 +1054,27 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
                 "windGust": _safe_float(h_gust[i]) if i < len(h_gust) else None,
                 "windBearing": _safe_float(h_bearing[i]) if i < len(h_bearing) else None,
                 "precipIntensity": _safe_float(h_precip[i]) if i < len(h_precip) else None,
+                "rain": _safe_float(h_rain[i]) if i < len(h_rain) else None,
+                "showers": _safe_float(h_showers[i]) if i < len(h_showers) else None,
+                "snowfall": _safe_float(h_snowfall[i]) if i < len(h_snowfall) else None,
                 "precipProbability": (precip_prob / 100.0) if precip_prob is not None else 0,
                 "cloudCover": _safe_float(h_cloud[i]) if i < len(h_cloud) else None,
                 "humidity": (
-                    (_safe_float(h_rh[i]) / 100.0)
-                    if i < len(h_rh) and _safe_float(h_rh[i]) is not None
+                    (humidity_pct / 100.0)
+                    if humidity_pct is not None
                     else None
                 ),
                 "dewPoint": _safe_float(h_dew[i]) if i < len(h_dew) else None,
+                "pressure": _safe_float(h_pressure[i]) if i < len(h_pressure) else None,
+                "pressureMSL": (
+                    _safe_float(h_pressure_msl[i]) if i < len(h_pressure_msl) else None
+                ),
+                "visibility": (
+                    _visibility_m_to_forecast_units(h_visibility[i], forecast_units)
+                    if i < len(h_visibility)
+                    else None
+                ),
+                "weatherCode": to_int(h_weather[i]) if i < len(h_weather) else None,
             }
         )
 
@@ -780,6 +1088,18 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
     d_bearing = daily_raw.get("wind_direction_10m_dominant") or []
     d_precip_prob = daily_raw.get("precipitation_probability_max") or []
     d_precip = daily_raw.get("precipitation_sum") or []
+    d_rain = daily_raw.get("rain_sum") or []
+    d_showers = daily_raw.get("showers_sum") or []
+    d_snowfall = daily_raw.get("snowfall_sum") or []
+    d_precip_hours = daily_raw.get("precipitation_hours") or []
+    d_cloud = daily_raw.get("cloud_cover_mean") or []
+    d_humidity = daily_raw.get("relative_humidity_2m_mean") or []
+    d_dewpoint = daily_raw.get("dew_point_2m_mean") or []
+    d_apparent_max = daily_raw.get("apparent_temperature_max") or []
+    d_apparent_min = daily_raw.get("apparent_temperature_min") or []
+    d_sunrise = daily_raw.get("sunrise") or []
+    d_sunset = daily_raw.get("sunset") or []
+    d_uv = daily_raw.get("uv_index_max") or []
 
     for i, time_value in enumerate(d_time):
         summary, icon = _openmeteo_weather_to_icon_summary(
@@ -787,6 +1107,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
             is_daytime=True,
         )
         precip_prob = _safe_float(d_precip_prob[i]) if i < len(d_precip_prob) else None
+        humidity_pct = _safe_float(d_humidity[i]) if i < len(d_humidity) else None
         daily.append(
             {
                 "time": _iso_to_epoch(time_value) or int(time.time()),
@@ -799,7 +1120,27 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
                 "windBearing": _safe_float(d_bearing[i]) if i < len(d_bearing) else None,
                 "precipIntensity": _safe_float(d_precip[i]) if i < len(d_precip) else None,
                 "precipProbability": (precip_prob / 100.0) if precip_prob is not None else 0,
-                "cloudCover": None,
+                "cloudCover": _safe_float(d_cloud[i]) if i < len(d_cloud) else None,
+                "humidity": (
+                    (humidity_pct / 100.0) if humidity_pct is not None else None
+                ),
+                "dewPoint": _safe_float(d_dewpoint[i]) if i < len(d_dewpoint) else None,
+                "apparentTemperatureHigh": (
+                    _safe_float(d_apparent_max[i]) if i < len(d_apparent_max) else None
+                ),
+                "apparentTemperatureLow": (
+                    _safe_float(d_apparent_min[i]) if i < len(d_apparent_min) else None
+                ),
+                "rain": _safe_float(d_rain[i]) if i < len(d_rain) else None,
+                "showers": _safe_float(d_showers[i]) if i < len(d_showers) else None,
+                "snowfall": _safe_float(d_snowfall[i]) if i < len(d_snowfall) else None,
+                "precipitationHours": (
+                    _safe_float(d_precip_hours[i]) if i < len(d_precip_hours) else None
+                ),
+                "sunrise": _iso_to_epoch(d_sunrise[i]) if i < len(d_sunrise) else None,
+                "sunset": _iso_to_epoch(d_sunset[i]) if i < len(d_sunset) else None,
+                "uvIndex": _safe_float(d_uv[i]) if i < len(d_uv) else None,
+                "weatherCode": to_int(d_weather[i]) if i < len(d_weather) else None,
             }
         )
 
@@ -1730,8 +2071,6 @@ def build_almanac_diagram_payload(
             hour=0, minute=0, second=0, microsecond=0
         )
 
-    day_start_ts = int(day_start.timestamp())
-
     sun_track_points = []
     moon_track_points = []
     sample_minutes = sorted(
@@ -2392,6 +2731,9 @@ class getData(SearchList):
         # Find the beginning of the current year
         now = datetime.datetime.now()
         year_start_epoch = int(datetime.datetime(now.year, 1, 1, 0, 0).timestamp())
+        next_year_start_epoch = int(
+            datetime.datetime(now.year + 1, 1, 1, 0, 0).timestamp()
+        )
         month_start_epoch = int(datetime.datetime(now.year, now.month, 1, 0, 0).timestamp())
         today_start_epoch = int(
             datetime.datetime(now.year, now.month, now.day, 0, 0).timestamp()
@@ -2531,14 +2873,24 @@ class getData(SearchList):
             ORDER BY sum DESC LIMIT 1;
         """
         at_rainiest_day_query = wx_manager.getSql(at_rainiest_day_sql)
-        at_rainiest_day_tuple = (at_rainiest_day_query[1], rain_unit, "group_rain")
-        at_rainiest_day_converted = (
-            rain_round % self.generator.converter.convert(at_rainiest_day_tuple)[0]
-        )
-        at_rainiest_day = [
-            at_rainiest_day_query[0],
-            locale.format_string("%g", float(at_rainiest_day_converted)),
-        ]
+        if at_rainiest_day_query is not None:
+            at_rainiest_day_tuple = (
+                at_rainiest_day_query[1],
+                rain_unit,
+                "group_rain",
+            )
+            at_rainiest_day_converted = (
+                rain_round % self.generator.converter.convert(at_rainiest_day_tuple)[0]
+            )
+            at_rainiest_day = [
+                at_rainiest_day_query[0],
+                locale.format_string("%g", float(at_rainiest_day_converted)),
+            ]
+        else:
+            at_rainiest_day = [
+                calendar.timegm(time.gmtime()),
+                locale.format_string("%.2f", 0),
+            ]
 
         # Find what kind of database we're working with and specify the
         # correctly tailored SQL Query for each type of database
@@ -2546,12 +2898,11 @@ class getData(SearchList):
         database = config_dict["DataBindings"][data_binding]["database"]
         database_type = config_dict["Databases"][database]["database_type"]
         driver = config_dict["DatabaseTypes"][database_type]["driver"]
-        current_year = str(now.year)
         if driver == "weedb.sqlite":
             year_rainiest_month_sql = """
                 SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, SUM(sum) AS total
                 FROM archive_day_rain
-                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?
+                WHERE dateTime >= ? AND dateTime < ?
                 GROUP BY month ORDER BY total DESC LIMIT 1;
             """
             at_rainiest_month_sql = """
@@ -2561,7 +2912,8 @@ class getData(SearchList):
             """
             year_rain_data_sql = """
                 SELECT dateTime, sum, count FROM archive_day_rain
-                WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?;
+                WHERE dateTime >= ? AND dateTime < ?
+                ORDER BY dateTime;
             """
             at_rain_highest_year_sql = """
                 SELECT strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
@@ -2572,7 +2924,7 @@ class getData(SearchList):
             year_rainiest_month_sql = """
                 SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, ROUND(SUM(sum), 2) AS total
                 FROM archive_day_rain
-                WHERE YEAR(FROM_UNIXTIME(dateTime)) = ?
+                WHERE dateTime >= ? AND dateTime < ?
                 GROUP BY month ORDER BY total DESC LIMIT 1;
             """
             at_rainiest_month_sql = """
@@ -2582,7 +2934,8 @@ class getData(SearchList):
             """
             year_rain_data_sql = """
                 SELECT dateTime, ROUND(sum, 2), count FROM archive_day_rain
-                WHERE year(FROM_UNIXTIME(dateTime)) = ?;
+                WHERE dateTime >= ? AND dateTime < ?
+                ORDER BY dateTime;
             """
             at_rain_highest_year_sql = """
                 SELECT FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
@@ -2592,7 +2945,7 @@ class getData(SearchList):
 
         # Rainiest month
         year_rainiest_month_query = wx_manager.getSql(
-            year_rainiest_month_sql, (current_year,)
+            year_rainiest_month_sql, (year_start_epoch, next_year_start_epoch)
         )
         if year_rainiest_month_query is not None:
             year_rainiest_month_tuple = (
@@ -2702,12 +3055,11 @@ class getData(SearchList):
             database = config_dict["DataBindings"][data_binding]["database"]
             database_type = config_dict["Databases"][database]["database_type"]
             driver = config_dict["DatabaseTypes"][database_type]["driver"]
-            current_year = str(now.year)
             if driver == "weedb.sqlite":
                 year_suniest_month_sql = """
                     SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, SUM(sum) AS total
                     FROM archive_day_sunshineDur
-                    WHERE strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) = ?
+                    WHERE dateTime >= ? AND dateTime < ?
                     GROUP BY month ORDER BY total DESC LIMIT 1;
                 """
                 at_suniest_month_sql = """
@@ -2724,7 +3076,7 @@ class getData(SearchList):
                 year_suniest_month_sql = """
                     SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, ROUND(SUM(sum), 2) AS total
                     FROM archive_day_sunshineDur
-                    WHERE YEAR(FROM_UNIXTIME(dateTime)) = ?
+                    WHERE dateTime >= ? AND dateTime < ?
                     GROUP BY month ORDER BY total DESC LIMIT 1;
                 """
                 at_suniest_month_sql = """
@@ -2739,7 +3091,7 @@ class getData(SearchList):
                 """
 
             year_suniest_month_query = wx_manager.getSql(
-                year_suniest_month_sql, (current_year,)
+                year_suniest_month_sql, (year_start_epoch, next_year_start_epoch)
             )
             if year_suniest_month_query is not None and len(year_suniest_month_query) >= 2:
                 year_suniest_month_tuple = (
@@ -2868,33 +3220,41 @@ class getData(SearchList):
             return [0, calendar.timegm(time.gmtime())]
 
         year_streaks = _compute_consecutive_rain_streaks(
-            list(wx_manager.genSql(year_rain_data_sql, (current_year,)))
+            wx_manager.genSql(
+                year_rain_data_sql, (year_start_epoch, next_year_start_epoch)
+            )
         )
         year_days_with_rain = _normalize_streak_result(year_streaks[0])
         year_days_without_rain = _normalize_streak_result(year_streaks[1])
 
         month_streaks = _compute_consecutive_rain_streaks(
-            list(wx_manager.genSql(period_rain_data_sql, (month_start_epoch, today_start_epoch)))
+            wx_manager.genSql(
+                period_rain_data_sql, (month_start_epoch, today_start_epoch)
+            )
         )
         month_days_with_rain = _normalize_streak_result(month_streaks[0])
         month_days_without_rain = _normalize_streak_result(month_streaks[1])
 
         week_streaks = _compute_consecutive_rain_streaks(
-            list(wx_manager.genSql(period_rain_data_sql, (week_start_epoch, today_start_epoch)))
+            wx_manager.genSql(
+                period_rain_data_sql, (week_start_epoch, today_start_epoch)
+            )
         )
         week_days_with_rain = _normalize_streak_result(week_streaks[0])
         week_days_without_rain = _normalize_streak_result(week_streaks[1])
 
         yesterday_streaks = _compute_consecutive_rain_streaks(
-            list(wx_manager.genSql(period_rain_data_sql, (yesterday_start_epoch, today_start_epoch)))
+            wx_manager.genSql(
+                period_rain_data_sql, (yesterday_start_epoch, today_start_epoch)
+            )
         )
         yesterday_days_with_rain = _normalize_streak_result(yesterday_streaks[0])
         yesterday_days_without_rain = _normalize_streak_result(yesterday_streaks[1])
 
         at_streaks = _compute_consecutive_rain_streaks(
-            list(wx_manager.genSql(
+            wx_manager.genSql(
                 "SELECT dateTime, ROUND(sum, 2), count FROM archive_day_rain ORDER BY dateTime;"
-            ))
+            )
         )
         at_days_with_rain = _normalize_streak_result(at_streaks[0])
         at_days_without_rain = _normalize_streak_result(at_streaks[1])
@@ -3018,6 +3378,7 @@ class getData(SearchList):
 
         # Forecast enabled default should be on when missing.
         forecast_enabled = str(extras_dict.get("forecast_enabled", "1")).strip()
+        aqi_enabled = to_bool(extras_dict.get("aqi_enabled", "0"))
 
         # Ensure AQI variables are always defined to avoid NameError when forecast is disabled or fails
         # aqi and aqi_category are global so they can be used by Highcharts
@@ -3071,6 +3432,52 @@ class getData(SearchList):
                     forecast_place = f"{latitude},{longitude}"
                 if belchertown_debug > 0:
                     log.info(f"forecast_place set to {forecast_place}")
+
+                def _refresh_openmeteo_aqi_fallback(force=False):
+                    if not aqi_enabled:
+                        return None
+
+                    if not force:
+                        cached_aqi = _load_aqi_payload_from_forecast_file(
+                            forecast_file, require_success=True
+                        )
+                        if cached_aqi is not None:
+                            return cached_aqi
+
+                    aqi_lat, aqi_lon = _resolve_forecast_lat_lon(
+                        latitude, longitude, forecast_place
+                    )
+                    if aqi_lat is None or aqi_lon is None:
+                        return None
+
+                    try:
+                        aqi_payload = _fetch_openmeteo_aqi_payload(aqi_lat, aqi_lon)
+                        if _merge_aqi_payload_into_forecast_file(
+                            forecast_file, aqi_payload
+                        ):
+                            log.info(
+                                "Open-Meteo AQI fallback cached to forecast.json"
+                            )
+                        return aqi_payload
+                    except Exception as e:
+                        log.warning(
+                            "Open-Meteo AQI fallback update failed. "
+                            f"Reason: {e}"
+                        )
+                        return _load_aqi_payload_from_forecast_file(forecast_file)
+
+                def _apply_aqi_globals_from_forecast():
+                    global aqi, aqi_category
+                    nonlocal aqi_location, aqi_time
+                    aqi_payload = _load_aqi_payload_from_forecast_file(forecast_file)
+                    if aqi_payload is None:
+                        return
+                    (
+                        aqi,
+                        aqi_category,
+                        aqi_location,
+                        aqi_time,
+                    ) = _extract_aqi_globals_from_payload(aqi_payload, label_dict)
 
                 forecast_stale_timer = int(extras_dict["forecast_stale"])
                 current_conditions_stale_timer = int(
@@ -3143,19 +3550,14 @@ class getData(SearchList):
 
                     # Read current_conditions.json and populate the variables used below
                     try:
-                        with open(
-                            current_conditions_file, "r", encoding="utf-8"
-                        ) as read_file:
-                            data = json.load(read_file)
-                        current_conditions_data = data["current"][0]
                         (
                             current_obs_icon,
                             current_obs_summary,
                             visibility,
                             visibility_unit,
                             cloud_cover,
-                        ) = _normalize_current_conditions_values(
-                            current_conditions_data,
+                        ) = _load_normalized_current_conditions(
+                            current_conditions_file,
                             forecast_units,
                             cloud_cover_scale=100.0,
                         )
@@ -3168,22 +3570,16 @@ class getData(SearchList):
                             cloud_cover,
                         ) = _default_current_conditions_values()
                         log.error(f"Pirate Weather parse error: {e}")
+
+                    _refresh_openmeteo_aqi_fallback(force=forecast_is_stale)
+                    _apply_aqi_globals_from_forecast()
                 elif forecast_provider == "nws":
                     # NWS does not require API id/secret, but does expect a descriptive User-Agent.
                     nws_forecast_failed = False
 
-                    nws_lat = _safe_float(latitude)
-                    nws_lon = _safe_float(longitude)
-                    if forecast_place and "," in forecast_place:
-                        try:
-                            lat_raw, lon_raw = forecast_place.split(",", 1)
-                            parsed_lat = _safe_float(lat_raw.strip())
-                            parsed_lon = _safe_float(lon_raw.strip())
-                            if parsed_lat is not None and parsed_lon is not None:
-                                nws_lat = parsed_lat
-                                nws_lon = parsed_lon
-                        except Exception:
-                            pass
+                    nws_lat, nws_lon = _resolve_forecast_lat_lon(
+                        latitude, longitude, forecast_place
+                    )
 
                     # Forecast file (daily/hourly/current + alerts)
                     if forecast_is_stale:
@@ -3294,17 +3690,14 @@ class getData(SearchList):
                     # Read current_conditions.json and populate variables used by templates
                     if not nws_forecast_failed:
                         try:
-                            with open(current_conditions_file, "r", encoding="utf-8") as read_file:
-                                data = json.load(read_file)
-                            current_conditions_data = data["current"][0]
                             (
                                 current_obs_icon,
                                 current_obs_summary,
                                 visibility,
                                 visibility_unit,
                                 cloud_cover,
-                            ) = _normalize_current_conditions_values(
-                                current_conditions_data,
+                            ) = _load_normalized_current_conditions(
+                                current_conditions_file,
                                 forecast_units,
                                 cloud_cover_scale=100.0,
                             )
@@ -3320,21 +3713,15 @@ class getData(SearchList):
                             "NWS forecast is unavailable for this cycle. Falling back to Open-Meteo."
                         )
                         forecast_provider = "open-meteo"
+                    else:
+                        _refresh_openmeteo_aqi_fallback(force=forecast_is_stale)
+                        _apply_aqi_globals_from_forecast()
                 if forecast_provider == "open-meteo":
                     openmeteo_forecast_failed = False
 
-                    om_lat = _safe_float(latitude)
-                    om_lon = _safe_float(longitude)
-                    if forecast_place and "," in forecast_place:
-                        try:
-                            lat_raw, lon_raw = forecast_place.split(",", 1)
-                            parsed_lat = _safe_float(lat_raw.strip())
-                            parsed_lon = _safe_float(lon_raw.strip())
-                            if parsed_lat is not None and parsed_lon is not None:
-                                om_lat = parsed_lat
-                                om_lon = parsed_lon
-                        except Exception:
-                            pass
+                    om_lat, om_lon = _resolve_forecast_lat_lon(
+                        latitude, longitude, forecast_place
+                    )
 
                     # Open-Meteo free API supports direct unit selection.
                     if forecast_units in ("si", "ca"):
@@ -3352,14 +3739,19 @@ class getData(SearchList):
                                 "https://api.open-meteo.com/v1/forecast"
                                 f"?latitude={om_lat}&longitude={om_lon}"
                                 "&current=temperature_2m,apparent_temperature,relative_humidity_2m,"
-                                "surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
-                                "cloud_cover,visibility,dew_point_2m,precipitation,weather_code,is_day"
+                                "pressure_msl,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
+                                "cloud_cover,visibility,dew_point_2m,precipitation,rain,showers,snowfall,"
+                                "weather_code,is_day"
                                 "&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,"
-                                "dew_point_2m,precipitation_probability,precipitation,weather_code,is_day,"
-                                "cloud_cover,wind_speed_10m,wind_gusts_10m,wind_direction_10m"
+                                "dew_point_2m,pressure_msl,surface_pressure,visibility,precipitation_probability,"
+                                "precipitation,rain,showers,snowfall,weather_code,is_day,cloud_cover,"
+                                "wind_speed_10m,wind_gusts_10m,wind_direction_10m"
                                 "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
-                                "precipitation_sum,precipitation_probability_max,wind_speed_10m_max,"
-                                "wind_gusts_10m_max,wind_direction_10m_dominant"
+                                "apparent_temperature_max,apparent_temperature_min,precipitation_sum,"
+                                "rain_sum,showers_sum,snowfall_sum,precipitation_hours,"
+                                "precipitation_probability_max,cloud_cover_mean,relative_humidity_2m_mean,"
+                                "dew_point_2m_mean,wind_speed_10m_max,wind_gusts_10m_max,"
+                                "wind_direction_10m_dominant,sunrise,sunset,uv_index_max"
                                 f"&temperature_unit={om_temp_unit}"
                                 f"&wind_speed_unit={om_wind_unit}"
                                 f"&precipitation_unit={om_precip_unit}"
@@ -3407,18 +3799,14 @@ class getData(SearchList):
 
                     if not openmeteo_forecast_failed:
                         try:
-                            with open(current_conditions_file, "r", encoding="utf-8") as read_file:
-                                data = json.load(read_file)
-
-                            current_conditions_data = data["current"][0]
                             (
                                 current_obs_icon,
                                 current_obs_summary,
                                 visibility,
                                 visibility_unit,
                                 cloud_cover,
-                            ) = _normalize_current_conditions_values(
-                                current_conditions_data,
+                            ) = _load_normalized_current_conditions(
+                                current_conditions_file,
                                 forecast_units,
                                 cloud_cover_scale=1.0,
                             )
@@ -3437,6 +3825,9 @@ class getData(SearchList):
                             visibility_unit,
                             cloud_cover,
                         ) = _default_current_conditions_values()
+                    else:
+                        _refresh_openmeteo_aqi_fallback(force=forecast_is_stale)
+                        _apply_aqi_globals_from_forecast()
                 elif forecast_provider not in ("pirateweather", "nws"):
 
                     def xweather_coded_weather(data):
@@ -3906,22 +4297,21 @@ class getData(SearchList):
                         data = json.load(read_file)
 
                     try:
-                        if data["aqi"][0]["response"]:
-                            if data["aqi"][0]["error"]:
+                        aqi_payload = data["aqi"][0]
+                        if aqi_payload["response"]:
+                            if aqi_payload["error"]:
                                 log.error(
-                                    f"""Error getting AQI from Xweather weather. The error was: {data["aqi"]}"""
+                                    f"Error getting AQI from Xweather weather. The error was: {data['aqi']}"
                                 )
                             else:
-                                aqi = data["aqi"][0]["response"][0]["periods"][0]["aqi"]
-                                aqi_category = data["aqi"][0]["response"][0]["periods"][
-                                    0
-                                ]["category"]
-                                aqi_location = data["aqi"][0]["response"][0]["place"][
-                                    "name"
-                                ].title()
-                                aqi_time = data["aqi"][0]["response"][0]["periods"][0][
-                                    "timestamp"
-                                ]
+                                (
+                                    aqi,
+                                    aqi_category,
+                                    aqi_location,
+                                    aqi_time,
+                                ) = _extract_aqi_globals_from_payload(
+                                    aqi_payload, label_dict
+                                )
                     except KeyError:
                         pass  # aqi key missing from forecast data (e.g. aqi disabled or older file)
                     except Exception as e:
@@ -3929,22 +4319,6 @@ class getData(SearchList):
                             f"Error getting AQI from Xweather weather. The error was: {e}. Data: {data['aqi']}"
                         )
                         pass
-
-                    # https://www.xweather.com/docs/weather-api/endpoints/airquality
-                    if aqi_category == "good":
-                        aqi_category = label_dict["aqi_good"]
-                    elif aqi_category == "moderate":
-                        aqi_category = label_dict["aqi_moderate"]
-                    elif aqi_category == "usg":
-                        aqi_category = label_dict["aqi_usg"]
-                    elif aqi_category == "unhealthy":
-                        aqi_category = label_dict["aqi_unhealthy"]
-                    elif aqi_category == "very unhealthy":
-                        aqi_category = label_dict["aqi_very_unhealthy"]
-                    elif aqi_category == "hazardous":
-                        aqi_category = label_dict["aqi_hazardous"]
-                    else:
-                        aqi_category = label_dict["aqi_unknown"]
 
                     # For forecasts/ endpoint and METAR != 0, no visibilty seems to be available
                     # (used Los Angeles as test case)
@@ -4353,7 +4727,9 @@ class getData(SearchList):
                         humabs_val = None
                 if humabs_val is not None:
                     obs_humabs_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
-                    obs_humabs_output += f"<span class='outHumAbs'>%s</span>" % humabs_val
+                    obs_humabs_output += (
+                        "<span class='outHumAbs'>%s</span>" % humabs_val
+                    )
                     row_parts.append(obs_humabs_output)
             if obs=='radiation':
                 maxSolarRad_output = getattr(current,'maxSolarRad',None)
@@ -4365,7 +4741,9 @@ class getData(SearchList):
                         maxSolarRad_val = None
                 if maxSolarRad_val is not None:
                     obs_maxSolarRad_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
-                    obs_maxSolarRad_output += f"<span class='maxSolarRad'>%s</span>" % maxSolarRad_val
+                    obs_maxSolarRad_output += (
+                        "<span class='maxSolarRad'>%s</span>" % maxSolarRad_val
+                    )
                     row_parts.append(obs_maxSolarRad_output)
             row_parts.append("</td>")
             row_parts.append("</tr>")
@@ -4670,6 +5048,7 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
         exclude_globs = list(self.DEFAULT_EXCLUDE_GLOBS)
 
         processed = 0
+        skipped = 0
         errors = 0
 
         for root, _dirs, files in os.walk(html_root):
@@ -4691,6 +5070,14 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
                 minified_path = f"{base}.min{ext}"
 
                 try:
+                    if (
+                        os.path.exists(minified_path)
+                        and os.path.getmtime(minified_path)
+                        >= os.path.getmtime(source_path)
+                    ):
+                        skipped += 1
+                        continue
+
                     with open(source_path, "r", encoding="utf-8") as src_fh:
                         source_text = src_fh.read()
 
@@ -4714,10 +5101,13 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
 
         if errors:
             log.warning(
-                f"Belchertown minify finished with {errors} errors; {processed} files processed"
+                f"Belchertown minify finished with {errors} errors; "
+                f"{processed} files processed; {skipped} unchanged"
             )
         else:
-            log.info(f"Belchertown minify processed {processed} files")
+            log.info(
+                f"Belchertown minify processed {processed} files; {skipped} unchanged"
+            )
 
     def _matches_any(self, relative_path, globs):
         if not globs:
@@ -4816,6 +5206,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
         # Final output dict
         output = {}
+        html_dest_dir = os.path.join(
+            self.config_dict["WEEWX_ROOT"], self.skin_dict["HTML_ROOT"], "json"
+        )
 
         # Loop through each [section]. This is the first bracket group of
         # options including global options.
@@ -4831,9 +5224,6 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             )
 
             # Setup the JSON file name for each chart group
-            html_dest_dir = os.path.join(
-                self.config_dict["WEEWX_ROOT"], self.skin_dict["HTML_ROOT"], "json"
-            )
             json_filename = html_dest_dir + "/" + chart_group + ".json"
 
             # Default back to Highcharts standards
@@ -5550,10 +5940,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             with open(json_filename, mode="w", encoding="utf-8") as jf:
                 jf.write(json.dumps(output[chart_group], indent=4))
 
-            # Save the charts.conf to a json file for future debugging
-            chart_json_filename = html_dest_dir + "/charts.json"
-            with open(chart_json_filename, mode="w", encoding="utf-8") as cjf:
-                cjf.write(json.dumps(self.chart_dict, indent=4))
+        # Save the charts.conf to a json file for future debugging.
+        chart_json_filename = html_dest_dir + "/charts.json"
+        with open(chart_json_filename, mode="w", encoding="utf-8") as cjf:
+            cjf.write(json.dumps(self.chart_dict, indent=4))
 
     def _get_forecast_aqi_point(self, observation, fallback_ts=None):
         """Return a single [timestamp_ms, value] point for AQI observations
@@ -6356,7 +6746,6 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             and aggregate_interval == 86400
         ):
             obs_lookup = "rain"
-            obs_label = "Rainfall"
 
         if xAxis_groupby or len(xAxis_categories) >= 1:
             # Setup the converter - for some reason converter doesn't work

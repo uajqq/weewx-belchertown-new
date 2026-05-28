@@ -914,6 +914,27 @@ function update_forecast_data(data) {
     else if (forecast_provider == "pirateweather" || forecast_provider == "nws" || forecast_provider == "open-meteo") {
         // PW shape: current, hourly[], daily[], alerts[]
         try {
+            try {
+                if (data["aqi"] && data["aqi"][0] && data["aqi"][0]["success"] && !data["aqi"][0]["error"]) {
+                    const aqiPeriod = data["aqi"][0]["response"][0]["periods"][0];
+                    const aqiValue = aqiPeriod["aqi"];
+                    const aqiCategory = aeris_aqi_translate(aqiPeriod["category"]);
+                    jQuery(".wx-aqi").html(aqiValue);
+                    jQuery(".wx-aqi-category").html(aqiCategory);
+                    if ("$Extras.aqi_location_enabled" === "1") {
+                        const aqiPlace = data["aqi"][0]["response"][0]["place"]["name"] || "";
+                        jQuery(".aqi_location_outer").html(aqiPlace ? "<br>" + aqiPlace : "").css('textTransform', 'capitalize');
+                    }
+                    try {
+                        jQuery(".station-observations .aqi").html(aqiValue + " (" + aqiCategory + ")");
+                    } catch (err) {
+                        // AQI not in the station observation table, so silently exit
+                    }
+                }
+            } catch (err) {
+                belchertown_debug("Forecast: AQI fallback data missing or malformed, skipping: " + err);
+            }
+
             const daily = Array.isArray(data["daily"]) ? data["daily"] : [];
             const hourly = Array.isArray(data["hourly"]) ? data["hourly"] : [];
 
@@ -964,10 +985,14 @@ function update_forecast_data(data) {
                 const minTempNum = parseFloat(minTemp);
                 const windSpeedNum = parseFloat(d["windSpeed"]);
                 const windGustNum = parseFloat(d["windGust"]);
+                const precipNum = (d["precipProbability"] != null) ? parseFloat(d["precipProbability"]) * 100 : 0;
+                const humidityNum = (d["humidity"] != null) ? parseFloat(d["humidity"]) * 100 : null;
+                const dewPointNum = (d["dewPoint"] != null) ? parseFloat(d["dewPoint"]) : null;
                 const maxTempText = isFinite(maxTempNum) ? maxTempNum.toFixed(0) + '&deg;' : 'N/A';
                 const minTempText = isFinite(minTempNum) ? minTempNum.toFixed(0) + '&deg;' : 'N/A';
                 const windSpeedText = isFinite(windSpeedNum) ? windSpeedNum.toFixed(0) : 'N/A';
                 const windGustText = isFinite(windGustNum) ? windGustNum.toFixed(0) : 'N/A';
+                const precipText = isFinite(precipNum) ? precipNum.toFixed(0) : '0';
 
                 // Card markup consistent with Aeris layout
                 html24 += '<div class="forecast-day forecast-24hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
@@ -979,6 +1004,22 @@ function update_forecast_data(data) {
                 html24 += '</div>';
                 html24 += '<span class="forecast-high">' + maxTempText + '</span> | <span class="forecast-low">' + minTempText + '</span>';
                 html24 += '<br>';
+                html24 += '<div class="forecast-precip">';
+                // #if $Extras.has_key("forecast_show_humidity_dewpoint") and $Extras.forecast_show_humidity_dewpoint == '1'
+                if (humidityNum != null && isFinite(humidityNum)) {
+                    html24 += '<i class="wi wi-humidity rain-precip"></i> <span>' + humidityNum.toFixed(0) + '%</span> | ';
+                }
+                // #elif $Extras.has_key("forecast_show_humidity_dewpoint") and $Extras.forecast_show_humidity_dewpoint == '2'
+                if (dewPointNum != null && isFinite(dewPointNum)) {
+                    html24 += '<i class="wi wi-raindrops rain-precip"></i> <span>' + dewPointNum.toFixed(0) + '&deg;</span> | ';
+                }
+                // #end if
+                if (precipNum > 0) {
+                    html24 += '<i class="wi wi-raindrop wi-rotate-45 rain-precip"></i> <span>' + precipText + '%</span>';
+                } else {
+                    html24 += '<i class="wi wi-raindrop wi-rotate-45 rain-no-precip"></i> <span>0%</span>';
+                }
+                html24 += '</div>';
                 html24 += '<div class="forecast-wind">';
                 html24 += '<i class="wi wi-strong-wind"></i> <span>' + windSpeedText + '</span> | <span> ' + windGustText + '$unit.label.windSpeed';
                 html24 += '</div>';

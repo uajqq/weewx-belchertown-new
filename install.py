@@ -3,7 +3,7 @@
 
 import configobj
 from setup import ExtensionInstaller
-from io import StringIO
+from io import BytesIO, StringIO
 import os
 import sys
 
@@ -81,6 +81,12 @@ class BelchertownInstaller(ExtensionInstaller):
         if isinstance(value, (list, tuple)):
             return ", ".join(cls._format_config_value(item) for item in value)
         return str(value)
+
+    @classmethod
+    def _format_config_assignment(cls, key, value, key_part=None):
+        """Format a key/value pair back into config syntax."""
+        left_side = key_part.rstrip() if key_part is not None else key
+        return "%s = %s" % (left_side, cls._format_config_value(value))
 
     @staticmethod
     def _split_value_comment(value_text):
@@ -287,6 +293,7 @@ class BelchertownInstaller(ExtensionInstaller):
         legacy_value_overrides = legacy_value_overrides or {}
         legacy_insert_before = legacy_insert_before or {}
         legacy_insert_end = legacy_insert_end or []
+        rendered_active_keys = set()
         non_empty_lines = [line for line in source_lines if line.strip()]
         base_indent = min(
             (cls._leading_spaces(line) for line in non_empty_lines),
@@ -326,11 +333,12 @@ class BelchertownInstaller(ExtensionInstaller):
             legacy_before_keys = legacy_insert_before.get(key, [])
             for legacy_key in legacy_before_keys:
                 if legacy_key in legacy_value_overrides:
-                    legacy_line = "%s = %s" % (
+                    legacy_line = cls._format_config_assignment(
                         legacy_key,
-                        cls._format_config_value(legacy_value_overrides[legacy_key]),
+                        legacy_value_overrides[legacy_key],
                     )
                     rendered.append(target_indent + legacy_line)
+                    rendered_active_keys.add(legacy_key)
 
             _, inline_comment = cls._split_value_comment(raw_value)
             active_value = restored_values.get(key)
@@ -339,9 +347,10 @@ class BelchertownInstaller(ExtensionInstaller):
                 commented_override = commented_value_overrides.get(key)
                 if commented_override is not None:
                     commented_value, commented_inline = commented_override
-                    commented_line = "%s = %s" % (
-                        key_part.rstrip(),
-                        cls._format_config_value(commented_value),
+                    commented_line = cls._format_config_assignment(
+                        key,
+                        commented_value,
+                        key_part,
                     )
                     chosen_inline = commented_inline or inline_comment
                     if chosen_inline:
@@ -352,23 +361,58 @@ class BelchertownInstaller(ExtensionInstaller):
                 rendered.append(target_indent + "# " + stripped)
                 continue
 
-            restored_line = "%s = %s" % (
-                key_part.rstrip(),
-                cls._format_config_value(active_value),
-            )
+            restored_line = cls._format_config_assignment(key, active_value, key_part)
             if inline_comment:
                 restored_line = "%s  %s" % (restored_line, inline_comment)
 
             rendered.append(target_indent + restored_line)
+            rendered_active_keys.add(key)
 
         for legacy_key in legacy_insert_end:
             if legacy_key in legacy_value_overrides:
-                legacy_line = "%s = %s" % (
+                legacy_line = cls._format_config_assignment(
                     legacy_key,
-                    cls._format_config_value(legacy_value_overrides[legacy_key]),
+                    legacy_value_overrides[legacy_key],
                 )
                 rendered.append(target_indent + legacy_line)
+                rendered_active_keys.add(legacy_key)
+
+        preserved_keys = [
+            key
+            for key in restored_values
+            if key not in rendered_active_keys and not cls._is_placeholder_key(key)
+        ]
+        if preserved_keys:
+            if rendered and rendered[-1]:
+                rendered.append("")
+            rendered.append(target_indent + "# ----- Preserved custom Extras -----")
+            for key in preserved_keys:
+                rendered.append(
+                    target_indent
+                    + cls._format_config_assignment(key, restored_values[key])
+                )
+
         return rendered
+
+    @classmethod
+    def _extract_report_overrides(cls, current_report):
+        """Return report-level options that the Belchertown rebuild does not own."""
+        if not isinstance(current_report, (dict, configobj.Section)):
+            return {}
+
+        owned_keys = set(cls._BELCHERTOWN_ROOT_KEYS)
+        owned_keys.update(("Extras", "Labels"))
+
+        report_overrides = {}
+        for key, value in current_report.items():
+            if key in owned_keys:
+                continue
+            if isinstance(value, (dict, configobj.Section)):
+                report_overrides[key] = cls._section_to_dict(value)
+            else:
+                report_overrides[key] = value
+
+        return report_overrides
 
     @classmethod
     def _build_belchertown_template(
@@ -380,7 +424,11 @@ class BelchertownInstaller(ExtensionInstaller):
         legacy_insert_end=None,
     ):
         """Build a fresh Belchertown section from skin.conf and old Extras values."""
-        current_report = current_report if isinstance(current_report, (dict, configobj.Section)) else {}
+        current_report = (
+            current_report
+            if isinstance(current_report, (dict, configobj.Section))
+            else {}
+        )
         current_extras = cls._extract_extra_overrides(current_report.get("Extras", {}))
 
         skin_path = cls._skin_conf_path()
@@ -694,10 +742,17 @@ class BelchertownInstaller(ExtensionInstaller):
     def _empty_sections_survive_round_trip(cls, config):
         """Return True if ConfigObj preserves empty nested sections when written/read."""
         try:
-            stream = StringIO()
-            config.write(stream)
+            try:
+                stream = BytesIO()
+                config.write(stream)
+            except TypeError:
+                stream = StringIO()
+                config.write(stream)
             stream.seek(0)
-            reparsed = configobj.ConfigObj(stream, encoding="utf-8")
+            reparsed = configobj.ConfigObj(
+                stream,
+                encoding=getattr(config, "encoding", None) or "utf-8",
+            )
         except Exception:
             return False
 
@@ -726,7 +781,7 @@ class BelchertownInstaller(ExtensionInstaller):
         )
 
     def configure(self, engine):
-        """Rebuild Belchertown root/Extras from skin.conf, preserving only label overrides."""
+        """Rebuild Belchertown root/Extras from skin.conf, preserving user overrides."""
         current_config = engine.config_dict
         commented_extra_overrides = self._extract_commented_extra_overrides(
             engine,
@@ -759,8 +814,10 @@ class BelchertownInstaller(ExtensionInstaller):
             )
 
         preserved_labels = None
+        preserved_report_options = {}
         if isinstance(current_report, (dict, configobj.Section)):
             preserved_labels = self._extract_label_overrides(current_report.get("Labels"))
+            preserved_report_options = self._extract_report_overrides(current_report)
 
         fresh_config = self._build_belchertown_template(
             current_report,
@@ -776,9 +833,16 @@ class BelchertownInstaller(ExtensionInstaller):
             del std_report["Belchertown"]
 
         current_config.merge(fresh_config)
+        report_section = std_report["Belchertown"]
+
+        if preserved_report_options:
+            if hasattr(report_section, "merge"):
+                report_section.merge(preserved_report_options)
+            else:
+                report_section.update(preserved_report_options)
 
         if isinstance(preserved_labels, dict) and preserved_labels:
-            std_report["Belchertown"]["Labels"] = preserved_labels
+            report_section["Labels"] = preserved_labels
 
         return True
 
