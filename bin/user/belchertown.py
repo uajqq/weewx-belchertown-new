@@ -504,20 +504,27 @@ def _nws_cloud_cover_fraction(cloud_layers):
 
 
 def _nws_icon_to_darksky(icon_value, is_daytime=True):
-    """Map NWS icon url/code to Dark Sky-style icon keys used by this skin."""
+    """Map NWS icon URL/code to Weather34 icon keys used by this skin."""
     icon = str(icon_value or "").lower()
     if not icon:
         return "unknown"
 
     token = icon.split("/")[-1].split("?")[0].split(",")[0].strip()
-    if token.startswith("n") and len(token) > 1:
+    token = token.replace("-", "_")
+
+    if "/night/" in icon or (token.startswith("n") and len(token) > 1):
         is_daytime = False
+    elif "/day/" in icon or (token.startswith("d") and len(token) > 1):
+        is_daytime = True
 
     mapping = {
         "skc": "clear-day" if is_daytime else "clear-night",
-        "few": "partly-cloudy-day" if is_daytime else "partly-cloudy-night",
+        "clear": "clear-day" if is_daytime else "clear-night",
+        "sunny": "clear-day",
+        "fair": "mostly-clear-day" if is_daytime else "mostly-clear-night",
+        "few": "mostly-clear-day" if is_daytime else "mostly-clear-night",
         "sct": "partly-cloudy-day" if is_daytime else "partly-cloudy-night",
-        "bkn": "partly-cloudy-day" if is_daytime else "partly-cloudy-night",
+        "bkn": "mostly-cloudy-day" if is_daytime else "mostly-cloudy-night",
         "ovc": "cloudy",
         "wind_skc": "wind",
         "wind_few": "wind",
@@ -525,24 +532,76 @@ def _nws_icon_to_darksky(icon_value, is_daytime=True):
         "wind_bkn": "wind",
         "wind_ovc": "wind",
         "rain": "rain",
+        "ra": "rain",
+        "shra": "rain",
+        "shwrs": "rain",
+        "hi_shwrs": "rain",
         "rain_showers": "rain",
+        "rain_showers_hi": "rain",
+        "rain_showers_sct": "rain",
+        "rain_snow": "sleet",
+        "rain_sleet": "sleet",
+        "rain_fzra": "sleet",
         "tsra": "thunderstorm",
         "tsra_sct": "thunderstorm",
+        "tsra_hi": "thunderstorm",
+        "hi_tsra": "thunderstorm",
         "snow": "snow",
+        "sn": "snow",
         "blizzard": "snow",
+        "snow_sleet": "sleet",
+        "snow_fzra": "sleet",
         "sleet": "sleet",
         "fzra": "sleet",
+        "ip": "sleet",
+        "mix": "sleet",
+        "hail": "sleet",
         "fg": "fog",
+        "fog": "fog",
         "smoke": "fog",
         "haze": "fog",
         "dust": "fog",
-        "tornado": "tornado",
+        "tornado": "wind",
         "hurricane": "wind",
         "tropical_storm": "wind",
         "hot": "clear-day",
-        "cold": "clear-day",
+        "cold": "clear-night" if not is_daytime else "clear-day",
     }
-    return mapping.get(token, "unknown")
+
+    if token in mapping:
+        return mapping[token]
+
+    # Some NWS/METAR feeds use legacy day/night-prefixed codes such as
+    # "nskc" or "nfew"; strip the prefix only after checking the full token.
+    if len(token) > 1 and token[0] in ("d", "n") and token[1:] in mapping:
+        return mapping[token[1:]]
+
+    # Prefer a recognizable icon over the generic unknown cloud when NWS adds
+    # compound codes that still contain an obvious weather signal.
+    if "tsra" in token or "thunder" in token:
+        return "thunderstorm"
+    if "sleet" in token or "fzra" in token or "ice" in token:
+        return "sleet"
+    if "snow" in token or "blizzard" in token:
+        return "snow"
+    if "rain" in token or token in ("ra", "shra", "drizzle"):
+        return "rain"
+    if any(part in token for part in ("fog", "fg", "smoke", "haze", "dust")):
+        return "fog"
+    if any(part in token for part in ("wind", "hurricane", "tropical", "tornado")):
+        return "wind"
+    if "ovc" in token or "cloudy" in token:
+        return "cloudy"
+    if "bkn" in token:
+        return "mostly-cloudy-day" if is_daytime else "mostly-cloudy-night"
+    if "sct" in token:
+        return "partly-cloudy-day" if is_daytime else "partly-cloudy-night"
+    if "few" in token:
+        return "mostly-clear-day" if is_daytime else "mostly-clear-night"
+    if "skc" in token or "clear" in token:
+        return "clear-day" if is_daytime else "clear-night"
+
+    return "unknown"
 
 
 def _nws_build_current(obs_payload, forecast_units):

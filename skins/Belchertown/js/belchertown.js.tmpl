@@ -53,17 +53,22 @@ var icon_dict = {};
 const DS_ICON_TO_W34 = {
     'clear-day': 'clear-day',
     'clear-night': 'clear-night',
+    'mostly-clear-day': 'mostly-clear-day',
+    'mostly-clear-night': 'mostly-clear-night',
     'partly-cloudy-day': 'partly-cloudy-day',
     'partly-cloudy-night': 'partly-cloudy-night',
+    'mostly-cloudy-day': 'mostly-cloudy-day',
+    'mostly-cloudy-night': 'mostly-cloudy-night',
     'cloudy': 'cloudy',
     'rain': 'rain',
     'sleet': 'sleet',
     'snow': 'snow',
     'wind': 'wind',
+    'windy': 'windy',
     'fog': 'fog',
-    'hail': 'hail',
+    'hail': 'sleet',
     'thunderstorm': 'thunderstorm',
-    'tornado': 'tornado'
+    'tornado': 'wind'
 };
 
 /*
@@ -89,12 +94,140 @@ function resolveIconForProvider(iconRaw, provider) {
         // Pirate Weather uses Dark Sky–style identifiers like "partly-cloudy-day"
         const key = normalized.toLowerCase(); // DS mapping is lowercase keys
         const mapped = DS_ICON_TO_W34[key];
-        return mapped || 'unknown';
+        if (mapped) {
+            return mapped;
+        }
     } else {
-        // Optional: catch-all for other providers (if you have a default)
         const key = normalized.toLowerCase();
-        return DS_ICON_TO_W34[key] || 'unknown';
+        if (DS_ICON_TO_W34[key]) {
+            return DS_ICON_TO_W34[key];
+        }
     }
+
+    let token = normalized
+        .split('?')[0]
+        .split('/')
+        .pop()
+        .split(',')[0]
+        .trim()
+        .toLowerCase()
+        .replace(/-/g, '_');
+
+    if (!token) {
+        return 'unknown';
+    }
+
+    let isDaytime = !normalized.toLowerCase().includes('/night/');
+    if (normalized.toLowerCase().includes('/day/')) {
+        isDaytime = true;
+    }
+    if (token.charAt(0) === 'n' && token.length > 1) {
+        isDaytime = false;
+    } else if (token.charAt(0) === 'd' && token.length > 1) {
+        isDaytime = true;
+    }
+
+    const dayNight = function(dayIcon, nightIcon) {
+        return isDaytime ? dayIcon : nightIcon;
+    };
+
+    const nwsIconMap = {
+        'skc': dayNight('clear-day', 'clear-night'),
+        'clear': dayNight('clear-day', 'clear-night'),
+        'sunny': 'clear-day',
+        'fair': dayNight('mostly-clear-day', 'mostly-clear-night'),
+        'few': dayNight('mostly-clear-day', 'mostly-clear-night'),
+        'sct': dayNight('partly-cloudy-day', 'partly-cloudy-night'),
+        'bkn': dayNight('mostly-cloudy-day', 'mostly-cloudy-night'),
+        'ovc': 'cloudy',
+        'wind_skc': 'wind',
+        'wind_few': 'wind',
+        'wind_sct': 'wind',
+        'wind_bkn': 'wind',
+        'wind_ovc': 'wind',
+        'rain': 'rain',
+        'ra': 'rain',
+        'shra': 'rain',
+        'shwrs': 'rain',
+        'hi_shwrs': 'rain',
+        'rain_showers': 'rain',
+        'rain_showers_hi': 'rain',
+        'rain_showers_sct': 'rain',
+        'rain_snow': 'sleet',
+        'rain_sleet': 'sleet',
+        'rain_fzra': 'sleet',
+        'tsra': 'thunderstorm',
+        'tsra_sct': 'thunderstorm',
+        'tsra_hi': 'thunderstorm',
+        'hi_tsra': 'thunderstorm',
+        'snow': 'snow',
+        'sn': 'snow',
+        'blizzard': 'snow',
+        'snow_sleet': 'sleet',
+        'snow_fzra': 'sleet',
+        'sleet': 'sleet',
+        'fzra': 'sleet',
+        'ip': 'sleet',
+        'mix': 'sleet',
+        'hail': 'sleet',
+        'fg': 'fog',
+        'fog': 'fog',
+        'smoke': 'fog',
+        'haze': 'fog',
+        'dust': 'fog',
+        'tornado': 'wind',
+        'hurricane': 'wind',
+        'tropical_storm': 'wind',
+        'hot': 'clear-day',
+        'cold': dayNight('clear-day', 'clear-night')
+    };
+
+    if (nwsIconMap[token]) {
+        return nwsIconMap[token];
+    }
+
+    if (token.length > 1 && (token.charAt(0) === 'd' || token.charAt(0) === 'n')) {
+        const unprefixed = token.substring(1);
+        if (nwsIconMap[unprefixed]) {
+            return nwsIconMap[unprefixed];
+        }
+    }
+
+    if (token.includes('tsra') || token.includes('thunder')) {
+        return 'thunderstorm';
+    }
+    if (token.includes('sleet') || token.includes('fzra') || token.includes('ice')) {
+        return 'sleet';
+    }
+    if (token.includes('snow') || token.includes('blizzard')) {
+        return 'snow';
+    }
+    if (token.includes('rain') || token === 'ra' || token === 'shra' || token.includes('shwrs') || token.includes('drizzle')) {
+        return 'rain';
+    }
+    if (token.includes('fog') || token.includes('fg') || token.includes('smoke') || token.includes('haze') || token.includes('dust')) {
+        return 'fog';
+    }
+    if (token.includes('wind') || token.includes('hurricane') || token.includes('tropical') || token.includes('tornado')) {
+        return 'wind';
+    }
+    if (token.includes('ovc') || token.includes('cloudy')) {
+        return 'cloudy';
+    }
+    if (token.includes('bkn')) {
+        return dayNight('mostly-cloudy-day', 'mostly-cloudy-night');
+    }
+    if (token.includes('sct')) {
+        return dayNight('partly-cloudy-day', 'partly-cloudy-night');
+    }
+    if (token.includes('few')) {
+        return dayNight('mostly-clear-day', 'mostly-clear-night');
+    }
+    if (token.includes('skc') || token.includes('clear')) {
+        return dayNight('clear-day', 'clear-night');
+    }
+
+    return 'unknown';
 }
 
 function belchertown_debug(message) {
