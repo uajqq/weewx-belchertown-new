@@ -47,9 +47,128 @@ var reconnect_using_inactive_timestamp = false;
 var inactive_timestamp = "";
 var mqtt_connect_retry_count = 0;
 var mqtt_max_connect_retries = 20;
+var mqtt_activity_timeout = null;
+var mqtt_stale_timeout = null;
+var mqtt_last_message_received_ms = 0;
+var mqtt_last_data_epoch = "";
+var mqtt_inactive_disconnect_requested = false;
+var mqtt_stale_timeout_seconds = parseFloat("$Extras.last_updated_alert_threshold");
+if (!isFinite(mqtt_stale_timeout_seconds) || mqtt_stale_timeout_seconds <= 0) {
+    mqtt_stale_timeout_seconds = 1800;
+}
+mqtt_stale_timeout_seconds = Math.max(mqtt_stale_timeout_seconds, 30);
+var mqtt_stale_timeout_ms = mqtt_stale_timeout_seconds * 1000;
+
+function mqtt_restart_button_html() {
+    return " <button type='button' class='btn btn-primary restart-interval'>$obs.label.mqtt_websockets_continue</button>";
+}
+
+function mqtt_safe_client_connected() {
+    try {
+        return typeof client !== "undefined" && client && typeof client.isConnected === "function" && client.isConnected();
+    } catch (e) {
+        belchertown_debug("MQTT: Unable to read client connection state: " + e.message);
+        return false;
+    }
+}
+
+function mqtt_clear_activity_timeout() {
+    if (mqtt_activity_timeout) {
+        clearTimeout(mqtt_activity_timeout);
+        mqtt_activity_timeout = null;
+    }
+}
+
+function mqtt_clear_stale_timeout() {
+    if (mqtt_stale_timeout) {
+        clearTimeout(mqtt_stale_timeout);
+        mqtt_stale_timeout = null;
+    }
+}
+
+function mqtt_set_disconnected_status(message, epoch, show_restart) {
+    mqttConnected = false;
+    mqtt_clear_activity_timeout();
+    mqtt_clear_stale_timeout();
+    jQuery(".onlineMarker").hide();
+    jQuery(".offlineMarker").show();
+    jQuery(".loadingMarker").hide();
+
+    var updated_epoch = epoch || mqtt_last_data_epoch || "$current.dateTime.raw";
+    var updated = tzAdjustedMoment(updated_epoch).format("$obs.label.time_last_updated");
+    var restart_button = show_restart ? mqtt_restart_button_html() : "";
+    jQuery(".updated").html(message + " $obs.label.header_last_updated " + updated + restart_button);
+}
+
+function mqtt_schedule_activity_timeout() {
+    mqtt_clear_activity_timeout();
+
+    var timeout_ms = parseFloat("$Extras.disconnect_live_website_visitor");
+    if (!isFinite(timeout_ms) || timeout_ms <= 0) {
+        belchertown_debug("MQTT: Inactivity timeout disabled by configuration");
+        return;
+    }
+    if (getURLvar("stayconnected") && (getURLvar("stayconnected") == "true" || getURLvar("stayconnected") == "1")) {
+        belchertown_debug("MQTT: URL parameter 'stayconnected' detected - inactivity timeout disabled");
+        return;
+    }
+    if (pageName == "pi" || pageName == "kiosk.html") {
+        belchertown_debug("MQTT: Page type '" + pageName + "' detected - inactivity timeout disabled");
+        return;
+    }
+
+    belchertown_debug("MQTT: Inactivity timeout set to " + timeout_ms + " ms");
+    mqtt_activity_timeout = setTimeout(inactive, timeout_ms);
+}
+
+function mqtt_schedule_stale_timeout() {
+    mqtt_clear_stale_timeout();
+
+    mqtt_stale_timeout = setTimeout(function() {
+        if (!mqttConnected) {
+            return;
+        }
+
+        var last_seen = mqtt_last_message_received_ms || 0;
+        if (last_seen && (Date.now() - last_seen) < mqtt_stale_timeout_ms) {
+            mqtt_schedule_stale_timeout();
+            return;
+        }
+
+        var epoch = mqtt_last_data_epoch || parseFloat(Date.now() / 1000).toFixed(0);
+        belchertown_debug("MQTT: No messages received for " + mqtt_stale_timeout_seconds + " seconds. Marking connection stale.");
+        reconnect_using_inactive_timestamp = true;
+        inactive_timestamp = epoch;
+        mqtt_inactive_disconnect_requested = true;
+        try {
+            if (mqtt_safe_client_connected()) {
+                client.disconnect();
+            }
+        } catch (e) {
+            belchertown_debug("MQTT: Disconnect after stale timeout failed: " + e.message);
+        }
+        mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true);
+    }, mqtt_stale_timeout_ms + 1000);
+}
+
+function mqtt_note_message_activity(data) {
+    mqttConnected = true;
+    mqtt_last_message_received_ms = Date.now();
+    if (data && data.hasOwnProperty("dateTime")) {
+        var data_epoch = parseFloat(data["dateTime"]);
+        if (isFinite(data_epoch)) {
+            mqtt_last_data_epoch = data_epoch.toFixed(0);
+        }
+    }
+    mqtt_schedule_stale_timeout();
+}
 
 // MQTT connect
 function connect() {
+    mqtt_clear_activity_timeout();
+    mqtt_clear_stale_timeout();
+    mqtt_inactive_disconnect_requested = false;
+
     if (typeof window.Paho === "undefined" || typeof window.Paho.Client !== "function") {
         mqtt_connect_retry_count++;
         belchertown_debug("MQTT: Paho library not ready (attempt " + mqtt_connect_retry_count + "). Retrying shortly.");
@@ -57,10 +176,7 @@ function connect() {
             setTimeout(connect, 500);
         } else {
             console.error("MQTT: Paho library failed to load after retries. Aborting connect.");
-            jQuery(".onlineMarker").hide();
-            jQuery(".offlineMarker").show();
-            jQuery(".loadingMarker").hide();
-            jQuery(".updated").html("$obs.label.mqtt_websockets_failed $obs.label.header_last_updated " + tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated"));
+            mqtt_set_disconnected_status("$obs.label.mqtt_websockets_failed", "$current.dateTime.raw", true);
         }
         return;
     }
@@ -150,6 +266,8 @@ function connect() {
 // MQTT connect callback
 function onConnect() {
     mqttConnected = true;
+    mqtt_inactive_disconnect_requested = false;
+    mqtt_last_message_received_ms = Date.now();
     belchertown_debug("MQTT: [" + new Date().toISOString() + "] Successfully connected to broker");
     belchertown_debug("MQTT: Client state is now CONNECTED");
     if (reconnect_using_inactive_timestamp) {
@@ -171,19 +289,8 @@ function onConnect() {
     belchertown_debug("MQTT: Subscribing to topic: $Extras.mqtt_websockets_topic");
     client.subscribe("$Extras.mqtt_websockets_topic");
     belchertown_debug("MQTT: Topic subscription request sent");
-    // #if $Extras.has_key("disconnect_live_website_visitor") and $Extras.disconnect_live_website_visitor != '0'
-    if (getURLvar("stayconnected") && (getURLvar("stayconnected") == "true" || getURLvar("stayconnected") == "1")) {
-        belchertown_debug("MQTT: URL parameter 'stayconnected' detected - inactivity timeout disabled");
-    } else {
-        if (pageName == "pi" || pageName == "kiosk.html") {
-            belchertown_debug("MQTT: Page type '" + pageName + "' detected - inactivity timeout disabled");
-        }
-        else {
-            belchertown_debug("MQTT: Inactivity timeout set to $Extras.disconnect_live_website_visitor ms");
-            var activityTimeout = setTimeout(inactive, $Extras.disconnect_live_website_visitor); // Stop automatic ajax refresh
-        }
-    }
-    // #end if
+    mqtt_schedule_activity_timeout();
+    mqtt_schedule_stale_timeout();
 }
 
 // MQTT Failure
@@ -194,37 +301,37 @@ function onFailure() {
     var timestamp = d.toISOString();
     belchertown_debug("MQTT: [" + timestamp + "] Connection FAILED");
     belchertown_debug("MQTT: Client state is now DISCONNECTED (failure)");
-    jQuery(".onlineMarker").hide();
-    jQuery(".offlineMarker").show();
-    jQuery(".loadingMarker").hide();
-    if (client.isConnected()) {
-        updated = tzAdjustedMoment(epoch).format("$obs.label.time_last_updated");
-    } else {
-        updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
+    if (!mqtt_safe_client_connected()) {
+        epoch = mqtt_last_data_epoch || "$current.dateTime.raw";
     }
-    jQuery(".updated").html("$obs.label.mqtt_websockets_failed $obs.label.header_last_updated " + updated);
+    reconnect_using_inactive_timestamp = true;
+    inactive_timestamp = epoch;
+    mqtt_set_disconnected_status("$obs.label.mqtt_websockets_failed", epoch, true);
     console.error("MQTT: " + timestamp + " - Connection Failed - Unable to connect to MQTT broker");
     belchertown_debug("MQTT: UI markers updated for failure state");
 }
 
 // MQTT connection lost
 function onConnectionLost(responseObject) {
+    if (mqtt_inactive_disconnect_requested) {
+        belchertown_debug("MQTT: Connection lost after an intentional timeout disconnect; keeping stopped UI state");
+        return;
+    }
+
+    responseObject = responseObject || {};
     mqttConnected = false;
     var d = new Date();
     epoch = parseFloat((d / 1000)).toFixed(0);  // Convert millis to seconds
     var timestamp = d.toISOString();
     belchertown_debug("MQTT: [" + timestamp + "] Connection LOST");
     belchertown_debug("MQTT: Client state is now DISCONNECTED (lost)");
-    jQuery(".onlineMarker").hide();
-    jQuery(".offlineMarker").show();
-    jQuery(".loadingMarker").hide();
-    if (client.isConnected()) {
-        updated = tzAdjustedMoment(epoch).format("$obs.label.time_last_updated");
-    } else {
-        updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
+    if (!mqtt_safe_client_connected()) {
+        epoch = mqtt_last_data_epoch || "$current.dateTime.raw";
     }
-    jQuery(".updated").html("$obs.label.mqtt_websockets_lost $obs.label.header_last_updated " + updated);
-    if (responseObject.errorCode !== 0) {
+    reconnect_using_inactive_timestamp = true;
+    inactive_timestamp = epoch;
+    mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true);
+    if (typeof responseObject.errorCode !== "undefined" && responseObject.errorCode !== 0) {
         var errorMsg = "Error Code: " + responseObject.errorCode + " - " + (responseObject.errorMessage || "Unknown error");
         console.error("MQTT: " + timestamp + " - Connection Lost: " + errorMsg);
         belchertown_debug("MQTT: Error details - " + errorMsg);
@@ -237,19 +344,24 @@ function onConnectionLost(responseObject) {
 
 function inactive() {
     var timestamp = new Date().toISOString();
-    belchertown_debug("MQTT: [" + timestamp + "] Inactivity timeout triggered - initiating disconnect");
-    belchertown_debug("MQTT: Total messages received during session: " + mqtt_message_count);
-    client.disconnect(); // Disconnect mqtt
-    belchertown_debug("MQTT: Client disconnect command issued");
-    jQuery(".onlineMarker").hide(); // Hide online beacon
-    jQuery(".offlineMarker").show(); // Show offline beacon
-    jQuery(".loadingMarker").hide(); // Hide loading beacon
     var d = new Date();
     epoch = parseFloat((d / 1000)).toFixed(0);  // Convert millis to seconds
-    updated = tzAdjustedMoment(epoch).format("$obs.label.time_last_updated");
-    jQuery(".updated").html("$obs.label.mqtt_websockets_stopped $obs.label.header_last_updated " + updated + " <button type='button' class='btn btn-primary restart-interval'>$obs.label.mqtt_websockets_continue</button>");
+    belchertown_debug("MQTT: [" + timestamp + "] Inactivity timeout triggered - initiating disconnect");
+    belchertown_debug("MQTT: Total messages received during session: " + mqtt_message_count);
     reconnect_using_inactive_timestamp = true; // Set a flag to use the inactive timestamp in case we reconnect we have the latest last updated time
     inactive_timestamp = epoch; // Store this timestamp in case we reconnect
+    mqtt_inactive_disconnect_requested = true;
+    try {
+        if (mqtt_safe_client_connected()) {
+            client.disconnect(); // Disconnect mqtt
+            belchertown_debug("MQTT: Client disconnect command issued");
+        } else {
+            belchertown_debug("MQTT: Client was already disconnected before inactivity timeout cleanup");
+        }
+    } catch (e) {
+        belchertown_debug("MQTT: Disconnect during inactivity timeout failed: " + e.message);
+    }
+    mqtt_set_disconnected_status("$obs.label.mqtt_websockets_stopped", epoch, true);
     belchertown_debug("MQTT: Inactive mode activated - awaiting user interaction to resume");
 }
 
@@ -485,6 +597,7 @@ function update_current_wx(data) {
         data = jQuery.parseJSON(data);
     }
     data = normalize_mqtt_payload(data);
+    mqtt_note_message_activity(data);
 
     var statusEls = get_mqtt_status_elements();
     var updatedTextEl = statusEls.updatedTextEl;
