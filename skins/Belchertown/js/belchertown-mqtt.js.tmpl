@@ -628,6 +628,7 @@ function update_almanac_diagram_from_mqtt(payload) {
     var lunarAz = parse_mqtt_number(payload, "lunarAzimuth");
     var solarAlt = parse_mqtt_number(payload, "solarAltitude");
     var lunarAlt = parse_mqtt_number(payload, "lunarAltitude");
+    var currentTs = parse_mqtt_number(payload, "dateTime");
 
     if (solarAz === null && lunarAz === null && solarAlt === null && lunarAlt === null) {
         return;
@@ -656,7 +657,8 @@ function update_almanac_diagram_from_mqtt(payload) {
             altitude: getDiagramValue("moonAlt"),
             x_offset: getDiagramValue("moonXOffset")
         },
-        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase()
+        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase(),
+        current_ts: currentTs === null ? getDiagramValue("currentTs") : currentTs
     };
 
     if (solarAz !== null) {

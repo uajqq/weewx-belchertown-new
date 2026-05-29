@@ -991,8 +991,9 @@ function almanacBodyXOffsetInfo(bodyKey) {
     return { value: 0, hasExplicit: false };
 }
 
-function almanacCurrentTimeToDiagramX(currentTs, currentX) {
+function almanacCurrentTimeToDiagramX(currentTs, currentX, fallbackCurrentX) {
     var explicitX = parseFloat(currentX);
+    var fallbackX = parseFloat(fallbackCurrentX);
     var ts = parseFloat(currentTs);
     var adjusted;
     var dayMinutes;
@@ -1015,7 +1016,31 @@ function almanacCurrentTimeToDiagramX(currentTs, currentX) {
         }
     }
 
+    if (isFinite(fallbackX)) {
+        return Math.max(0, Math.min(1440, fallbackX));
+    }
+
     return null;
+}
+
+function readAlmanacDiagramNumber(diagram, attrName, dataKey) {
+    var attrValue = parseFloat(diagram.attr(attrName));
+    var dataValue;
+
+    if (isFinite(attrValue)) {
+        return attrValue;
+    }
+
+    dataValue = parseFloat(diagram.data(dataKey));
+    return isFinite(dataValue) ? dataValue : null;
+}
+
+function almanacExistingMarkerX(marker) {
+    var transformText = String(marker.attr("transform") || "");
+    var match = transformText.match(/translate\(\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/i);
+    var parsed = match ? parseFloat(match[1]) : NaN;
+
+    return isFinite(parsed) ? parsed : null;
 }
 
 function almanacVerticalScale() {
@@ -1093,6 +1118,9 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     // direct projection of live altitude at current time using the same x-offset.
     if (isFinite(alt)) {
         projectedX = almanacWrapDiagramX(almanacCurrentTimeToDiagramX(currentTs, currentX), bodyOffset);
+        if (projectedX === null) {
+            projectedX = almanacExistingMarkerX(marker);
+        }
         projectedY = almanacAltitudeToDiagramY(alt);
         if (projectedX !== null && projectedY !== null) {
             point = {
@@ -1104,6 +1132,11 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     }
 
     if (!point) {
+        if (isFinite(alt)) {
+            marker.show();
+            marker.find("title").text(label);
+            return;
+        }
         marker.hide();
         return;
     }
@@ -1166,6 +1199,13 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
     var centeringMode = String(diagramData["centering_mode"] || "off").toLowerCase();
     var currentTs = parseFloat(diagramData["current_ts"]);
     var currentX = parseFloat(diagramData["current_x"]);
+    var fallbackCurrentX = readAlmanacDiagramNumber(diagram, "data-current-x", "currentX");
+    var resolvedCurrentX;
+
+    if (!isFinite(currentTs)) {
+        currentTs = readAlmanacDiagramNumber(diagram, "data-current-ts", "currentTs");
+    }
+    resolvedCurrentX = almanacCurrentTimeToDiagramX(currentTs, currentX, fallbackCurrentX);
 
     if (isFinite(sunAz)) {
         diagram.attr("data-sun-az", sunAz.toFixed(3));
@@ -1202,9 +1242,9 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         diagram.attr("data-current-ts", currentTs.toFixed(3));
         diagram.data("currentTs", currentTs);
     }
-    if (isFinite(currentX)) {
-        diagram.attr("data-current-x", currentX.toFixed(3));
-        diagram.data("currentX", currentX);
+    if (isFinite(resolvedCurrentX)) {
+        diagram.attr("data-current-x", resolvedCurrentX.toFixed(3));
+        diagram.data("currentX", resolvedCurrentX);
     }
 
     diagram.removeClass("almanac-diagram--inactive");
@@ -1225,7 +1265,7 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         diagramData["sun"]["azimuth"],
         diagramData["sun"]["altitude"],
         currentTs,
-        currentX
+        resolvedCurrentX
     );
     setAlmanacDiagramObject(
         ".almanac-diagram-object--moon",
@@ -1234,7 +1274,7 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         diagramData["moon"]["azimuth"],
         diagramData["moon"]["altitude"],
         currentTs,
-        currentX
+        resolvedCurrentX
     );
 
     if (!preserveViewBox) {
