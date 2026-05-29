@@ -91,6 +91,47 @@ AQI_OBS_MAP = {
     "so2": {"pollutant": "so2", "value_key": "valuePPB"},
 }
 
+DEFAULT_DIRECTION_LABELS = [
+    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+]
+
+WINDROSE_UNIT_ALIASES = {
+    "mile_per_hour": "mile_per_hour",
+    "mile_per_hour2": "mile_per_hour",
+    "km_per_hour": "km_per_hour",
+    "km_per_hour2": "km_per_hour",
+    "meter_per_second": "meter_per_second",
+    "meter_per_second2": "meter_per_second",
+    "knot": "knot",
+    "knot2": "knot",
+    "beaufort": "beaufort",
+}
+
+WINDROSE_THRESHOLDS = {
+    "mile_per_hour": [1, 4, 8, 13, 19, 25],
+    "km_per_hour": [2, 6, 12, 20, 29, 39],
+    "meter_per_second": [0.5, 1.6, 3.4, 5.6, 8, 10.8],
+    "knot": [1, 4, 7, 11, 17, 22],
+    "beaufort": [2, 3, 4, 5, 6, 7],
+}
+
+WINDROSE_SPEED_RANGE_LABELS = {
+    "mile_per_hour": ["< 1", "1-3", "4-7", "8-12", "13-18", "19-24", "25+"],
+    "km_per_hour": ["< 2", "2-5", "6-11", "12-19", "20-28", "29-38", "39+"],
+    "meter_per_second": [
+        "< 0.5",
+        "0.5-1.5",
+        "1.6-3.3",
+        "3.4-5.5",
+        "5.5-7.9",
+        "8-10.7",
+        "10.8+",
+    ],
+    "knot": ["< 1", "1-3", "4-6", "7-10", "11-16", "17-21", "22+"],
+    "beaufort": ["0", "1", "2", "3", "4", "5", "6+"],
+}
+
 # Cached minifier dependency status: (all_available: bool, missing: tuple[str, ...])
 _MINIFIER_DEPS_STATUS = None
 _MINIFIER_DEPS_MISSING_LOGGED = False
@@ -1049,6 +1090,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
     current_raw = payload.get("current") or {}
     hourly_raw = payload.get("hourly") or {}
     daily_raw = payload.get("daily") or {}
+    generated_at = int(time.time())
 
     current_is_day = bool(to_int(current_raw.get("is_day")) == 1)
     current_summary, current_icon = _openmeteo_weather_to_icon_summary(
@@ -1056,7 +1098,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
     )
     current_humidity_pct = _safe_float(current_raw.get("relative_humidity_2m"))
     current = {
-        "time": _iso_to_epoch(current_raw.get("time")) or int(time.time()),
+        "time": _iso_to_epoch(current_raw.get("time")) or generated_at,
         "summary": current_summary,
         "icon": current_icon,
         "temperature": _safe_float(current_raw.get("temperature_2m")),
@@ -1115,7 +1157,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
         humidity_pct = _safe_float(h_rh[i]) if i < len(h_rh) else None
         hourly.append(
             {
-                "time": _iso_to_epoch(time_value) or int(time.time()),
+                "time": _iso_to_epoch(time_value) or generated_at,
                 "summary": summary,
                 "icon": icon,
                 "temperature": _safe_float(h_temp[i]) if i < len(h_temp) else None,
@@ -1180,7 +1222,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
         humidity_pct = _safe_float(d_humidity[i]) if i < len(d_humidity) else None
         daily.append(
             {
-                "time": _iso_to_epoch(time_value) or int(time.time()),
+                "time": _iso_to_epoch(time_value) or generated_at,
                 "summary": summary,
                 "icon": icon,
                 "temperatureHigh": _safe_float(d_tmax[i]) if i < len(d_tmax) else None,
@@ -1222,21 +1264,22 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
         "alerts": [],
         "provider": "open-meteo",
         "schema": "belchertown.forecast.v1",
-        "generated_at": int(time.time()),
+        "generated_at": generated_at,
     }
 
 
 def _parse_aeris_json(obj):
     """Robustly parse JSON whether it's str or bytes."""
+    if isinstance(obj, bytearray):
+        obj = bytes(obj)
+    if isinstance(obj, bytes):
+        try:
+            obj = obj.decode("utf-8")
+        except UnicodeDecodeError:
+            obj = obj.decode("utf-8", "replace")
+
     try:
         return json.loads(obj)
-    except (ValueError, TypeError):
-        pass
-    
-    try:
-        if isinstance(obj, (bytes, bytearray)):
-            return json.loads(obj.decode("utf-8"))
-        return json.loads(obj.decode("utf-8", "replace"))
     except Exception as e:
         log.error(f"Error parsing forecast JSON: {e}")
         return {}
@@ -2851,27 +2894,22 @@ class getData(SearchList):
         """
         Divides compass into 16 wedges and returns direction label.
         """
-        DEFAULT_DIRECTIONS = [
-            "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
-        ]
-        
         skin_dict = self.generator.skin_dict
         ordinate_names = (
             skin_dict.get("Units", {}).get("Ordinates", {}).get("directions", None)
         )
-        
+
         if ordinate_names is not None:
             names = (
                 ordinate_names if isinstance(ordinate_names, list)
                 else weeutil.weeutil.option_as_list(ordinate_names)
             )
         else:
-            names = DEFAULT_DIRECTIONS
-            
+            names = DEFAULT_DIRECTION_LABELS
+
         if return_only_labels:
             return names
-            
+
         try:
             idx = int(((float(degree) - 11.25) / 22.5) + 1) % 16
             return names[idx]
@@ -3174,41 +3212,24 @@ class getData(SearchList):
             chart_dict = configobj.ConfigObj(default_chart_config_path, file_error=True)
         else:
             chart_dict = configobj.ConfigObj(default_chart_config_path, file_error=True)
+        # Gather chart metadata for templates in one pass over charts.conf.
         charts = OrderedDict()
-        for chart_timespan in chart_dict.sections:
-            timespan_chart_list = []
-            for plotname in chart_dict[chart_timespan].sections:
-                if plotname not in timespan_chart_list:
-                    timespan_chart_list.append(plotname)
-            charts[chart_timespan] = timespan_chart_list
-
-        # Create a dict of chart group titles for use on the charts page
-        # header. If no title defined, use the chart group name
         chartpage_titles = OrderedDict()
+        chartpage_content = OrderedDict()
+        button_parts = []
         for chartgroup in chart_dict.sections:
             chart_group_config = chart_dict[chartgroup]
+            charts[chartgroup] = list(chart_group_config.sections)
             chartpage_titles[chartgroup] = chart_group_config.get("title", chartgroup)
 
-        # Create a dict of chart group page content for use on the charts page
-        # below the header.
-        chartpage_content = OrderedDict()
-        for chartgroup in chart_dict.sections:
-            if "page_content" in chart_dict[chartgroup]:
-                chartpage_content[chartgroup] = chart_dict[chartgroup]["page_content"]
+            if "page_content" in chart_group_config:
+                chartpage_content[chartgroup] = chart_group_config["page_content"]
 
-        # Setup the Charts page button row based on the skin extras option and
-        # the button_text from charts.conf
-        chart_page_chartgroup_buttons = [
-            chartgroup
-            for chartgroup in chart_dict.sections
-            if chart_dict[chartgroup].get("show_button", "").lower() == "true"
-        ]
-        button_parts = []
-        for gg in chart_page_chartgroup_buttons:
-            button_text = chart_dict[gg].get("button_text", gg)
-            button_parts.append(
-                f'<a href="./?chart={gg}"><button type="button" class="btn btn-primary">{button_text}</button></a>'
-            )
+            if chart_group_config.get("show_button", "").lower() == "true":
+                button_text = chart_group_config.get("button_text", chartgroup)
+                button_parts.append(
+                    f'<a href="./?chart={chartgroup}"><button type="button" class="btn btn-primary">{button_text}</button></a>'
+                )
         chart_page_buttons = " ".join(button_parts)
 
         # Set a default radar URL using station's lat/lon
@@ -3810,7 +3831,7 @@ class getData(SearchList):
         # ==============================================================================
         # Get NOAA Data
         # ==============================================================================
-        years = []
+        years = set()
         noaa_header_html = ""
         default_noaa_file = ""
         noaa_dir = html_root + "/NOAA/"
@@ -3827,13 +3848,9 @@ class getData(SearchList):
             for f in noaa_file_list:
                 filename = f.split(".")[0]  # Drop the .txt
                 year = filename.split("-")[1]
-                years.append(year)
+                years.add(year)
 
-            # Remove duplicates with set, and sort numerically, then reverse
-            # sort with [::-1] oldest year last
-            # first_year = years[0]
-            # final_year = years[-1]
-            years = sorted(set(years))[::-1]
+            years = sorted(years, reverse=True)
 
             # Build NOAA header HTML using list then join for efficiency
             noaa_parts = []
@@ -4014,17 +4031,18 @@ class getData(SearchList):
                 current_conditions_stale_timer = int(
                     extras_dict["current_conditions_stale"]
                 )
+                current_time = int(time.time())
 
                 if os.path.isfile(forecast_file):
                     # belchertown.py is called 12 times per archive, so the last condition ensures forecast on the hour is only downloaded once
-                    current_time = int(time.time())
-                    file_modtime = int(os.path.getmtime(forecast_file))
+                    forecast_stat = os.stat(forecast_file)
+                    file_modtime = int(forecast_stat.st_mtime)
                     archive_interval = int(
                         config_dict["StdArchive"]["archive_interval"]
                     )
                     forecast_is_stale = (
                         (current_time - file_modtime) > forecast_stale_timer
-                        or os.stat(forecast_file).st_size == 0
+                        or forecast_stat.st_size == 0
                         or (
                             int(time.strftime("%M")) < archive_interval / 60
                             and (current_time - file_modtime) > archive_interval
@@ -4034,12 +4052,13 @@ class getData(SearchList):
                     forecast_is_stale = True
                 current_conditions_is_stale = True
                 if os.path.isfile(current_conditions_file):
+                    current_conditions_stat = os.stat(current_conditions_file)
                     current_conditions_is_stale = (
-                        int(time.time())
-                        - int(os.path.getmtime(current_conditions_file))
-                    ) > current_conditions_stale_timer or os.stat(
-                        current_conditions_file
-                    ).st_size == 0
+                        current_time
+                        - int(current_conditions_stat.st_mtime)
+                    ) > current_conditions_stale_timer or (
+                        current_conditions_stat.st_size == 0
+                    )
 
                 if forecast_provider == "pirateweather":
                     # Fetch → normalize → write forecast
@@ -4802,11 +4821,13 @@ class getData(SearchList):
             earthquake_is_stale = False
 
             # Determine if the file exists and get its modified time
-            if os.path.isfile(earthquake_file) and os.stat(earthquake_file).st_size > 0:
-                if (int(time.time()) - int(os.path.getmtime(earthquake_file))) > int(
-                    earthquake_stale_timer
-                ):
-                    earthquake_is_stale = True
+            if os.path.isfile(earthquake_file):
+                earthquake_stat = os.stat(earthquake_file)
+                earthquake_age = int(time.time()) - int(earthquake_stat.st_mtime)
+                earthquake_is_stale = (
+                    earthquake_stat.st_size == 0
+                    or earthquake_age > int(earthquake_stale_timer)
+                )
             else:
                 # File doesn't exist or is blank, download a new copy
                 earthquake_is_stale = True
@@ -4984,7 +5005,7 @@ class getData(SearchList):
         station_obs_parts = []
         station_observations = extras_dict["station_observations"]
         # Check if this is a list. If not then we have 1 item, so force it into a list
-        if isinstance(station_observations, list) is False:
+        if not isinstance(station_observations, list):
             station_observations = station_observations.split()
         current_stamp = manager.lastGoodStamp()
         current_record = manager.getRecord(current_stamp)
@@ -5595,6 +5616,8 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         html_dest_dir = os.path.join(
             self.config_dict["WEEWX_ROOT"], self.skin_dict["HTML_ROOT"], "json"
         )
+        current_time = int(time.time())
+        generated_timestamp = time.strftime("%m/%d/%Y %H:%M:%S")
 
         # Loop through each [section]. This is the first bracket group of
         # options including global options.
@@ -5605,9 +5628,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             chart_options = accumulateLeaves(self.chart_dict[chart_group])
 
             output[chart_group]["belchertown_version"] = VERSION
-            output[chart_group]["generated_timestamp"] = time.strftime(
-                "%m/%d/%Y %H:%M:%S"
-            )
+            output[chart_group]["generated_timestamp"] = generated_timestamp
 
             # Setup the JSON file name for each chart group
             json_filename = html_dest_dir + "/" + chart_group + ".json"
@@ -5677,7 +5698,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 else:
                     # The file exists get timestamp to compare against what the
                     # user wants for an interval
-                    if (int(time.time()) - int(os.path.getmtime(json_filename))) >= int(
+                    if (current_time - int(os.path.getmtime(json_filename))) >= int(
                         chart_stale_timer
                     ):
                         create_new_chart = True
@@ -5766,7 +5787,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 xAxis_categories = plot_options.get("xAxis_categories", "")
                 # Check if this is a list. If not then we have 1 item, so force
                 # it into a list
-                if isinstance(xAxis_categories, list) is False:
+                if not isinstance(xAxis_categories, list):
                     xAxis_categories = xAxis_categories.split()
                 output[chart_group][plotname]["options"][
                     "xAxis_categories"
@@ -6631,38 +6652,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             # Get the unit label from the skin dict for speed.
             windSpeed_unit = windSpeed_vt[1]
             windSpeed_unit_label = skin_dict["Units"]["Labels"][windSpeed_unit]
+            windSpeed_unit_key = WINDROSE_UNIT_ALIASES.get(
+                windSpeed_unit, "mile_per_hour"
+            )
 
             # Initialize wind speed groups more efficiently
             wind_groups = [{"dir": [], "speed": []} for _ in range(7)]
 
-            # Define beaufort scale thresholds for different units (more efficient than nested ifs)
-            beaufort_thresholds = {
-                ("mile_per_hour", "mile_per_hour2"): [1, 4, 8, 13, 19, 25],
-                ("km_per_hour", "km_per_hour2"): [2, 6, 12, 20, 29, 39],
-                ("meter_per_second", "meter_per_second2"): [
-                    0.5,
-                    1.6,
-                    3.4,
-                    5.6,
-                    8,
-                    10.8,
-                ],
-                ("knot", "knot2"): [1, 4, 7, 11, 17, 22],
-                "beaufort": [2, 3, 4, 5, 6, 7],
-            }
-
-            # Find matching threshold set
-            thresholds = None
-            for units, thresh in beaufort_thresholds.items():
-                if isinstance(units, tuple) and windSpeed_unit in units:
-                    thresholds = thresh
-                    break
-                elif windSpeed_unit == units:
-                    thresholds = thresh
-                    break
-
-            if thresholds is None:
-                thresholds = [1, 4, 8, 13, 19, 25]  # Default to mph
+            thresholds = WINDROSE_THRESHOLDS[windSpeed_unit_key]
 
             # Process wind data efficiently
             for windDir, windSpeed in zip(windDir_vals, windSpeed_vals):
@@ -6690,67 +6687,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     for data in series_data
                 ]
 
-            # Setup the labels based on unit (using dictionary for efficiency)
-            speed_range_labels = {
-                ("mile_per_hour", "mile_per_hour2"): [
-                    "< 1",
-                    "1-3",
-                    "4-7",
-                    "8-12",
-                    "13-18",
-                    "19-24",
-                    "25+",
-                ],
-                ("km_per_hour", "km_per_hour2"): [
-                    "< 2",
-                    "2-5",
-                    "6-11",
-                    "12-19",
-                    "20-28",
-                    "29-38",
-                    "39+",
-                ],
-                ("meter_per_second", "meter_per_second2"): [
-                    "< 0.5",
-                    "0.5-1.5",
-                    "1.6-3.3",
-                    "3.4-5.5",
-                    "5.5-7.9",
-                    "8-10.7",
-                    "10.8+",
-                ],
-                ("knot", "knot2"): [
-                    "< 1",
-                    "1-3",
-                    "4-6",
-                    "7-10",
-                    "11-16",
-                    "17-21",
-                    "22+",
-                ],
-                "beaufort": ["0", "1", "2", "3", "4", "5", "6+"],
-            }
-
-            # Find matching labels
-            labels = None
-            for units, lbls in speed_range_labels.items():
-                if isinstance(units, tuple) and windSpeed_unit in units:
-                    labels = lbls
-                    break
-                elif windSpeed_unit == units:
-                    labels = lbls
-                    break
-
-            if labels is None:
-                labels = [
-                    "< 1",
-                    "1-3",
-                    "4-7",
-                    "8-12",
-                    "13-18",
-                    "19-24",
-                    "25+",
-                ]  # Default to mph
+            labels = WINDROSE_SPEED_RANGE_LABELS[windSpeed_unit_key]
 
             # Build series data efficiently using list comprehension
             series = [
@@ -7552,18 +7489,16 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         https://stackoverflow.com/a/54565277/1177153
         """
 
-        try:
-            for k, v in d.items():
-                if isinstance(v, dict):
-                    # Check nested dicts
-                    self.highcharts_series_options_to_float(v)
-                else:
-                    try:
-                        v = to_float(v)
-                        d.update({k: v})
-                    except Exception:
-                        pass
+        if not isinstance(d, dict):
             return d
-        except Exception:
-            # This item isn't a dict, so return it back
-            return d
+
+        for k, v in d.items():
+            if isinstance(v, dict):
+                self.highcharts_series_options_to_float(v)
+                continue
+
+            try:
+                d[k] = to_float(v)
+            except Exception:
+                pass
+        return d
