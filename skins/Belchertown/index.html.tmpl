@@ -42,16 +42,11 @@
             window.homepageChartsInitialized = true;
         };
 
-        if (typeof belchertownEnsureHighcharts === "function") {
-            belchertownEnsureHighcharts().then(function() {
-                renderChartsNow();
-            }).catch(function(err) {
-                console.log("ERROR: Failed loading Highcharts assets: " + err.message);
-            });
-            return;
+        if (typeof showChart !== "function") {
+            console.log("ERROR: Cannot render homepage charts because showChart is unavailable.");
+        } else {
+            renderChartsNow();
         }
-
-        renderChartsNow();
     };
 
     function autoRefreshPage() {

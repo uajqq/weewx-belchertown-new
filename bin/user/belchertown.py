@@ -6247,40 +6247,41 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         "rounding"
                     ] = obs_round
 
-                    def get_rainbow_color(value, min, max):
-
-                        # If value is off-scale high/low, assign max/min color
-                        if value < min:
-                            value = min
-                        elif value > max:
-                            value = max
-
-                        # Using sine waves to generate rainbow colors (see
-                        # below). Set the value to range from 8π/7 (blue)
-                        # to 3π (purple).
-                        i = (value - min) / (max - min) * 5.83 + 3.59
-
-                        # https://krazydad.com/tutorials/makecolors.php
-                        # Creating sine waves for red, green, and blue,
-                        # and then offsetting by 2π/3 and 4π/3, creates
-                        # a loop of rainbow colors. The sine waves are
-                        # centered at 255/2 and have an amplitude of
-                        # 255/2, so they vary from 0 to 255.
-                        n = sin(i) * 127.5 + 127.5
-                        red = format(int(n), "x")  # convert to hex
-                        n = sin(i + 2.09) * 127.5 + 127.5
-                        green = format(int(n), "x")  # convert to hex
-                        n = sin(i + 4.19) * 127.5 + 127.5
-                        blue = format(int(n), "x")  # convert to hex
-                        return "#" + red + green + blue
-
-                    # Set default colors, unless the user has specified
-                    # otherwise in charts.conf
                     wind_rose_color = {}
-                    for x in range(7):
-                        wind_rose_color[x] = line_options.get(
-                            f"beauford{x}", get_rainbow_color(x, 0, 6)
-                        )
+                    if observation_type == "windRose":
+                        def get_rainbow_color(value, min, max):
+
+                            # If value is off-scale high/low, assign max/min color
+                            if value < min:
+                                value = min
+                            elif value > max:
+                                value = max
+
+                            # Using sine waves to generate rainbow colors (see
+                            # below). Set the value to range from 8π/7 (blue)
+                            # to 3π (purple).
+                            i = (value - min) / (max - min) * 5.83 + 3.59
+
+                            # https://krazydad.com/tutorials/makecolors.php
+                            # Creating sine waves for red, green, and blue,
+                            # and then offsetting by 2π/3 and 4π/3, creates
+                            # a loop of rainbow colors. The sine waves are
+                            # centered at 255/2 and have an amplitude of
+                            # 255/2, so they vary from 0 to 255.
+                            n = sin(i) * 127.5 + 127.5
+                            red = format(int(n), "x")  # convert to hex
+                            n = sin(i + 2.09) * 127.5 + 127.5
+                            green = format(int(n), "x")  # convert to hex
+                            n = sin(i + 4.19) * 127.5 + 127.5
+                            blue = format(int(n), "x")  # convert to hex
+                            return "#" + red + green + blue
+
+                        # Set default colors, unless the user has specified
+                        # otherwise in charts.conf
+                        for x in range(7):
+                            wind_rose_color[x] = line_options.get(
+                                f"beauford{x}", get_rainbow_color(x, 0, 6)
+                            )
 
                     # Build series data
                     series_data = self.get_observation_data(
@@ -6672,12 +6673,9 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 windSpeed_unit, "mile_per_hour"
             )
 
-            # Initialize wind speed groups more efficiently
-            wind_groups = [{"dir": [], "speed": []} for _ in range(7)]
-
             thresholds = WINDROSE_THRESHOLDS[windSpeed_unit_key]
+            series_data = [[0.0] * 16 for _ in range(7)]
 
-            # Process wind data efficiently
             for windDir, windSpeed in zip(windDir_vals, windSpeed_vals):
                 if windDir is not None and windSpeed is not None:
                     # Determine group index based on thresholds
@@ -6687,13 +6685,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             group_idx = i
                             break
 
-                    wind_groups[group_idx]["dir"].append(windDir)
-                    wind_groups[group_idx]["speed"].append(windSpeed)
+                    dir_idx = int((windDir + 11.25) / 22.5) % 16
+                    series_data[group_idx][dir_idx] += windSpeed
 
-            # Get the windRose data for all groups
-            series_data = [
-                self.create_windrose_data(g["dir"], g["speed"]) for g in wind_groups
-            ]
+            series_data = [[round(v, 1) for v in data] for data in series_data]
 
             # Calculate wind frequency percentages
             wind_sum = sum(sum(data) for data in series_data)

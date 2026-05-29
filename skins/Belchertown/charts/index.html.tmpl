@@ -29,16 +29,11 @@
                         showChart(chartgroup, prependRenderTo);
                     };
 
-                    if (typeof belchertownEnsureHighcharts === "function") {
-                        belchertownEnsureHighcharts().then(function() {
-                            renderNow();
-                        }).catch(function(err) {
-                            console.log("ERROR: Failed loading Highcharts assets: " + err.message);
-                        });
-                        return;
+                    if (typeof showChart !== "function") {
+                        console.log("ERROR: Cannot render charts from [" + chartgroup + "] because showChart is unavailable.");
+                    } else {
+                        renderNow();
                     }
-
-                    renderNow();
                 }
 
                 jQuery(document).ready(function() {
