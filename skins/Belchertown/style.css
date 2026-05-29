@@ -2304,13 +2304,14 @@ p.entry-meta {
 
 .almanac-diagram-horizon {
   fill: none;
-  stroke: rgba(15, 23, 42, 0.18);
-  stroke-width: 1.9;
+  stroke: rgba(15, 23, 42, 0.24);
+  stroke-width: 2.15;
   stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .dark .almanac-diagram-horizon {
-  stroke: rgba(255, 255, 255, 0.28);
+  stroke: rgba(255, 255, 255, 0.36);
 }
 
 .almanac-diagram-object {
