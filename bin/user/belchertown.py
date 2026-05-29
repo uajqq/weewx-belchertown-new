@@ -12,6 +12,7 @@ import html
 import json
 import locale
 import logging
+import math
 import os
 import fnmatch
 import time
@@ -1301,6 +1302,56 @@ def _safe_float(value):
         return float(value)
     except (TypeError, ValueError, AttributeError, OverflowError):
         return None
+
+
+def build_earthquake_map_context(latitude, longitude, zoom=7, tile_radius=2):
+    """Return OSM tile coordinates and offsets for a quake-centered map."""
+
+    lat = _safe_float(latitude)
+    lon = _safe_float(longitude)
+    if lat is None or lon is None:
+        return None
+
+    zoom = int(zoom)
+    tile_radius = int(tile_radius)
+    tile_size = 256.0
+    tile_count = 2**zoom
+    clamped_lat = max(min(lat, 85.05112878), -85.05112878)
+    normalized_lon = ((lon + 180.0) % 360.0) - 180.0
+    lat_rad = math.radians(clamped_lat)
+    world_x = ((normalized_lon + 180.0) / 360.0) * tile_count * tile_size
+    world_y = (
+        (
+            1.0
+            - math.log(math.tan(lat_rad) + (1.0 / math.cos(lat_rad))) / math.pi
+        )
+        / 2.0
+        * tile_count
+        * tile_size
+    )
+
+    tile_x_raw = int(math.floor(world_x / tile_size))
+    tile_y_raw = int(math.floor(world_y / tile_size))
+    tile_x = tile_x_raw % tile_count
+    tile_y = max(0, min(tile_count - 1, tile_y_raw))
+    local_x = max(0.0, min(tile_size, world_x - (tile_x_raw * tile_size)))
+    local_y = max(0.0, min(tile_size, world_y - (tile_y * tile_size)))
+
+    tiles = []
+    for row in range((tile_radius * 2) + 1):
+        current_y = max(0, min(tile_count - 1, tile_y - tile_radius + row))
+        for col in range((tile_radius * 2) + 1):
+            current_x = (tile_x - tile_radius + col) % tile_count
+            tiles.append({"x": current_x, "y": current_y})
+
+    grid_offset_x = (tile_radius * tile_size) + local_x
+    grid_offset_y = (tile_radius * tile_size) + local_y
+    return {
+        "zoom": zoom,
+        "tiles": tiles,
+        "offset_x": f"{grid_offset_x:.2f}",
+        "offset_y": f"{grid_offset_y:.2f}",
+    }
 
 
 def _safe_epoch(value):

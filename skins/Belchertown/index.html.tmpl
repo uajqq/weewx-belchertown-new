@@ -4,8 +4,7 @@
 ## actually in Latin-1, then you should replace the string "UTF-8" with "latin-1"
 ## If you do this, you should also change the 'Content-Type' metadata below.
 #encoding UTF-8
-#import math
-#from user.belchertown import build_almanac_template_context
+#from user.belchertown import build_almanac_template_context, build_earthquake_map_context
 ##
 #set global $page = "home"
 
@@ -642,33 +641,23 @@
                             </a>
                         </div>
                         #if $earthquake_lat != '' and $earthquake_lon != ''
-                        #set $eq_lat = float($earthquake_lat)
-                        #set $eq_lon = float($earthquake_lon)
-                        #set $eq_zoom = 6
-                        #set $eq_n = 2 ** $eq_zoom
-                        #set $eq_lat_rad = math.radians($eq_lat)
-                        #set $eq_tile_x = int((($eq_lon + 180.0) / 360.0) * $eq_n)
-                        #set $eq_tile_y = int((1.0 - math.log(math.tan($eq_lat_rad) + (1.0 / math.cos($eq_lat_rad))) / math.pi) / 2.0 * $eq_n)
-                        #set $eq_tile_zoom = $eq_zoom + 1
-                        #set $eq_tile_x0 = $eq_tile_x * 2
-                        #set $eq_tile_x1 = $eq_tile_x0 + 1
-                        #set $eq_tile_y0 = $eq_tile_y * 2
-                        #set $eq_tile_y1 = $eq_tile_y0 + 1
+                        #set $earthquake_map = build_earthquake_map_context($earthquake_lat, $earthquake_lon)
+                        #if $earthquake_map
                         <div class="earthquake-subcard earthquake-subcard--map">
                             <div class="earthquake-map-wrap">
                                 <a class="earthquake-map-link" href="$earthquake_url" target="_blank" aria-label="$obs.label.earthquake_title">
                                     <div class="earthquake-map" role="img" aria-label="$obs.label.earthquake_title">
-                                        <div class="earthquake-map-grid">
-                                            <img class="earthquake-map-tile" alt="" aria-hidden="true" loading="lazy" decoding="async" fetchpriority="low" width="256" height="256" src="https://tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y0}.png" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='https://a.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y0}.png';}else if(this.dataset.fallback==='1'){this.dataset.fallback='2';this.src='https://b.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y0}.png';}else if(this.dataset.fallback==='2'){this.dataset.fallback='3';this.src='https://c.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y0}.png';}" />
-                                            <img class="earthquake-map-tile" alt="" aria-hidden="true" loading="lazy" decoding="async" fetchpriority="low" width="256" height="256" src="https://tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y0}.png" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='https://a.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y0}.png';}else if(this.dataset.fallback==='1'){this.dataset.fallback='2';this.src='https://b.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y0}.png';}else if(this.dataset.fallback==='2'){this.dataset.fallback='3';this.src='https://c.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y0}.png';}" />
-                                            <img class="earthquake-map-tile" alt="" aria-hidden="true" loading="lazy" decoding="async" fetchpriority="low" width="256" height="256" src="https://tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y1}.png" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='https://a.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y1}.png';}else if(this.dataset.fallback==='1'){this.dataset.fallback='2';this.src='https://b.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y1}.png';}else if(this.dataset.fallback==='2'){this.dataset.fallback='3';this.src='https://c.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x0}/${eq_tile_y1}.png';}" />
-                                            <img class="earthquake-map-tile" alt="" aria-hidden="true" loading="lazy" decoding="async" fetchpriority="low" width="256" height="256" src="https://tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y1}.png" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='https://a.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y1}.png';}else if(this.dataset.fallback==='1'){this.dataset.fallback='2';this.src='https://b.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y1}.png';}else if(this.dataset.fallback==='2'){this.dataset.fallback='3';this.src='https://c.tile.openstreetmap.org/${eq_tile_zoom}/${eq_tile_x1}/${eq_tile_y1}.png';}" />
+                                        <div class="earthquake-map-grid" style="--earthquake-map-grid-left: calc(50% - ${earthquake_map.offset_x}px); --earthquake-map-grid-top: calc(50% - ${earthquake_map.offset_y}px);">
+                                            #for $earthquake_tile in $earthquake_map.tiles
+                                            <img class="earthquake-map-tile" alt="" aria-hidden="true" loading="lazy" decoding="async" fetchpriority="low" width="256" height="256" src="https://tile.openstreetmap.org/${earthquake_map.zoom}/${earthquake_tile.x}/${earthquake_tile.y}.png" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='https://a.tile.openstreetmap.org/${earthquake_map.zoom}/${earthquake_tile.x}/${earthquake_tile.y}.png';}else if(this.dataset.fallback==='1'){this.dataset.fallback='2';this.src='https://b.tile.openstreetmap.org/${earthquake_map.zoom}/${earthquake_tile.x}/${earthquake_tile.y}.png';}else if(this.dataset.fallback==='2'){this.dataset.fallback='3';this.src='https://c.tile.openstreetmap.org/${earthquake_map.zoom}/${earthquake_tile.x}/${earthquake_tile.y}.png';}" />
+                                            #end for
                                         </div>
                                     </div>
                                 </a>
                                 <span class="earthquake-map-marker" aria-hidden="true"></span>
                             </div>
                         </div>
+                        #end if
                         #end if
                     </div>
                 </section>
