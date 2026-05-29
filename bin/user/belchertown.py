@@ -16,6 +16,7 @@ import math
 import os
 import fnmatch
 import time
+import xml.etree.ElementTree as ET
 from urllib.request import Request, urlopen
 import urllib.error
 from collections import OrderedDict
@@ -78,6 +79,63 @@ HTTP_HEADERS = {
         "User-Agent": "weewx-belchertown-new/open-meteo",
         "Connection": "keep-alive",
     },
+    "METEOALARM": {
+        "User-Agent": "weewx-belchertown-new/meteoalarm",
+        "Accept": "application/atom+xml, application/xml, text/xml",
+        "Connection": "keep-alive",
+    },
+}
+
+METEOALARM_COUNTRY_SLUG_BY_CODE = {
+    "AD": "andorra",
+    "AT": "austria",
+    "BA": "bosnia-herzegovina",
+    "BE": "belgium",
+    "BG": "bulgaria",
+    "CH": "switzerland",
+    "CY": "cyprus",
+    "CZ": "czechia",
+    "DE": "germany",
+    "DK": "denmark",
+    "EE": "estonia",
+    "ES": "spain",
+    "FI": "finland",
+    "FR": "france",
+    "GB": "united-kingdom",
+    "GR": "greece",
+    "HR": "croatia",
+    "HU": "hungary",
+    "IE": "ireland",
+    "IL": "israel",
+    "IS": "iceland",
+    "IT": "italy",
+    "LT": "lithuania",
+    "LU": "luxembourg",
+    "LV": "latvia",
+    "MD": "moldova",
+    "ME": "montenegro",
+    "MK": "republic-of-north-macedonia",
+    "MT": "malta",
+    "NL": "netherlands",
+    "NO": "norway",
+    "PL": "poland",
+    "PT": "portugal",
+    "RO": "romania",
+    "RS": "serbia",
+    "SE": "sweden",
+    "SI": "slovenia",
+    "SK": "slovakia",
+    "UA": "ukraine",
+    "UK": "united-kingdom",
+}
+
+METEOALARM_COUNTRY_SLUG_ALIASES = {
+    "bosnia-and-herzegovina": "bosnia-herzegovina",
+    "czech-republic": "czechia",
+    "great-britain": "united-kingdom",
+    "north-macedonia": "republic-of-north-macedonia",
+    "uk": "united-kingdom",
+    "united-kingdom-of-great-britain-and-northern-ireland": "united-kingdom",
 }
 
 # Shared AQI/pollutant extraction map for forecast/current-condition fallback.
@@ -152,6 +210,15 @@ def _http_get_json(url, headers=None, timeout=DEFAULT_HTTP_TIMEOUT):
     req = Request(url, headers=req_headers)
     with urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def _http_get_text(url, headers=None, timeout=DEFAULT_HTTP_TIMEOUT):
+    """Fetch text from an HTTP endpoint."""
+    req_headers = headers or HTTP_HEADERS["PIRATE_WEATHER"]
+    req = Request(url, headers=req_headers)
+    with urlopen(req, timeout=timeout) as resp:
+        charset = resp.headers.get_content_charset() or "utf-8"
+        return resp.read().decode(charset, "replace")
 
 
 def _get_minifier_dependency_status():
@@ -872,6 +939,262 @@ def _nws_build_alerts(alerts_payload):
             }
         )
     return output
+
+
+def _fetch_nws_alerts(latitude, longitude):
+    """Fetch NWS alerts for a point and normalize them."""
+    alerts_url = f"https://api.weather.gov/alerts/active?point={latitude},{longitude}"
+    alerts_data = _http_get_json(alerts_url, headers=HTTP_HEADERS["NWS_WEATHER"])
+    return _nws_build_alerts(alerts_data)
+
+
+def _xml_local_name(tag):
+    """Return an XML local name without its namespace."""
+    return str(tag).rsplit("}", 1)[-1]
+
+
+def _xml_children(element, local_name):
+    """Return child elements whose local name matches."""
+    if element is None:
+        return []
+    return [
+        child
+        for child in list(element)
+        if _xml_local_name(child.tag) == local_name
+    ]
+
+
+def _xml_first_child_text(element, *local_names):
+    """Return the first non-empty child text matching one of the local names."""
+    if element is None:
+        return ""
+    local_name_set = set(local_names)
+    for child in list(element):
+        if _xml_local_name(child.tag) in local_name_set and child.text:
+            return child.text.strip()
+    return ""
+
+
+def _config_list_values(value):
+    """Return a normalized list from a comma-separated or ConfigObj list value."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        parts = value
+    else:
+        parts = str(value).split(",")
+    return [str(part).strip() for part in parts if str(part).strip()]
+
+
+def _forecast_alert_limit_value(extras_dict):
+    """Return a sane forecast alert limit."""
+    limit_value = to_int((extras_dict or {}).get("forecast_alert_limit", 1))
+    if limit_value is None or limit_value < 1:
+        return 1
+    return limit_value
+
+
+def _limit_alerts(alerts, limit_value):
+    """Limit alert list length when a positive limit is available."""
+    if not isinstance(alerts, list):
+        return []
+    limit_value = to_int(limit_value)
+    if limit_value is None or limit_value < 1:
+        return alerts
+    return alerts[:limit_value]
+
+
+def _meteoalarm_country_slug(country_value):
+    """Normalize a MeteoAlarm country value to its public Atom feed slug."""
+    values = _config_list_values(country_value)
+    if not values:
+        return ""
+
+    country_text = values[0].strip()
+    if not country_text:
+        return ""
+
+    country_upper = country_text.upper()
+    if country_upper in METEOALARM_COUNTRY_SLUG_BY_CODE:
+        return METEOALARM_COUNTRY_SLUG_BY_CODE[country_upper]
+
+    country_slug = (
+        country_text.lower()
+        .replace("_", "-")
+        .replace(" ", "-")
+        .strip("-")
+    )
+    if country_slug.startswith("meteoalarm-legacy-atom-"):
+        country_slug = country_slug.replace("meteoalarm-legacy-atom-", "", 1)
+    return METEOALARM_COUNTRY_SLUG_ALIASES.get(country_slug, country_slug)
+
+
+def _meteoalarm_country_slug_from_geocode(geocode_values):
+    """Infer a MeteoAlarm country feed slug from an EMMA_ID-style geocode."""
+    for geocode in _config_list_values(geocode_values):
+        geocode_upper = geocode.upper()
+        for country_code in sorted(
+            METEOALARM_COUNTRY_SLUG_BY_CODE.keys(), key=len, reverse=True
+        ):
+            if geocode_upper.startswith(country_code):
+                return METEOALARM_COUNTRY_SLUG_BY_CODE[country_code]
+    return ""
+
+
+def _meteoalarm_feed_url(extras_dict):
+    """Build the MeteoAlarm Atom feed URL from explicit config."""
+    feed_url_values = _config_list_values(
+        (extras_dict or {}).get("meteoalarm_feed_url")
+    )
+    if feed_url_values:
+        return feed_url_values[0]
+
+    country_slug = _meteoalarm_country_slug(
+        (extras_dict or {}).get("meteoalarm_country")
+    )
+    if not country_slug:
+        country_slug = _meteoalarm_country_slug_from_geocode(
+            (extras_dict or {}).get("meteoalarm_geocode")
+        )
+    if not country_slug:
+        return ""
+
+    return f"https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-{country_slug}"
+
+
+def _meteoalarm_entry_geocodes(entry):
+    """Return geocode values from a MeteoAlarm Atom entry."""
+    output = []
+    for geocode in _xml_children(entry, "geocode"):
+        value = _xml_first_child_text(geocode, "value")
+        if value:
+            output.append(value.upper())
+    return output
+
+
+def _meteoalarm_entry_matches(entry, geocode_filters, area_filters):
+    """Return True when an Atom entry matches configured geocode or area filters."""
+    if geocode_filters:
+        entry_geocodes = set(_meteoalarm_entry_geocodes(entry))
+        if entry_geocodes.intersection(geocode_filters):
+            return True
+
+    area_desc = _xml_first_child_text(entry, "areaDesc").lower()
+    if area_filters and area_desc:
+        for area_filter in area_filters:
+            if area_filter in area_desc:
+                return True
+
+    return not geocode_filters and not area_filters
+
+
+def _meteoalarm_entry_to_alert(entry):
+    """Normalize a MeteoAlarm Atom entry to the common alert schema."""
+    title = _xml_first_child_text(entry, "title")
+    area_desc = _xml_first_child_text(entry, "areaDesc")
+    event = _xml_first_child_text(entry, "event")
+    severity = _xml_first_child_text(entry, "severity")
+    urgency = _xml_first_child_text(entry, "urgency")
+    certainty = _xml_first_child_text(entry, "certainty")
+    onset = _xml_first_child_text(entry, "onset")
+    expires = _xml_first_child_text(entry, "expires")
+    identifier = (
+        _xml_first_child_text(entry, "identifier")
+        or _xml_first_child_text(entry, "id")
+    )
+
+    description_parts = []
+    if event:
+        description_parts.append(event)
+    if area_desc:
+        description_parts.append(f"Area: {area_desc}")
+    for label, value in (
+        ("Severity", severity),
+        ("Urgency", urgency),
+        ("Certainty", certainty),
+        ("Onset", onset),
+    ):
+        if value:
+            description_parts.append(f"{label}: {value}")
+
+    return {
+        "title": title or event or "MeteoAlarm Alert",
+        "expires": _iso_to_epoch(expires),
+        "description": "\n".join(description_parts),
+        "severity": severity,
+        "uri": identifier,
+        "source": "meteoalarm",
+    }
+
+
+def _meteoalarm_build_alerts(feed_xml, geocode_filters=None, area_filters=None):
+    """Normalize a MeteoAlarm Atom feed to the common alert schema."""
+    if not feed_xml:
+        return []
+
+    root = ET.fromstring(feed_xml)
+    entries = [
+        element
+        for element in root.iter()
+        if _xml_local_name(element.tag) == "entry"
+    ]
+    geocode_filters = set(value.upper() for value in (geocode_filters or []))
+    area_filters = [value.lower() for value in (area_filters or [])]
+
+    output = []
+    for entry in entries:
+        if not _meteoalarm_entry_matches(entry, geocode_filters, area_filters):
+            continue
+        output.append(_meteoalarm_entry_to_alert(entry))
+    return output
+
+
+def _fetch_meteoalarm_alerts(extras_dict):
+    """Fetch configured MeteoAlarm fallback alerts."""
+    feed_url = _meteoalarm_feed_url(extras_dict)
+    if not feed_url:
+        log.info(
+            "MeteoAlarm alert fallback skipped; configure meteoalarm_geocode, "
+            "meteoalarm_country, or meteoalarm_feed_url."
+        )
+        return None
+
+    geocode_filters = _config_list_values(
+        (extras_dict or {}).get("meteoalarm_geocode")
+    )
+    area_filters = _config_list_values((extras_dict or {}).get("meteoalarm_area"))
+    feed_xml = _http_get_text(feed_url, headers=HTTP_HEADERS["METEOALARM"])
+    return _meteoalarm_build_alerts(
+        feed_xml,
+        geocode_filters=geocode_filters,
+        area_filters=area_filters,
+    )
+
+
+def _fetch_openmeteo_alerts(latitude, longitude, extras_dict):
+    """Fetch Open-Meteo alerts, preferring NWS with MeteoAlarm fallback."""
+    if str((extras_dict or {}).get("forecast_alert_enabled", "0")).strip() != "1":
+        return ([], "")
+
+    alert_limit = _forecast_alert_limit_value(extras_dict)
+
+    try:
+        nws_alerts = _fetch_nws_alerts(latitude, longitude)
+        return (_limit_alerts(nws_alerts, alert_limit), "nws")
+    except Exception as e:
+        log.info(
+            "NWS alerts unavailable for Open-Meteo point; trying MeteoAlarm. "
+            f"Reason: {e}"
+        )
+
+    try:
+        meteoalarm_alerts = _fetch_meteoalarm_alerts(extras_dict)
+        if meteoalarm_alerts is None:
+            return ([], "")
+        return (_limit_alerts(meteoalarm_alerts, alert_limit), "meteoalarm")
+    except Exception as e:
+        log.warning(f"MeteoAlarm alert fallback update failed. Reason: {e}")
+        return ([], "")
 
 
 def _nws_transform_to_belch(
@@ -4343,6 +4666,12 @@ class getData(SearchList):
                             normalized = _openmeteo_transform_to_belch(
                                 om_raw, forecast_units
                             )
+                            (
+                                normalized["alerts"],
+                                alert_provider,
+                            ) = _fetch_openmeteo_alerts(om_lat, om_lon, extras_dict)
+                            if alert_provider:
+                                normalized["alert_provider"] = alert_provider
                             _write_json_file(forecast_file, normalized)
                             log.info(f"New Open-Meteo forecast cached to {forecast_file}")
                         except Exception as e:
