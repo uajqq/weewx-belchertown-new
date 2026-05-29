@@ -2332,6 +2332,18 @@ def _compute_current_x_offset(current_ts):
     return center_x - now_point[0]
 
 
+def _current_diagram_x(current_ts):
+    """Return station-local current x position in diagram coordinates."""
+
+    now_point = _project_timealt_to_diagram(
+        _seconds_since_local_midnight(current_ts), 0.0
+    )
+    if now_point is None:
+        return None
+
+    return now_point[0]
+
+
 def _build_track_path_from_points(track_points, x_offset=0.0, wrap_x=False):
     """Build SVG path string from list of 'minute_of_day,alt' samples."""
 
@@ -2673,6 +2685,7 @@ def _build_almanac_inline_markup(payload, image_root="."):
     moon_x_offset_attr = str(payload.get("moon_x_offset_attr", "0.000") or "0.000")
     diagram_centering_mode_attr = str(payload.get("diagram_centering_mode_attr", "off") or "off")
     diagram_current_ts_attr = str(payload.get("diagram_current_ts_attr", "") or "")
+    diagram_current_x_attr = str(payload.get("diagram_current_x_attr", "") or "")
 
     image_root_clean = str(image_root or ".").rstrip("/")
     sunrise_image = f"{image_root_clean}/images/sunrise.png"
@@ -2696,7 +2709,8 @@ def _build_almanac_inline_markup(payload, image_root="."):
         f'data-sun-x-offset="{html.escape(sun_x_offset_attr)}" '
         f'data-moon-x-offset="{html.escape(moon_x_offset_attr)}" '
         f'data-centering-mode="{html.escape(diagram_centering_mode_attr)}" '
-        f'data-current-ts="{html.escape(diagram_current_ts_attr)}">'
+        f'data-current-ts="{html.escape(diagram_current_ts_attr)}" '
+        f'data-current-x="{html.escape(diagram_current_x_attr)}">'
         f'{svg_markup}'
         '</div>'
         '<div class="almanac-sun-stack almanac-sun-stack--set">'
@@ -2914,6 +2928,7 @@ def build_almanac_diagram_payload(
         "moon_x_offset_attr": _format_attr(0.0),
         "diagram_centering_mode_attr": _get_apex_center_mode(),
         "diagram_current_ts_attr": _format_attr(current_ts),
+        "diagram_current_x_attr": _format_attr(_current_diagram_x(current_ts)),
         "almanac_svg_markup_attr": "",
     }
 
@@ -3032,6 +3047,7 @@ def build_almanac_diagram_payload(
     payload["moon_x_offset_attr"] = _format_attr(moon_x_offset)
     payload["diagram_centering_mode_attr"] = centering_mode
     payload["diagram_current_ts_attr"] = _format_attr(current_ts)
+    payload["diagram_current_x_attr"] = _format_attr(_current_diagram_x(current_ts))
 
     payload["sun_track_points_attr"] = "|".join(sun_track_points)
     payload["moon_track_points_attr"] = "|".join(moon_track_points)
@@ -3093,6 +3109,7 @@ def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, ima
         "moon_x_offset_attr": "0.000",
         "diagram_centering_mode_attr": str(defaults.get("center_apex_mode", "off") or "off").strip().lower(),
         "diagram_current_ts_attr": _format_attr(current_ts),
+        "diagram_current_x_attr": _format_attr(_current_diagram_x(current_ts)),
         "almanac_inline_markup_attr": "",
     }
 
@@ -3158,6 +3175,7 @@ def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, ima
             "moon_x_offset_attr",
             "diagram_centering_mode_attr",
             "diagram_current_ts_attr",
+            "diagram_current_x_attr",
             "almanac_inline_markup_attr",
         )
 
