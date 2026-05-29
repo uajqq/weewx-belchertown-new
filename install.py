@@ -50,6 +50,7 @@ class BelchertownInstaller(ExtensionInstaller):
         "graphs_windDir_ordinals": "charts_windDir_ordinals",
     }
     _SKIN_DEFAULTS_CACHE = None
+    _SKIN_ALIGNMENT_CACHE = None
 
     @staticmethod
     def _section_to_dict(section):
@@ -85,8 +86,181 @@ class BelchertownInstaller(ExtensionInstaller):
     @classmethod
     def _format_config_assignment(cls, key, value, key_part=None):
         """Format a key/value pair back into config syntax."""
-        left_side = key_part.rstrip() if key_part is not None else key
-        return "%s = %s" % (left_side, cls._format_config_value(value))
+        if key_part is not None:
+            return "%s= %s" % (key_part, cls._format_config_value(value))
+        return "%s = %s" % (key, cls._format_config_value(value))
+
+    @classmethod
+    def _extract_alignment_key_parts(cls, source_lines):
+        """Return skin.conf key spacing for later ConfigObj output alignment."""
+        key_parts = {}
+        non_empty_lines = [line for line in source_lines if line.strip()]
+        base_indent = min(
+            (cls._leading_spaces(line) for line in non_empty_lines),
+            default=0,
+        )
+
+        for raw_line in source_lines:
+            line = raw_line.rstrip("\n")
+            if base_indent and len(line) >= base_indent:
+                content = line[base_indent:]
+            else:
+                content = line.lstrip(" ")
+
+            stripped = content.strip()
+            if not stripped or stripped.startswith("#") or stripped.startswith("["):
+                continue
+            if "=" not in content:
+                continue
+
+            key_part, _ = content.split("=", 1)
+            key = key_part.strip()
+            if key and not cls._is_placeholder_key(key):
+                key_parts[key] = key_part
+
+        return key_parts
+
+    @classmethod
+    def _get_skin_alignment_key_parts(cls):
+        """Load and cache skin.conf assignment columns."""
+        if cls._SKIN_ALIGNMENT_CACHE is not None:
+            return cls._SKIN_ALIGNMENT_CACHE
+
+        skin_path = cls._skin_conf_path()
+        if not os.path.isfile(skin_path):
+            cls._SKIN_ALIGNMENT_CACHE = {}
+            return cls._SKIN_ALIGNMENT_CACHE
+
+        try:
+            with open(skin_path, "r", encoding="utf-8") as skin_file:
+                skin_lines = skin_file.readlines()
+        except Exception:
+            cls._SKIN_ALIGNMENT_CACHE = {}
+            return cls._SKIN_ALIGNMENT_CACHE
+
+        alignment = {}
+        alignment.update(
+            cls._extract_alignment_key_parts(
+                cls._extract_skin_section_lines(skin_lines, "Extras")
+            )
+        )
+        alignment.update(
+            cls._extract_alignment_key_parts(
+                cls._extract_skin_section_lines(skin_lines, "Labels", "Generic")
+            )
+        )
+        cls._SKIN_ALIGNMENT_CACHE = alignment
+        return cls._SKIN_ALIGNMENT_CACHE
+
+    @classmethod
+    def _align_belchertown_config_text(cls, config_text):
+        """Align active Belchertown Extras options in serialized config text."""
+        alignment = cls._get_skin_alignment_key_parts()
+        if not alignment:
+            return config_text
+
+        rendered_lines = []
+        in_stdreport = False
+        in_belchertown = False
+        in_extras = False
+        extras_option_indent = None
+
+        for raw_line in config_text.splitlines(True):
+            body = raw_line.rstrip("\r\n")
+            newline = raw_line[len(body) :]
+            stripped = body.strip()
+
+            if stripped.startswith("[") and stripped.endswith("]"):
+                if stripped.startswith("[[["):
+                    section_name = stripped[3:-3].strip()
+                    in_extras = in_belchertown and section_name == "Extras"
+                    if in_extras:
+                        marker_indent = body[: len(body) - len(body.lstrip(" "))]
+                        extras_option_indent = marker_indent + "    "
+                    else:
+                        extras_option_indent = None
+                elif stripped.startswith("[["):
+                    section_name = stripped[2:-2].strip()
+                    in_belchertown = in_stdreport and section_name == "Belchertown"
+                    in_extras = False
+                    extras_option_indent = None
+                else:
+                    section_name = stripped[1:-1].strip()
+                    in_stdreport = section_name == "StdReport"
+                    in_belchertown = False
+                    in_extras = False
+                    extras_option_indent = None
+                rendered_lines.append(raw_line)
+                continue
+
+            if in_extras and stripped.startswith("#") and extras_option_indent is not None:
+                body = extras_option_indent + body.lstrip(" ")
+                raw_line = body + newline
+
+            if in_extras and stripped and not stripped.startswith("#") and "=" in body:
+                leading = body[: len(body) - len(body.lstrip(" "))]
+                content = body[len(leading) :]
+                key_part, raw_value = content.split("=", 1)
+                aligned_key_part = alignment.get(key_part.strip())
+                if aligned_key_part is not None:
+                    body = "%s%s= %s" % (
+                        leading,
+                        aligned_key_part,
+                        raw_value.lstrip(),
+                    )
+                    raw_line = body + newline
+
+            rendered_lines.append(raw_line)
+
+        return "".join(rendered_lines)
+
+    @classmethod
+    def _install_aligned_config_writer(cls):
+        """Patch ConfigObj output for Belchertown's generated config section."""
+        if getattr(configobj.ConfigObj, "_belchertown_original_write", None):
+            return
+
+        original_write = configobj.ConfigObj.write
+
+        def aligned_write(config_self, outfile=None, section=None):
+            if section is not None:
+                return original_write(config_self, outfile, section)
+
+            encoding = (
+                config_self.encoding
+                or config_self.default_encoding
+                or "ascii"
+            )
+
+            if outfile is None and config_self.filename is None:
+                output = original_write(config_self, outfile=None, section=None)
+                if not output:
+                    return output
+                output_is_bytes = isinstance(output[0], bytes)
+                if output_is_bytes:
+                    text = "\n".join(line.decode(encoding) for line in output)
+                else:
+                    text = "\n".join(output)
+                text = BelchertownInstaller._align_belchertown_config_text(text)
+                lines = text.split("\n")
+                if output_is_bytes:
+                    return [line.encode(encoding) for line in lines]
+                return lines
+
+            stream = BytesIO()
+            original_write(config_self, stream, section=None)
+            text = stream.getvalue().decode(encoding)
+            text = BelchertownInstaller._align_belchertown_config_text(text)
+            output_bytes = text.encode(encoding)
+
+            if outfile is not None:
+                outfile.write(output_bytes)
+            else:
+                with open(config_self.filename, "wb") as output_file:
+                    output_file.write(output_bytes)
+
+        configobj.ConfigObj._belchertown_original_write = original_write
+        configobj.ConfigObj.write = aligned_write
 
     @staticmethod
     def _split_value_comment(value_text):
@@ -456,21 +630,46 @@ class BelchertownInstaller(ExtensionInstaller):
             "        [[[Extras]]]",
             "",
         ]
-        template_lines.extend(
-            cls._render_skin_lines(
-                extras_lines,
-                "            ",
-                current_extras,
-                cls._EXTRAS_PLACEHOLDER_KEY,
-                commented_extra_overrides,
-                legacy_extra_overrides,
-                legacy_insert_before,
-                legacy_insert_end,
-            )
+        rendered_extras_lines = cls._render_skin_lines(
+            extras_lines,
+            "            ",
+            current_extras,
+            cls._EXTRAS_PLACEHOLDER_KEY,
+            commented_extra_overrides,
+            legacy_extra_overrides,
+            legacy_insert_before,
+            legacy_insert_end,
         )
+        template_lines.extend(rendered_extras_lines)
         template_lines.append("")
+        template_lines.extend(
+            [
+                "        [[[Labels]]]",
+                "            [[[[Generic]]]]",
+            ]
+        )
 
-        return configobj.ConfigObj(StringIO("\n".join(template_lines)), encoding="utf-8")
+        fresh_config = configobj.ConfigObj(
+            StringIO("\n".join(template_lines)),
+            encoding="utf-8",
+        )
+        belchertown = fresh_config.get("StdReport", {}).get("Belchertown", {})
+        if isinstance(belchertown, (dict, configobj.Section)):
+            last_active_extra_index = -1
+            for index, line in enumerate(rendered_extras_lines):
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    last_active_extra_index = index
+
+            # ConfigObj drops comment-only section tails unless they anchor to
+            # the following section.
+            labels_comments = rendered_extras_lines[last_active_extra_index + 1 :]
+            while labels_comments and not labels_comments[-1].strip():
+                labels_comments.pop()
+            labels_comments.append("")
+            belchertown.comments["Labels"] = labels_comments
+
+        return fresh_config
 
     @classmethod
     def _extract_extra_overrides(cls, extras_section):
@@ -731,6 +930,7 @@ class BelchertownInstaller(ExtensionInstaller):
         extras = belchertown.setdefault("Extras", {})
         labels = belchertown.setdefault("Labels", {})
         generic = labels.setdefault("Generic", {})
+        belchertown.comments["Labels"] = [""]
 
         if not cls._empty_sections_survive_round_trip(config):
             extras[cls._EXTRAS_PLACEHOLDER_KEY] = "true"
@@ -782,6 +982,7 @@ class BelchertownInstaller(ExtensionInstaller):
 
     def configure(self, engine):
         """Rebuild Belchertown root/Extras from skin.conf, preserving user overrides."""
+        self._install_aligned_config_writer()
         current_config = engine.config_dict
         commented_extra_overrides = self._extract_commented_extra_overrides(
             engine,
@@ -843,6 +1044,8 @@ class BelchertownInstaller(ExtensionInstaller):
 
         if isinstance(preserved_labels, dict) and preserved_labels:
             report_section["Labels"] = preserved_labels
+            if not report_section.comments.get("Labels"):
+                report_section.comments["Labels"] = [""]
 
         return True
 
