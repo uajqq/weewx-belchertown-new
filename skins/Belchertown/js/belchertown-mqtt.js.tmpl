@@ -53,6 +53,10 @@ var mqtt_last_message_received_ms = 0;
 var mqtt_last_data_epoch = "";
 var mqtt_inactive_disconnect_requested = false;
 var mqtt_stale_timeout_seconds = parseFloat("$Extras.last_updated_alert_threshold");
+var mqtt_relative_updated_epoch = null;
+var mqtt_relative_updated_message = "";
+var mqtt_relative_updated_timer = null;
+var mqtt_receiving_indicator_timeout = null;
 if (!isFinite(mqtt_stale_timeout_seconds) || mqtt_stale_timeout_seconds <= 0) {
     mqtt_stale_timeout_seconds = 1800;
 }
@@ -61,6 +65,99 @@ var mqtt_stale_timeout_ms = mqtt_stale_timeout_seconds * 1000;
 
 function mqtt_restart_button_html() {
     return " <button type='button' class='btn btn-primary restart-interval'>$obs.label.mqtt_websockets_continue</button>";
+}
+
+function mqtt_relative_time(epoch) {
+    var timestamp = parseFloat(epoch);
+    return isFinite(timestamp) ? tzAdjustedMoment(timestamp).fromNow() : "";
+}
+
+function mqtt_absolute_time(epoch) {
+    var timestamp = parseFloat(epoch);
+    return isFinite(timestamp) ? tzAdjustedMoment(timestamp).format("$obs.label.time_last_updated") : "";
+}
+
+function mqtt_sentence_text(parts) {
+    var text = parts
+        .map(function(part) {
+            return String(part || "").trim().replace(/[\.\s]+$/, "");
+        })
+        .filter(function(part) {
+            return part !== "";
+        })
+        .join(" ");
+    return text ? text + "." : "";
+}
+
+function mqtt_render_relative_updated_status() {
+    if (mqtt_relative_updated_epoch === null || !mqtt_relative_updated_message) {
+        return;
+    }
+
+    var relative_time = mqtt_relative_time(mqtt_relative_updated_epoch);
+    var absolute_time = mqtt_absolute_time(mqtt_relative_updated_epoch);
+    jQuery(".updated")
+        .text(mqtt_sentence_text([mqtt_relative_updated_message, relative_time]))
+        .attr("title", absolute_time ? mqtt_sentence_text([mqtt_relative_updated_message, absolute_time]) : "");
+}
+
+function mqtt_start_relative_updated_timer() {
+    if (mqtt_relative_updated_timer !== null) {
+        return;
+    }
+    mqtt_relative_updated_timer = setInterval(mqtt_render_relative_updated_status, 30000);
+}
+
+function mqtt_clear_relative_updated_status() {
+    mqtt_relative_updated_epoch = null;
+    mqtt_relative_updated_message = "";
+    if (mqtt_relative_updated_timer !== null) {
+        clearInterval(mqtt_relative_updated_timer);
+        mqtt_relative_updated_timer = null;
+    }
+}
+
+function mqtt_clear_receiving_indicator() {
+    if (mqtt_receiving_indicator_timeout !== null) {
+        clearTimeout(mqtt_receiving_indicator_timeout);
+        mqtt_receiving_indicator_timeout = null;
+    }
+    jQuery(".onlineMarker").removeClass("mqtt-receiving");
+}
+
+function mqtt_mark_receiving_data() {
+    var marker = jQuery(".onlineMarker");
+    if (mqtt_receiving_indicator_timeout !== null) {
+        clearTimeout(mqtt_receiving_indicator_timeout);
+    }
+    marker.removeClass("mqtt-receiving");
+    if (marker.length) {
+        marker[0].offsetWidth;
+    }
+    marker.addClass("mqtt-receiving");
+    mqtt_receiving_indicator_timeout = setTimeout(function() {
+        mqtt_receiving_indicator_timeout = null;
+        mqtt_clear_receiving_indicator();
+    }, 1000);
+}
+
+function mqtt_set_updated_html(html) {
+    mqtt_clear_relative_updated_status();
+    mqtt_clear_receiving_indicator();
+    jQuery(".updated").removeAttr("title").html(html);
+}
+
+function mqtt_set_relative_updated_status(message, epoch) {
+    var timestamp = parseFloat(epoch);
+    if (!isFinite(timestamp)) {
+        mqtt_set_updated_html(message);
+        return;
+    }
+
+    mqtt_relative_updated_message = message;
+    mqtt_relative_updated_epoch = timestamp;
+    mqtt_render_relative_updated_status();
+    mqtt_start_relative_updated_timer();
 }
 
 function mqtt_safe_client_connected() {
@@ -97,7 +194,7 @@ function mqtt_set_disconnected_status(message, epoch, show_restart) {
     var updated_epoch = epoch || mqtt_last_data_epoch || "$current.dateTime.raw";
     var updated = tzAdjustedMoment(updated_epoch).format("$obs.label.time_last_updated");
     var restart_button = show_restart ? mqtt_restart_button_html() : "";
-    jQuery(".updated").html(message + " $obs.label.header_last_updated " + updated + restart_button);
+    mqtt_set_updated_html(message + " $obs.label.header_last_updated " + updated + restart_button);
 }
 
 function mqtt_schedule_activity_timeout() {
@@ -154,6 +251,7 @@ function mqtt_schedule_stale_timeout() {
 function mqtt_note_message_activity(data) {
     mqttConnected = true;
     mqtt_last_message_received_ms = Date.now();
+    mqtt_mark_receiving_data();
     if (data && data.hasOwnProperty("dateTime")) {
         var data_epoch = parseFloat(data["dateTime"]);
         if (isFinite(data_epoch)) {
@@ -196,7 +294,7 @@ function connect() {
         belchertown_debug("MQTT: Initial connection attempt");
     }
     reported = "$obs.label.mqtt_websockets_connecting $obs.label.header_last_updated " + updated;
-    jQuery(".updated").html(reported);
+    mqtt_set_updated_html(reported);
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").hide();
     jQuery(".loadingMarker").show();
@@ -282,7 +380,7 @@ function onConnect() {
     } else {
         reported = "$obs.label.mqtt_websockets_waiting $obs.label.header_last_updated " + updated;
     }
-    jQuery(".updated").html(reported);
+    mqtt_set_updated_html(reported);
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").hide();
     jQuery(".loadingMarker").show();
@@ -380,7 +478,6 @@ function get_mqtt_status_elements() {
     }
 
     mqttStatusElements = {
-        updatedTextEl: jQuery(".updated"),
         onlineMarkerEl: jQuery(".onlineMarker"),
         offlineMarkerEl: jQuery(".offlineMarker"),
         loadingMarkerEl: jQuery(".loadingMarker")
@@ -600,7 +697,6 @@ function update_current_wx(data) {
     mqtt_note_message_activity(data);
 
     var statusEls = get_mqtt_status_elements();
-    var updatedTextEl = statusEls.updatedTextEl;
     var onlineMarkerEl = statusEls.onlineMarkerEl;
     var offlineMarkerEl = statusEls.offlineMarkerEl;
     var loadingMarkerEl = statusEls.loadingMarkerEl;
@@ -658,13 +754,12 @@ function update_current_wx(data) {
     } else {
         // Only show the updated time on non-archive packets
         epoch = parseFloat(data["dateTime"]).toFixed(0);
-        updated = tzAdjustedMoment(epoch).format("$obs.label.time_last_updated");
         if (pageName == "pi") {
-            updated_text = "$obs.label.mqtt_websockets_connected_pi " + updated;
+            updated_text = "$obs.label.mqtt_websockets_connected_pi";
         } else {
-            updated_text = "$obs.label.mqtt_websockets_connected " + updated;
+            updated_text = "$obs.label.mqtt_websockets_connected";
         }
-        updatedTextEl.html(updated_text);
+        mqtt_set_relative_updated_status(updated_text, epoch);
     }
     // If we're in this function, show the online beacon and hide the others
     onlineMarkerEl.show(); // Show the online beacon

@@ -418,18 +418,9 @@
             <section class="homepage-card homepage-card--forecast">
             <div class="row forecastrow">
                 <!-- Forecast -->
-                #if $Extras.has_key("current_conditions_timestamp_enabled") and $Extras.current_conditions_timestamp_enabled == '1'
-                <div class="col-lg-4 forecast-title">
-                #else
                 <div class="col-lg-8 forecast-title">
-                #end if
-                    $obs.label.forecast_header <span class="forecast-subtitle"></span><!-- moment.js -->
+                    $obs.label.forecast_header <span class="forecast-subtitle"></span><!-- moment.js --> <span class="forecast-source"></span>
                 </div>
-                #if $Extras.has_key("current_conditions_timestamp_enabled") and $Extras.current_conditions_timestamp_enabled == '1'
-                <div class="col-lg-4 current-conditions-title">
-                    $obs.label.current_conditions_last_updated&nbsp;<span class="current-conditions-subtitle"></span><!-- moment.js -->
-                </div>
-                #end if
                 <div class="col-lg-4 forecast-menu">
                     $obs.label.forecast_interval_caption <div class="forecast-button" onclick="forecast_select(1);" id="button1">1</div>
                     <div class="forecast-button" onclick="forecast_select(3);" id="button3">3</div>

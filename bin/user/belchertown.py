@@ -136,6 +136,12 @@ WINDROSE_SPEED_RANGE_LABELS = {
 _MINIFIER_DEPS_STATUS = None
 _MINIFIER_DEPS_MISSING_LOGGED = False
 
+EXTERNAL_STATION_OBSERVATION_SOURCES = {
+    "visibility": {"source_key": "current_conditions"},
+    "cloud_cover": {"source_key": "current_conditions"},
+    "aqi": {"source_key": "aqi"},
+}
+
 
 # Module-level helper functions for HTTP and JSON processing
 
@@ -253,6 +259,8 @@ def _write_current_conditions_from_forecast(forecast_file, current_conditions_fi
 
     cc_out = {
         "timestamp": int(time.time()),
+        "provider": data_cc.get("provider"),
+        "source": "forecast",
         "current": [data_cc.get("current", {})],
     }
     _write_json_file(current_conditions_file, cc_out)
@@ -5002,6 +5010,7 @@ class getData(SearchList):
 
         station_obs_binding = None
         station_obs_json = OrderedDict()
+        station_obs_source_json = OrderedDict()
         station_obs_parts = []
         station_observations = extras_dict["station_observations"]
         # Check if this is a list. If not then we have 1 item, so force it into a list
@@ -5019,6 +5028,7 @@ class getData(SearchList):
             current_record,
         )
         for obs in station_observations:
+            obs_source = None
             if "data_binding" in obs:
                 station_obs_binding = obs[obs.find("(") + 1 : obs.rfind(")")].split(
                     "="
@@ -5043,6 +5053,7 @@ class getData(SearchList):
             if obs == "visibility":
                 # Using .strip() automatically returns "N/A" for invalid observations
                 obs_output = f"{visibility} {visibility_unit}".strip()
+                obs_source = EXTERNAL_STATION_OBSERVATION_SOURCES.get(obs)
             elif obs == "rainWithRainRate":
                 # rainWithRainRate Rain shows rain daily sum and rain rate
                 obs_binder = weewx.tags.ObservationBinder(
@@ -5067,9 +5078,11 @@ class getData(SearchList):
                 obs_output = ""
             elif obs == "cloud_cover":
                 obs_output = cloud_cover
+                obs_source = EXTERNAL_STATION_OBSERVATION_SOURCES.get(obs)
             elif obs == "aqi":
                 aqi_unit = aqi_category if aqi_category else label_dict["aqi_unknown"]
                 obs_output = f"{aqi} ({aqi_unit})"
+                obs_source = EXTERNAL_STATION_OBSERVATION_SOURCES.get(obs)
             else:
                 # Only call getattr for observations not handled above.
                 try:
@@ -5090,10 +5103,12 @@ class getData(SearchList):
             # Build the json "current" array for weewx_data.json for JavaScript
             if obs not in station_obs_json:
                 station_obs_json[obs] = obs_output_str
+            if obs_source is not None and obs not in station_obs_source_json:
+                station_obs_source_json[obs] = dict(obs_source)
 
             # Build the HTML for the front page (accumulate into list, join later)
             row_parts = [
-                "<tr>",
+                f"<tr data-observation='{html.escape(obs, quote=True)}'>",
                 f"<td class='station-observations-label'>{label_dict[obs]}</td>",
                 "<td>",
             ]
@@ -5348,6 +5363,7 @@ class getData(SearchList):
             "visibility_unit": visibility_unit,
             "cloud_cover": cloud_cover,
             "station_obs_json": json.dumps(station_obs_json),
+            "station_obs_source_json": json.dumps(station_obs_source_json),
             "station_obs_html": station_obs_html,
             "all_obs_rounding_json": json.dumps(all_obs_rounding_json),
             "all_obs_unit_labels_json": json.dumps(all_obs_unit_labels_json),

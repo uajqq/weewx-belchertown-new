@@ -1,4 +1,10 @@
 // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
+var forecast_last_updated_epoch = null;
+var forecast_relative_timer = null;
+var forecast_external_observations = {};
+var forecast_observation_info_bound = false;
+var forecast_station_observation_sources = $station_obs_source_json;
+
 function ajaxforecast() {
     forecast_data = {};
     current_conditions_data = {};
@@ -45,6 +51,207 @@ function forecast_sentence_text(parts) {
         .filter(function(part) { return part !== ""; })
         .join(" ");
     return text ? text + "." : "";
+}
+
+function forecast_timestamp_label(value) {
+    return forecast_trim_sentence_end(value).replace(/\s+(on|at)$/i, "");
+}
+
+function forecast_relative_time(epoch) {
+    const timestamp = forecast_number(epoch);
+    return timestamp === null ? "" : tzAdjustedMoment(timestamp).fromNow();
+}
+
+function forecast_absolute_time(epoch, formatString) {
+    const timestamp = forecast_number(epoch);
+    return timestamp === null ? "" : tzAdjustedMoment(timestamp).format(formatString);
+}
+
+function forecast_escape_html(value) {
+    return jQuery("<div>").text(value == null ? "" : String(value)).html();
+}
+
+function forecast_provider_label(provider) {
+    const providerKey = String(provider || "").toLowerCase().replace(/_/g, "-");
+    if (providerKey === "nws") return "NWS";
+    if (providerKey === "openmeteo" || providerKey === "open-meteo") return "Open-Meteo";
+    if (providerKey === "pirateweather" || providerKey === "pirate-weather") return "Pirate Weather";
+    if (providerKey === "xweather") return "Xweather";
+    if (providerKey === "aeris") return "Aeris/Xweather";
+    return provider ? String(provider) : "forecast data";
+}
+
+function forecast_payload_source(data, fallbackProvider) {
+    data = data || {};
+    return forecast_provider_label(data["provider"] || fallbackProvider || "$Extras.forecast_provider");
+}
+
+function forecast_render_source(data) {
+    const source = forecast_payload_source(data, "");
+    jQuery(".forecast-source")
+        .text(forecast_sentence_text(["Source: " + source]))
+        .attr("title", "Forecast source: " + source);
+}
+
+function forecast_current_observation_epoch(data) {
+    const cc = data && data["current"] && data["current"][0] ? data["current"][0] : {};
+    return forecast_number(cc["time"] || data["timestamp"] || data["generated_at"]);
+}
+
+function forecast_observation_label(row, fallback) {
+    const labelCell = row.find(".station-observations-label").first().clone();
+    labelCell.find(".observation-source-info").remove();
+    return jQuery.trim(labelCell.text()) || fallback;
+}
+
+function forecast_observation_age_sentence(epoch) {
+    const timestamp = forecast_number(epoch);
+    if (timestamp === null) {
+        return "The observation time is not available.";
+    }
+
+    return "The observation was reported " + forecast_relative_time(timestamp) + ".";
+}
+
+function forecast_ensure_observation_modal() {
+    if (jQuery("#observation-source-modal").length) {
+        return;
+    }
+
+    var modal = "";
+    modal += "<div class='modal fade observation-source-modal' id='observation-source-modal' tabindex='-1' role='dialog' aria-labelledby='observation-source-modal-title'>";
+    modal += "<div class='modal-dialog modal-sm' role='document'>";
+    modal += "<div class='modal-content'>";
+    modal += "<div class='modal-header'>";
+    modal += "<button type='button' class='close' data-dismiss='modal' aria-label='Close'><span aria-hidden='true'>&times;</span></button>";
+    modal += "<h4 class='modal-title' id='observation-source-modal-title'>Observation source</h4>";
+    modal += "</div>";
+    modal += "<div class='modal-body observation-source-modal-body'></div>";
+    modal += "<div class='modal-footer'>";
+    modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>$obs.label.close</button>";
+    modal += "</div>";
+    modal += "</div>";
+    modal += "</div>";
+    modal += "</div>";
+    jQuery("body").append(modal);
+}
+
+function forecast_render_observation_modal(observationKey) {
+    const info = forecast_external_observations[observationKey];
+    if (!info) {
+        return;
+    }
+
+    const label = forecast_escape_html(info["label"]);
+    const source = forecast_escape_html(info["source"]);
+    const observedAt = forecast_absolute_time(info["epoch"], '$obs.label.time_current_conditions_last_updated');
+    let body = "<p><strong>" + label + "</strong> is provided by " + source + ".</p>";
+    body += "<p>" + forecast_escape_html(forecast_observation_age_sentence(info["epoch"])) + "</p>";
+    if (observedAt) {
+        body += "<p class='observation-source-modal-time'>" + forecast_escape_html(observedAt) + "</p>";
+    }
+
+    jQuery("#observation-source-modal")
+        .data("observation", observationKey)
+        .find(".observation-source-modal-body")
+        .html(body);
+}
+
+function forecast_bind_observation_info() {
+    if (forecast_observation_info_bound) {
+        return;
+    }
+
+    forecast_observation_info_bound = true;
+    jQuery(document).on("click", ".observation-source-info", function(event) {
+        event.preventDefault();
+        forecast_ensure_observation_modal();
+        forecast_render_observation_modal(jQuery(this).data("observation"));
+        jQuery("#observation-source-modal").modal("show");
+    });
+}
+
+function forecast_register_external_observation(observationKey, data, options) {
+    options = options || {};
+    let row = jQuery(".station-observations tr").filter(function() {
+        return jQuery(this).data("observation") === observationKey;
+    }).first();
+    if (!row.length) {
+        row = jQuery(".station-observations ." + observationKey).closest("tr");
+    }
+    if (!row.length) {
+        return;
+    }
+
+    const label = forecast_observation_label(row, observationKey);
+    const metadata = options["metadata"] || {};
+    const sourceProvider = options["sourceProvider"] || metadata["provider"];
+    const source = forecast_payload_source(data, sourceProvider);
+    let observationEpoch = forecast_number(options["epoch"] || metadata["epoch"]);
+    if (observationEpoch === null) {
+        observationEpoch = forecast_current_observation_epoch(data);
+    }
+
+    forecast_external_observations[observationKey] = {
+        label: label,
+        source: source,
+        epoch: observationEpoch
+    };
+
+    row.addClass("station-observation-row station-observation-row--external");
+
+    let button = row.find(".observation-source-info").first();
+    if (!button.length) {
+        button = jQuery("<button type='button' class='observation-source-info'><i class='fa fa-info' aria-hidden='true'></i></button>");
+        row.find(".station-observations-label").first().append(button);
+    }
+
+    button
+        .data("observation", observationKey)
+        .attr("aria-label", label + " source information")
+        .attr("title", label + " source information");
+
+    forecast_bind_observation_info();
+}
+
+function forecast_register_external_observations(sourceKey, data, options) {
+    const observationSources = forecast_station_observation_sources || {};
+    jQuery.each(observationSources, function(observationKey, metadata) {
+        metadata = metadata || {};
+        if (metadata["source_key"] !== sourceKey) {
+            return;
+        }
+        forecast_register_external_observation(observationKey, data, {
+            metadata: metadata,
+            sourceProvider: options && options["sourceProvider"],
+            epoch: options && options["epoch"]
+        });
+    });
+}
+
+function forecast_render_relative_timestamps() {
+    if (forecast_last_updated_epoch !== null) {
+        const forecastLabel = forecast_timestamp_label("$obs.label.forecast_last_updated");
+        jQuery(".forecast-subtitle")
+            .html(forecast_sentence_text([forecastLabel, forecast_relative_time(forecast_last_updated_epoch)]))
+            .attr("title", forecast_absolute_time(forecast_last_updated_epoch, '$obs.label.time_forecast_last_updated'));
+    }
+
+    const activeObservation = jQuery("#observation-source-modal").data("observation");
+    if (activeObservation) {
+        forecast_render_observation_modal(activeObservation);
+    }
+
+    if (typeof forecast_sync_row_height === "function") {
+        forecast_sync_row_height();
+    }
+}
+
+function forecast_start_relative_timer() {
+    if (forecast_relative_timer !== null) {
+        return;
+    }
+    forecast_relative_timer = window.setInterval(forecast_render_relative_timestamps, 30000);
 }
 
 function show_forcast_alert(data) {
@@ -158,11 +365,8 @@ function update_current_conditions(data) {
             jQuery(".station-observations .visibility").html(visibility_output);
         } catch (err) { /* silent */}
 
-        if ("$Extras.current_conditions_timestamp_enabled" == "1") {
-            const ts = data["timestamp"];
-            const current_subtitle = tzAdjustedMoment(ts).format('$obs.label.time_current_conditions_last_updated');
-            jQuery(".current-conditions-subtitle").html(forecast_sentence_text([current_subtitle]));
-        }
+        forecast_register_external_observations("current_conditions", data);
+
     } catch (error) {
         belchertown_debug("Current Conditions: Normalized render failed: " + error);
     }
@@ -356,8 +560,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
             const tempChartPadding = (tempNum !== null && highTemp !== null)
                 ? parseInt((highTemp - tempNum + offset) * 76 / rangeTemp)
                 : 0;
-            html += '<div class="forecast-conditions"';
-            html += ' style="min-height:155px">'
+            html += '<div class="forecast-conditions forecast-conditions-1hour">';
             html += '<div class="forecast-temp-chart forecast-temp-chart-1hour">';
             html += '<div class="forecast-temp-chart-marker" style="top:' + tempChartPadding + 'px">';
             html += '<div class="forecast-image">';
@@ -420,6 +623,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
 
 function forecast_update_aqi(data) {
     try {
+        const aqiPayload = data["aqi"] && data["aqi"][0] ? data["aqi"][0] : null;
         if (data["aqi"] && data["aqi"][0] && data["aqi"][0]["success"] && !data["aqi"][0]["error"]) {
             const aqiPeriod = data["aqi"][0]["response"][0]["periods"][0];
             const aqiValue = aqiPeriod["aqi"];
@@ -435,6 +639,10 @@ function forecast_update_aqi(data) {
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
+            forecast_register_external_observations("aqi", data, {
+                sourceProvider: aqiPayload["provider"],
+                epoch: aqiPeriod["timestamp"] || data["generated_at"] || data["timestamp"]
+            });
         } else if (data["aqi"] && data["aqi"][0] && data["aqi"][0]["success"] && data["aqi"][0]["error"] && data["aqi"][0]["error"]["code"] === "warn_no_data") {
             const aqiNoDataCategory = forecast_aqi_translate("");
             jQuery(".wx-aqi").html("No Data");
@@ -445,6 +653,10 @@ function forecast_update_aqi(data) {
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
+            forecast_register_external_observations("aqi", data, {
+                sourceProvider: aqiPayload["provider"],
+                epoch: data["generated_at"] || data["timestamp"]
+            });
         }
     } catch (err) {
         belchertown_debug("Forecast: AQI data missing or malformed, skipping: " + err);
@@ -462,12 +674,18 @@ function forecast_render_common(data) {
     const threeHourly = Array.isArray(data["threeHourly"]) ? data["threeHourly"] : forecast_pick_three_hourly_from_current_period(hourly);
     const daily = Array.isArray(data["daily"]) ? data["daily"] : [];
     const lastUpdated = data["generated_at"] || data["timestamp"] || (Date.now() / 1000);
-    const lastUpdatedText = tzAdjustedMoment(lastUpdated).format('$obs.label.time_forecast_last_updated');
+    forecast_last_updated_epoch = forecast_number(lastUpdated);
 
-    jQuery(".forecast-subtitle").html(forecast_sentence_text(["$obs.label.forecast_last_updated", lastUpdatedText]));
+    forecast_render_source(data);
+    forecast_register_external_observations("forecast", data, {epoch: lastUpdated});
     jQuery(".onehr_forecasts").html(forecast_render_hourly_tiles(hourly, 16, "forecast-1hour"));
     jQuery(".threehr_forecasts").html(forecast_render_hourly_tiles(threeHourly, 8, "forecast-3hour"));
     jQuery(".day_forecasts").html(forecast_render_daily_tiles(daily, 7));
+    forecast_render_relative_timestamps();
+    forecast_start_relative_timer();
+    if (typeof forecast_sync_row_height === "function") {
+        forecast_sync_row_height();
+    }
     show_forcast_alert(data);
 }
 

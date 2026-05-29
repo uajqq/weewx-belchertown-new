@@ -476,19 +476,12 @@
             #if $forecast_header_label
             #set $forecast_header_prefix = "%s. " % $forecast_header_label
             #end if
-            #set $current_conditions_last_updated_label = $obs.label.current_conditions_last_updated.strip().rstrip(". ")
-            #set $current_conditions_last_updated_prefix = ""
-            #if $current_conditions_last_updated_label
-            #set $current_conditions_last_updated_prefix = "%s&nbsp;" % $current_conditions_last_updated_label
-            #end if
             <section class="homepage-card homepage-card--forecast">
                 <div class="homepage-card-header homepage-card-header--forecast">
                     <div class="forecast-header-text">
                         <h2>
                             #echo $forecast_header_prefix#<span class="forecast-subtitle"></span><!-- moment.js -->
-                            #if $Extras.has_key("current_conditions_timestamp_enabled") and $Extras.current_conditions_timestamp_enabled == '1'
-                            <span class="forecast-current-conditions-inline"> #echo $current_conditions_last_updated_prefix#<span class="current-conditions-subtitle"></span><!-- moment.js --></span>
-                            #end if
+                            <span class="forecast-source"></span>
                         </h2>
                     </div>
                     <div class="forecast-menu forecast-menu--header">

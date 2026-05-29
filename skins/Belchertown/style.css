@@ -1044,24 +1044,10 @@ p.entry-meta {
   padding-right: 0 !important;
 }
 
-.forecast-subtitle {
+.forecast-subtitle,
+.forecast-source {
   font-size: 14px;
-}
-
-.current-conditions-title {
-  display: flex;
-  align-items: flex-end;
-  /* vertical alignment */
-  justify-content: center;
-  /* horizontal aligment */
-  height: 40px;
-  font-size: 14px;
-  padding-bottom: 5px;
-  padding-left: 0;
-}
-
-.current-conditions-subtitle {
-  font-size: 14px;
+  font-weight: 400;
 }
 
 .forecast-menu {
@@ -1137,6 +1123,8 @@ p.entry-meta {
 
 .forecast-day.pirateweather-forecast .forecast-conditions {
   flex: 0 0 auto;
+  min-height: var(--forecast-condition-band-height);
+  height: var(--forecast-condition-band-height);
   line-height: 1;
 }
 
@@ -1153,24 +1141,33 @@ p.entry-meta {
 }
 
 .forecast-day.pirateweather-forecast {
-  display: flex;
-  flex-direction: column;
+  --forecast-label-band-height: 38px;
+  --forecast-condition-band-height: 160px;
+  --forecast-bottom-band-min-height: 78px;
+  display: grid;
+  grid-template-rows:
+    var(--forecast-label-band-height)
+    var(--forecast-condition-band-height)
+    minmax(var(--forecast-bottom-band-min-height), 1fr);
+  min-height: 286px;
+  align-items: stretch;
 }
 
 .forecast-card-label {
-  flex: 0 0 auto;
   line-height: 1.15;
-  margin-bottom: 4px;
+  min-height: var(--forecast-label-band-height);
+  margin-bottom: 0;
 }
 
 .onehr_forecasts .forecast-card-label,
-.threehr_forecasts .forecast-card-label {
-  min-height: 2.3em;
+.threehr_forecasts .forecast-card-label,
+.day_forecasts .forecast-card-label {
+  min-height: var(--forecast-label-band-height);
 }
 
 .forecast-card-bottom {
-  flex: 0 0 auto;
-  margin-top: auto;
+  align-self: end;
+  margin-top: 0;
 }
 
 .snow-precip,
@@ -1591,12 +1588,6 @@ p.entry-meta {
     padding-top: 0px;
   }
 
-  .current-conditions-title {
-    justify-content: flex-start;
-    /* Align left */
-    padding-left: 10px;
-  }
-
   .forecast-menu {
     padding-left: 0px !important;
   }
@@ -1731,8 +1722,14 @@ p.entry-meta {
   box-shadow: 0 0 4px #00bb00, inset 0 0 4px rgb(56, 111, 169);
   -webkit-transform: scale(0);
   transform: scale(0);
-  -webkit-animation: online 2.5s ease-in-out infinite;
-  animation: online 2.5s ease-in-out infinite;
+  opacity: 0;
+}
+
+.onlineMarker.mqtt-receiving:after {
+  -webkit-animation: online-receiving 900ms ease-out 1;
+  animation: online-receiving 900ms ease-out 1;
+  border-color: #00bb00;
+  box-shadow: 0 0 8px #00bb00, inset 0 0 4px #00bb00;
 }
 
 @-webkit-keyframes online {
@@ -1747,6 +1744,30 @@ p.entry-meta {
   }
 
   100% {
+    opacity: 0;
+  }
+}
+
+@-webkit-keyframes online-receiving {
+  0% {
+    -webkit-transform: scale(0.4);
+    opacity: 1;
+  }
+
+  100% {
+    -webkit-transform: scale(2.9);
+    opacity: 0;
+  }
+}
+
+@keyframes online-receiving {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(2.9);
     opacity: 0;
   }
 }
@@ -2799,6 +2820,7 @@ table.celestial td.label {
   background-color: var(--homepage-card-surface) !important;
   text-align: center;
   box-shadow: var(--homepage-card-shadow);
+  position: relative;
 }
 
 .dark .frontpage .homepage-card--observations .station-observations tbody tr {
@@ -2833,6 +2855,53 @@ table.celestial td.label {
   font-weight: 500;
   line-height: 1.15;
   word-break: break-word;
+}
+
+.frontpage .homepage-card--observations .station-observation-row--external {
+  padding-right: 24px !important;
+}
+
+.frontpage .homepage-card--observations .observation-source-info {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--homepage-card-border);
+  border-radius: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.82);
+  color: #6b7280;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.frontpage .homepage-card--observations .observation-source-info:hover,
+.frontpage .homepage-card--observations .observation-source-info:focus {
+  color: #e5554e;
+  border-color: #e5554e;
+  outline: none;
+}
+
+.dark .frontpage .homepage-card--observations .observation-source-info {
+  background: rgba(49, 49, 49, 0.88);
+  color: #cbd5e1;
+}
+
+.observation-source-modal-time {
+  margin-bottom: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.dark .observation-source-modal-time {
+  color: #cbd5e1;
 }
 
 .frontpage .homepage-card--temperature .current_obs_top,
@@ -3290,19 +3359,10 @@ table.celestial td.label {
   --forecast-meta-size: 0.62em;
 }
 
-.frontpage .homepage-card--forecast .forecast-subtitle {
-  font-size: var(--forecast-meta-size);
-}
-
-.frontpage .homepage-card--forecast .forecast-current-conditions-inline {
-  display: inline;
+.frontpage .homepage-card--forecast .forecast-subtitle,
+.frontpage .homepage-card--forecast .forecast-source {
   font-size: var(--forecast-meta-size);
   font-weight: 400;
-  white-space: nowrap;
-}
-
-.frontpage .homepage-card--forecast .forecast-current-conditions-inline .current-conditions-subtitle {
-  font-size: 1em;
 }
 
 .frontpage .homepage-card--forecast .forecast-menu {
@@ -3326,7 +3386,7 @@ table.celestial td.label {
   }
 }
 
-/* Mode 3: forecast line centered, updated/observed centered below, interval centered beneath */
+/* Mode 3: forecast line centered, updated centered below, interval centered beneath */
 @container forecast-card (max-width: 760px) {
   .frontpage .homepage-card--forecast .forecast-header-text {
     flex-basis: 100%;
@@ -3341,10 +3401,6 @@ table.celestial td.label {
   .frontpage .homepage-card--forecast .forecast-subtitle::before {
     content: "";
     display: block;
-  }
-
-  .frontpage .homepage-card--forecast .forecast-current-conditions-inline {
-    white-space: normal;
   }
 }
 
@@ -5863,6 +5919,7 @@ body.pi::-webkit-scrollbar {
 }
 
 @media (pointer: coarse) {
+  .onlineMarker.mqtt-receiving:after,
   .onlineMarker:after {
     -webkit-animation: none;
     animation: none;
@@ -5876,6 +5933,7 @@ body.pi::-webkit-scrollbar {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .onlineMarker.mqtt-receiving:after,
   .onlineMarker:after {
     -webkit-animation: none;
     animation: none;
