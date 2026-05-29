@@ -101,6 +101,7 @@
 #set $diagram_centering_mode_attr = $almanac_diagram_context.get("diagram_centering_mode_attr", "off")
 #set $sun_x_offset_attr = $almanac_diagram_context.get("sun_x_offset_attr", "0.000")
 #set $moon_x_offset_attr = $almanac_diagram_context.get("moon_x_offset_attr", "0.000")
+#set $diagram_current_ts_attr = $almanac_diagram_context.get("diagram_current_ts_attr", "")
 #set $almanac_svg_markup_attr = $almanac_diagram_context.get("almanac_svg_markup_attr", "")
 
 #try
@@ -795,7 +796,8 @@
                     "altitude": #if $moon_set_alt_attr != ""##echo $moon_set_alt_attr##else#null#end if#
                 }
             },
-            "centering_mode": "$diagram_centering_mode_attr"
+            "centering_mode": "$diagram_centering_mode_attr",
+            "current_ts": #if $diagram_current_ts_attr != ""##echo $diagram_current_ts_attr##else#null#end if#
         },
         #if $almanac.hasExtras
         "almanac_extras_modal_html": "<div id='celestial_widget' class='widget'> <div class='widget_contents'> <div id='celestial_details'> <div class='celestial_source_note'><small>Data source: WeeWX <code>$almanac</code> tags (Skyfield extension when available; otherwise core PyEphem where available).</small></div> <div class='celestial_body'> <table class='celestial'> <tr><th>&#9728; $obs.label.sun</th><th></th></tr> <tr> <td class='label'>$obs.label.start_civil_twilight</td> <td class='data'>$almanac(horizon=-6).sun(use_center=1).rise</td> </tr> <tr> <td class='label'>$obs.label.rise</td> <td class='data'>$almanac.sun.rise.format(None_string=$sun_None)</td> </tr> <tr> <td class='label'>$obs.label.transit</td> <td class='data'>$almanac.sun.transit</td> </tr> <tr> <td class='label'>$obs.label.set</td> <td class='data'>$almanac.sun.set.format(None_string=$sun_None)</td> </tr> <tr> <td class='label'>$obs.label.end_civil_twilight</td> <td class='data'>$almanac(horizon=-6).sun(use_center=1).set</td> </tr> <tr> <td class='label'>$obs.label.azimuth</td> <td class='data'>$sun_azimuth</td> </tr> <tr> <td class='label'>$obs.label.altitude</td> <td class='data'>$sun_altitude</td> </tr> <tr> <td class='label'>$obs.label.right_ascension</td> <td class='data'>$sun_ra</td> </tr> <tr> <td class='label'>$obs.label.declination</td> <td class='data'>$sun_dec</td> </tr>#slurp

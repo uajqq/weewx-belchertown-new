@@ -991,8 +991,9 @@ function almanacBodyXOffsetInfo(bodyKey) {
     return { value: 0, hasExplicit: false };
 }
 
-function almanacCurrentTimeToDiagramX() {
-    var now = new Date();
+function almanacCurrentTimeToDiagramX(currentTs) {
+    var ts = parseFloat(currentTs);
+    var now = isFinite(ts) ? new Date(ts * 1000) : new Date();
     var dayMinutes = (now.getHours() * 60) + now.getMinutes() + (now.getSeconds() / 60);
     return Math.max(0, Math.min(1440, dayMinutes));
 }
@@ -1054,7 +1055,7 @@ function setAlmanacDiagramHorizonBounds() {
         .attr("x2", xBounds.maxX.toFixed(1));
 }
 
-function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitude) {
+function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitude, currentTs) {
     var point = null;
     var bodyKey = selector.indexOf("--moon") !== -1 ? "moon" : "sun";
     var alt = parseFloat(altitude);
@@ -1071,7 +1072,7 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     // Python is authoritative for curve geometry. Marker position should be a
     // direct projection of live altitude at current time using the same x-offset.
     if (isFinite(alt)) {
-        projectedX = almanacWrapDiagramX(almanacCurrentTimeToDiagramX(), bodyOffset);
+        projectedX = almanacWrapDiagramX(almanacCurrentTimeToDiagramX(currentTs), bodyOffset);
         projectedY = almanacAltitudeToDiagramY(alt);
         if (projectedX !== null && projectedY !== null) {
             point = {
@@ -1143,6 +1144,7 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
     var sunXOffset = parseFloat(diagramData["sun"]["x_offset"]);
     var moonXOffset = parseFloat(diagramData["moon"]["x_offset"]);
     var centeringMode = String(diagramData["centering_mode"] || "off").toLowerCase();
+    var currentTs = parseFloat(diagramData["current_ts"]);
 
     if (isFinite(sunAz)) {
         diagram.attr("data-sun-az", sunAz.toFixed(3));
@@ -1175,6 +1177,10 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         diagram.attr("data-centering-mode", "off");
         diagram.data("centeringMode", "off");
     }
+    if (isFinite(currentTs)) {
+        diagram.attr("data-current-ts", currentTs.toFixed(3));
+        diagram.data("currentTs", currentTs);
+    }
 
     diagram.removeClass("almanac-diagram--inactive");
 
@@ -1192,14 +1198,16 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         ".almanac-diagram-track--sun",
         "$obs.label.sun",
         diagramData["sun"]["azimuth"],
-        diagramData["sun"]["altitude"]
+        diagramData["sun"]["altitude"],
+        currentTs
     );
     setAlmanacDiagramObject(
         ".almanac-diagram-object--moon",
         ".almanac-diagram-track--moon",
         "$obs.label.moon",
         diagramData["moon"]["azimuth"],
-        diagramData["moon"]["altitude"]
+        diagramData["moon"]["altitude"],
+        currentTs
     );
 
     if (!preserveViewBox) {
@@ -1241,7 +1249,8 @@ function initializeAlmanacDiagramFromDOM() {
             altitude: readNumericAttr("data-moon-alt", "moonAlt"),
             x_offset: readNumericAttr("data-moon-x-offset", "moonXOffset")
         },
-        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase()
+        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase(),
+        current_ts: readNumericAttr("data-current-ts", "currentTs")
     });
 }
 
