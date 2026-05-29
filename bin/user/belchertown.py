@@ -5706,6 +5706,13 @@ class getData(SearchList):
             if obs == "rainWithRainRate":
                 # Add special rain + rainRate one liner
                 row_parts.append(obs_rain_output)
+            elif obs == "cloud_cover" and obs_output_str not in ("", "N/A"):
+                cloud_cover_unit_label = skin_dict["Units"]["Labels"].get(
+                    "percent", "%"
+                )
+                row_parts.append(
+                    f"<span class={obs}>{obs_output_str}{cloud_cover_unit_label}</span>"
+                )
             else:
                 row_parts.append(f"<span class={obs}>{obs_output_str}</span>")
             if obs in ("barometer", "pressure", "altimeter"):
@@ -5802,6 +5809,10 @@ class getData(SearchList):
         else:
             all_obs_rounding_json["visibility"] = ""
             all_obs_unit_labels_json["visibility"] = ""
+        all_obs_rounding_json["cloud_cover"] = "0"
+        all_obs_unit_labels_json["cloud_cover"] = skin_dict["Units"]["Labels"].get(
+            "percent", "%"
+        )
 
         # ==============================================================================
         # Social Share
