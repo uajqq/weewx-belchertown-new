@@ -2303,6 +2303,46 @@ def _project_track_points(track_points):
     return projected_points
 
 
+def _build_track_path_from_projected_points(ordered_points):
+    """Build a smooth SVG path from projected ``(order, x, y)`` points."""
+
+    if len(ordered_points) < 2:
+        return ""
+
+    # Smooth the sampled polyline using open Catmull-Rom -> cubic Bezier
+    # conversion. This preserves point order while removing visual kinks.
+    segments = [f"M {ordered_points[0][1]:.1f} {ordered_points[0][2]:.1f}"]
+    if len(ordered_points) == 2:
+        _, curr_x, curr_y = ordered_points[1]
+        segments.append(f"L {curr_x:.1f} {curr_y:.1f}")
+        return " ".join(segments)
+
+    for i in range(0, len(ordered_points) - 1):
+        _, p1x, p1y = ordered_points[i]
+        _, p2x, p2y = ordered_points[i + 1]
+
+        if i > 0:
+            _, p0x, p0y = ordered_points[i - 1]
+        else:
+            p0x, p0y = p1x, p1y
+
+        if i + 2 < len(ordered_points):
+            _, p3x, p3y = ordered_points[i + 2]
+        else:
+            p3x, p3y = p2x, p2y
+
+        c1x = p1x + ((p2x - p0x) / 6.0)
+        c1y = p1y + ((p2y - p0y) / 6.0)
+        c2x = p2x - ((p3x - p1x) / 6.0)
+        c2y = p2y - ((p3y - p1y) / 6.0)
+
+        segments.append(
+            f"C {c1x:.1f} {c1y:.1f} {c2x:.1f} {c2y:.1f} {p2x:.1f} {p2y:.1f}"
+        )
+
+    return " ".join(segments)
+
+
 def _compute_apex_x_offset(track_points):
     """Compute x offset needed to center the highest point (apex) at mid-diagram."""
 
@@ -2344,6 +2384,84 @@ def _current_diagram_x(current_ts):
     return now_point[0]
 
 
+def _continuous_track_window_start_minute(x_offset, current_ts=None):
+    """Return the absolute minute offset for display x=0 in a wrapped track.
+
+    The returned minute can be outside the current local day. This lets a
+    transit- or now-centered 24-hour curve cross midnight while still sampling
+    the ephemeris in chronological order.
+    """
+
+    offset = _safe_float(x_offset)
+    if offset is None:
+        offset = 0.0
+
+    start_minute = -offset
+    current_seconds = _seconds_since_local_midnight(current_ts)
+    current_minute = current_seconds / 60.0
+
+    while current_minute < start_minute:
+        start_minute -= 1440.0
+    while current_minute > start_minute + 1440.0:
+        start_minute += 1440.0
+
+    return start_minute
+
+
+def _sample_continuous_display_track_points(
+    almanac_obj,
+    body_name,
+    day_start,
+    sample_step_minutes,
+    x_offset=0.0,
+    current_ts=None,
+):
+    """Sample a wrapped display track from a continuous 24-hour ephemeris window."""
+
+    if almanac_obj is None or day_start is None:
+        return [], []
+
+    try:
+        step = max(1, int(sample_step_minutes))
+    except Exception:
+        step = 1
+
+    sample_minutes = list(range(0, (24 * 60) + 1, step))
+    if not sample_minutes or sample_minutes[-1] != 24 * 60:
+        sample_minutes.append(24 * 60)
+
+    start_minute = _continuous_track_window_start_minute(
+        x_offset, current_ts=current_ts
+    )
+    projected_points = []
+    point_attrs = []
+
+    for display_minute in sample_minutes:
+        absolute_minute = start_minute + float(display_minute)
+        sample_dt = day_start + datetime.timedelta(minutes=absolute_minute)
+        sample_ts = int(sample_dt.timestamp())
+        try:
+            sample_snapshot = almanac_obj(almanac_time=sample_ts)
+            sample_body = getattr(sample_snapshot, body_name, None)
+            if sample_body is None:
+                continue
+            sample_alt = _safe_float(getattr(sample_body, "alt", None))
+        except Exception:
+            continue
+
+        if sample_alt is None:
+            continue
+
+        projected = _project_timealt_to_diagram(display_minute * 60.0, sample_alt)
+        if projected is None:
+            continue
+
+        projected_points.append((float(display_minute), projected[0], projected[1]))
+        point_attrs.append(f"{float(display_minute):.0f},{sample_alt:.3f}")
+
+    return projected_points, point_attrs
+
+
 def _build_track_path_from_points(track_points, x_offset=0.0, wrap_x=False):
     """Build SVG path string from list of 'minute_of_day,alt' samples."""
 
@@ -2366,38 +2484,7 @@ def _build_track_path_from_points(track_points, x_offset=0.0, wrap_x=False):
         # Keep path in local-time order for a continuous 24-hour track.
         ordered_points = projected_points
 
-    # Smooth the sampled polyline using open Catmull-Rom -> cubic Bézier
-    # conversion. This preserves point order while removing visual kinks.
-    segments = [f"M {ordered_points[0][1]:.1f} {ordered_points[0][2]:.1f}"]
-    if len(ordered_points) == 2:
-        _, curr_x, curr_y = ordered_points[1]
-        segments.append(f"L {curr_x:.1f} {curr_y:.1f}")
-        return " ".join(segments)
-
-    for i in range(0, len(ordered_points) - 1):
-        _, p1x, p1y = ordered_points[i]
-        _, p2x, p2y = ordered_points[i + 1]
-
-        if i > 0:
-            _, p0x, p0y = ordered_points[i - 1]
-        else:
-            p0x, p0y = p1x, p1y
-
-        if i + 2 < len(ordered_points):
-            _, p3x, p3y = ordered_points[i + 2]
-        else:
-            p3x, p3y = p2x, p2y
-
-        c1x = p1x + ((p2x - p0x) / 6.0)
-        c1y = p1y + ((p2y - p0y) / 6.0)
-        c2x = p2x - ((p3x - p1x) / 6.0)
-        c2y = p2y - ((p3y - p1y) / 6.0)
-
-        segments.append(
-            f"C {c1x:.1f} {c1y:.1f} {c2x:.1f} {c2y:.1f} {p2x:.1f} {p2y:.1f}"
-        )
-
-    return " ".join(segments)
+    return _build_track_path_from_projected_points(ordered_points)
 
 
 def _default_track_path():
@@ -2441,17 +2528,39 @@ def _almanac_content_viewbox(
 
     sun_track_raw = str(payload.get("sun_track_points_attr", "") or "").strip()
     moon_track_raw = str(payload.get("moon_track_points_attr", "") or "").strip()
+    sun_display_track_raw = str(
+        payload.get("sun_track_display_points_attr", "") or ""
+    ).strip()
+    moon_display_track_raw = str(
+        payload.get("moon_track_display_points_attr", "") or ""
+    ).strip()
     sun_track = [p for p in sun_track_raw.split("|") if p] if sun_track_raw else []
     moon_track = [p for p in moon_track_raw.split("|") if p] if moon_track_raw else []
+    sun_display_track = (
+        [p for p in sun_display_track_raw.split("|") if p]
+        if sun_display_track_raw
+        else []
+    )
+    moon_display_track = (
+        [p for p in moon_display_track_raw.split("|") if p]
+        if moon_display_track_raw
+        else []
+    )
 
     points = []
-    for track_points, x_offset in ((sun_track, sun_x_offset), (moon_track, moon_x_offset)):
+    for track_points, display_track_points, x_offset in (
+        (sun_track, sun_display_track, sun_x_offset),
+        (moon_track, moon_display_track, moon_x_offset),
+    ):
+        track_is_already_displayed = bool(display_track_points)
+        if track_is_already_displayed:
+            track_points = display_track_points
         projected = _project_track_points(track_points)
         if not projected:
             continue
         for _, x_val, y_val in projected:
             x_out = x_val
-            if use_x_offsets:
+            if use_x_offsets and not track_is_already_displayed:
                 wrapped = _wrap_diagram_x(x_out, x_offset)
                 if wrapped is not None:
                     x_out = wrapped
@@ -2912,6 +3021,8 @@ def build_almanac_diagram_payload(
         "moon_set_alt_attr": "",
         "sun_track_points_attr": "",
         "moon_track_points_attr": "",
+        "sun_track_display_points_attr": "",
+        "moon_track_display_points_attr": "",
         "sun_track_path_attr": "",
         "moon_track_path_attr": "",
         "diagram_vertical_scale_attr": _format_attr(_get_vertical_scale()),
@@ -3051,12 +3162,52 @@ def build_almanac_diagram_payload(
 
     payload["sun_track_points_attr"] = "|".join(sun_track_points)
     payload["moon_track_points_attr"] = "|".join(moon_track_points)
-    payload["sun_track_path_attr"] = _build_track_path_from_points(
-        sun_track_points, x_offset=sun_x_offset, wrap_x=use_x_offsets
-    )
-    payload["moon_track_path_attr"] = _build_track_path_from_points(
-        moon_track_points, x_offset=moon_x_offset, wrap_x=use_x_offsets
-    )
+
+    sun_display_points = []
+    moon_display_points = []
+    if use_x_offsets:
+        (
+            sun_display_points,
+            sun_display_point_attrs,
+        ) = _sample_continuous_display_track_points(
+            almanac_obj,
+            "sun",
+            day_start,
+            sun_step,
+            x_offset=sun_x_offset,
+            current_ts=current_ts,
+        )
+        (
+            moon_display_points,
+            moon_display_point_attrs,
+        ) = _sample_continuous_display_track_points(
+            almanac_obj,
+            "moon",
+            day_start,
+            moon_step,
+            x_offset=moon_x_offset,
+            current_ts=current_ts,
+        )
+        payload["sun_track_display_points_attr"] = "|".join(sun_display_point_attrs)
+        payload["moon_track_display_points_attr"] = "|".join(moon_display_point_attrs)
+
+    if len(sun_display_points) >= 2:
+        payload["sun_track_path_attr"] = _build_track_path_from_projected_points(
+            sun_display_points
+        )
+    else:
+        payload["sun_track_path_attr"] = _build_track_path_from_points(
+            sun_track_points, x_offset=sun_x_offset, wrap_x=use_x_offsets
+        )
+
+    if len(moon_display_points) >= 2:
+        payload["moon_track_path_attr"] = _build_track_path_from_projected_points(
+            moon_display_points
+        )
+    else:
+        payload["moon_track_path_attr"] = _build_track_path_from_points(
+            moon_track_points, x_offset=moon_x_offset, wrap_x=use_x_offsets
+        )
 
     if not payload["sun_track_path_attr"]:
         payload["sun_track_path_attr"] = _default_track_path()

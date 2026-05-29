@@ -69,7 +69,14 @@ function mqtt_restart_button_html() {
 
 function mqtt_relative_time(epoch) {
     var timestamp = parseFloat(epoch);
-    return isFinite(timestamp) ? tzAdjustedMoment(timestamp).fromNow() : "";
+    if (!isFinite(timestamp)) {
+        return "";
+    }
+
+    // Simulator and slightly skewed clocks can report a packet timestamp a few
+    // seconds ahead of the browser. Last-updated text should not read as future.
+    timestamp = Math.min(timestamp, Date.now() / 1000);
+    return tzAdjustedMoment(timestamp).fromNow();
 }
 
 function mqtt_absolute_time(epoch) {
