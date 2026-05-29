@@ -472,13 +472,23 @@
             </div>
             #end if
             #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1' and (($Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours != '0') or not ($Extras.has_key("forecast_interval_hours")))
+            #set $forecast_header_label = $obs.label.forecast_header.strip().rstrip(". ")
+            #set $forecast_header_prefix = ""
+            #if $forecast_header_label
+            #set $forecast_header_prefix = "%s. " % $forecast_header_label
+            #end if
+            #set $current_conditions_last_updated_label = $obs.label.current_conditions_last_updated.strip().rstrip(". ")
+            #set $current_conditions_last_updated_prefix = ""
+            #if $current_conditions_last_updated_label
+            #set $current_conditions_last_updated_prefix = "%s&nbsp;" % $current_conditions_last_updated_label
+            #end if
             <section class="homepage-card homepage-card--forecast">
                 <div class="homepage-card-header homepage-card-header--forecast">
                     <div class="forecast-header-text">
                         <h2>
-                            $obs.label.forecast_header.rstrip('. '). <span class="forecast-subtitle"></span><!-- moment.js -->
+                            #echo $forecast_header_prefix#<span class="forecast-subtitle"></span><!-- moment.js -->
                             #if $Extras.has_key("current_conditions_timestamp_enabled") and $Extras.current_conditions_timestamp_enabled == '1'
-                            <span class="forecast-current-conditions-inline"> $obs.label.current_conditions_last_updated.rstrip('. ')&nbsp;<span class="current-conditions-subtitle"></span><!-- moment.js --></span>
+                            <span class="forecast-current-conditions-inline"> #echo $current_conditions_last_updated_prefix#<span class="current-conditions-subtitle"></span><!-- moment.js --></span>
                             #end if
                         </h2>
                     </div>
@@ -517,10 +527,15 @@
             #else
             #set $homepage_secondary_row_class = "homepage-secondary-row homepage-secondary-row--single"
             #end if
+            #set $weather_snapshots_label = $obs.label.weather_snapshots.strip().rstrip(". ")
+            #set $weather_snapshots_prefix = ""
+            #if $weather_snapshots_label
+            #set $weather_snapshots_prefix = "%s. " % $weather_snapshots_label
+            #end if
             <div class="$homepage_secondary_row_class">
                 <section class="homepage-card homepage-card--records">
                     <div class="homepage-card-header">
-                        <h2>$obs.label.weather_snapshots.rstrip('. '). <a href="$relative_url/records" class="homepage-card-link-inline">$obs.label.weather_snapshots_link</a></h2>
+                        <h2>#echo $weather_snapshots_prefix#<a href="$relative_url/records" class="homepage-card-link-inline">$obs.label.weather_snapshots_link</a></h2>
                     </div>
                     <div class="homepage-card-body">
                         <div class="row">
@@ -601,9 +616,14 @@
                 </section>
 
                 #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'
+                #set $earthquake_title_label = $obs.label.earthquake_title.strip().rstrip(". ")
+                #set $earthquake_title = ""
+                #if $earthquake_title_label
+                #set $earthquake_title = "%s." % $earthquake_title_label
+                #end if
                 <section class="homepage-card homepage-card--earthquake earthquake-container">
                     <div class="homepage-card-header">
-                        <h2>$obs.label.earthquake_title</h2>
+                        <h2>#echo $earthquake_title#</h2>
                     </div>
                     <div class="homepage-card-body eq-region">
                         <div class="earthquake-subcard earthquake-subcard--summary">
@@ -660,11 +680,20 @@
                 #include "index_hook_after_snapshot.inc"
             </div>
             #end if                          
-            
+
             #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
+            #set $homepage_chartgroup_title = $chartpage_titles_dict[$Extras.highcharts_homepage_chartgroup].strip().rstrip(". ")
+            #set $homepage_chartgroup_prefix = ""
+            #if $homepage_chartgroup_title
+            #set $homepage_chartgroup_prefix = "%s." % $homepage_chartgroup_title
+            #end if
             <section class="homepage-card homepage-card--charts">
                 <div class="homepage-card-header">
-                    <h2><span class="homepage-chartgroup-title">$chartpage_titles_dict[$Extras.highcharts_homepage_chartgroup].rstrip('. ').</span> <a href="$relative_url/charts" class="homepage-card-link-inline">$homepage_charts_link_label.strip()</a></h2>
+                    #if $homepage_chartgroup_prefix
+                    <h2><span class="homepage-chartgroup-title">#echo $homepage_chartgroup_prefix#</span> <a href="$relative_url/charts" class="homepage-card-link-inline">$homepage_charts_link_label.strip()</a></h2>
+                    #else
+                    <h2><a href="$relative_url/charts" class="homepage-card-link-inline">$homepage_charts_link_label.strip()</a></h2>
+                    #end if
                 </div>
                 <div class="chart-outer"></div><!-- JS populated -->
             </section>

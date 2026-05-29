@@ -35,6 +35,18 @@ function ajaxforecast() {
         });
 }
 
+function forecast_trim_sentence_end(value) {
+    return String(value || "").trim().replace(/[\.\s]+$/, "");
+}
+
+function forecast_sentence_text(parts) {
+    const text = parts
+        .map(forecast_trim_sentence_end)
+        .filter(function(part) { return part !== ""; })
+        .join(" ");
+    return text ? text + "." : "";
+}
+
 function show_forcast_alert(data) {
     belchertown_debug("Forecast: Updating alert data");
     var i, forecast_alerts;
@@ -148,8 +160,8 @@ function update_current_conditions(data) {
 
         if ("$Extras.current_conditions_timestamp_enabled" == "1") {
             const ts = data["timestamp"];
-            const current_subtitle = tzAdjustedMoment(ts).format('$obs.label.time_current_conditions_last_updated').trim().replace(/[\.\s]+$/, '');
-            jQuery(".current-conditions-subtitle").html(current_subtitle + ".");
+            const current_subtitle = tzAdjustedMoment(ts).format('$obs.label.time_current_conditions_last_updated');
+            jQuery(".current-conditions-subtitle").html(forecast_sentence_text([current_subtitle]));
         }
     } catch (error) {
         belchertown_debug("Current Conditions: Normalized render failed: " + error);
@@ -450,9 +462,9 @@ function forecast_render_common(data) {
     const threeHourly = Array.isArray(data["threeHourly"]) ? data["threeHourly"] : forecast_pick_three_hourly_from_current_period(hourly);
     const daily = Array.isArray(data["daily"]) ? data["daily"] : [];
     const lastUpdated = data["generated_at"] || data["timestamp"] || (Date.now() / 1000);
-    const lastUpdatedText = tzAdjustedMoment(lastUpdated).format('$obs.label.time_forecast_last_updated').trim().replace(/[\.\s]+$/, '');
+    const lastUpdatedText = tzAdjustedMoment(lastUpdated).format('$obs.label.time_forecast_last_updated');
 
-    jQuery(".forecast-subtitle").html("$obs.label.forecast_last_updated " + lastUpdatedText + ".");
+    jQuery(".forecast-subtitle").html(forecast_sentence_text(["$obs.label.forecast_last_updated", lastUpdatedText]));
     jQuery(".onehr_forecasts").html(forecast_render_hourly_tiles(hourly, 16, "forecast-1hour"));
     jQuery(".threehr_forecasts").html(forecast_render_hourly_tiles(threeHourly, 8, "forecast-3hour"));
     jQuery(".day_forecasts").html(forecast_render_daily_tiles(daily, 7));
