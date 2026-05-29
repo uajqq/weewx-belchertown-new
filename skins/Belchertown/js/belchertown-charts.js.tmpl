@@ -726,8 +726,19 @@ function showChart(json_file, prepend_renderTo = false) {
             // Validate every series has usable data. If any configured
             // observation is unavailable, skip this chart and let the
             // placeholder logic in catch() handle the container.
+            var hasOwn = function(obj, key) {
+                return obj && Object.prototype.hasOwnProperty.call(obj, key);
+            };
+
             var isFiniteNumber = function(v) {
-                return v !== null && v !== "" && isFinite(parseFloat(v));
+                return v !== null && typeof v !== "undefined" && v !== "" && isFinite(parseFloat(v));
+            };
+
+            var axisOptionNumber = function(obj, key) {
+                if (!hasOwn(obj, key) || !isFiniteNumber(obj[key])) {
+                    return null;
+                }
+                return parseFloat(obj[key]);
             };
 
             var seriesHasUsableData = function(series) {
@@ -837,16 +848,16 @@ function showChart(json_file, prepend_renderTo = false) {
                 belchertown_debug(options.chart.renderTo + ": " + s.obsType + " is on yAxis " + this_yAxis);
 
                 // Some charts may require a defined min/max on the yAxis
-                options.yAxis[this_yAxis].min = s.yAxis_min !== "undefined" ? s.yAxis_min : null;
-                options.yAxis[this_yAxis].max = s.yAxis_max !== "undefined" ? s.yAxis_max : null;
+                options.yAxis[this_yAxis].min = axisOptionNumber(s, "yAxis_min");
+                options.yAxis[this_yAxis].max = axisOptionNumber(s, "yAxis_max");
 
                 // Some charts may require a defined soft min/max on the yAxis
-                options.yAxis[this_yAxis].softMin = s.yAxis_softMin !== "undefined" ? parseInt(s.yAxis_softMin) : null;
-                options.yAxis[this_yAxis].softMax = s.yAxis_softMax !== "undefined" ? parseInt(s.yAxis_softMax) : null;
+                options.yAxis[this_yAxis].softMin = axisOptionNumber(s, "yAxis_softMin");
+                options.yAxis[this_yAxis].softMax = axisOptionNumber(s, "yAxis_softMax");
 
                 // Set the yAxis tick interval. Mostly used for barometer. 
-                if (s.yAxis_tickInterval) {
-                    options.yAxis[this_yAxis].tickInterval = s.yAxis_tickInterval;
+                if (isFiniteNumber(s.yAxis_tickInterval) && parseFloat(s.yAxis_tickInterval) > 0) {
+                    options.yAxis[this_yAxis].tickInterval = parseFloat(s.yAxis_tickInterval);
                 }
 
                 // Set yAxis minorTicks. This is a chart-wide setting so setting it for any of the yAxis will set it for the chart itself
@@ -903,6 +914,99 @@ function showChart(json_file, prepend_renderTo = false) {
                     options.yAxis[this_yAxis].labels = {formatter: function() {return Highcharts.numberFormat(this.value, decimals, decimalPoint, thousandsSep);}}
                 }
 
+            });
+
+            // Flat datasets (especially all-zero observations) need a real
+            // y-range; min == max can leave Highcharts with nothing to draw.
+            var seriesPointValues = function(point, obsType) {
+                if (point === null || typeof point === "undefined") {
+                    return [];
+                }
+                if (obsType === "weatherRange" || obsType === "haysChart") {
+                    if (Array.isArray(point)) {
+                        return [point[1], point[2], point[3]];
+                    }
+                    if (typeof point === "object") {
+                        return [point.low, point.high, point.average];
+                    }
+                    return [];
+                }
+                if (obsType === "windBarb") {
+                    if (Array.isArray(point)) {
+                        return [point[1]];
+                    }
+                    if (typeof point === "object") {
+                        return [point.value];
+                    }
+                    return [];
+                }
+                if (Array.isArray(point)) {
+                    return [point[1]];
+                }
+                if (typeof point === "object") {
+                    return [point.y];
+                }
+                return [point];
+            };
+
+            var axisExtents = {};
+            options.series.forEach(function(series) {
+                var axisIndex = parseInt(series.yAxis, 10);
+                if (!isFinite(axisIndex)) {
+                    axisIndex = 0;
+                }
+                var obsType = series.obsType || series.observation_type || "";
+                if (!axisExtents[axisIndex]) {
+                    axisExtents[axisIndex] = {min: null, max: null};
+                }
+                series.data.forEach(function(point) {
+                    seriesPointValues(point, obsType).forEach(function(rawValue) {
+                        if (!isFiniteNumber(rawValue)) {
+                            return;
+                        }
+                        var value = parseFloat(rawValue);
+                        if (axisExtents[axisIndex].min === null || value < axisExtents[axisIndex].min) {
+                            axisExtents[axisIndex].min = value;
+                        }
+                        if (axisExtents[axisIndex].max === null || value > axisExtents[axisIndex].max) {
+                            axisExtents[axisIndex].max = value;
+                        }
+                    });
+                });
+            });
+
+            Object.keys(axisExtents).forEach(function(axisIndex) {
+                var extent = axisExtents[axisIndex];
+                var axis = options.yAxis[axisIndex];
+                if (!axis || extent.min === null || extent.max === null || extent.min !== extent.max) {
+                    return;
+                }
+
+                var flatValue = extent.min;
+                var padding = Math.max(Math.abs(flatValue) * 0.05, 1);
+                var configuredMin = isFiniteNumber(axis.min);
+                var configuredMax = isFiniteNumber(axis.max);
+                var currentMin = configuredMin ? parseFloat(axis.min) : null;
+                var currentMax = configuredMax ? parseFloat(axis.max) : null;
+
+                if (configuredMin && configuredMax && currentMin === currentMax) {
+                    axis.min = flatValue === 0 ? 0 : flatValue - padding;
+                    axis.max = flatValue + padding;
+                } else if (flatValue === 0) {
+                    if (!configuredMin) {
+                        axis.min = 0;
+                    }
+                    if (!configuredMax || currentMax <= 0) {
+                        axis.max = 1;
+                    }
+                } else {
+                    if (!configuredMin || currentMin >= flatValue) {
+                        axis.min = flatValue - padding;
+                    }
+                    if (!configuredMax || currentMax <= flatValue) {
+                        axis.max = flatValue + padding;
+                    }
+                }
             });
 
             // If windRose is present, configure a special chart to show that data
@@ -1014,11 +1118,14 @@ function showChart(json_file, prepend_renderTo = false) {
                     lineColor: null,
                     tickPositions: []
                 }
-                if (options.series[0].yAxis_max) {
+                if (isFiniteNumber(options.series[0].yAxis_max)) {
                     options.yAxis.max = parseFloat(options.series[0].yAxis_max);
                 }
-                if (options.series[0].yAxis_min) {
+                if (isFiniteNumber(options.series[0].yAxis_min)) {
                     options.yAxis.min = parseFloat(options.series[0].yAxis_min);
+                }
+                if (options.yAxis.min === options.yAxis.max) {
+                    options.yAxis.max = options.yAxis.min + 1;
                 }
                 options.yAxis.title = {
                     text: null,
@@ -1059,7 +1166,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     options.series[0].data[1].color = currentColor;
                 } else if (options.series[0].colors_enabled) {
                     // Fall back to rainbow gradient coloring
-                    options.series[0].data[1].color = new_gradient_temp(options.series[0].data[1]["y"], options.series[0].yAxis_min, options.series[0].yAxis_max)
+                    options.series[0].data[1].color = new_gradient_temp(options.series[0].data[1]["y"], options.yAxis.min, options.yAxis.max)
                 }
 
                 // Always resolve a concrete gauge color for both the gauge and

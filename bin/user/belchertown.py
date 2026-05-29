@@ -6190,12 +6190,12 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     # Set the yAxis min and max if present. Useful for the
                     # rxCheckPercent plots
                     yAxis_min = line_options.get("yAxis_min", None)
-                    if yAxis_min:
+                    if yAxis_min is not None and yAxis_min != "":
                         output[chart_group][plotname]["series"][line_name][
                             "yAxis_min"
                         ] = yAxis_min
                     yAxis_max = line_options.get("yAxis_max", None)
-                    if yAxis_max:
+                    if yAxis_max is not None and yAxis_max != "":
                         output[chart_group][plotname]["series"][line_name][
                             "yAxis_max"
                         ] = yAxis_max
