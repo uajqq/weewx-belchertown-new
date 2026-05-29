@@ -11,7 +11,7 @@
  */
 .dark .carousel-inner>.item>a>img,
 .dark .carousel-inner>.item>img,
-.dark .dark .img-responsive,
+.dark .img-responsive,
 .dark .thumbnail a>img,
 .dark .thumbnail>img {
   display: block;
@@ -6863,12 +6863,12 @@ table>thead>tr>th {
 .dark .table-bordered>tfoot>tr>th,
 .dark .table-bordered>thead>tr>td,
 .dark .table-bordered>thead>tr>th,
-table-bordered>tbody>tr>td,
-table-bordered>tbody>tr>th,
-table-bordered>tfoot>tr>td,
-table-bordered>tfoot>tr>th,
-table-bordered>thead>tr>td,
-table-bordered>thead>tr>th {
+.dark .table-bordered>tbody>tr>td,
+.dark .table-bordered>tbody>tr>th,
+.dark .table-bordered>tfoot>tr>td,
+.dark .table-bordered>tfoot>tr>th,
+.dark .table-bordered>thead>tr>td,
+.dark .table-bordered>thead>tr>th {
   border: 1px solid #464545;
 }
 
@@ -7078,7 +7078,7 @@ a.list-group-item-danger.active:hover {
   stroke-width: 1px !important;
 }
 
-.dark .dark .highcharts-axis-title,
+.dark .highcharts-axis-title,
 .dark .highcharts-axis-labels,
 .dark .highcharts-axis-labels text,
 .dark .highcharts-axis-title text {
