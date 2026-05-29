@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 import urllib.error
 from collections import OrderedDict
 from math import asin, atan2, cos, degrees, radians, sin, sqrt
-from re import findall, match
+from re import findall, match, sub
 
 import configobj
 import weeutil.weeutil
@@ -259,6 +259,40 @@ def _extract_fields(source, fields):
     return {field: source.get(field) for field in fields}
 
 
+def _compact_alert_title(*candidates, default="Alert"):
+    """Return the shortest useful alert title from provider-specific values."""
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        title = sub(r"\s+", " ", str(candidate)).strip()
+        if not title:
+            continue
+
+        lower_title = title.lower()
+        for marker in (
+            " issued ",
+            " updated ",
+            " extended ",
+            " continued ",
+            " continues ",
+            " remains in effect ",
+            " in effect until ",
+            " until ",
+            " from ",
+            " cancelled ",
+            " canceled ",
+        ):
+            marker_index = lower_title.find(marker)
+            if marker_index > 0:
+                title = title[:marker_index].rstrip(" :-")
+                break
+
+        if title:
+            return title
+
+    return default
+
+
 def _pw_transform_to_belch(pw):
     """Map Dark Sky-style JSON from Pirate Weather to the compact structure
     this skin uses: current, hourly[], daily[], alerts[].
@@ -279,7 +313,10 @@ def _pw_transform_to_belch(pw):
         "windSpeed", "windGust", "windBearing", "precipIntensity",
         "precipProbability", "cloudCover"
     ]
-    ALERT_FIELDS = ["title", "expires", "description", "severity", "uri"]
+    ALERT_FIELDS = [
+        "title", "expires", "description", "severity", "uri",
+        "effective", "onset", "ends", "source",
+    ]
 
     current_data = pw.get("currently") or {}
     hourly_list = (pw.get("hourly") or {}).get("data", [])
@@ -290,12 +327,27 @@ def _pw_transform_to_belch(pw):
     hourly = _slice_from_current_period(hourly_all, 1)
     daily = [_extract_fields(d, DAILY_FIELDS) for d in daily_list]
 
+    alerts = []
+    for alert in alerts_list:
+        alert = alert or {}
+        compact_alert = _extract_fields(alert, ALERT_FIELDS)
+        compact_alert["title"] = _compact_alert_title(
+            alert.get("event"),
+            alert.get("title"),
+            alert.get("headline"),
+        )
+        compact_alert["effective"] = alert.get("time")
+        compact_alert["onset"] = alert.get("time")
+        compact_alert["ends"] = alert.get("expires")
+        compact_alert["source"] = "pirateweather"
+        alerts.append(compact_alert)
+
     return {
         "current": _extract_fields(current_data, CURRENT_FIELDS),
         "hourly": hourly,
         "threeHourly": _pick_three_hourly_from_current_period(hourly_all),
         "daily": daily,
-        "alerts": [_extract_fields(a, ALERT_FIELDS) for a in alerts_list],
+        "alerts": alerts,
         "provider": "pirateweather",
         "schema": "belchertown.forecast.v1",
         "generated_at": int(time.time()),
@@ -931,11 +983,18 @@ def _nws_build_alerts(alerts_payload):
         props = feature.get("properties") or {}
         output.append(
             {
-                "title": props.get("headline") or props.get("event") or "Alert",
+                "title": _compact_alert_title(
+                    props.get("event"),
+                    props.get("headline"),
+                ),
+                "effective": _iso_to_epoch(props.get("effective")),
+                "onset": _iso_to_epoch(props.get("onset")),
+                "ends": _iso_to_epoch(props.get("ends")),
                 "expires": _iso_to_epoch(props.get("expires")),
                 "description": props.get("description") or props.get("instruction") or "",
                 "severity": props.get("severity") or "",
                 "uri": feature.get("id") or props.get("@id") or "",
+                "source": "nws",
             }
         )
     return output
@@ -1096,7 +1155,9 @@ def _meteoalarm_entry_to_alert(entry):
     severity = _xml_first_child_text(entry, "severity")
     urgency = _xml_first_child_text(entry, "urgency")
     certainty = _xml_first_child_text(entry, "certainty")
+    effective = _xml_first_child_text(entry, "effective")
     onset = _xml_first_child_text(entry, "onset")
+    ends = _xml_first_child_text(entry, "ends")
     expires = _xml_first_child_text(entry, "expires")
     identifier = (
         _xml_first_child_text(entry, "identifier")
@@ -1118,7 +1179,10 @@ def _meteoalarm_entry_to_alert(entry):
             description_parts.append(f"{label}: {value}")
 
     return {
-        "title": title or event or "MeteoAlarm Alert",
+        "title": _compact_alert_title(event, title, default="MeteoAlarm Alert"),
+        "effective": _iso_to_epoch(effective),
+        "onset": _iso_to_epoch(onset),
+        "ends": _iso_to_epoch(ends or expires),
         "expires": _iso_to_epoch(expires),
         "description": "\n".join(description_parts),
         "severity": severity,
@@ -1987,11 +2051,18 @@ def _aeris_alerts_to_common(alerts_payload, label_dict):
         label_key = "forecast_alert_code_" + alert_type.replace(".", "_")
         output.append(
             {
-                "title": label_dict.get(label_key) or details.get("name") or "Alert",
+                "title": _compact_alert_title(
+                    label_dict.get(label_key),
+                    details.get("name"),
+                ),
+                "effective": timestamps.get("issued"),
+                "onset": timestamps.get("begins") or timestamps.get("issued"),
+                "ends": timestamps.get("expires"),
                 "expires": timestamps.get("expires"),
                 "description": details.get("body") or "",
                 "severity": details.get("severity") or "",
                 "uri": alert_type,
+                "source": "aeris",
             }
         )
     return output
@@ -2763,8 +2834,8 @@ def _build_almanac_svg_markup(payload, current_ts):
         f'viewBox="{viewbox_x:.1f} {viewbox_y:.1f} {viewbox_w:.1f} {viewbox_h:.1f}" '
         'preserveAspectRatio="xMidYMid meet" role="img" aria-label="Sun and moon">'
         f'<line class="almanac-diagram-horizon" x1="{min_x:.1f}" y1="0" x2="{max_x:.1f}" y2="0"></line>'
-        f'<path class="almanac-diagram-track almanac-diagram-track--moon" d="{html.escape(moon_path_d)}"></path>'
         f'<path class="almanac-diagram-track almanac-diagram-track--sun" d="{html.escape(sun_path_d)}"></path>'
+        f'<path class="almanac-diagram-track almanac-diagram-track--moon" d="{html.escape(moon_path_d)}"></path>'
         f"{moon_group}"
         f"{sun_group}"
         "</svg>"

@@ -254,9 +254,87 @@ function forecast_start_relative_timer() {
     forecast_relative_timer = window.setInterval(forecast_render_relative_timestamps, 30000);
 }
 
+function forecast_compact_alert_title(title) {
+    if (title == null) {
+        return "Alert";
+    }
+
+    var compactTitle = String(title).replace(/\s+/g, " ").trim();
+    if (!compactTitle) {
+        return "Alert";
+    }
+
+    var lowerTitle = compactTitle.toLowerCase();
+    var markers = [
+        " issued ",
+        " updated ",
+        " extended ",
+        " continued ",
+        " continues ",
+        " remains in effect ",
+        " in effect until ",
+        " until ",
+        " from ",
+        " cancelled ",
+        " canceled ",
+    ];
+    for (var markerIndex = 0; markerIndex < markers.length; markerIndex++) {
+        var titleCutoff = lowerTitle.indexOf(markers[markerIndex]);
+        if (titleCutoff > 0) {
+            compactTitle = compactTitle.slice(0, titleCutoff).replace(/[ :\-]+$/, "");
+            break;
+        }
+    }
+
+    return compactTitle || "Alert";
+}
+
+function forecast_format_alert_time(timestamp) {
+    if (timestamp == null || timestamp === "") {
+        return "";
+    }
+
+    return tzAdjustedMoment(timestamp).format('$obs.label.time_forecast_alert_expires');
+}
+
+function forecast_format_alert_start_time(timestamp) {
+    if (timestamp == null || timestamp === "") {
+        return "";
+    }
+
+    return forecast_relative_time(timestamp);
+}
+
+function forecast_alert_in_effect_text(alertObj) {
+    var startTimestamp = alertObj['onset'] || alertObj['effective'];
+    var endTimestamp = alertObj['ends'];
+    var startEpoch = forecast_number(startTimestamp);
+    var startText = forecast_format_alert_start_time(startTimestamp);
+    var endText = forecast_format_alert_time(endTimestamp);
+
+    if (startText && endText) {
+        if (startEpoch !== null && startEpoch <= (Date.now() / 1000)) {
+            return "in effect since " + startText + " until " + endText;
+        }
+        return "in effect starting " + startText + " until " + endText;
+    }
+    if (startText) {
+        if (startEpoch !== null && startEpoch <= (Date.now() / 1000)) {
+            return "in effect since " + startText;
+        }
+        return "in effect starting " + startText;
+    }
+    if (endText) {
+        return "$obs.label.alert_in_effect " + endText;
+    }
+
+    return "";
+}
+
 function show_forcast_alert(data) {
     belchertown_debug("Forecast: Updating alert data");
-    var i, forecast_alerts;
+    var i, forecast_alerts, forecast_alert_title, forecast_alert_body;
+    var forecast_alert_link, forecast_alert_expires, forecast_alert_in_effect, alert_link;
     forecast_alerts = [];
 
     // Empty anything that's been appended to the modal from the previous run
@@ -270,13 +348,18 @@ function show_forcast_alert(data) {
                 : String(alertObj['description']);
             forecast_alert_title = (alertObj['title'] == null)
                 ? "Alert"
-                : String(alertObj['title']);
+                : forecast_compact_alert_title(alertObj['title']);
             forecast_alert_body = alertDescription.replace(/\n/g, '<br>');
             forecast_alert_link = forecast_alert_title;
-            forecast_alert_expires = (alertObj['expires'] != null)
-                ? tzAdjustedMoment(alertObj['expires']).format('$obs.label.time_forecast_alert_expires')
-                : "";
-            forecast_alerts.push({"title": forecast_alert_title, "body": forecast_alert_body, "link": forecast_alert_link, "expires": forecast_alert_expires});
+            forecast_alert_expires = forecast_format_alert_time(alertObj['expires']);
+            forecast_alert_in_effect = forecast_alert_in_effect_text(alertObj);
+            forecast_alerts.push({
+                "title": forecast_alert_title,
+                "body": forecast_alert_body,
+                "link": forecast_alert_link,
+                "expires": forecast_alert_expires,
+                "in_effect": forecast_alert_in_effect
+            });
         }
     }
 
@@ -286,8 +369,12 @@ function show_forcast_alert(data) {
 
             var forecastAlertId = "forecast-alert-" + i;
             var forecastAlertTitleId = forecastAlertId + "-title";
+            var alertLinkText = forecast_alerts[i]["title"];
+            if (forecast_alerts[i]["in_effect"]) {
+                alertLinkText += " " + forecast_alerts[i]["in_effect"];
+            }
 
-            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-toggle='modal' data-target='#" + forecastAlertId + "'>" + forecast_alerts[i]["title"] + " $obs.label.alert_in_effect " + forecast_alerts[i]["expires"] + "</a><br>";
+            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-toggle='modal' data-target='#" + forecastAlertId + "'>" + alertLinkText + "</a><br>";
             jQuery(".wx-stn-alert-text").append(alert_link);
 
             var forecast_alert_modal = "";

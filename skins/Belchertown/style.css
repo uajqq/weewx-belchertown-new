@@ -1706,6 +1706,66 @@ p.entry-meta {
   margin-bottom: 5px;
 }
 
+.mqtt-status-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 0 5px 6px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.82);
+  color: #6b7280;
+  font-size: 10px;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.mqtt-status-info:hover,
+.mqtt-status-info:focus {
+  color: #e5554e;
+  border-color: #e5554e;
+  outline: none;
+}
+
+.mqtt-status-detail-list {
+  margin: 0;
+}
+
+.mqtt-status-detail-list dt {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mqtt-status-detail-list dd {
+  margin: 0 0 12px;
+  color: #1f2937;
+}
+
+.mqtt-status-detail-list dd:last-child {
+  margin-bottom: 0;
+}
+
+.dark .mqtt-status-info {
+  background: rgba(49, 49, 49, 0.88);
+  color: #cbd5e1;
+  border-color: rgba(226, 232, 240, 0.35);
+}
+
+.dark .mqtt-status-detail-list dt {
+  color: #cbd5e1;
+}
+
+.dark .mqtt-status-detail-list dd {
+  color: #f8fafc;
+}
+
 .onlineMarkerOuter {
   /* width: 30px; */
   /* height: 30px; */

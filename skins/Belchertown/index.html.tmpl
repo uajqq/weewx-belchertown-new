@@ -126,24 +126,6 @@
                 belchertown_debug("MQTT: offline url var detected. Skipping MQTT connect.");
             } else {
                 connect(); // Begin mqtt after WeeWX initial load
-                // If the Restart button is clicked, reconnect to mqtt and update WeeWX and forecast data
-                jQuery(document).on('click', '.restart-interval', function() {
-                    ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
-                        update_weewx_data(weewx_data); // Initial call to update (date, daily high, low, etc)
-                        belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
-
-                        // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
-                        ajaxforecast(); // Update forecast data
-                        // #end if
-                        ajaximages(); // Update radar and home page hook "img src" if present
-                        connect(); // Restart mqtt after WeeWX data's re-loaded
-                        // #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
-                        window.renderHomepageCharts(true);
-                        // #end if
-                    }).catch(function(e) {
-                        console.log(e);
-                    });
-                });
             }
 
             // #if $Extras.has_key("reload_hook_images") and $Extras.reload_hook_images == '1'
