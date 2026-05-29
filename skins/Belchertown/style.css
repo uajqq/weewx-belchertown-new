@@ -3191,6 +3191,11 @@ table.celestial td.label {
   flex-direction: column;
 }
 
+.frontpage .homepage-card--wind:has(.windbarb-marker) {
+  padding-top: 30px;
+  padding-bottom: 30px;
+}
+
 .frontpage .homepage-card--wind .windrow {
   border-top: 0;
   width: 100%;
