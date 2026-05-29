@@ -284,17 +284,20 @@ function show_forcast_alert(data) {
         belchertown_debug("Forecast: There are " + forecast_alerts.length + " alert(s).");
         for (i = 0; i < forecast_alerts.length; i++) {
 
-            alert_link = "<i class='fa fa-exclamation-triangle'></i> <a href='#forecast-alert-" + i + "' data-toggle='modal' data-target='#forecast-alert-" + i + "'>" + forecast_alerts[i]["title"] + " $obs.label.alert_in_effect " + forecast_alerts[i]["expires"] + "</a><br>";
+            var forecastAlertId = "forecast-alert-" + i;
+            var forecastAlertTitleId = forecastAlertId + "-title";
+
+            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-toggle='modal' data-target='#" + forecastAlertId + "'>" + forecast_alerts[i]["title"] + " $obs.label.alert_in_effect " + forecast_alerts[i]["expires"] + "</a><br>";
             jQuery(".wx-stn-alert-text").append(alert_link);
 
             var forecast_alert_modal = "";
             forecast_alert_modal += "<!-- Forecast Alert Modal " + i + " -->";
-            forecast_alert_modal += "<div class='modal fade' id='forecast-alert-" + i + "' tabindex='-1' role='dialog' aria-labelledby='forecast-alert'>";
+            forecast_alert_modal += "<div class='modal fade' id='" + forecastAlertId + "' tabindex='-1' role='dialog' aria-labelledby='" + forecastAlertTitleId + "'>";
             forecast_alert_modal += "<div class='modal-dialog' role='document'>";
             forecast_alert_modal += "<div class='modal-content'>";
             forecast_alert_modal += "<div class='modal-header'>";
             forecast_alert_modal += "<button type='button' class='close' data-dismiss='modal' aria-label='Close'><span aria-hidden='true'>&times;</span></button>";
-            forecast_alert_modal += "<h4 class='modal-title' id='forecast-alert'>" + forecast_alerts[i]["title"] + "</h4>";
+            forecast_alert_modal += "<h4 class='modal-title' id='" + forecastAlertTitleId + "'>" + forecast_alerts[i]["title"] + "</h4>";
             forecast_alert_modal += "</div>";
             forecast_alert_modal += "<div class='modal-body'>";
             forecast_alert_modal += forecast_alerts[i]["body"];
@@ -564,7 +567,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
             html += '<div class="forecast-temp-chart forecast-temp-chart-1hour">';
             html += '<div class="forecast-temp-chart-marker" style="top:' + tempChartPadding + 'px">';
             html += '<div class="forecast-image">';
-            html += '<img id="icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
+            html += '<img class="forecast-icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
             html += '</div>';
             html += '<span class="forecast-chart-temp">' + forecast_temp_text(row["temperature"]) + '</span>';
             html += '</div>';
@@ -572,7 +575,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
             html += '</div>';
         } else {
             html += '<div class="forecast-conditions">';
-            html += '<img id="icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async"><br>';
+            html += '<img class="forecast-icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async"><br>';
             html += '<span class="forecast-condition-text">' + (row["summary"] || "") + '</span>';
             html += '</div>';
         }
@@ -604,7 +607,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
         html += '<div class="forecast-day forecast-24hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
         html += '<div class="forecast-card-label"><span id="weekday">' + dayLabel + '</span></div>';
         html += '<div class="forecast-conditions">';
-        html += '<img id="icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
+        html += '<img class="forecast-icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
         html += '<br>';
         html += '<span class="forecast-condition-text">' + (row["summary"] || "") + '</span>';
         html += '</div>';

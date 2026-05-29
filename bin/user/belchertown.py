@@ -180,9 +180,9 @@ def _log_minifier_missing_error_once(missing_modules):
         return
 
     module_list = ", ".join(missing_modules)
-    log.error(
+    log.warning(
         "Belchertown minify: required package(s) not installed: "
-        f"{module_list}. Falling back to no minifying."
+        f"{module_list}. Falling back to built-in CSS minifying and JS copies."
     )
     _MINIFIER_DEPS_MISSING_LOGGED = True
 
@@ -2342,7 +2342,7 @@ def _build_almanac_inline_markup(payload, image_root="."):
     return (
         '<div class="almanac-sun-stack almanac-sun-stack--rise">'
         '<div class="almanac-sun-time almanac-sun-time--rise almanac-time-row">'
-        f'<span class="sunrise-value"></span><span class="sunrise-set-image sunrise-set-image--rise"><img src="{html.escape(sunrise_image)}"></span>'
+        f'<span class="sunrise-value"></span><span class="sunrise-set-image sunrise-set-image--rise"><img src="{html.escape(sunrise_image)}" alt="" width="20" height="10" loading="lazy" decoding="async"></span>'
         '</div>'
         '<div class="almanac-sun-time almanac-sun-time--moonrise almanac-time-row">'
         '<span class="moonrise-value"></span><span class="moonrise-set-image moonrise-set-image--rise" aria-hidden="true"></span>'
@@ -2361,7 +2361,7 @@ def _build_almanac_inline_markup(payload, image_root="."):
         '</div>'
         '<div class="almanac-sun-stack almanac-sun-stack--set">'
         '<div class="almanac-sun-time almanac-sun-time--set almanac-time-row">'
-        f'<span class="sunrise-set-image"><img src="{html.escape(sunset_image)}"></span><span class="sunset-value"></span>'
+        f'<span class="sunrise-set-image"><img src="{html.escape(sunset_image)}" alt="" width="20" height="10" loading="lazy" decoding="async"></span><span class="sunset-value"></span>'
         '</div>'
         '<div class="almanac-sun-time almanac-sun-time--moonset almanac-time-row">'
         '<span class="moonrise-set-image moonrise-set-image--set" aria-hidden="true"></span><span class="moonset-value"></span>'
@@ -2936,7 +2936,8 @@ class getData(SearchList):
                 extras_dict, width, height, lat, lon, zoom, dark=False
             )
         return self._build_windy_radar(
-            width, height, lat, lon, zoom, rain, wind, temp, marker == "true", overlay
+            width, height, lat, lon, zoom, rain, wind, temp, marker == "true",
+            overlay
         )
 
     def _get_radar_html_dark(self, extras_dict, lat, lon, zoom, overlay, width, height):
@@ -2956,10 +2957,11 @@ class getData(SearchList):
         width = extras_dict.get("radar_width_kiosk", "")
         height = extras_dict.get("radar_height_kiosk", "")
         src = skin_dict.get("Extras", {}).get("radar_html_kiosk", "")
+        escaped_src = html.escape(str(src), quote=True)
         return (
             f'<iframe width="{width}px" height="{height}px" '
-            f'src="{html.escape(str(src), quote=True)}" frameborder="0" '
-            f'loading="lazy" title="Radar map"></iframe>'
+            f'src="{escaped_src}" frameborder="0" loading="lazy" '
+            f'title="Radar map"></iframe>'
         )
 
     def _build_aeris_radar(self, extras_dict, width, height, lat, lon, zoom, dark=False):
@@ -2983,16 +2985,21 @@ class getData(SearchList):
     def _build_windy_radar(self, width, height, lat, lon, zoom, rain, wind, temp, marker, overlay):
         """Build Windy.com embedded radar HTML."""
         marker_str = "true" if marker else "false"
+        src = (
+            f"https://embed.windy.com/embed2.html?lat={lat}&lon={lon}"
+            f"&zoom={zoom}&level=surface"
+            f"&overlay={overlay}"
+            f"&menu=&message=true"
+            f"&marker={marker_str}&calendar=&pressure=&type=map"
+            f"&location=coordinates&detail=&detailLat={lat}&detailLon={lon}"
+            f"&metricRain={rain}&metricWind={wind}&metricTemp={temp}"
+            f"&radarRange=-1"
+        )
+        escaped_src = html.escape(src, quote=True)
+
         return (
             f'<iframe width="{width}px" height="{height}px" '
-            f'src="https://embed.windy.com/embed2.html?lat={lat}&lon={lon}'
-            f'&zoom={zoom}&level=surface'
-            f'&overlay={overlay}'
-            f'&menu=&message=true'
-            f'&marker={marker_str}&calendar=&pressure=&type=map'
-            f'&location=coordinates&detail=&detailLat={lat}&detailLon={lon}'
-            f'&metricRain={rain}&metricWind={wind}&metricTemp={temp}'
-            f'&radarRange=-1" frameborder="0" loading="lazy" '
+            f'src="{escaped_src}" frameborder="0" loading="lazy" '
             f'title="Radar map"></iframe>'
         )
 
@@ -3261,7 +3268,7 @@ class getData(SearchList):
             radar_rain, radar_wind, radar_temp, marker, radar_overlay
         )
         radar_html_dark = self._get_radar_html_dark(
-            extras_dict, lat, lon, zoom, radar_width, radar_height, radar_overlay
+            extras_dict, lat, lon, zoom, radar_overlay, radar_width, radar_height
         )
         radar_html_kiosk = (
             self._get_radar_html_kiosk(extras_dict, skin_dict)
@@ -5290,12 +5297,10 @@ class getData(SearchList):
         custom_css_exists = os.path.isfile(custom_css_file)
 
         minify_requested = to_bool(extras_dict.get("minify", "0"))
-        asset_suffix = ""
+        asset_suffix = ".min" if minify_requested else ""
         if minify_requested:
             minify_deps_ok, missing_modules = _get_minifier_dependency_status()
-            if minify_deps_ok:
-                asset_suffix = ".min"
-            else:
+            if not minify_deps_ok:
                 _log_minifier_missing_error_once(missing_modules)
 
         # Build the search list with the new values
@@ -5453,15 +5458,22 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
         minify_deps_ok, missing_modules = _get_minifier_dependency_status()
         if not minify_deps_ok:
             _log_minifier_missing_error_once(missing_modules)
-            return
 
         html_root = os.path.join(
             self.config_dict["WEEWX_ROOT"],
             self.skin_dict["HTML_ROOT"],
         )
 
-        self._jsmin_func = __import__("rjsmin").jsmin
-        self._cssmin_func = __import__("rcssmin").cssmin
+        self._jsmin_func = None
+        self._cssmin_func = None
+        try:
+            self._jsmin_func = __import__("rjsmin").jsmin
+        except Exception:
+            pass
+        try:
+            self._cssmin_func = __import__("rcssmin").cssmin
+        except Exception:
+            pass
 
         if not os.path.isdir(html_root):
             log.debug(f"Belchertown minify: HTML_ROOT does not exist yet: {html_root}")
@@ -5544,6 +5556,8 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
         fallback that preserves semantics.
         """
 
+        if self._jsmin_func is None:
+            return source_text
         return self._jsmin_func(source_text)
 
     def _minify_css(self, source_text):
@@ -5553,7 +5567,65 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
         fallback that preserves semantics.
         """
 
-        return self._cssmin_func(source_text)
+        if self._cssmin_func is not None:
+            return self._cssmin_func(source_text)
+        return self._minify_css_fallback(source_text)
+
+    def _minify_css_fallback(self, source_text):
+        """Small dependency-free CSS minifier that preserves quoted strings."""
+
+        output = []
+        in_string = None
+        escape_next = False
+        pending_space = False
+        i = 0
+
+        while i < len(source_text):
+            char = source_text[i]
+            next_char = source_text[i + 1] if i + 1 < len(source_text) else ""
+
+            if in_string:
+                output.append(char)
+                if escape_next:
+                    escape_next = False
+                elif char == "\\":
+                    escape_next = True
+                elif char == in_string:
+                    in_string = None
+                i += 1
+                continue
+
+            if char in ("'", '"'):
+                if pending_space and output and output[-1] not in "{[:;,>+~(":
+                    output.append(" ")
+                pending_space = False
+                in_string = char
+                output.append(char)
+                i += 1
+                continue
+
+            if char == "/" and next_char == "*":
+                i += 2
+                while i + 1 < len(source_text) and source_text[i:i + 2] != "*/":
+                    i += 1
+                i += 2
+                continue
+
+            if char.isspace():
+                pending_space = True
+                i += 1
+                continue
+
+            if pending_space and output:
+                prev = output[-1]
+                if prev not in "{[:;,>+~(" and char not in "}]:;,>+~)":
+                    output.append(" ")
+            pending_space = False
+
+            output.append(char)
+            i += 1
+
+        return "".join(output).replace(";}", "}").strip()
 
 
 # ======================================================================================

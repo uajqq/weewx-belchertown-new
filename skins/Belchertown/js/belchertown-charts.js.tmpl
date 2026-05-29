@@ -129,12 +129,18 @@ function belchertown_run_when_visible(target, onVisible, config = {}) {
             threshold: threshold,
         });
         observer.observe(element);
+    } else {
+        // Safety fallback for older browsers without IntersectionObserver.
+        fallbackTimer = setTimeout(function() {
+            complete();
+        }, Math.max(0, fallbackDelayMs));
     }
 
-    // Safety fallback: eventually render even if observer is unavailable or never fires.
-    fallbackTimer = setTimeout(function() {
-        complete();
-    }, Math.max(0, fallbackDelayMs));
+    if (config.alwaysFallback === true && !fallbackTimer) {
+        fallbackTimer = setTimeout(function() {
+            complete();
+        }, Math.max(0, fallbackDelayMs));
+    }
 
     return {
         disconnect: function() {

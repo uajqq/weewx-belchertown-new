@@ -101,9 +101,6 @@
         #end if
         <meta property="og:site_name" content="$head_title" />
 
-        #if $load_highcharts_js
-        <link rel='dns-prefetch' href='//code.highcharts.com' />
-        #end if
         #if $load_core_js
         <link rel='dns-prefetch' href='//ajax.googleapis.com' />
         #end if
@@ -112,13 +109,9 @@
         <link rel='dns-prefetch' href='//stackpath.bootstrapcdn.com' />
         <link rel='dns-prefetch' href='//cdnjs.cloudflare.com' />
 
-        #if $load_highcharts_js
-        <link rel='preconnect' href='https://code.highcharts.com' crossorigin>
-        #end if
         #if $load_core_js
         <link rel='preconnect' href='https://ajax.googleapis.com'>
         #end if
-        <link rel='preconnect' href='https://fonts.googleapis.com'>
         <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
         <link rel='preconnect' href='https://stackpath.bootstrapcdn.com' crossorigin>
         <link rel='preconnect' href='https://cdnjs.cloudflare.com' crossorigin>
@@ -385,8 +378,8 @@
     <body class="page-template-default page full-width-content $bodyTheme" itemscope itemtype="https://schema.org/WebPage">
         #if $Extras.has_key("back_to_top_button_enabled") and $Extras.back_to_top_button_enabled == '1'
         <!-- Back to top button -->
-        <button type="button" class="btn btn-danger" id="btn-back-to-top">
-            <i class="fa fa-arrow-up fa-2x"></i>
+        <button type="button" class="btn btn-danger" id="btn-back-to-top" aria-label="Back to top" title="Back to top">
+            <i class="fa fa-arrow-up fa-2x" aria-hidden="true"></i>
         </button>
         #end if
         <div class="site-container">

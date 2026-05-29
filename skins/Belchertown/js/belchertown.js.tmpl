@@ -223,12 +223,189 @@ function belchertown_debug(message) {
     }
 }
 
+function belchertown_load_deferred_iframes(root) {
+    var scope = (root && root.querySelectorAll) ? root : document;
+    var frames = scope.querySelectorAll("iframe[data-src]");
+
+    frames.forEach(function(frame) {
+        var src = frame.getAttribute("data-src");
+        if (!src) {
+            return;
+        }
+
+        frame.setAttribute("src", src);
+        frame.removeAttribute("data-src");
+    });
+}
+
+function belchertown_schedule_deferred_iframes(root, delayMs, options) {
+    options = options || {};
+    var loadFrames = function() {
+        belchertown_load_deferred_iframes(root);
+    };
+    var delay = parseInt(delayMs, 10);
+    var rootElement = (root && root.nodeType === 1) ? root : null;
+    var scheduled = false;
+
+    if (!isFinite(delay) || delay < 0) {
+        delay = 0;
+    }
+
+    var scheduleLoad = function() {
+        if (scheduled) {
+            return;
+        }
+        scheduled = true;
+
+        window.setTimeout(function() {
+            if ("requestIdleCallback" in window) {
+                window.requestIdleCallback(loadFrames, {timeout: 2500});
+            } else {
+                loadFrames();
+            }
+        }, delay);
+    };
+
+    if (options.waitUntilVisible === true && rootElement && "IntersectionObserver" in window) {
+        var observer = new IntersectionObserver(function(entries) {
+            for (var i = 0; i < entries.length; i++) {
+                if (entries[i].isIntersecting || entries[i].intersectionRatio > 0) {
+                    observer.disconnect();
+                    scheduleLoad();
+                    break;
+                }
+            }
+        }, {
+            root: null,
+            rootMargin: options.rootMargin || "200px 0px",
+            threshold: typeof options.threshold === "number" ? options.threshold : 0.01,
+        });
+        observer.observe(rootElement);
+
+        if (typeof options.fallbackDelayMs === "number" && options.fallbackDelayMs >= 0) {
+            window.setTimeout(function() {
+                observer.disconnect();
+                scheduleLoad();
+            }, options.fallbackDelayMs);
+        }
+        return;
+    }
+
+    scheduleLoad();
+}
+
+function belchertown_parse_rgb_color(color) {
+    var value = String(color || "").trim();
+    var match;
+
+    if (value.charAt(0) === "#") {
+        value = value.slice(1);
+        if (value.length === 3) {
+            value = value.replace(/(.)/g, "$1$1");
+        }
+        if (value.length === 6 && /^[0-9a-fA-F]+$/.test(value)) {
+            return [
+                parseInt(value.slice(0, 2), 16),
+                parseInt(value.slice(2, 4), 16),
+                parseInt(value.slice(4, 6), 16),
+            ];
+        }
+    }
+
+    match = value.match(/^rgba?\(([^)]+)\)$/i);
+    if (match) {
+        return match[1].split(",").slice(0, 3).map(function(part) {
+            return Math.max(0, Math.min(255, parseFloat(part)));
+        });
+    }
+
+    return null;
+}
+
+function belchertown_rgb_to_hex(rgb) {
+    return "#" + rgb.map(function(channel) {
+        return Math.round(channel).toString(16).padStart(2, "0");
+    }).join("");
+}
+
+function belchertown_relative_luminance(rgb) {
+    var channels = rgb.map(function(channel) {
+        var value = channel / 255;
+        return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    });
+
+    return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+}
+
+function belchertown_contrast_ratio(foreground, background) {
+    var foregroundLum = belchertown_relative_luminance(foreground);
+    var backgroundLum = belchertown_relative_luminance(background);
+    var lighter = Math.max(foregroundLum, backgroundLum);
+    var darker = Math.min(foregroundLum, backgroundLum);
+
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+function belchertown_effective_background_color(element) {
+    var current = element;
+
+    while (current && current !== document.documentElement) {
+        var color = window.getComputedStyle(current).backgroundColor;
+        var parsed = belchertown_parse_rgb_color(color);
+        if (parsed && !/rgba\([^,]+,[^,]+,[^,]+,\s*0\s*\)/i.test(color)) {
+            return parsed;
+        }
+        current = current.parentElement;
+    }
+
+    return belchertown_parse_rgb_color(window.getComputedStyle(document.body).backgroundColor) || [255, 255, 255];
+}
+
+function belchertown_readable_color(color, background, minimumRatio) {
+    var rgb = belchertown_parse_rgb_color(color);
+    var bg = Array.isArray(background) ? background : belchertown_parse_rgb_color(background);
+    var ratio = parseFloat(minimumRatio);
+
+    if (!rgb || !bg) {
+        return color;
+    }
+    if (!isFinite(ratio) || ratio <= 0) {
+        ratio = 4.5;
+    }
+    if (belchertown_contrast_ratio(rgb, bg) >= ratio) {
+        return color;
+    }
+
+    var target = belchertown_relative_luminance(bg) > 0.45 ? [0, 0, 0] : [255, 255, 255];
+    for (var step = 1; step <= 24; step++) {
+        var mix = step / 24;
+        var candidate = rgb.map(function(channel, index) {
+            return (channel * (1 - mix)) + (target[index] * mix);
+        });
+        if (belchertown_contrast_ratio(candidate, bg) >= ratio) {
+            return belchertown_rgb_to_hex(candidate);
+        }
+    }
+
+    return belchertown_rgb_to_hex(target);
+}
+
+function belchertown_apply_readable_color(selector, color, minimumRatio) {
+    jQuery(selector).each(function() {
+        var background = belchertown_effective_background_color(this);
+        jQuery(this).css("color", belchertown_readable_color(color, background, minimumRatio));
+    });
+}
+
 jQuery(document).ready(function() {
 
     // Bootstrap hover tooltips
     if (jQuery.fn.tooltip) {
         jQuery('[data-toggle="tooltip"]').tooltip()
     }
+
+    // Fail-open for pages generated with deferred iframe markup.
+    belchertown_schedule_deferred_iframes(document, 0);
 
     // If the visitor has overridden the theme, keep that theme going throughout the full site and their visit.
     if (sessionStorage.getItem('theme') == "toggleOverride") {
@@ -312,7 +489,7 @@ jQuery(document).ready(function() {
 
     // Style legacy celestial table markup as modern sub-cards in the extras modal.
     enhanceAlmanacExtrasModal();
-    jQuery('#almanac').on('shown.bs.modal', function() {
+    jQuery('#almanac-modal').on('shown.bs.modal', function() {
         enhanceAlmanacExtrasModal();
     });
 
@@ -400,7 +577,7 @@ function get_aqi_color(aqi) {
     } else {
         color = "#cc241d";
     }
-    jQuery(".wx-aqi, .wx-aqi-category, .aqi_outer").css("color", color);
+    belchertown_apply_readable_color(".wx-aqi, .wx-aqi-category, .aqi_outer", color);
 }
 
 function get_outTemp_color(unit, outTemp, returnColor = false) {
@@ -422,7 +599,7 @@ function get_outTemp_color(unit, outTemp, returnColor = false) {
     if (returnColor) {
         return outTemp_color;
     } else {
-        jQuery(".outtemp_outer").css("color", outTemp_color);
+        belchertown_apply_readable_color(".outtemp_outer", outTemp_color);
     }
 }
 
@@ -1145,6 +1322,7 @@ function changeTheme(themeName, toggleOverride = false) {
         // Apply dark theme
         // #if $radar_html_dark != "None"
         jQuery('.radar_image').html('$radar_html_dark');
+        belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
         // #end if
         jQuery('body').addClass("dark");
         jQuery('body').removeClass("light");
@@ -1160,6 +1338,7 @@ function changeTheme(themeName, toggleOverride = false) {
         // Apply light theme
         // #if $radar_html_dark != "None"
         jQuery('.radar_image').html('$radar_html');
+        belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
         // #end if
         jQuery('body').addClass("light");
         jQuery('body').removeClass("dark");
@@ -1190,7 +1369,7 @@ var unit_rounding_array = "";
 var unit_label_array = "";
 var weewx_data = "";
 function enhanceAlmanacExtrasModal(almanacData) {
-    var modalBody = jQuery("#almanac .almanac-extras-modal-body");
+    var modalBody = jQuery("#almanac-modal .almanac-extras-modal-body");
     var sourceRaw;
     var sourceLabel;
     var sourceNote;
@@ -1548,8 +1727,8 @@ function update_weewx_data(data) {
     renderAlmanacDiagram(data["almanac"]["diagram"]);
     // #if $almanac.hasExtras
     // Close current modal if open
-    if (jQuery.fn.modal && jQuery('#almanac').length) {
-        jQuery('#almanac').modal('hide');
+    if (jQuery.fn.modal && jQuery('#almanac-modal').length) {
+        jQuery('#almanac-modal').modal('hide');
     }
     if (data["almanac"] && typeof data["almanac"]["almanac_extras_modal_html"] === "string" && data["almanac"]["almanac_extras_modal_html"].length > 0) {
         jQuery(".almanac-extras-modal-body").html(data["almanac"]["almanac_extras_modal_html"]);

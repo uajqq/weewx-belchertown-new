@@ -367,19 +367,19 @@
                                     </div>
                                     #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
                                     <div class="almanac-details-link almanac-details-link--inline">
-                                        <a href="#almanac" data-toggle="modal" data-target="#almanac">$obs.label.almanac_more_details</a>
+                                        <a href="#almanac-modal" data-toggle="modal" data-target="#almanac-modal">$obs.label.almanac_more_details</a>
                                     </div>
                                     #end if
                                 </div>
                                     #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
-                                    <div class="modal fade" id="almanac" tabindex="-1" role="dialog" aria-labelledby="almanac" aria-hidden="true">
+                                    <div class="modal fade" id="almanac-modal" tabindex="-1" role="dialog" aria-labelledby="almanac-modal-title" aria-hidden="true">
                                         <div class="modal-dialog modal-lg" role="document">
                                             <div class="modal-content">
                                                 <div class="modal-header">
                                                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                                                         <span aria-hidden="true">&times;</span>
                                                     </button>
-                                                    <h4 class="modal-title" id="almanac">$obs.label.almanac_modal_title</h4>
+                                                    <h4 class="modal-title" id="almanac-modal-title">$obs.label.almanac_modal_title</h4>
                                                 </div>
                                                 <div class="almanac-extras-modal-body modal-body">
                                                     #include "celestial.inc"
