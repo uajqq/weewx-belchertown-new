@@ -768,7 +768,7 @@ function showChart(json_file, prepend_renderTo = false) {
             });
             if (missingSeriesIndex >= 0) {
                 var missingSeries = options.series[missingSeriesIndex] || {};
-                var missingObs = missingSeries.obsType || missingSeries.observation_type || missingSeries.name || "unknown observation";
+                var missingObs = missingSeries.obsType || missingSeries.observation_type || missingSeries.name || "$obs.label.unknown_observation";
                 throw new Error("Unavailable observation value for chart series: " + missingObs);
             }
 
@@ -977,7 +977,7 @@ function showChart(json_file, prepend_renderTo = false) {
 
             var seriesAnalysis = analyzeSeriesData(options.series);
             if (seriesAnalysis.missingSeries) {
-                var unavailableObs = seriesAnalysis.missingSeries.obsType || seriesAnalysis.missingSeries.observation_type || seriesAnalysis.missingSeries.name || "unknown observation";
+                var unavailableObs = seriesAnalysis.missingSeries.obsType || seriesAnalysis.missingSeries.observation_type || seriesAnalysis.missingSeries.name || "$obs.label.unknown_observation";
                 throw new Error("Unavailable observation value for chart series: " + unavailableObs);
             }
 
@@ -1609,11 +1609,11 @@ function showChart(json_file, prepend_renderTo = false) {
                 if (typeof options !== "undefined" && options.chart && options.chart.renderTo) {
                     var failedChart = jQuery("#" + options.chart.renderTo);
                     if (failedChart.length) {
-                        var unavailableObs = observation_type || plotname || "unknown observation";
+                        var unavailableObs = observation_type || plotname || "$obs.label.unknown_observation";
                         failedChart.html(
                             '<div class="chart-unavailable" style="padding:14px 10px;text-align:center;color:#888;">' +
-                            '<div>Chart unavailable (missing or invalid observation)</div>' +
-                            '<div style="margin-top:6px;font-weight:500;">Observation: ' + unavailableObs + '</div>' +
+                            '<div>$obs.label.chart_unavailable ($obs.label.chart_unavailable_detail)</div>' +
+                            '<div style="margin-top:6px;font-weight:500;">$obs.label.observation: ' + unavailableObs + '</div>' +
                             '</div>'
                         );
                     }

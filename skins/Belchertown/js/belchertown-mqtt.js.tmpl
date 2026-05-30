@@ -91,7 +91,7 @@ function mqtt_ensure_status_info_button() {
     }
 
     updated.after(
-        " <button type='button' class='mqtt-status-info' aria-label='Live update details'>" +
+        " <button type='button' class='mqtt-status-info' aria-label='$obs.label.mqtt_live_update_details'>" +
         "<i class='fa fa-info' aria-hidden='true'></i>" +
         "</button>"
     );
@@ -111,14 +111,14 @@ function mqtt_ensure_status_modal() {
     modal += "<div class='modal-dialog modal-sm' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
-    modal += "<button type='button' class='close mqtt-status-modal-dismiss' data-dismiss='modal' aria-label='Close'><span aria-hidden='true'>&times;</span></button>";
-    modal += "<h4 class='modal-title' id='mqtt-status-modal-title'>Live update details</h4>";
+    modal += "<button type='button' class='close mqtt-status-modal-dismiss' data-dismiss='modal' aria-label='$obs.label.close'><span aria-hidden='true'>&times;</span></button>";
+    modal += "<h4 class='modal-title' id='mqtt-status-modal-title'>$obs.label.mqtt_live_update_details</h4>";
     modal += "</div>";
     modal += "<div class='modal-body'>";
     modal += "<dl class='mqtt-status-detail-list'>";
-    modal += "<dt>Status</dt><dd class='mqtt-status-detail-message'></dd>";
-    modal += "<dt>Displayed time</dt><dd class='mqtt-status-detail-relative'></dd>";
-    modal += "<dt>Exact time</dt><dd class='mqtt-status-detail-absolute'></dd>";
+    modal += "<dt>$obs.label.status</dt><dd class='mqtt-status-detail-message'></dd>";
+    modal += "<dt>$obs.label.displayed_time</dt><dd class='mqtt-status-detail-relative'></dd>";
+    modal += "<dt>$obs.label.exact_time</dt><dd class='mqtt-status-detail-absolute'></dd>";
     modal += "</dl>";
     modal += "</div>";
     modal += "<div class='modal-footer'>";

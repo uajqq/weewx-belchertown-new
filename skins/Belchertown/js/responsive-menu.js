@@ -60,10 +60,11 @@
             menu.classList.add("responsive-menu");
 
             var icon = document.createElement("div");
+            var menuLabel = menu.getAttribute("data-responsive-menu-label") || "Menu";
             icon.className = "responsive-menu-icon";
             icon.setAttribute("role", "button");
             icon.setAttribute("tabindex", "0");
-            icon.setAttribute("aria-label", "Menu");
+            icon.setAttribute("aria-label", menuLabel);
             icon.setAttribute("aria-expanded", "false");
             menu.parentNode.insertBefore(icon, menu);
 

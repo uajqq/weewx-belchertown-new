@@ -1465,11 +1465,31 @@ function enhanceAlmanacExtrasModal(almanacData) {
     var phaseLabel = "$obs.label.phase".toLowerCase();
     var moonAgeValue = "";
     var moonAgeLabel = "$obs.label.moon_age";
+    var dataSourceLabel = "$obs.label.data_source";
+    var sourceNoneLabel = "$obs.label.source_none";
+    var hourShort = "$obs.label.hour_short";
+    var minuteShort = "$obs.label.minute_short";
+    var secondShort = "$obs.label.second_short";
     var almanacDateTimeFormat = "$obs.label.time_records_page_full_date";
     var almanacTimeFormat = "$obs.label.time_sunrise";
 
     if (!moonAgeLabel || moonAgeLabel === "moon_age") {
         moonAgeLabel = "Moon age";
+    }
+    if (!dataSourceLabel || dataSourceLabel === "data_source") {
+        dataSourceLabel = "Data source";
+    }
+    if (!sourceNoneLabel || sourceNoneLabel === "source_none") {
+        sourceNoneLabel = "None";
+    }
+    if (!hourShort || hourShort === "hour_short") {
+        hourShort = "h";
+    }
+    if (!minuteShort || minuteShort === "minute_short") {
+        minuteShort = "m";
+    }
+    if (!secondShort || secondShort === "second_short") {
+        secondShort = "s";
     }
     if (!almanacDateTimeFormat || almanacDateTimeFormat === "time_records_page_full_date") {
         almanacDateTimeFormat = "L LTS";
@@ -1645,7 +1665,7 @@ function enhanceAlmanacExtrasModal(almanacData) {
     } else if (sourceRaw === "pyephem") {
         sourceLabel = "PyEphem";
     } else {
-        sourceLabel = "None";
+        sourceLabel = sourceNoneLabel;
     }
 
     sourceNote = modalBody.find(".celestial_source_note").first();
@@ -1658,7 +1678,7 @@ function enhanceAlmanacExtrasModal(almanacData) {
         sourceNoteSmall = jQuery("<small></small>");
         sourceNote.empty().append(sourceNoteSmall);
     }
-    sourceNoteSmall.html("Data source: <strong>" + sourceLabel + "</strong>");
+    sourceNoteSmall.html(dataSourceLabel + ": <strong>" + sourceLabel + "</strong>");
 
     detailsContainer = modalBody.find("#celestial_details").first();
     if (detailsContainer.length) {
@@ -1687,7 +1707,7 @@ function enhanceAlmanacExtrasModal(almanacData) {
             var hours = Math.floor(total / 3600);
             var mins = Math.floor((total % 3600) / 60);
             var secs = total % 60;
-            daylightValue.text(hours + "h " + mins + "m " + secs + "s");
+            daylightValue.text(hours + hourShort + " " + mins + minuteShort + " " + secs + secondShort);
         }
     }
 }

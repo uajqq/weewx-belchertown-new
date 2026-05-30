@@ -92,7 +92,7 @@
 
                         <div class="col-xs-6 temp-observation">
                             <div class="obs-group">
-                                <img id="wxicon" src="$relative_url/images/$current_obs_icon" alt="Current conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high"><!-- AJAX -->
+                                <img id="wxicon" src="$relative_url/images/$current_obs_icon" alt="$obs.label.current_conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high"><!-- AJAX -->
                                 <div class="outtemp_outer"><span class="outtemp">$current.outTemp.formatted</span><sup
                                         class="outtempunitlabelsuper">$unit.label.outTemp</sup></div><!-- AJAX -->
                                 <div class="current-obs-text">$current_obs_summary</div><!-- AJAX -->

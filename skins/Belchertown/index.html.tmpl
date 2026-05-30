@@ -251,7 +251,7 @@
                                             #if $current_obs_icon != ""
                                                 #set $homepage_current_icon = $current_obs_icon
                                             #end if
-                                            <img id="wxicon" src="$relative_url/images/$homepage_current_icon" alt="Current conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high">
+                                            <img id="wxicon" src="$relative_url/images/$homepage_current_icon" alt="$obs.label.current_conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high">
                                         #end if
                                     </div>
                                     <div class="col-sm-6 current_temp">
@@ -413,7 +413,7 @@
                                         <div class="modal-dialog modal-lg" role="document">
                                             <div class="modal-content">
                                                 <div class="modal-header">
-                                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                    <button type="button" class="close" data-dismiss="modal" aria-label="$obs.label.close">
                                                         <span aria-hidden="true">&times;</span>
                                                     </button>
                                                     <h4 class="modal-title" id="almanac-modal-title">$obs.label.almanac_modal_title</h4>

@@ -4,7 +4,7 @@
         <div class="col-sm-1 wx-stn-info-current-obs">
             <span class="obs-header-icon">
                 #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1' and $current_obs_icon != ""
-                <img id="wxicon" src="${relative_url}/images/${current_obs_icon}" alt="Current conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high">
+                <img id="wxicon" src="${relative_url}/images/${current_obs_icon}" alt="$obs.label.current_conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high">
                 #end if
             </span>
             <span class="obs-header-outtemp">$current.outTemp</span>

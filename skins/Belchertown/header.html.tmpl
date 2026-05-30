@@ -28,13 +28,29 @@
 
 ## Setup the header labels, setting a default if not defined
 #if $obs.label.html_title == "" 
-#set $head_title = $station.location + " Weather Conditions"
+#set $head_title_template = "%s Weather Conditions"
+#try
+    #if $obs.label.html_title_default != "html_title_default"
+        #set $head_title_template = $obs.label.html_title_default
+    #end if
+#except
+    #set $unused_head_title_template = None
+#end try
+#set $head_title = $head_title_template % $station.location
 #else
 #set $head_title = $obs.label.html_title
 #end if
 
 #if $obs.label.html_description == "" 
-#set $head_desc = "Weather conditions for " + $station.location + " as observed by a personal weather station and the WeeWX weather software"
+#set $head_desc_template = "Weather conditions for %s as observed by a personal weather station and the WeeWX weather software"
+#try
+    #if $obs.label.html_description_default != "html_description_default"
+        #set $head_desc_template = $obs.label.html_description_default
+    #end if
+#except
+    #set $unused_head_desc_template = None
+#end try
+#set $head_desc = $head_desc_template % $station.location
 #else
 #set $head_desc = $obs.label.html_description
 #end if
@@ -378,7 +394,7 @@
     <body class="page-template-default page full-width-content $bodyTheme" itemscope itemtype="https://schema.org/WebPage">
         #if $Extras.has_key("back_to_top_button_enabled") and $Extras.back_to_top_button_enabled == '1'
         <!-- Back to top button -->
-        <button type="button" class="btn btn-danger" id="btn-back-to-top" aria-label="Back to top" title="Back to top">
+        <button type="button" class="btn btn-danger" id="btn-back-to-top" aria-label="$obs.label.back_to_top" title="$obs.label.back_to_top">
             <i class="fa fa-arrow-up fa-2x" aria-hidden="true"></i>
         </button>
         #end if
@@ -402,7 +418,7 @@
                     <div class="widget-area header-widget-area">
                         <section id="nav_menu">
                             <div class="widget-wrap">
-                                <nav class="nav-header" itemscope itemtype="https://schema.org/SiteNavigationElement">
+                                <nav class="nav-header" itemscope itemtype="https://schema.org/SiteNavigationElement" data-responsive-menu-label="$obs.label.nav_menu">
                                     <ul id="menu-menu" class="menu genesis-nav-menu">
                                         <!-- class = current-menu-item -->
                                         <li class="menu-item menu-item-home"><a href="$relative_url" itemprop="url"><span itemprop="name">$obs.label.nav_home</span></a></li>
