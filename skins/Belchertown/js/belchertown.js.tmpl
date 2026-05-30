@@ -1464,10 +1464,13 @@ function enhanceAlmanacExtrasModal(almanacData) {
     var totalDaylightLabel = "$obs.label.total_daylight".toLowerCase();
     var phaseLabel = "$obs.label.phase".toLowerCase();
     var moonAgeValue = "";
-    var moonAgeLabel = "Moon age";
+    var moonAgeLabel = "$obs.label.moon_age";
     var almanacDateTimeFormat = "$obs.label.time_records_page_full_date";
     var almanacTimeFormat = "$obs.label.time_sunrise";
 
+    if (!moonAgeLabel || moonAgeLabel === "moon_age") {
+        moonAgeLabel = "Moon age";
+    }
     if (!almanacDateTimeFormat || almanacDateTimeFormat === "time_records_page_full_date") {
         almanacDateTimeFormat = "L LTS";
     }

@@ -13,6 +13,7 @@
 #set $moon_ra = "--"
 #set $moon_dec = "--"
 #set $moon_age_label = "Moon age"
+#set $moon_age_days_label = "days"
 #set $moon_age_days = None
 #set $moon_age_display = "--"
 #set $synodic_month_days = 29.530588853
@@ -32,6 +33,13 @@
   #end if
 #except
   #set $unused_moon_age_label = None
+#end try
+#try
+  #if $obs.label.moon_age_days != "moon_age_days"
+    #set $moon_age_days_label = $obs.label.moon_age_days
+  #end if
+#except
+  #set $unused_moon_age_days_label = None
 #end try
 #set $next_new_moon_raw = None
 #set $now_raw = None
@@ -54,7 +62,7 @@
   #while $moon_age_days >= $synodic_month_days
     #set $moon_age_days = $moon_age_days - $synodic_month_days
   #end while
-  #set $moon_age_display = "%.1f days" % $moon_age_days
+  #set $moon_age_display = "%.1f %s" % ($moon_age_days, $moon_age_days_label)
 #end if
 #include "almanac_daylight_data.inc"
 #if $almanac.hasExtras

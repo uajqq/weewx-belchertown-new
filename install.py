@@ -589,6 +589,121 @@ class BelchertownInstaller(ExtensionInstaller):
         return report_overrides
 
     @classmethod
+    def _known_belchertown_option_keys(cls):
+        """Return option names owned by Belchertown's generated config."""
+        default_extras, default_generic = cls._get_skin_defaults()
+        known_keys = set(cls._BELCHERTOWN_ROOT_KEYS)
+        known_keys.update(default_extras)
+        known_keys.update(default_generic)
+        known_keys.update(cls._LEGACY_EXTRAS_MAPPING)
+        known_keys.update(cls._LEGACY_EXTRAS_MAPPING.values())
+        known_keys.update(cls._LEGACY_LABELS_GENERIC_MAPPING)
+        known_keys.update(cls._LEGACY_LABELS_GENERIC_MAPPING.values())
+        known_keys.update(cls._LEGACY_PLACEHOLDER_KEYS)
+        known_keys.add(cls._EXTRAS_PLACEHOLDER_KEY)
+        return known_keys
+
+    @staticmethod
+    def _section_names(section):
+        """Return ConfigObj subsection names, falling back to dict order."""
+        section_names = getattr(section, "sections", None)
+        if section_names is not None:
+            return list(section_names)
+
+        names = []
+        for key, value in section.items():
+            if isinstance(value, (dict, configobj.Section)):
+                names.append(key)
+        return names
+
+    @classmethod
+    def _comment_line_has_belchertown_option(cls, line, known_keys):
+        """Return True if a comment line is a commented Belchertown assignment."""
+        content = str(line).strip()
+        if not content.startswith("#"):
+            return False
+
+        content = content[1:].lstrip()
+        if not content or content.startswith("#") or "=" not in content:
+            return False
+
+        key_part, _ = content.split("=", 1)
+        key = key_part.strip()
+        return key in known_keys
+
+    @classmethod
+    def _remove_belchertown_comment_groups(cls, comments, known_keys):
+        """Remove contiguous comment groups that contain Belchertown options."""
+        cleaned = []
+        group = []
+        group_has_belchertown_option = False
+        pending_blanks = []
+        changed = False
+
+        def flush_group():
+            nonlocal group, group_has_belchertown_option, pending_blanks, changed
+
+            if not group:
+                return
+
+            if group_has_belchertown_option:
+                changed = True
+                pending_blanks = []
+            else:
+                cleaned.extend(pending_blanks)
+                cleaned.extend(group)
+                pending_blanks = []
+
+            group = []
+            group_has_belchertown_option = False
+
+        for comment in comments:
+            if not str(comment).strip():
+                flush_group()
+                pending_blanks.append(comment)
+                continue
+
+            group.append(comment)
+            if cls._comment_line_has_belchertown_option(comment, known_keys):
+                group_has_belchertown_option = True
+
+        flush_group()
+        cleaned.extend(pending_blanks)
+
+        if changed and not any(str(comment).strip() for comment in cleaned):
+            cleaned = [""]
+
+        return cleaned, changed
+
+    @classmethod
+    def _cleanup_following_report_comments(cls, std_report):
+        """Drop stale Belchertown comments attached to the next report section."""
+        if not isinstance(std_report, (dict, configobj.Section)):
+            return
+
+        report_names = cls._section_names(std_report)
+        try:
+            belchertown_index = report_names.index("Belchertown")
+        except ValueError:
+            return
+
+        if belchertown_index + 1 >= len(report_names):
+            return
+
+        next_report = report_names[belchertown_index + 1]
+        comments_by_key = getattr(std_report, "comments", None)
+        if not isinstance(comments_by_key, dict) or next_report not in comments_by_key:
+            return
+
+        comments = comments_by_key.get(next_report) or []
+        cleaned_comments, changed = cls._remove_belchertown_comment_groups(
+            comments,
+            cls._known_belchertown_option_keys(),
+        )
+        if changed:
+            comments_by_key[next_report] = cleaned_comments
+
+    @classmethod
     def _build_belchertown_template(
         cls,
         current_report,
@@ -1030,6 +1145,7 @@ class BelchertownInstaller(ExtensionInstaller):
         if fresh_config is None:
             return False
 
+        self._cleanup_following_report_comments(std_report)
         if "Belchertown" in std_report:
             del std_report["Belchertown"]
 

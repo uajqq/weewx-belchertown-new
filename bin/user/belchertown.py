@@ -3023,11 +3023,13 @@ def build_daylight_change_string(
     second_short="s",
     more_than_yesterday_label="more than yesterday",
     less_than_yesterday_label="less than yesterday",
+    daylight_label="Daylight",
+    same_as_yesterday_label="same as yesterday",
 ):
     """Build daylight change-vs-yesterday string only."""
 
     if almanac_obj is None:
-        return "Daylight: --"
+        return f"{daylight_label}: --"
 
     sunrise_ts = _safe_getattr_chain(almanac_obj, ("sun", "rise", "raw"))
     if sunrise_ts is None:
@@ -3041,15 +3043,15 @@ def build_daylight_change_string(
         # Polar fallback if sun altitude is available.
         sun_alt = _safe_float(_safe_getattr_chain(almanac_obj, ("sun", "alt")))
         if sun_alt is None:
-            return "Daylight: --"
+            return f"{daylight_label}: --"
         if sun_alt < 0:
-            return f"Daylight: 0{hour_short} 0{minute_short} 0{second_short} less than yesterday"
-        return f"Daylight: 0{hour_short} 0{minute_short} 0{second_short} more than yesterday"
+            return f"{daylight_label}: 0{hour_short} 0{minute_short} 0{second_short} {less_than_yesterday_label}"
+        return f"{daylight_label}: 0{hour_short} 0{minute_short} 0{second_short} {more_than_yesterday_label}"
 
     try:
         today_daylight = int(round(float(sunset_ts) - float(sunrise_ts)))
     except Exception:
-        return "Daylight: --"
+        return f"{daylight_label}: --"
 
     if today_daylight < 0:
         today_daylight = 0
@@ -3067,7 +3069,7 @@ def build_daylight_change_string(
         yesterday_snapshot = None
 
     if yesterday_snapshot is None:
-        return "Daylight: --"
+        return f"{daylight_label}: --"
 
     y_sunrise = _safe_getattr_chain(yesterday_snapshot, ("sun", "rise", "raw"))
     if y_sunrise is None:
@@ -3078,16 +3080,16 @@ def build_daylight_change_string(
         y_sunset = _safe_getattr_chain(yesterday_snapshot, ("sunset", "raw"))
 
     if y_sunrise is None or y_sunset is None:
-        return "Daylight: --"
+        return f"{daylight_label}: --"
 
     try:
         yesterday_daylight = int(round(float(y_sunset) - float(y_sunrise)))
     except Exception:
-        return "Daylight: --"
+        return f"{daylight_label}: --"
 
     difference = today_daylight - yesterday_daylight
     if difference == 0:
-        return "Daylight: no change from yesterday"
+        return f"{daylight_label}: {same_as_yesterday_label}"
 
     delta = abs(difference)
     amt_minutes = (delta % 3600) // 60
@@ -3098,7 +3100,7 @@ def build_daylight_change_string(
     else:
         delta_str = f"{amt_str} {less_than_yesterday_label}"
 
-    return f"Daylight: {delta_str}"
+    return f"{daylight_label}: {delta_str}"
 
 
 def build_almanac_diagram_payload(

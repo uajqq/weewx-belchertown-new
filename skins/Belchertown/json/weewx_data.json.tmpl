@@ -15,6 +15,7 @@
 #set $moon_ra = "--"
 #set $moon_dec = "--"
 #set $moon_age_label = "Moon age"
+#set $moon_age_days_label = "days"
 #set $moon_age_days = None
 #set $moon_age_display = "--"
 #set $moon_tilt_degrees = None
@@ -35,6 +36,13 @@
     #end if
 #except
     #set $unused_moon_age_label = None
+#end try
+#try
+    #if $obs.label.moon_age_days != "moon_age_days"
+        #set $moon_age_days_label = $obs.label.moon_age_days
+    #end if
+#except
+    #set $unused_moon_age_days_label = None
 #end try
 #set $next_new_moon_raw = None
 #set $now_raw = None
@@ -57,7 +65,7 @@
     #while $moon_age_days >= $synodic_month_days
         #set $moon_age_days = $moon_age_days - $synodic_month_days
     #end while
-    #set $moon_age_display = "%.1f days" % $moon_age_days
+    #set $moon_age_display = "%.1f %s" % ($moon_age_days, $moon_age_days_label)
 #end if
 #if $moon_age_days is not None and not math.isfinite($moon_age_days)
     #set $moon_age_days = None
