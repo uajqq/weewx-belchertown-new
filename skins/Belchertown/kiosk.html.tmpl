@@ -409,7 +409,10 @@
             <div class="row forecastrow">
                 <!-- Forecast -->
                 <div class="col-lg-8 forecast-title">
-                    #echo $forecast_header_prefix#<span class="forecast-subtitle"></span><!-- moment.js --> <span class="forecast-source"></span>
+                    #if $forecast_header_prefix
+                    <span class="forecast-header-label">#echo $forecast_header_prefix#</span>
+                    #end if
+                    <span class="forecast-subtitle"></span><!-- moment.js --> <span class="forecast-source"></span>
                 </div>
                 <div class="col-lg-4 forecast-menu">
                     $obs.label.forecast_interval_caption <div class="forecast-button" onclick="forecast_select(1);" id="button1">1</div>

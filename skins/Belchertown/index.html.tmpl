@@ -458,7 +458,10 @@
                 <div class="homepage-card-header homepage-card-header--forecast">
                     <div class="forecast-header-text">
                         <h2>
-                            #echo $forecast_header_prefix#<span class="forecast-subtitle"></span><!-- moment.js -->
+                            #if $forecast_header_prefix
+                            <span class="forecast-header-label">#echo $forecast_header_prefix#</span>
+                            #end if
+                            <span class="forecast-subtitle"></span><!-- moment.js -->
                             <span class="forecast-source"></span>
                         </h2>
                     </div>
@@ -505,7 +508,12 @@
             <div class="$homepage_secondary_row_class">
                 <section class="homepage-card homepage-card--records">
                     <div class="homepage-card-header">
-                        <h2>#echo $weather_snapshots_prefix#<a href="$relative_url/records" class="homepage-card-link-inline">$obs.label.weather_snapshots_link</a></h2>
+                        <h2>
+                            #if $weather_snapshots_prefix
+                            <span class="weather-snapshots-label">#echo $weather_snapshots_prefix#</span>
+                            #end if
+                            <a href="$relative_url/records" class="homepage-card-link-inline">$obs.label.weather_snapshots_link</a>
+                        </h2>
                     </div>
                     <div class="homepage-card-body">
                         <div class="row">
