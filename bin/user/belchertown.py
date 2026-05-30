@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import fnmatch
+import re
 import time
 import xml.etree.ElementTree as ET
 from urllib.request import Request, urlopen
@@ -3502,12 +3503,93 @@ class getData(SearchList):
         except (ValueError, TypeError):
             return names[0]
 
+    @staticmethod
+    def _strip_wrapping_url_quotes(value, unescape_entities=True):
+        """Strip accidental quote wrappers from copied iframe URLs."""
+        cleaned = str(value or "").strip()
+        if unescape_entities:
+            cleaned = html.unescape(cleaned)
+
+        while len(cleaned) >= 2:
+            previous = cleaned
+            for quote in ("'", '"'):
+                escaped_quote = "\\" + quote
+                if cleaned.startswith(escaped_quote) and cleaned.endswith(escaped_quote):
+                    cleaned = cleaned[2:-2].strip()
+                    break
+                if cleaned.startswith(quote) and cleaned.endswith(quote):
+                    cleaned = cleaned[1:-1].strip()
+                    break
+                if cleaned.startswith(escaped_quote) and cleaned.endswith(quote):
+                    cleaned = cleaned[2:-1].strip()
+                    break
+                if cleaned.startswith(quote) and cleaned.endswith(escaped_quote):
+                    cleaned = cleaned[1:-2].strip()
+                    break
+            if cleaned == previous:
+                break
+
+        return cleaned
+
+    @staticmethod
+    def _is_absolute_radar_url(value):
+        value = str(value or "").lower()
+        return value.startswith(("https://", "http://", "//"))
+
+    def _normalize_radar_src(self, value):
+        """Return a clean URL from a bare URL, quoted URL, or iframe snippet."""
+        raw_src = str(value or "").strip()
+        src_match = re.search(r"""(?is)\bsrc\s*=\s*(['"])(.*?)\1""", raw_src)
+        if src_match:
+            return self._strip_wrapping_url_quotes(src_match.group(2))
+
+        src = self._strip_wrapping_url_quotes(raw_src)
+        src_match = re.search(r"""(?is)\bsrc\s*=\s*(['"])(.*?)\1""", src)
+        if src_match:
+            src = self._strip_wrapping_url_quotes(src_match.group(2))
+        return src
+
+    def _build_radar_iframe_from_src(self, src, width, height):
+        """Build an iframe from a normalized radar URL."""
+        escaped_src = html.escape(self._normalize_radar_src(src), quote=True)
+        escaped_width = html.escape(str(width), quote=True)
+        escaped_height = html.escape(str(height), quote=True)
+        return (
+            f'<iframe width="{escaped_width}px" height="{escaped_height}px" '
+            f'src="{escaped_src}" frameborder="0" loading="lazy" '
+            f'title="Radar map"></iframe>'
+        )
+
+    def _normalize_custom_radar_html(self, value, width, height):
+        """Accept custom radar HTML or a bare custom radar URL."""
+        markup = self._strip_wrapping_url_quotes(value, unescape_entities=False)
+        if not markup:
+            return ""
+
+        normalized_url = self._strip_wrapping_url_quotes(markup)
+        if self._is_absolute_radar_url(normalized_url):
+            return self._build_radar_iframe_from_src(normalized_url, width, height)
+
+        def normalize_src_attr(match_obj):
+            src = html.escape(
+                self._normalize_radar_src(match_obj.group(3)),
+                quote=True,
+            )
+            return f"{match_obj.group(1)}{match_obj.group(2)}{src}{match_obj.group(2)}"
+
+        return re.sub(
+            r"""(?is)(\bsrc\s*=\s*)(['"])(.*?)\2""",
+            normalize_src_attr,
+            markup,
+            count=1,
+        )
+
     def _get_radar_html(self, extras_dict, lat, lon, zoom, width, height,
                         rain, wind, temp, marker, overlay):
         """Generate radar HTML based on provider configuration."""
         custom = extras_dict.get("radar_html", "")
         if custom:
-            return custom
+            return self._normalize_custom_radar_html(custom, width, height)
         
         if extras_dict.get("aeris_map") == "1":
             return self._build_aeris_radar(
@@ -3522,7 +3604,7 @@ class getData(SearchList):
         """Generate dark mode radar HTML based on provider configuration."""
         custom = extras_dict.get("radar_html_dark", "")
         if custom:
-            return custom
+            return self._normalize_custom_radar_html(custom, width, height)
         
         if extras_dict.get("aeris_map") == "1":
             return self._build_aeris_radar(
@@ -3535,12 +3617,7 @@ class getData(SearchList):
         width = extras_dict.get("radar_width_kiosk", "")
         height = extras_dict.get("radar_height_kiosk", "")
         src = skin_dict.get("Extras", {}).get("radar_html_kiosk", "")
-        escaped_src = html.escape(str(src), quote=True)
-        return (
-            f'<iframe width="{width}px" height="{height}px" '
-            f'src="{escaped_src}" frameborder="0" loading="lazy" '
-            f'title="Radar map"></iframe>'
-        )
+        return self._build_radar_iframe_from_src(src, width, height)
 
     def _build_aeris_radar(self, extras_dict, width, height, lat, lon, zoom, dark=False):
         """Build Aeris API radar embed HTML."""
@@ -3573,13 +3650,7 @@ class getData(SearchList):
             f"&metricRain={rain}&metricWind={wind}&metricTemp={temp}"
             f"&radarRange=-1"
         )
-        escaped_src = html.escape(src, quote=True)
-
-        return (
-            f'<iframe width="{width}px" height="{height}px" '
-            f'src="{escaped_src}" frameborder="0" loading="lazy" '
-            f'title="Radar map"></iframe>'
-        )
+        return self._build_radar_iframe_from_src(src, width, height)
 
     def _convert_temperature(self, value, from_unit, formatter):
         """Convert temperature value and format for display."""
@@ -3853,19 +3924,6 @@ class getData(SearchList):
             if extras_dict.get("radar_html_kiosk") != ""
             else radar_html
         )
-
-        if extras_dict.get("radar_html_kiosk") != "":
-            radar_width_kiosk = extras_dict["radar_width_kiosk"]
-            radar_height_kiosk = extras_dict["radar_height_kiosk"]
-            radar_kiosk_src = html.escape(
-                str(skin_dict["Extras"]["radar_html_kiosk"]),
-                quote=True,
-            )
-            radar_html_kiosk = (
-                f'<iframe width="{radar_width_kiosk}px" '
-                f'height="{radar_height_kiosk}px" src="{radar_kiosk_src}" '
-                f'frameborder="0" loading="lazy" title="Radar map"></iframe>'
-            )
 
         # ==============================================================================
         # Build the all time stats.
