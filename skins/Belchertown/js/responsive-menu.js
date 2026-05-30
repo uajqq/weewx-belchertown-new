@@ -98,7 +98,7 @@
 
         document.addEventListener("click", function(event) {
             var item = event.target.closest(".responsive-menu .menu-item-has-children");
-            if (!item || event.target !== item) {
+            if (!item) {
                 return;
             }
             if (window.innerWidth > 768) {
@@ -109,6 +109,11 @@
             if (!submenu) {
                 return;
             }
+            if (submenu.contains(event.target)) {
+                return;
+            }
+
+            event.preventDefault();
 
             var isOpen = toggleDisplay(submenu);
             item.classList.toggle("menu-open", isOpen);
