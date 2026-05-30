@@ -45,6 +45,10 @@ function forecast_trim_sentence_end(value) {
     return String(value || "").trim().replace(/[\.\s]+$/, "");
 }
 
+function forecast_label_text(value) {
+    return String(value || "").trim().replace(/\s+([.,;:!?])/g, "$1");
+}
+
 function forecast_sentence_text(parts) {
     const text = parts
         .map(forecast_trim_sentence_end)
@@ -502,7 +506,7 @@ function forecast_daily_link(timestamp) {
         .replace("YYYY", linkMoment.format("YYYY"))
         .replace("MM", linkMoment.format("MM"))
         .replace("DD", linkMoment.format("DD"));
-    return '<a href="' + link + '" target="_blank">$obs.label.daily_forecast</a>';
+    return '<a href="' + link + '" target="_blank">' + forecast_escape_html(forecast_label_text("$obs.label.daily_forecast")) + '</a>';
 }
 
 function forecast_metric_rows(row) {

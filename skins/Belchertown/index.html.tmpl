@@ -449,7 +449,7 @@
             </div>
             #end if
             #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1' and (($Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours != '0') or not ($Extras.has_key("forecast_interval_hours")))
-            #set $forecast_header_label = $obs.label.forecast_header.strip().rstrip(". ")
+            #set $forecast_header_label = $obs.label.forecast_header.strip().replace(" .", ".").rstrip(". ")
             #set $forecast_header_prefix = ""
             #if $forecast_header_label
             #set $forecast_header_prefix = "%s. " % $forecast_header_label

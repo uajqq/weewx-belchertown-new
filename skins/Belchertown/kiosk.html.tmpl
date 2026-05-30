@@ -400,11 +400,16 @@
             ## #end if
 
             #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1' and (($Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk != '0') or not ($Extras.has_key("forecast_interval_hours_kiosk")))
+            #set $forecast_header_label = $obs.label.forecast_header.strip().replace(" .", ".").rstrip(". ")
+            #set $forecast_header_prefix = ""
+            #if $forecast_header_label
+            #set $forecast_header_prefix = "%s. " % $forecast_header_label
+            #end if
             <section class="homepage-card homepage-card--forecast">
             <div class="row forecastrow">
                 <!-- Forecast -->
                 <div class="col-lg-8 forecast-title">
-                    $obs.label.forecast_header <span class="forecast-subtitle"></span><!-- moment.js --> <span class="forecast-source"></span>
+                    #echo $forecast_header_prefix#<span class="forecast-subtitle"></span><!-- moment.js --> <span class="forecast-source"></span>
                 </div>
                 <div class="col-lg-4 forecast-menu">
                     $obs.label.forecast_interval_caption <div class="forecast-button" onclick="forecast_select(1);" id="button1">1</div>
