@@ -1,40 +1,74 @@
-<script type="text/javascript">
-    var moment_locale = "$system_locale_js";
-    moment.locale(moment_locale);
-
-    jQuery(document).ready(function() {
-
-        jQuery("#year-inTemp-max-ts").text(moment.unix($year.inTemp.maxtime.raw).format("$obs.label.time_records_page_full_date"));
-        jQuery("#at-inTemp-max-ts").text(moment.unix($alltime.inTemp.maxtime.raw).format("$obs.label.time_records_page_full_date"));
-
-        jQuery("#year-inTemp-min-ts").text(moment.unix($year.inTemp.mintime.raw).format("$obs.label.time_records_page_full_date"));
-        jQuery("#at-inTemp-min-ts").text(moment.unix($alltime.inTemp.mintime.raw).format("$obs.label.time_records_page_full_date"));
-
-
-    });
-</script>
-
-
-
-<tr>
-    <td class="records-header" colspan=5>$obs.label.records_inTemp_records</td>
-</tr>
-<tr>
-    <td colspan=1> </td>
-    <td class="records-header-year" colspan=2>$current.dateTime.format("%Y")</td>
-    <td class="records-header-alltime" colspan=2>$obs.label.records_all_time</td>
-</tr>
-<tr>
-    <td>$obs.label.records_high_inTemp</td>
-    <td class="leftborder">$year.inTemp.max</td>
-    <td><span id="year-inTemp-max-ts"></span></td><!-- moment.js -->
-    <td class="leftborder"><span id="at-inTemp-max-ts"></span></td><!-- moment.js -->
-    <td>$alltime.inTemp.max</td>
-</tr>
-<tr>
-    <td>$obs.label.records_low_inTemp</td>
-    <td class="leftborder">$year.inTemp.min</td>
-    <td id="year-inTemp-min-ts"></td><!-- moment.js -->
-    <td class="leftborder" id="at-inTemp-min-ts"></td><!-- moment.js -->
-    <td>$alltime.inTemp.min</td>
-</tr>
+#encoding UTF-8
+<section class="records-section-card records-section-card--custom">
+    <div class="records-section-card__header">
+        <h2 class="records-section-card__title">$obs.label.records_inTemp_records</h2>
+    </div>
+    <div class="records-section-card__table">
+        <div class="records-section-card__period-header">
+            <div class="records-section-card__period-header-spacer" aria-hidden="true"></div>
+            <div class="records-section-card__period-header-cell records-section-card__period-header-cell--yesterday">$obs.label.snapshot_period_yesterday</div>
+            <div class="records-section-card__period-header-cell records-section-card__period-header-cell--week">$obs.label.snapshot_period_7days</div>
+            <div class="records-section-card__period-header-cell records-section-card__period-header-cell--month">$obs.label.snapshot_period_month</div>
+            <div class="records-section-card__period-header-cell records-section-card__period-header-cell--year">$current.dateTime.format("%Y")</div>
+            <div class="records-section-card__period-header-cell records-section-card__period-header-cell--alltime">$obs.label.records_all_time</div>
+        </div>
+        <div class="records-section-card__body">
+            <article class="records-record-card">
+                <h3 class="records-record-card__title">$obs.label.records_high_inTemp</h3>
+                <section class="records-record-period records-record-period--yesterday">
+                    <div class="records-record-period__label">$obs.label.snapshot_period_yesterday</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">--</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">--</span></div>
+                </section>
+                <section class="records-record-period records-record-period--week">
+                    <div class="records-record-period__label">$obs.label.snapshot_period_7days</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">--</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">--</span></div>
+                </section>
+                <section class="records-record-period records-record-period--month">
+                    <div class="records-record-period__label">$obs.label.snapshot_period_month</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">--</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">--</span></div>
+                </section>
+                <section class="records-record-period records-record-period--year">
+                    <div class="records-record-period__label">$current.dateTime.format("%Y")</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">$year.inTemp.max</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">$year.inTemp.maxtime</span></div>
+                </section>
+                <section class="records-record-period records-record-period--alltime">
+                    <div class="records-record-period__label">$obs.label.records_all_time</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">$alltime.inTemp.max</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">$alltime.inTemp.maxtime</span></div>
+                </section>
+            </article>
+            <article class="records-record-card">
+                <h3 class="records-record-card__title">$obs.label.records_low_inTemp</h3>
+                <section class="records-record-period records-record-period--yesterday">
+                    <div class="records-record-period__label">$obs.label.snapshot_period_yesterday</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">--</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">--</span></div>
+                </section>
+                <section class="records-record-period records-record-period--week">
+                    <div class="records-record-period__label">$obs.label.snapshot_period_7days</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">--</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">--</span></div>
+                </section>
+                <section class="records-record-period records-record-period--month">
+                    <div class="records-record-period__label">$obs.label.snapshot_period_month</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">--</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">--</span></div>
+                </section>
+                <section class="records-record-period records-record-period--year">
+                    <div class="records-record-period__label">$current.dateTime.format("%Y")</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">$year.inTemp.min</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">$year.inTemp.mintime</span></div>
+                </section>
+                <section class="records-record-period records-record-period--alltime">
+                    <div class="records-record-period__label">$obs.label.records_all_time</div>
+                    <div class="records-record-period__value"><span class="records-record-period__value-main">$alltime.inTemp.min</span></div>
+                    <div class="records-record-period__date"><span class="records-record-period__date-line">$alltime.inTemp.mintime</span></div>
+                </section>
+            </article>
+        </div>
+    </div>
+</section>

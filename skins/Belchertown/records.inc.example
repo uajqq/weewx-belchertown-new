@@ -1,4 +1,5 @@
 #encoding UTF-8
 <p>Welcome to your records page!</p>
-<p>To change or remove this text, please change the skins/Belchertown/records.inc file to your about description. Full HTML is accepted.</p>
+<p>To change or remove this text, create <code>skins/Belchertown/records.inc</code>, or rename <code>skins/Belchertown/records.inc.example</code> to <code>records.inc</code>. Full HTML and WeeWX variables are accepted.</p>
+<p>This content appears above the generated records cards.</p>
 <p>For an example of what this could say, please see <a href="https://belchertownweather.com/records" target="_blank">https://belchertownweather.com/records</a></p>

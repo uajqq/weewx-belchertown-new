@@ -737,7 +737,19 @@
 
             #include "page-header.inc"
 
+            #if os.path.exists("records.inc")
+            <div class="wx-records-description">
+                #include "records.inc"
+            </div>
+            #end if
+
             <div id="records-sections" class="records-sections"></div>
+
+            #if os.path.exists("records-table.inc")
+            <div class="records-sections records-custom-sections">
+                #include "records-table.inc"
+            </div>
+            #end if
 
         </article>
 </div>

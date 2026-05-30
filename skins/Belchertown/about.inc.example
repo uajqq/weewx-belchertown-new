@@ -1,15 +1,13 @@
 #encoding UTF-8
 <div class="entry-content about-outer" itemprop="text">
-    <br>
     <h2>Welcome to your new about page!</h2>
     <p>Thank you for installing the <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank">Belchertown WeeWX skin</a>!</p>
-    <p>This is your default about page. To change this text:
+    <p>This is your default about page. To change this text:</p>
     <ul>
         <li>Create a new file at <code>skins/Belchertown/about.inc</code>, or rename the <code>skins/Belchertown/about.inc.example</code> file to <code>about.inc</code></li>
         <li>Use the example text within <code>skins/Belchertown/about.inc.example</code> to create your about page description!</li>
         <li>Full HTML, and WeeWX variables are accepted.</li>
     </ul>
-    </p>
     <p>To show built in WeeWX variables (like station battery status (if supported), temperature, WeeWX version, etc.), just add them to this file. For example:</p>
     <ul>
         <li>Station hardware: $station.hardware</li>
