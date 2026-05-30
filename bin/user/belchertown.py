@@ -403,8 +403,12 @@ def _normalize_current_conditions_values(
     else:
         visibility_unit = "miles"
 
+    visibility_qualifier = current_conditions_data.get("visibilityQualifier") or ""
+    if visibility_qualifier not in ("<", ">"):
+        visibility_qualifier = ""
+
     if vis_val is not None:
-        visibility = locale.format_string("%g", float(vis_val))
+        visibility = visibility_qualifier + locale.format_string("%g", float(vis_val))
     else:
         visibility = "N/A"
 
@@ -459,8 +463,8 @@ def _nws_quantity_value(quantity):
     return None
 
 
-def _nws_parse_metar_visibility_m(raw_message):
-    """Parse visibility in meters from a METAR rawMessage token like 10SM or 1 1/2SM."""
+def _nws_parse_metar_visibility(raw_message):
+    """Parse METAR visibility in meters and return any display qualifier."""
     if not raw_message:
         return None
 
@@ -517,17 +521,31 @@ def _nws_parse_metar_visibility_m(raw_message):
         if miles is None:
             continue
 
+        qualifier = ""
+
         # "M" means less-than; preserve a sane numeric approximation.
         if is_less_than:
             miles = max(miles, 0.0)
+            qualifier = "<"
 
-        # "P" means greater-than; represent as the threshold value.
-        if is_greater_than:
+        # "P" means greater-than. In US METAR, 10SM is also the common
+        # ceiling for "10 statute miles or more".
+        if is_greater_than or miles >= 10.0:
             miles = max(miles, 0.0)
+            qualifier = ">"
 
-        return miles * 1609.344
+        return {
+            "visibility_m": miles * 1609.344,
+            "qualifier": qualifier,
+        }
 
     return None
+
+
+def _nws_parse_metar_visibility_m(raw_message):
+    """Parse visibility in meters from a METAR rawMessage token like 10SM or 1 1/2SM."""
+    parsed = _nws_parse_metar_visibility(raw_message)
+    return parsed.get("visibility_m") if parsed else None
 
 
 NWS_FORECAST_TARGET_TEMP_UNIT = {
@@ -790,9 +808,13 @@ def _nws_build_current(obs_payload, forecast_units):
     if apparent_c is None:
         apparent_c = _nws_quantity_value(props.get("windChill"))
     humidity_pct = _nws_quantity_value(props.get("relativeHumidity"))
-    visibility_m = _nws_quantity_value(props.get("visibility"))
-    if visibility_m is None:
-        visibility_m = _nws_parse_metar_visibility_m(props.get("rawMessage"))
+    metar_visibility = _nws_parse_metar_visibility(props.get("rawMessage"))
+    visibility_m = (
+        metar_visibility.get("visibility_m")
+        if metar_visibility
+        else _nws_quantity_value(props.get("visibility"))
+    )
+    visibility_qualifier = metar_visibility.get("qualifier") if metar_visibility else ""
     wind_mps = _nws_quantity_value(props.get("windSpeed"))
     gust_mps = _nws_quantity_value(props.get("windGust"))
     pressure_pa = _nws_quantity_value(props.get("barometricPressure"))
@@ -843,6 +865,7 @@ def _nws_build_current(obs_payload, forecast_units):
         "humidity": _probability_fraction(humidity_pct, default=None),
         "pressure": _pressure_pa_to_hpa(pressure_pa),
         "visibility": _visibility_m_to_forecast_units(visibility_m, forecast_units),
+        "visibilityQualifier": visibility_qualifier,
         "dewPoint": dewpoint_out,
         "precipIntensity": _precip_mm_to_forecast_units(
             precip_last_hour_mm, forecast_units

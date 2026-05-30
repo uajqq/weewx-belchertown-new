@@ -446,17 +446,7 @@ function update_current_conditions(data) {
         } catch (err) { /* silent */}
 
         try {
-            const visibility = cc["visibility"];
-            const visibility_output = (visibility != null)
-                ? parseFloat(parseFloat(visibility)).toLocaleString(
-                    "$system_locale_js",
-                    {
-                        minimumFractionDigits: unit_rounding_array["visibility"],
-                        maximumFractionDigits: unit_rounding_array["visibility"]
-                    }
-                ) + " " + unit_label_array["visibility"]
-                : "N/A";
-            jQuery(".station-observations .visibility").html(visibility_output);
+            jQuery(".station-observations .visibility").html(forecast_visibility_text(cc["visibility"], cc["visibilityQualifier"]));
         } catch (err) { /* silent */}
 
         forecast_register_external_observations("current_conditions", data);
@@ -487,6 +477,41 @@ function forecast_percent_text(value, fallback) {
     if (numberValue === null) return fallback || null;
     const percentValue = Math.abs(numberValue) <= 1 ? numberValue * 100 : numberValue;
     return percentValue.toFixed(0) + '%';
+}
+
+function forecast_visibility_unit_label() {
+    if (
+        unit_label_array &&
+        typeof unit_label_array === "object" &&
+        unit_label_array.hasOwnProperty("visibility") &&
+        unit_label_array["visibility"] != null
+    ) {
+        return String(unit_label_array["visibility"]);
+    }
+
+    const forecastUnits = "$Extras.forecast_units";
+    return (forecastUnits === "si" || forecastUnits === "ca") ? "km" : "miles";
+}
+
+function forecast_visibility_text(value, qualifier) {
+    const numberValue = forecast_number(value);
+    if (numberValue === null) return "N/A";
+
+    const rounding = (
+        unit_rounding_array &&
+        typeof unit_rounding_array === "object" &&
+        unit_rounding_array.hasOwnProperty("visibility")
+    ) ? unit_rounding_array["visibility"] : 2;
+    const unitLabel = forecast_visibility_unit_label();
+    const visibilityQualifier = (qualifier === "<" || qualifier === ">") ? qualifier : "";
+
+    return visibilityQualifier + numberValue.toLocaleString(
+        "$system_locale_js",
+        {
+            minimumFractionDigits: rounding,
+            maximumFractionDigits: rounding
+        }
+    ) + (unitLabel ? " " + unitLabel : "");
 }
 
 function forecast_icon_url(iconValue) {
