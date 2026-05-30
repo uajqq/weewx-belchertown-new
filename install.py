@@ -9,7 +9,7 @@ import sys
 
 # -------- extension info -----------
 
-VERSION = "2.0beta3-new-belchertown"
+VERSION = "2.0beta4-new-belchertown"
 NAME = "Belchertown"
 DESCRIPTION = "A clean modern skin with real time streaming updates and interactive charts. Modeled after BelchertownWeather.com"
 AUTHOR = "Pat OBrien, maintained by uajqq"
