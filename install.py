@@ -77,6 +77,10 @@ class BelchertownInstaller(ExtensionInstaller):
         if isinstance(value, bool):
             return "true" if value else "false"
         if isinstance(value, str):
+            if '"' in value and "'" not in value:
+                # Preserve HTML attributes without adding backslash escapes.
+                escaped = value.replace("\\", "\\\\")
+                return "'%s'" % escaped
             escaped = value.replace("\\", "\\\\").replace('"', '\\"')
             return '"%s"' % escaped
         if isinstance(value, (list, tuple)):
