@@ -1,11 +1,11 @@
 #encoding UTF-8
 <div class="entry-content about-outer" itemprop="text">
     <h2>Welcome to your new about page!</h2>
-    <p>Thank you for installing the <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank">Belchertown WeeWX skin</a>!</p>
+    <p>Thank you for installing the <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank">New Belchertown WeeWX skin</a>!</p>
     <p>This is your default about page. To change this text:</p>
     <ul>
-        <li>Create a new file at <code>skins/Belchertown/about.inc</code>, or rename the <code>skins/Belchertown/about.inc.example</code> file to <code>about.inc</code></li>
-        <li>Use the example text within <code>skins/Belchertown/about.inc.example</code> to create your about page description!</li>
+        <li>Create a new file at <code>skins/new-belchertown/about.inc</code>, or rename the <code>skins/new-belchertown/about.inc.example</code> file to <code>about.inc</code></li>
+        <li>Use the example text within <code>skins/new-belchertown/about.inc.example</code> to create your about page description!</li>
         <li>Full HTML, and WeeWX variables are accepted.</li>
     </ul>
     <p>To show built in WeeWX variables (like station battery status (if supported), temperature, WeeWX version, etc.), just add them to this file. For example:</p>
@@ -14,7 +14,7 @@
         <li>Server uptime: $station.os_uptime.long_form</li>
         <li>WeeWX uptime: $station.uptime.long_form</li>
         <li>WeeWX version: $station.version</li>
-        <li>Belchertown Skin Version: $belchertown_version</li>
+        <li>New Belchertown Skin Version: $belchertown_version</li>
     </ul>
     <p>For an example of what this page could say, please see <a href="https://belchertownweather.com/about" target="_blank">https://belchertownweather.com/about</a></p>
     <p>Enjoy your new WeeWX skin!</p>

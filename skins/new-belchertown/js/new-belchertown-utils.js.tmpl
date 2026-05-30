@@ -17,7 +17,7 @@ function get_relative_url() {
     pageName = sPath.substring(sPath.lastIndexOf('/') + 1);
     const relative_url = pages.includes(pageName) ? ".." : ".";
 
-    // belchertown_debug is defined in belchertown.js.tmpl and may not exist yet
+    // belchertown_debug is defined in new-belchertown.js.tmpl and may not exist yet
     // when this utility file is parsed.
     if (typeof belchertown_debug === "function") {
         belchertown_debug("URL: Relative URL is: " + relative_url);

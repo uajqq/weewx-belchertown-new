@@ -1,32 +1,36 @@
-# Installer for Belchertown WeeWX skin
+# Installer for New Belchertown WeeWX skin
 # Pat O'Brien, 2018
+# uajqq, 2024
 
 import configobj
 from setup import ExtensionInstaller
 from io import BytesIO, StringIO
 import os
+import re
 import sys
 
 # -------- extension info -----------
 
-VERSION = "2.0beta4-new-belchertown"
-NAME = "Belchertown"
-DESCRIPTION = "A clean modern skin with real time streaming updates and interactive charts. Modeled after BelchertownWeather.com"
-AUTHOR = "Pat OBrien, maintained by uajqq"
+VERSION = "2.0-rc1"
+NAME = "New Belchertown"
+DESCRIPTION = "A clean, modern skin with real time streaming updates and interactive charts. Modeled after BelchertownWeather.com"
+AUTHOR = "Pat OBrien and uajqq"
 AUTHOR_EMAIL = "https://github.com/uajqq/weewx-belchertown-new"
 
 # -------- main loader -----------
 
 
 def loader():
-    return BelchertownInstaller()
+    return NewBelchertownInstaller()
 
 
-class BelchertownInstaller(ExtensionInstaller):
-    _SKIN_CONF_REL_PATH = ("skins", "Belchertown", "skin.conf")
-    _BELCHERTOWN_ROOT_KEYS = {
-        "skin": "Belchertown",
-        "HTML_ROOT": "belchertown",
+class NewBelchertownInstaller(ExtensionInstaller):
+    _NEW_REPORT_NAME = "new-belchertown"
+    _OLD_REPORT_NAMES = ("Belchertown", "belchertown")
+    _SKIN_CONF_REL_PATH = ("skins", "new-belchertown", "skin.conf")
+    _NEW_BELCHERTOWN_ROOT_KEYS = {
+        "skin": "new-belchertown",
+        "HTML_ROOT": "new-belchertown",
         "enable": "true",
     }
     _EXTRAS_PLACEHOLDER_KEY = "required_section_placeholder"
@@ -52,6 +56,47 @@ class BelchertownInstaller(ExtensionInstaller):
     _SKIN_DEFAULTS_CACHE = None
     _SKIN_ALIGNMENT_CACHE = None
 
+    @classmethod
+    def _normalize_old_belchertown_path(cls, value, allow_bare=False):
+        """Rewrite old Belchertown folder references to New Belchertown."""
+        if not isinstance(value, str):
+            return value
+
+        stripped = value.strip()
+        if stripped.lower() == "belchertown":
+            return cls._NEW_REPORT_NAME if allow_bare else value
+
+        def replace_segment(match):
+            return "%s%s" % (match.group(1), cls._NEW_REPORT_NAME)
+
+        return re.sub(
+            r"(^|[/\\])belchertown(?=$|[/\\])",
+            replace_segment,
+            value,
+            flags=re.IGNORECASE,
+        )
+
+    @classmethod
+    def _normalize_old_belchertown_paths(cls, value):
+        """Recursively normalize Belchertown path values in config data."""
+        if isinstance(value, str):
+            return cls._normalize_old_belchertown_path(value)
+        if isinstance(value, list):
+            return [cls._normalize_old_belchertown_paths(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(cls._normalize_old_belchertown_paths(item) for item in value)
+        if isinstance(value, (dict, configobj.Section)):
+            return {
+                key: cls._normalize_old_belchertown_paths(item)
+                for key, item in value.items()
+            }
+        return value
+
+    @staticmethod
+    def _should_normalize_extra_value(key):
+        """Return True if an Extras value should be treated as a path/html value."""
+        return not str(key).startswith("mqtt_")
+
     @staticmethod
     def _section_to_dict(section):
         """Convert a ConfigObj section to a plain nested dict."""
@@ -61,7 +106,7 @@ class BelchertownInstaller(ExtensionInstaller):
         result = {}
         for key, value in section.items():
             if isinstance(value, (dict, configobj.Section)):
-                result[key] = BelchertownInstaller._section_to_dict(value)
+                result[key] = NewBelchertownInstaller._section_to_dict(value)
             else:
                 result[key] = value
         return result
@@ -157,11 +202,9 @@ class BelchertownInstaller(ExtensionInstaller):
         return cls._SKIN_ALIGNMENT_CACHE
 
     @classmethod
-    def _align_belchertown_config_text(cls, config_text):
-        """Align active Belchertown Extras options in serialized config text."""
+    def _align_new_belchertown_config_text(cls, config_text):
+        """Align and space New Belchertown's serialized config section."""
         alignment = cls._get_skin_alignment_key_parts()
-        if not alignment:
-            return config_text
 
         rendered_lines = []
         in_stdreport = False
@@ -169,13 +212,30 @@ class BelchertownInstaller(ExtensionInstaller):
         in_extras = False
         extras_option_indent = None
 
+        def section_marker_level(stripped):
+            if not stripped.startswith("[") or not stripped.endswith("]"):
+                return 0
+            opening = len(stripped) - len(stripped.lstrip("["))
+            closing = len(stripped) - len(stripped.rstrip("]"))
+            if opening != closing:
+                return 0
+            return opening
+
+        def append_blank_line_if_needed(newline):
+            if rendered_lines and rendered_lines[-1].strip():
+                rendered_lines.append(newline or "\n")
+
         for raw_line in config_text.splitlines(True):
             body = raw_line.rstrip("\r\n")
             newline = raw_line[len(body) :]
             stripped = body.strip()
 
             if stripped.startswith("[") and stripped.endswith("]"):
-                if stripped.startswith("[[["):
+                marker_level = section_marker_level(stripped)
+                if in_belchertown and marker_level and marker_level <= 2:
+                    append_blank_line_if_needed(newline)
+
+                if marker_level >= 3:
                     section_name = stripped[3:-3].strip()
                     in_extras = in_belchertown and section_name == "Extras"
                     if in_extras:
@@ -183,12 +243,16 @@ class BelchertownInstaller(ExtensionInstaller):
                         extras_option_indent = marker_indent + "    "
                     else:
                         extras_option_indent = None
-                elif stripped.startswith("[["):
+                elif marker_level == 2:
                     section_name = stripped[2:-2].strip()
-                    in_belchertown = in_stdreport and section_name == "Belchertown"
+                    in_belchertown = (
+                        in_stdreport and section_name == cls._NEW_REPORT_NAME
+                    )
+                    if in_belchertown:
+                        append_blank_line_if_needed(newline)
                     in_extras = False
                     extras_option_indent = None
-                else:
+                elif marker_level == 1:
                     section_name = stripped[1:-1].strip()
                     in_stdreport = section_name == "StdReport"
                     in_belchertown = False
@@ -216,12 +280,15 @@ class BelchertownInstaller(ExtensionInstaller):
 
             rendered_lines.append(raw_line)
 
+        if in_belchertown:
+            append_blank_line_if_needed("\n")
+
         return "".join(rendered_lines)
 
     @classmethod
     def _install_aligned_config_writer(cls):
-        """Patch ConfigObj output for Belchertown's generated config section."""
-        if getattr(configobj.ConfigObj, "_belchertown_original_write", None):
+        """Patch ConfigObj output for New Belchertown's generated config section."""
+        if getattr(configobj.ConfigObj, "_new_belchertown_original_write", None):
             return
 
         original_write = configobj.ConfigObj.write
@@ -245,7 +312,7 @@ class BelchertownInstaller(ExtensionInstaller):
                     text = "\n".join(line.decode(encoding) for line in output)
                 else:
                     text = "\n".join(output)
-                text = BelchertownInstaller._align_belchertown_config_text(text)
+                text = NewBelchertownInstaller._align_new_belchertown_config_text(text)
                 lines = text.split("\n")
                 if output_is_bytes:
                     return [line.encode(encoding) for line in lines]
@@ -254,7 +321,7 @@ class BelchertownInstaller(ExtensionInstaller):
             stream = BytesIO()
             original_write(config_self, stream, section=None)
             text = stream.getvalue().decode(encoding)
-            text = BelchertownInstaller._align_belchertown_config_text(text)
+            text = NewBelchertownInstaller._align_new_belchertown_config_text(text)
             output_bytes = text.encode(encoding)
 
             if outfile is not None:
@@ -263,7 +330,7 @@ class BelchertownInstaller(ExtensionInstaller):
                 with open(config_self.filename, "wb") as output_file:
                     output_file.write(output_bytes)
 
-        configobj.ConfigObj._belchertown_original_write = original_write
+        configobj.ConfigObj._new_belchertown_original_write = original_write
         configobj.ConfigObj.write = aligned_write
 
     @staticmethod
@@ -349,12 +416,20 @@ class BelchertownInstaller(ExtensionInstaller):
         return collected
 
     @classmethod
-    def _extract_commented_extra_overrides(cls, engine, current_config):
+    def _extract_commented_extra_overrides(
+        cls,
+        engine,
+        current_config,
+        report_names=None,
+    ):
         """Extract commented-out Extras options that differ from skin.conf defaults."""
         default_extras, _ = cls._get_skin_defaults()
         if not default_extras:
             return {}
 
+        report_names = tuple(
+            report_names or ((cls._NEW_REPORT_NAME,) + cls._OLD_REPORT_NAMES)
+        )
         config_path = cls._guess_weewx_config_path(engine, current_config)
         if not config_path:
             return {}
@@ -385,7 +460,7 @@ class BelchertownInstaller(ExtensionInstaller):
 
                 if stripped.startswith("[["):
                     section_name = stripped[2:-2].strip()
-                    in_belchertown = in_stdreport and section_name == "Belchertown"
+                    in_belchertown = in_stdreport and section_name in report_names
                     in_extras = False
                     continue
 
@@ -415,6 +490,8 @@ class BelchertownInstaller(ExtensionInstaller):
 
             parsed_value_text, inline_comment = cls._split_value_comment(raw_value)
             parsed_value = cls._parse_config_value(parsed_value_text)
+            if cls._should_normalize_extra_value(key):
+                parsed_value = cls._normalize_old_belchertown_paths(parsed_value)
             if key not in default_extras:
                 continue
 
@@ -426,7 +503,7 @@ class BelchertownInstaller(ExtensionInstaller):
 
     @classmethod
     def _skin_conf_path(cls):
-        """Return the canonical absolute path to skins/Belchertown/skin.conf."""
+        """Return the canonical absolute path to skins/new-belchertown/skin.conf."""
         return os.path.join(os.path.dirname(__file__), *cls._SKIN_CONF_REL_PATH)
 
     @classmethod
@@ -574,11 +651,11 @@ class BelchertownInstaller(ExtensionInstaller):
 
     @classmethod
     def _extract_report_overrides(cls, current_report):
-        """Return report-level options that the Belchertown rebuild does not own."""
+        """Return report-level options that the New Belchertown rebuild does not own."""
         if not isinstance(current_report, (dict, configobj.Section)):
             return {}
 
-        owned_keys = set(cls._BELCHERTOWN_ROOT_KEYS)
+        owned_keys = set(cls._NEW_BELCHERTOWN_ROOT_KEYS)
         owned_keys.update(("Extras", "Labels"))
 
         report_overrides = {}
@@ -586,17 +663,19 @@ class BelchertownInstaller(ExtensionInstaller):
             if key in owned_keys:
                 continue
             if isinstance(value, (dict, configobj.Section)):
-                report_overrides[key] = cls._section_to_dict(value)
+                report_overrides[key] = cls._normalize_old_belchertown_paths(
+                    cls._section_to_dict(value)
+                )
             else:
-                report_overrides[key] = value
+                report_overrides[key] = cls._normalize_old_belchertown_paths(value)
 
         return report_overrides
 
     @classmethod
-    def _known_belchertown_option_keys(cls):
-        """Return option names owned by Belchertown's generated config."""
+    def _known_new_belchertown_option_keys(cls):
+        """Return option names owned by New Belchertown's generated config."""
         default_extras, default_generic = cls._get_skin_defaults()
-        known_keys = set(cls._BELCHERTOWN_ROOT_KEYS)
+        known_keys = set(cls._NEW_BELCHERTOWN_ROOT_KEYS)
         known_keys.update(default_extras)
         known_keys.update(default_generic)
         known_keys.update(cls._LEGACY_EXTRAS_MAPPING)
@@ -621,8 +700,39 @@ class BelchertownInstaller(ExtensionInstaller):
         return names
 
     @classmethod
-    def _comment_line_has_belchertown_option(cls, line, known_keys):
-        """Return True if a comment line is a commented Belchertown assignment."""
+    def _is_old_belchertown_report(cls, report):
+        """Return True if a report section points at the old Belchertown skin."""
+        if not isinstance(report, (dict, configobj.Section)):
+            return False
+
+        skin = str(report.get("skin", "")).strip().lower()
+        html_root = str(report.get("HTML_ROOT", "")).strip().lower()
+        return skin == "belchertown" or html_root == "belchertown"
+
+    @classmethod
+    def _find_old_belchertown_report_name(cls, std_report):
+        """Find the report section for an old Belchertown install."""
+        if not isinstance(std_report, (dict, configobj.Section)):
+            return None
+
+        report_names = cls._section_names(std_report)
+        for old_name in cls._OLD_REPORT_NAMES:
+            if old_name in report_names:
+                return old_name
+
+        for report_name in report_names:
+            if str(report_name).lower() == "belchertown":
+                return report_name
+
+        for report_name in report_names:
+            if cls._is_old_belchertown_report(std_report.get(report_name)):
+                return report_name
+
+        return None
+
+    @classmethod
+    def _comment_line_has_new_belchertown_option(cls, line, known_keys):
+        """Return True if a comment line is a commented New Belchertown assignment."""
         content = str(line).strip()
         if not content.startswith("#"):
             return False
@@ -636,8 +746,8 @@ class BelchertownInstaller(ExtensionInstaller):
         return key in known_keys
 
     @classmethod
-    def _remove_belchertown_comment_groups(cls, comments, known_keys):
-        """Remove contiguous comment groups that contain Belchertown options."""
+    def _remove_new_belchertown_comment_groups(cls, comments, known_keys):
+        """Remove contiguous comment groups that contain New Belchertown options."""
         cleaned = []
         group = []
         group_has_belchertown_option = False
@@ -668,7 +778,7 @@ class BelchertownInstaller(ExtensionInstaller):
                 continue
 
             group.append(comment)
-            if cls._comment_line_has_belchertown_option(comment, known_keys):
+            if cls._comment_line_has_new_belchertown_option(comment, known_keys):
                 group_has_belchertown_option = True
 
         flush_group()
@@ -681,34 +791,43 @@ class BelchertownInstaller(ExtensionInstaller):
 
     @classmethod
     def _cleanup_following_report_comments(cls, std_report):
-        """Drop stale Belchertown comments attached to the next report section."""
+        """Drop stale New Belchertown comments attached to the next report section."""
         if not isinstance(std_report, (dict, configobj.Section)):
             return
 
         report_names = cls._section_names(std_report)
-        try:
-            belchertown_index = report_names.index("Belchertown")
-        except ValueError:
-            return
-
-        if belchertown_index + 1 >= len(report_names):
-            return
-
-        next_report = report_names[belchertown_index + 1]
+        candidates = [cls._NEW_REPORT_NAME]
+        old_report_name = cls._find_old_belchertown_report_name(std_report)
+        if old_report_name:
+            candidates.append(old_report_name)
+        candidates.extend(cls._OLD_REPORT_NAMES)
         comments_by_key = getattr(std_report, "comments", None)
-        if not isinstance(comments_by_key, dict) or next_report not in comments_by_key:
+        if not isinstance(comments_by_key, dict):
             return
 
-        comments = comments_by_key.get(next_report) or []
-        cleaned_comments, changed = cls._remove_belchertown_comment_groups(
-            comments,
-            cls._known_belchertown_option_keys(),
-        )
-        if changed:
-            comments_by_key[next_report] = cleaned_comments
+        checked_reports = set()
+        for report_name in candidates:
+            if report_name in checked_reports or report_name not in report_names:
+                continue
+            checked_reports.add(report_name)
+            report_index = report_names.index(report_name)
+            if report_index + 1 >= len(report_names):
+                continue
+
+            next_report = report_names[report_index + 1]
+            if next_report not in comments_by_key:
+                continue
+
+            comments = comments_by_key.get(next_report) or []
+            cleaned_comments, changed = cls._remove_new_belchertown_comment_groups(
+                comments,
+                cls._known_new_belchertown_option_keys(),
+            )
+            if changed:
+                comments_by_key[next_report] = cleaned_comments
 
     @classmethod
-    def _build_belchertown_template(
+    def _build_new_belchertown_template(
         cls,
         current_report,
         commented_extra_overrides=None,
@@ -716,13 +835,15 @@ class BelchertownInstaller(ExtensionInstaller):
         legacy_insert_before=None,
         legacy_insert_end=None,
     ):
-        """Build a fresh Belchertown section from skin.conf and old Extras values."""
+        """Build a fresh New Belchertown section from skin.conf and old Extras values."""
         current_report = (
             current_report
             if isinstance(current_report, (dict, configobj.Section))
             else {}
         )
-        current_extras = cls._extract_extra_overrides(current_report.get("Extras", {}))
+        current_extras = cls._extract_extra_overrides(
+            current_report.get("Extras", {})
+        )
 
         skin_path = cls._skin_conf_path()
         if not os.path.isfile(skin_path):
@@ -734,13 +855,16 @@ class BelchertownInstaller(ExtensionInstaller):
         extras_lines = cls._extract_skin_section_lines(skin_lines, "Extras")
 
         root_values = {}
-        for key, default_value in cls._BELCHERTOWN_ROOT_KEYS.items():
-            root_values[key] = current_report.get(key, default_value)
+        for key, default_value in cls._NEW_BELCHERTOWN_ROOT_KEYS.items():
+            root_values[key] = cls._normalize_old_belchertown_path(
+                current_report.get(key, default_value),
+                allow_bare=key in ("skin", "HTML_ROOT"),
+            )
 
         template_lines = [
             "[StdReport]",
             "",
-            "    [[Belchertown]]",
+            "    [[new-belchertown]]",
             "        # See wiki for configuration help: https://github.com/uajqq/weewx-belchertown-new/wiki",
             '        skin = %s' % cls._format_config_value(root_values["skin"]),
             '        HTML_ROOT = %s' % cls._format_config_value(root_values["HTML_ROOT"]),
@@ -772,7 +896,7 @@ class BelchertownInstaller(ExtensionInstaller):
             StringIO("\n".join(template_lines)),
             encoding="utf-8",
         )
-        belchertown = fresh_config.get("StdReport", {}).get("Belchertown", {})
+        belchertown = fresh_config.get("StdReport", {}).get("new-belchertown", {})
         if isinstance(belchertown, (dict, configobj.Section)):
             last_active_extra_index = -1
             for index, line in enumerate(rendered_extras_lines):
@@ -807,8 +931,11 @@ class BelchertownInstaller(ExtensionInstaller):
             if cls._is_placeholder_key(key):
                 continue
 
-            if key not in default_extras or default_extras[key] != value:
-                extra_overrides[key] = value
+            normalized_value = value
+            if cls._should_normalize_extra_value(key):
+                normalized_value = cls._normalize_old_belchertown_paths(value)
+            if key not in default_extras or default_extras[key] != normalized_value:
+                extra_overrides[key] = normalized_value
 
         return extra_overrides
 
@@ -884,6 +1011,11 @@ class BelchertownInstaller(ExtensionInstaller):
         normalized = str(reply).strip().lower()
         return normalized in ("y", "yes")
 
+    @staticmethod
+    def _stdin_is_interactive():
+        """Return True when installer prompts can be answered safely."""
+        return hasattr(sys, "stdin") and sys.stdin and sys.stdin.isatty()
+
     @classmethod
     def _should_migrate_legacy_keys(cls, detected_legacy):
         """Offer legacy-key migration to users with a downgrade advisory."""
@@ -892,29 +1024,29 @@ class BelchertownInstaller(ExtensionInstaller):
         if not has_extras and not has_labels:
             return False
 
-        if not (hasattr(sys, "stdin") and sys.stdin and sys.stdin.isatty()):
+        if not cls._stdin_is_interactive():
             print("", flush=True)
-            print("Belchertown installer: legacy keys detected.", flush=True)
+            print("New Belchertown installer: legacy keys detected.", flush=True)
             print(
-                "Belchertown installer: non-interactive mode; "
+                "New Belchertown installer: non-interactive mode; "
                 "skipping automatic migration to preserve downgrade compatibility.",
                 flush=True,
             )
             print("", flush=True)
             return False
 
-        print("\nBelchertown installer: detected deprecated key names in weewx.conf:\n")
+        print("\nNew Belchertown installer: detected deprecated key names in weewx.conf:\n")
         if has_extras:
-            print("  [StdReport][Belchertown][Extras]")
+            print("  [StdReport][new-belchertown][Extras]")
             for legacy_key, new_key in detected_legacy["extras"].items():
                 print("    %s -> %s" % (legacy_key, new_key))
         if has_labels:
-            print("  [StdReport][Belchertown][Labels][Generic]")
+            print("  [StdReport][new-belchertown][Labels][Generic]")
             for legacy_key, new_key in detected_legacy["labels_generic"].items():
                 print("    %s -> %s" % (legacy_key, new_key))
 
         print("\nWARNING: Migrating legacy keys updates your config to newer names.")
-        print("WARNING: This can make downgrading to older Belchertown versions harder.\n")
+        print("WARNING: This can make downgrading to older versions harder.\n")
 
         return cls._legacy_prompt_choice(
             "Update these legacy keys to current names now? [y/N]: "
@@ -930,7 +1062,9 @@ class BelchertownInstaller(ExtensionInstaller):
         if isinstance(extras, (dict, configobj.Section)):
             for legacy_key, new_key in cls._LEGACY_EXTRAS_MAPPING.items():
                 if legacy_key in extras:
-                    extras[new_key] = extras[legacy_key]
+                    extras[new_key] = cls._normalize_old_belchertown_paths(
+                        extras[legacy_key]
+                    )
                     del extras[legacy_key]
 
         labels = current_report.get("Labels")
@@ -1041,9 +1175,9 @@ class BelchertownInstaller(ExtensionInstaller):
         """
         config = configobj.ConfigObj(encoding="utf-8")
         std_report = config.setdefault("StdReport", {})
-        belchertown = std_report.setdefault("Belchertown", {})
+        belchertown = std_report.setdefault("new-belchertown", {})
 
-        for key, default_value in cls._BELCHERTOWN_ROOT_KEYS.items():
+        for key, default_value in cls._NEW_BELCHERTOWN_ROOT_KEYS.items():
             belchertown[key] = default_value
 
         extras = belchertown.setdefault("Extras", {})
@@ -1077,7 +1211,7 @@ class BelchertownInstaller(ExtensionInstaller):
 
         std_report = reparsed.get("StdReport", {})
         belchertown = (
-            std_report.get("Belchertown", {})
+            std_report.get("new-belchertown", {})
             if isinstance(std_report, (dict, configobj.Section))
             else {}
         )
@@ -1100,15 +1234,32 @@ class BelchertownInstaller(ExtensionInstaller):
         )
 
     def configure(self, engine):
-        """Rebuild Belchertown root/Extras from skin.conf, preserving user overrides."""
+        """Rebuild New Belchertown root/Extras from skin.conf, preserving user overrides."""
         self._install_aligned_config_writer()
         current_config = engine.config_dict
+        std_report = current_config.setdefault("StdReport", {})
+        old_report_name = self._find_old_belchertown_report_name(std_report)
+
+        if self._NEW_REPORT_NAME in std_report:
+            source_report_name = self._NEW_REPORT_NAME
+            current_report = std_report.get(self._NEW_REPORT_NAME, {})
+        elif old_report_name:
+            source_report_name = old_report_name
+            current_report = std_report.get(old_report_name, {})
+            print(
+                "New Belchertown installer: detected existing Belchertown report; "
+                "upgrading it to [StdReport][new-belchertown].",
+                flush=True,
+            )
+        else:
+            source_report_name = self._NEW_REPORT_NAME
+            current_report = {}
+
         commented_extra_overrides = self._extract_commented_extra_overrides(
             engine,
             current_config,
+            (source_report_name,),
         )
-        std_report = current_config.setdefault("StdReport", {})
-        current_report = std_report.get("Belchertown", {})
         self._normalize_placeholder_keys_in_report(current_report)
         detected_legacy = self._detect_legacy_keys(current_report)
         migrate_legacy = self._should_migrate_legacy_keys(detected_legacy)
@@ -1123,23 +1274,31 @@ class BelchertownInstaller(ExtensionInstaller):
             existing_extras = self._section_to_dict(extras_section)
             for legacy_key in self._LEGACY_EXTRAS_MAPPING:
                 if legacy_key in existing_extras:
-                    preserved_legacy_extras[legacy_key] = existing_extras[legacy_key]
+                    preserved_legacy_extras[legacy_key] = (
+                        self._normalize_old_belchertown_paths(
+                            existing_extras[legacy_key]
+                        )
+                    )
 
             default_extras, _ = self._get_skin_defaults()
-            legacy_insert_before, legacy_insert_end = self._build_legacy_extras_insert_plan(
-                extras_section,
-                preserved_legacy_extras.keys(),
-                default_extras.keys(),
-                self._LEGACY_EXTRAS_MAPPING,
+            legacy_insert_before, legacy_insert_end = (
+                self._build_legacy_extras_insert_plan(
+                    extras_section,
+                    preserved_legacy_extras.keys(),
+                    default_extras.keys(),
+                    self._LEGACY_EXTRAS_MAPPING,
+                )
             )
 
         preserved_labels = None
         preserved_report_options = {}
         if isinstance(current_report, (dict, configobj.Section)):
-            preserved_labels = self._extract_label_overrides(current_report.get("Labels"))
+            preserved_labels = self._extract_label_overrides(
+                current_report.get("Labels")
+            )
             preserved_report_options = self._extract_report_overrides(current_report)
 
-        fresh_config = self._build_belchertown_template(
+        fresh_config = self._build_new_belchertown_template(
             current_report,
             commented_extra_overrides,
             preserved_legacy_extras,
@@ -1150,11 +1309,16 @@ class BelchertownInstaller(ExtensionInstaller):
             return False
 
         self._cleanup_following_report_comments(std_report)
-        if "Belchertown" in std_report:
-            del std_report["Belchertown"]
+        report_names_to_replace = [self._NEW_REPORT_NAME]
+        report_names_to_replace.extend(self._OLD_REPORT_NAMES)
+        if old_report_name and old_report_name not in report_names_to_replace:
+            report_names_to_replace.append(old_report_name)
+        for report_name in report_names_to_replace:
+            if report_name in std_report:
+                del std_report[report_name]
 
         current_config.merge(fresh_config)
-        report_section = std_report["Belchertown"]
+        report_section = std_report[self._NEW_REPORT_NAME]
 
         if preserved_report_options:
             if hasattr(report_section, "merge"):
@@ -1170,7 +1334,7 @@ class BelchertownInstaller(ExtensionInstaller):
         return True
 
     def __init__(self):
-        super(BelchertownInstaller, self).__init__(
+        super(NewBelchertownInstaller, self).__init__(
             version=VERSION,
             name=NAME,
             description=DESCRIPTION,
@@ -1186,128 +1350,128 @@ class BelchertownInstaller(ExtensionInstaller):
 # ----------------------------------
 
 # Keep this bootstrap config intentionally minimal.
-# Canonical Belchertown option defaults live in skins/Belchertown/skin.conf,
+# Canonical New Belchertown option defaults live in skins/new-belchertown/skin.conf,
 # and configure() rebuilds [[[Extras]]] from that file.
-config_dict = BelchertownInstaller._build_bootstrap_config()
+config_dict = NewBelchertownInstaller._build_bootstrap_config()
 
 # ----------------------------------
 #        files stanza
 # ----------------------------------
 
 files = [
-    ("bin/user", ["bin/user/belchertown.py"]),
+    ("bin/user", ["bin/user/new_belchertown.py"]),
     (
-        "skins/Belchertown",
+        "skins/new-belchertown",
         [
-            "skins/Belchertown/favicon.ico",
-            "skins/Belchertown/index_radar.inc.example",
-            "skins/Belchertown/footer.html.tmpl",
-            "skins/Belchertown/header.html.tmpl",
-            "skins/Belchertown/index.html.tmpl",
-            "skins/Belchertown/about.inc.example",
-            "skins/Belchertown/kiosk.html.tmpl",
-            "skins/Belchertown/kiosk.css",
-            "skins/Belchertown/celestial.inc",
-            "skins/Belchertown/daylight.inc",
-            "skins/Belchertown/almanac_daylight_data.inc",
-            "skins/Belchertown/charts.conf.example",
-            "skins/Belchertown/page-header.inc",
-            "skins/Belchertown/manifest.json.tmpl",
-            "skins/Belchertown/records.inc.example",
-            "skins/Belchertown/records-table.inc.example",
-            "skins/Belchertown/robots.txt",
-            "skins/Belchertown/skin.conf",
-            "skins/Belchertown/belchertown-dark.min.css",
-            "skins/Belchertown/style.css",
+            "skins/new-belchertown/favicon.ico",
+            "skins/new-belchertown/index_radar.inc.example",
+            "skins/new-belchertown/footer.html.tmpl",
+            "skins/new-belchertown/header.html.tmpl",
+            "skins/new-belchertown/index.html.tmpl",
+            "skins/new-belchertown/about.inc.example",
+            "skins/new-belchertown/kiosk.html.tmpl",
+            "skins/new-belchertown/kiosk.css",
+            "skins/new-belchertown/celestial.inc",
+            "skins/new-belchertown/daylight.inc",
+            "skins/new-belchertown/almanac_daylight_data.inc",
+            "skins/new-belchertown/charts.conf.example",
+            "skins/new-belchertown/page-header.inc",
+            "skins/new-belchertown/manifest.json.tmpl",
+            "skins/new-belchertown/records.inc.example",
+            "skins/new-belchertown/records-table.inc.example",
+            "skins/new-belchertown/robots.txt",
+            "skins/new-belchertown/skin.conf",
+            "skins/new-belchertown/new-belchertown-dark.min.css",
+            "skins/new-belchertown/style.css",
         ],
     ),
-    ("skins/Belchertown/about", ["skins/Belchertown/about/index.html.tmpl"]),
-    ("skins/Belchertown/charts", ["skins/Belchertown/charts/index.html.tmpl"]),
+    ("skins/new-belchertown/about", ["skins/new-belchertown/about/index.html.tmpl"]),
+    ("skins/new-belchertown/charts", ["skins/new-belchertown/charts/index.html.tmpl"]),
     (
-        "skins/Belchertown/NOAA",
+        "skins/new-belchertown/noaa",
         [
-            "skins/Belchertown/NOAA/NOAA-YYYY-MM.txt.tmpl",
-            "skins/Belchertown/NOAA/NOAA-YYYY.txt.tmpl",
+            "skins/new-belchertown/noaa/NOAA-YYYY-MM.txt.tmpl",
+            "skins/new-belchertown/noaa/NOAA-YYYY.txt.tmpl",
         ],
     ),
-    ("skins/Belchertown/pi", ["skins/Belchertown/pi/index.html.tmpl"]),
+    ("skins/new-belchertown/pi", ["skins/new-belchertown/pi/index.html.tmpl"]),
     (
-        "skins/Belchertown/records",
+        "skins/new-belchertown/records",
         [
-            "skins/Belchertown/records/index.html.tmpl",
+            "skins/new-belchertown/records/index.html.tmpl",
         ],
     ),
-    ("skins/Belchertown/reports", ["skins/Belchertown/reports/index.html.tmpl"]),
+    ("skins/new-belchertown/reports", ["skins/new-belchertown/reports/index.html.tmpl"]),
     (
-        "skins/Belchertown/js",
+        "skins/new-belchertown/js",
         [
-            "skins/Belchertown/js/belchertown.js.tmpl",
-            "skins/Belchertown/js/belchertown-utils.js.tmpl",
-            "skins/Belchertown/js/belchertown-forecast.js.tmpl",
-            "skins/Belchertown/js/belchertown-mqtt.js.tmpl",
-            "skins/Belchertown/js/belchertown-charts.js.tmpl",
-            "skins/Belchertown/js/index.html",
-            "skins/Belchertown/js/responsive-menu.js",
-        ],
-    ),
-    (
-        "skins/Belchertown/json",
-        [
-            "skins/Belchertown/json/index.html",
-            "skins/Belchertown/json/weewx_data.json.tmpl",
+            "skins/new-belchertown/js/new-belchertown.js.tmpl",
+            "skins/new-belchertown/js/new-belchertown-utils.js.tmpl",
+            "skins/new-belchertown/js/new-belchertown-forecast.js.tmpl",
+            "skins/new-belchertown/js/new-belchertown-mqtt.js.tmpl",
+            "skins/new-belchertown/js/new-belchertown-charts.js.tmpl",
+            "skins/new-belchertown/js/index.html",
+            "skins/new-belchertown/js/responsive-menu.js",
         ],
     ),
     (
-        "skins/Belchertown/lang",
+        "skins/new-belchertown/json",
         [
-            "skins/Belchertown/lang/ca.conf",
-            "skins/Belchertown/lang/da.conf",
-            "skins/Belchertown/lang/de.conf",
-            "skins/Belchertown/lang/es.conf",
-            "skins/Belchertown/lang/fr.conf",
-            "skins/Belchertown/lang/it.conf",
-            "skins/Belchertown/lang/nb.conf",
-            "skins/Belchertown/lang/nl.conf",
-            "skins/Belchertown/lang/pl.conf",
-            "skins/Belchertown/lang/pt.conf",
-            "skins/Belchertown/lang/sv.conf",
+            "skins/new-belchertown/json/index.html",
+            "skins/new-belchertown/json/weewx_data.json.tmpl",
         ],
     ),
     (
-        "skins/Belchertown/images",
+        "skins/new-belchertown/lang",
         [
-            "skins/Belchertown/images/clear-day.png",
-            "skins/Belchertown/images/clear-night.png",
-            "skins/Belchertown/images/cloudy.png",
-            "skins/Belchertown/images/drizzle.png",
-            "skins/Belchertown/images/fog.png",
-            "skins/Belchertown/images/hail.png",
-            "skins/Belchertown/images/mostly-clear-day.png",
-            "skins/Belchertown/images/mostly-clear-night.png",
-            "skins/Belchertown/images/mostly-cloudy-day.png",
-            "skins/Belchertown/images/mostly-cloudy-night.png",
-            "skins/Belchertown/images/partly-cloudy-day.png",
-            "skins/Belchertown/images/partly-cloudy-night.png",
-            "skins/Belchertown/images/rain.png",
-            "skins/Belchertown/images/sleet.png",
-            "skins/Belchertown/images/snow.png",
-            "skins/Belchertown/images/snowflake-icon-15px.png",
-            "skins/Belchertown/images/station.png",
-            "skins/Belchertown/images/station48.png",
-            "skins/Belchertown/images/station72.png",
-            "skins/Belchertown/images/station96.png",
-            "skins/Belchertown/images/station144.png",
-            "skins/Belchertown/images/station168.png",
-            "skins/Belchertown/images/station192.png",
-            "skins/Belchertown/images/sunrise.png",
-            "skins/Belchertown/images/sunset.png",
-            "skins/Belchertown/images/thunderstorm.png",
-            "skins/Belchertown/images/tornado.png",
-            "skins/Belchertown/images/unknown.png",
-            "skins/Belchertown/images/wind.png",
-            "skins/Belchertown/images/windy.png",
-            "skins/Belchertown/images/index.html",
-            "skins/Belchertown/images/aeris-icon-list.json",
+            "skins/new-belchertown/lang/ca.conf",
+            "skins/new-belchertown/lang/da.conf",
+            "skins/new-belchertown/lang/de.conf",
+            "skins/new-belchertown/lang/es.conf",
+            "skins/new-belchertown/lang/fr.conf",
+            "skins/new-belchertown/lang/it.conf",
+            "skins/new-belchertown/lang/nb.conf",
+            "skins/new-belchertown/lang/nl.conf",
+            "skins/new-belchertown/lang/pl.conf",
+            "skins/new-belchertown/lang/pt.conf",
+            "skins/new-belchertown/lang/sv.conf",
+        ],
+    ),
+    (
+        "skins/new-belchertown/images",
+        [
+            "skins/new-belchertown/images/clear-day.png",
+            "skins/new-belchertown/images/clear-night.png",
+            "skins/new-belchertown/images/cloudy.png",
+            "skins/new-belchertown/images/drizzle.png",
+            "skins/new-belchertown/images/fog.png",
+            "skins/new-belchertown/images/hail.png",
+            "skins/new-belchertown/images/mostly-clear-day.png",
+            "skins/new-belchertown/images/mostly-clear-night.png",
+            "skins/new-belchertown/images/mostly-cloudy-day.png",
+            "skins/new-belchertown/images/mostly-cloudy-night.png",
+            "skins/new-belchertown/images/partly-cloudy-day.png",
+            "skins/new-belchertown/images/partly-cloudy-night.png",
+            "skins/new-belchertown/images/rain.png",
+            "skins/new-belchertown/images/sleet.png",
+            "skins/new-belchertown/images/snow.png",
+            "skins/new-belchertown/images/snowflake-icon-15px.png",
+            "skins/new-belchertown/images/station.png",
+            "skins/new-belchertown/images/station48.png",
+            "skins/new-belchertown/images/station72.png",
+            "skins/new-belchertown/images/station96.png",
+            "skins/new-belchertown/images/station144.png",
+            "skins/new-belchertown/images/station168.png",
+            "skins/new-belchertown/images/station192.png",
+            "skins/new-belchertown/images/sunrise.png",
+            "skins/new-belchertown/images/sunset.png",
+            "skins/new-belchertown/images/thunderstorm.png",
+            "skins/new-belchertown/images/tornado.png",
+            "skins/new-belchertown/images/unknown.png",
+            "skins/new-belchertown/images/wind.png",
+            "skins/new-belchertown/images/windy.png",
+            "skins/new-belchertown/images/index.html",
+            "skins/new-belchertown/images/aeris-icon-list.json",
         ],
     ),
 ]

@@ -14,6 +14,10 @@ generator even if within a comment.
 #set global $hemisphere = "northern-hemisphere"
 #end if
 
+#set global $sunset_hour = "null"
+#set global $sunset_minute = "null"
+#set global $sunrise_hour = "null"
+#set global $sunrise_minute = "null"
 #if $almanac.sunrise.raw is not None and $almanac.sunset.raw is not None
 #set global $sunset_hour = datetime.datetime.fromtimestamp($almanac.sunset.raw).strftime('%-H')
 #set global $sunset_minute = datetime.datetime.fromtimestamp($almanac.sunset.raw).strftime('%-M')
@@ -45,6 +49,8 @@ var chartgroups_raw = $charts;
 var chartgroups_titles = $chartpage_titles;
 var chartpage_content = $chartpage_content;
 var moon_tilt_template_value = $moon_tilt_template_value;
+var belchertownAutoThemeMediaListenerAttached = false;
+var belchertownAutoThemeMediaQuery = null;
 
 // ---- Forecast icon helpers (Dark Sky-style icon names) ----
 const DS_ICON_TO_W34 = {
@@ -424,10 +430,8 @@ jQuery(document).ready(function() {
             changeTheme("light", true);
         } else if (window.location.search.indexOf('?theme=auto') === 0) {
             belchertown_debug("Theme: Setting auto theme because of URL override");
-            sessionStorage.setItem('theme', 'auto')
-            // #if $almanac.sunrise.raw is not None and $almanac.sunset.raw is not None
-            autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute)
-            // #end if
+            sessionStorage.setItem('theme', 'auto');
+            autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
         }
     }
 
@@ -499,9 +503,7 @@ jQuery(document).ready(function() {
 // #if $Extras.has_key("theme") and $Extras.theme == 'auto'
 // Run this on every page for dark mode if skin theme is auto, without fetching
 // full weather JSON on non-weather pages.
-// #if $almanac.sunrise.raw is not None and $almanac.sunset.raw is not None
 autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
-// #end if
 // #end if
 
 // http://stackoverflow.com/a/14887961/1177153
@@ -1330,6 +1332,108 @@ function initializeAlmanacDiagramFromDOM() {
     });
 }
 
+function getPreferredColorSchemeTheme() {
+    if (typeof window.matchMedia !== "function") {
+        return null;
+    }
+
+    try {
+        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            return "dark";
+        }
+        if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+            return "light";
+        }
+    } catch (err) {
+        belchertown_debug("Auto theme: prefers-color-scheme check failed: " + err);
+    }
+
+    return null;
+}
+
+function watchPreferredColorSchemeTheme() {
+    if (belchertownAutoThemeMediaListenerAttached || typeof window.matchMedia !== "function") {
+        return;
+    }
+
+    try {
+        belchertownAutoThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        var themePreferenceChanged = function(event) {
+            if (sessionStorage.getItem('theme') !== "auto") {
+                belchertown_debug("Auto theme: system color-scheme changed, but auto theme is not active.");
+                return;
+            }
+
+            var preferredTheme = event.matches ? "dark" : "light";
+            belchertown_debug("Auto theme: system color-scheme changed to " + preferredTheme);
+            changeTheme(preferredTheme);
+        };
+
+        if (typeof belchertownAutoThemeMediaQuery.addEventListener === "function") {
+            belchertownAutoThemeMediaQuery.addEventListener("change", themePreferenceChanged);
+            belchertownAutoThemeMediaListenerAttached = true;
+        } else if (typeof belchertownAutoThemeMediaQuery.addListener === "function") {
+            belchertownAutoThemeMediaQuery.addListener(themePreferenceChanged);
+            belchertownAutoThemeMediaListenerAttached = true;
+        }
+    } catch (err) {
+        belchertown_debug("Auto theme: unable to watch prefers-color-scheme changes: " + err);
+    }
+}
+
+function getSunriseSunsetTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
+    var sunriseHour = parseInt(sunrise_hour, 10);
+    var sunriseMinute = parseInt(sunrise_min, 10);
+    var sunsetHour = parseInt(sunset_hour, 10);
+    var sunsetMinute = parseInt(sunset_min, 10);
+
+    if (!isFinite(sunriseHour) || !isFinite(sunsetHour)) {
+        belchertown_debug("Auto theme: sunrise/sunset fallback is unavailable.");
+        return null;
+    }
+    if (!isFinite(sunriseMinute)) {
+        sunriseMinute = 0;
+    }
+    if (!isFinite(sunsetMinute)) {
+        sunsetMinute = 0;
+    }
+
+    var d = new Date();
+    var nowMinutes = (d.getHours() * 60) + d.getMinutes();
+    var sunriseMinutes = (sunriseHour * 60) + sunriseMinute;
+    var sunsetMinutes = (sunsetHour * 60) + sunsetMinute;
+    var dayTime;
+
+    if (sunriseMinutes === sunsetMinutes) {
+        belchertown_debug("Auto theme: sunrise/sunset fallback has matching rise and set times.");
+        return null;
+    } else if (sunriseMinutes < sunsetMinutes) {
+        dayTime = sunriseMinutes <= nowMinutes && nowMinutes < sunsetMinutes;
+    } else {
+        dayTime = nowMinutes >= sunriseMinutes || nowMinutes < sunsetMinutes;
+    }
+
+    belchertown_debug("Auto theme: sunrise: " + sunriseHour + ":" + sunriseMinute);
+    belchertown_debug("Auto theme: now minutes: " + nowMinutes);
+    belchertown_debug("Auto theme: sunset: " + sunsetHour + ":" + sunsetMinute);
+    belchertown_debug("Auto theme: are we in daylight hours: " + dayTime);
+
+    return dayTime ? "light" : "dark";
+}
+
+function applyAutoThemeChoice(themeName, reason) {
+    belchertown_debug("Auto theme: sessionStorage.getItem('theme') = " + sessionStorage.getItem('theme'));
+
+    if (sessionStorage.getItem('theme') == "auto") {
+        belchertown_debug("Auto theme: setting " + themeName + " theme from " + reason);
+        changeTheme(themeName);
+        return true;
+    }
+
+    belchertown_debug("Auto theme: cannot set " + themeName + " theme since visitor used toggle to override theme. Refresh to reset the override.");
+    return false;
+}
+
 function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     // First check if ?theme= is in URL. If so, bail out and do not change anything.
     const themeParam = getURLvar("theme");
@@ -1339,42 +1443,20 @@ function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     }
     belchertown_debug("Auto theme: checking to see if theme needs to be switched");
 
-    var d = new Date();
-    var nowHour = d.getHours();
-    var nowMinutes = d.getMinutes();
-
-    // Determine if it's day time. https://stackoverflow.com/a/14718577/1177153
-    if (sunrise_hour <= nowHour && nowHour < sunset_hour) {
-        dayTime = true;
-    } else {
-        dayTime = false;
+    var preferredTheme = getPreferredColorSchemeTheme();
+    if (preferredTheme) {
+        belchertown_debug("Auto theme: using prefers-color-scheme: " + preferredTheme);
+        watchPreferredColorSchemeTheme();
+        return applyAutoThemeChoice(preferredTheme, "browser color-scheme preference");
     }
 
-    belchertown_debug("Auto theme: sunrise: " + sunrise_hour);
-    belchertown_debug("Auto theme: now: " + nowHour);
-    belchertown_debug("Auto theme: sunset: " + sunset_hour);
-    belchertown_debug("Auto theme: are we in daylight hours: " + dayTime);
-    belchertown_debug("Auto theme: sessionStorage.getItem('theme') = " + sessionStorage.getItem('theme'));
-
-    if (dayTime) {
-        // Day time, set light if needed
-        // Only change theme if user has not overridden the auto option with the toggle
-        if (sessionStorage.getItem('theme') == "auto") {
-            belchertown_debug("Auto theme: setting light theme since dayTime variable is true (day)");
-            changeTheme("light");
-        } else {
-            belchertown_debug("Auto theme: cannot set light theme since visitor used toggle to override theme. Refresh to reset the override.");
-        }
-    } else {
-        // Night time, set dark if needed
-        // Only change theme if user has not overridden the auto option with the toggle
-        if (sessionStorage.getItem('theme') == "auto") {
-            belchertown_debug("Auto theme: setting dark theme since dayTime variable is false (night)");
-            changeTheme("dark");
-        } else {
-            belchertown_debug("Auto theme: cannot set dark theme since visitor used toggle to override theme. Refresh to reset the override.");
-        }
+    belchertown_debug("Auto theme: prefers-color-scheme unavailable. Falling back to sunrise/sunset.");
+    var fallbackTheme = getSunriseSunsetTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min);
+    if (!fallbackTheme) {
+        return false;
     }
+
+    return applyAutoThemeChoice(fallbackTheme, "sunrise/sunset fallback");
 }
 
 function ensureDarkThemeStylesheet() {
@@ -1387,7 +1469,7 @@ function ensureDarkThemeStylesheet() {
     darkStylesheet.rel = "stylesheet";
     darkStylesheet.type = "text/css";
     darkStylesheet.media = "all";
-    darkStylesheet.href = get_relative_url() + "/belchertown-dark.min.css?ver=$belchertown_version";
+    darkStylesheet.href = get_relative_url() + "/new-belchertown-dark.min.css?ver=$belchertown_version";
     document.head.appendChild(darkStylesheet);
 }
 
@@ -2005,7 +2087,7 @@ function moon_icon(moonphase) {
     }
 }
 
-// Forecast implementation moved to: js/belchertown-forecast.js.tmpl
+// Forecast implementation moved to: js/new-belchertown-forecast.js.tmpl
 function forecast_sync_row_height() {
     var row = document.querySelector(".forecastrow");
     if (!row) {
@@ -2099,7 +2181,7 @@ function forecast_time(i, interval, daytime, showDay) {
     return daytime;
 }
 
-// MQTT/live implementation moved to: js/belchertown-mqtt.js.tmpl
+// MQTT/live implementation moved to: js/new-belchertown-mqtt.js.tmpl
 
 
-// Charts implementation moved to: js/belchertown-charts.js.tmpl
+// Charts implementation moved to: js/new-belchertown-charts.js.tmpl

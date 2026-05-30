@@ -342,7 +342,7 @@ function showChart(json_file, prepend_renderTo = false) {
 
             try {
 
-            // Ignore the Belchertown Version since this "plot" has no other options
+            // Ignore the New Belchertown Version since this "plot" has no other options
             if (plotname == "belchertown_version") {
                 return true;
             }
@@ -934,7 +934,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     }
                 }
 
-                // Rain, RainRate and rainTotal (special Belchertown skin observation) get yAxis precision
+                // Rain, RainRate and rainTotal (special New Belchertown skin observation) get yAxis precision
                 if (s.obsType == "rain" || s.obsType == "rainRate" || s.obsType == "rainTotal") {
                     options.yAxis[this_yAxis].min = 0;
                     options.yAxis[this_yAxis].minRange = 0.01;

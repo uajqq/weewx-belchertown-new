@@ -1,4 +1,4 @@
-# Belchertown WeeWX skin
+# New Belchertown WeeWX skin
 
 ### This is a fork of [Pat O'Brien](https://github.com/poblabs)'s excellent Belchertown skin. His repo is no longer maintained, so this fork will be keeping up with bug fixes and new features.
 
@@ -7,7 +7,7 @@ This skin (or theme, or template) is for the [WeeWX weather software](http://wee
 Features include:
 * Real-time streaming updates on the front page of the webpage without neededing to reload the website. (weewx-mqtt extension required and an MQTT server with Websockets required.)
 * Extensive charting system with full customized control on observations, historical timescale, grouping and more. Charts also update automatically without needing to reload the website.
-* Light and Dark Mode with automatic switching based on sunset and sunrise.
+* Light and Dark Mode with automatic switching based on the visitor's system preference, with sunset and sunrise as a fallback.
 * Forecast data updated every hour without needing to reload the website. (A free Xweather API key required. You qualify for a free key by submitting weather observations to pwsweather.)
 * Forecast alternative from Pirate Weather has been integrated in v1.7. (Pirate Weather has a limited free subscription option, sign up is
 required to access the service.)

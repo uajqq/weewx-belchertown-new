@@ -3,7 +3,7 @@
 ## Copyright Tom Keffer, Matthew Wall
 ## See LICENSE.txt for your rights
 #errorCatcher Echo
-#from user.belchertown import build_daylight_change_string
+#from user.new_belchertown import build_daylight_change_string
 #set $hour_short = "h"
 #set $minute_short = "m"
 #set $second_short = "s"

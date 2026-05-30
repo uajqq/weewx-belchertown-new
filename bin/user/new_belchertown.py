@@ -1,5 +1,5 @@
 """
-Extension for the Belchertown skin.
+Extension for the New Belchertown skin.
 This extension builds search list extensions as well
 as a crude "cron" to download necessary files.
 
@@ -55,7 +55,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-VERSION = "2.0beta4-new-belchertown"
+VERSION = "2.0-rc1"
 log.info(f"version {VERSION}")
 
 # Default timeout for all HTTP requests (seconds)
@@ -282,7 +282,7 @@ def _log_minifier_missing_error_once(missing_modules):
 
     module_list = ", ".join(missing_modules)
     log.warning(
-        "Belchertown minify: required package(s) not installed: "
+        "New Belchertown minify: required package(s) not installed: "
         f"{module_list}. Falling back to built-in CSS minifying and JS copies."
     )
     _MINIFIER_DEPS_MISSING_LOGGED = True
@@ -846,7 +846,7 @@ def _nws_icon_to_darksky(icon_value, is_daytime=True):
 
 
 def _nws_build_current(obs_payload, forecast_units):
-    """Normalize NWS latest observation payload to Belchertown current schema."""
+    """Normalize NWS latest observation payload to New Belchertown current schema."""
     props = (obs_payload or {}).get("properties") or {}
 
     temp_c = _nws_quantity_value(props.get("temperature"))
@@ -927,7 +927,7 @@ def _nws_build_current(obs_payload, forecast_units):
 
 
 def _nws_build_hourly(hourly_payload, forecast_units):
-    """Normalize NWS hourly periods to Belchertown hourly schema."""
+    """Normalize NWS hourly periods to New Belchertown hourly schema."""
     periods = ((hourly_payload or {}).get("properties") or {}).get("periods") or []
     output = []
 
@@ -1049,7 +1049,7 @@ def _nws_build_daily(forecast_payload, forecast_units):
 
 
 def _nws_build_alerts(alerts_payload):
-    """Normalize NWS active alerts payload to Belchertown alerts schema."""
+    """Normalize NWS active alerts payload to New Belchertown alerts schema."""
     features = (alerts_payload or {}).get("features") or []
     output = []
     for feature in features:
@@ -1550,7 +1550,7 @@ def _extract_aqi_globals_from_payload(aqi_payload, label_dict):
 
 
 def _openmeteo_transform_to_belch(payload, forecast_units):
-    """Map Open-Meteo response to Belchertown compact forecast schema."""
+    """Map Open-Meteo response to New Belchertown compact forecast schema."""
 
     if not isinstance(payload, dict):
         payload = {}
@@ -1764,7 +1764,7 @@ def _apply_legacy_option_mappings(section_dict, section_name, legacy_mapping):
         if legacy_key in section_dict:
             section_dict[new_key] = section_dict[legacy_key]
             log.warning(
-                f"Belchertown: Deprecated option '{legacy_key}' found in [{section_name}]. "
+                f"New Belchertown: Deprecated option '{legacy_key}' found in [{section_name}]. "
                 f"Using it as '{new_key}' for backward compatibility. "
                 f"Please rename it in weewx.conf."
             )
@@ -1935,7 +1935,7 @@ def _pick_three_hourly_from_current_period(hourly_rows):
 
 
 def _load_aeris_icon_map(config_dict, skin_dict):
-    """Load Aeris/Xweather icon mappings to Belchertown icon names."""
+    """Load Aeris/Xweather icon mappings to New Belchertown icon names."""
     iconlist_file_path = os.path.join(
         config_dict["WEEWX_ROOT"],
         skin_dict["SKIN_ROOT"],
@@ -3734,7 +3734,7 @@ class getData(SearchList):
 
     def get_extension_list(self, timespan, db_lookup):
         """
-        Build the data needed for the Belchertown skin
+        Build the data needed for the New Belchertown skin
         """
         # Cache frequently accessed objects
         config_dict = self.generator.config_dict
@@ -3747,7 +3747,7 @@ class getData(SearchList):
 
         # Pull user overrides directly from weewx.conf report stanza and
         # normalize any legacy keys there before copying into effective skin dict.
-        report_name = skin_dict.get("skin", "Belchertown")
+        report_name = skin_dict.get("skin", "new-belchertown")
         report_dict = config_dict.get("StdReport", {}).get(report_name, {})
         report_extras_dict = report_dict.get("Extras", {})
         report_label_generic_dict = report_dict.get("Labels", {}).get("Generic", {})
@@ -3777,7 +3777,7 @@ class getData(SearchList):
                 "graphs_page_header"
             ]
             log.warning(
-                "Belchertown: Deprecated option 'graphs_page_header' found in "
+                "New Belchertown: Deprecated option 'graphs_page_header' found in "
                 f"[StdReport][{report_name}][Extras]. Using it as "
                 "'charts_page_header' for backward compatibility. "
                 f"Please move it to [StdReport][{report_name}][Labels][Generic]."
@@ -3787,7 +3787,7 @@ class getData(SearchList):
                 "charts_page_header"
             ]
             log.warning(
-                "Belchertown: Option 'charts_page_header' found in "
+                "New Belchertown: Option 'charts_page_header' found in "
                 f"[StdReport][{report_name}][Extras]. Using it, but this option "
                 f"belongs under [StdReport][{report_name}][Labels][Generic]."
             )
@@ -3880,7 +3880,7 @@ class getData(SearchList):
                     log.error(
                         f"Error using locale {belchertown_locale}. "
                         "This locale may not be installed on your system and you may see unexpected results. "
-                        f"Python could not set the requested locale, but Belchertown skin JavaScript will attempt to use the provided locale string. Full error: {e}"
+                        f"Python could not set the requested locale, but New Belchertown skin JavaScript will attempt to use the provided locale string. Full error: {e}"
                     )
 
         if system_locale is None:
@@ -3960,7 +3960,7 @@ class getData(SearchList):
         default_chart_config_path = os.path.join(skin_root_path, "charts.conf.example")
         if os.path.exists(legacy_chart_config_path):
             log.warning(
-                f"Belchertown: Found legacy chart config '{legacy_chart_config_path}'. "
+                f"New Belchertown: Found legacy chart config '{legacy_chart_config_path}'. "
                 "Using it for backward compatibility. Please migrate to 'charts.conf'."
             )
             chart_dict = configobj.ConfigObj(legacy_chart_config_path, file_error=True)
@@ -4579,7 +4579,7 @@ class getData(SearchList):
         years = set()
         noaa_header_html = ""
         default_noaa_file = ""
-        noaa_dir = html_root + "/NOAA/"
+        noaa_dir = html_root + "/noaa/"
 
         try:
             # Only process NOAA report files; ignore any other files (csv, etc.) in the directory
@@ -4779,7 +4779,7 @@ class getData(SearchList):
                 current_time = int(time.time())
 
                 if os.path.isfile(forecast_file):
-                    # belchertown.py is called 12 times per archive, so the last condition ensures forecast on the hour is only downloaded once
+                    # new_belchertown.py is called 12 times per archive, so the last condition ensures forecast on the hour is only downloaded once
                     forecast_stat = os.stat(forecast_file)
                     file_modtime = int(forecast_stat.st_mtime)
                     archive_interval = int(
@@ -5304,7 +5304,7 @@ class getData(SearchList):
                                     )
                             except FileNotFoundError:
                                 log.info(
-                                    "Belchertown JSON folder does not exist. Usually this "
+                                    "New Belchertown JSON folder does not exist. Usually this "
                                     "is an error that only occurs on the first run. If it "
                                     "is appearing repeatedly, check file permissions."
                                 )
@@ -5452,7 +5452,7 @@ class getData(SearchList):
                                     )
                             except FileNotFoundError:
                                 log.info(
-                                    "Belchertown JSON folder does not exist. Usually this "
+                                    "New Belchertown JSON folder does not exist. Usually this "
                                     "is an error that only occurs on the first run. If it "
                                     "is appearing repeatedly, check file permissions."
                                 )
@@ -5556,7 +5556,7 @@ class getData(SearchList):
             earthquake_maxradiuskm = extras_dict["earthquake_maxradiuskm"]
             earthquake_minmag = extras_dict.get("earthquake_minmag", "2")
             if extras_dict["earthquake_server"] == "ReNaSS":
-                log.error("Belchertown: earthquake_server 'ReNaSS' is no longer supported. Automatically switching to 'EMSC'. Please update your skin.conf.")
+                log.error("New Belchertown: earthquake_server 'ReNaSS' is no longer supported. Automatically switching to 'EMSC'. Please update your skin.conf.")
                 extras_dict["earthquake_server"] = "EMSC"
             # Sample URL from Belchertown Weather:
             # http://earthquake.usgs.gov/fdsnws/event/1/query?limit=1&lat=42.223&lon=-72.374&maxradiuskm=1000&format=geojson&nodata=204&minmagnitude=2
@@ -6206,7 +6206,7 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
         extras = self.skin_dict.get("Extras", {})
         minify_requested = to_bool(extras.get("minify", "0"))
         if not minify_requested:
-            log.debug("Belchertown minify: disabled by Extras.minify")
+            log.debug("New Belchertown minify: disabled by Extras.minify")
             return
 
         minify_deps_ok, missing_modules = _get_minifier_dependency_status()
@@ -6230,7 +6230,7 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
             pass
 
         if not os.path.isdir(html_root):
-            log.debug(f"Belchertown minify: HTML_ROOT does not exist yet: {html_root}")
+            log.debug(f"New Belchertown minify: HTML_ROOT does not exist yet: {html_root}")
             return
 
         include_globs = list(self.DEFAULT_INCLUDE_GLOBS)
@@ -6285,17 +6285,17 @@ class PostRenderMinifyGenerator(weewx.reportengine.ReportGenerator):
                 except Exception as e:
                     errors += 1
                     log.error(
-                        f"Belchertown minify failed for {source_path}: {e}"
+                        f"New Belchertown minify failed for {source_path}: {e}"
                     )
 
         if errors:
             log.warning(
-                f"Belchertown minify finished with {errors} errors; "
+                f"New Belchertown minify finished with {errors} errors; "
                 f"{processed} files processed; {skipped} unchanged"
             )
         else:
             log.info(
-                f"Belchertown minify processed {processed} files; {skipped} unchanged"
+                f"New Belchertown minify processed {processed} files; {skipped} unchanged"
             )
 
     def _matches_any(self, relative_path, globs):
@@ -6428,7 +6428,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         )
         if os.path.exists(legacy_chart_config_path):
             log.warning(
-                f"Belchertown: Found legacy chart config '{legacy_chart_config_path}'. "
+                f"New Belchertown: Found legacy chart config '{legacy_chart_config_path}'. "
                 "Using it for backward compatibility. Please migrate to 'charts.conf'."
             )
             self.chart_dict = configobj.ConfigObj(legacy_chart_config_path, file_error=True)
@@ -7447,7 +7447,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
         config_dict = self.config_dict
 
         if observation == "windRose":
-            # Special Belchertown wind rose with Highcharts aggregator Wind
+            # Special New Belchertown wind rose with Highcharts aggregator Wind
             # speeds are split into the first 7 beaufort groups.
             # https://en.wikipedia.org/wiki/Beaufort_scale
 
@@ -7542,7 +7542,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
             return series
 
-        # Special Belchertown Weather Range (radial)
+        # Special New Belchertown Weather Range (radial)
         # https://www.highcharts.com/blog/tutorials/209-the-art-of-the-chart-weather-radials/
         if observation == "weatherRange":
 
@@ -7744,7 +7744,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
             return data
 
-        # Belchertown wind barb chart
+        # New Belchertown wind barb chart
         if observation == "windBarb":
             start_ts = int(start_ts)
             end_ts = int(end_ts)
@@ -7884,7 +7884,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 "obs_unit_label": obs_unit_label,
             }
 
-        # Special Belchertown Skin rain counter
+        # Special New Belchertown Skin rain counter
         if observation in ("rainTotal", "rainDurTotal", "hailDurTotal", "sunshineDurTotal", "ETTotal"):
             obs_lookup = observation[:-5]  # e.g. "rain", "rainDur", "hailDur", "sunshineDur", "ET"
             # Force sum on this observation

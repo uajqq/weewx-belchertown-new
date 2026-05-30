@@ -12,11 +12,11 @@
         var year = params.get("yr");
         var url;
         if (year !== null && month !== null) {
-            url = '$relative_url/NOAA/NOAA-' + year + '-' + month + '.txt';
+            url = '$relative_url/noaa/NOAA-' + year + '-' + month + '.txt';
         } else if (year !== null) {
-            url = '$relative_url/NOAA/NOAA-' + year + '.txt';
+            url = '$relative_url/noaa/NOAA-' + year + '.txt';
         } else {
-            url = '$relative_url/NOAA/$default_noaa_file';
+            url = '$relative_url/noaa/$default_noaa_file';
         }
 
         populatePre(url);

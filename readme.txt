@@ -1,4 +1,4 @@
-This is a fork of the Belchertown skin for the WeeWX weather system.
+New Belchertown is a fork of the Belchertown skin for the WeeWX weather system.
 Copyright 2018 Pat O'Brien
 Maintained since 2025 by uajqq
 
@@ -8,7 +8,7 @@ Installation instructions:
 
 1) Run the installer:
 
-sudo wee_extension --install weewx-belchertown.tgz
+sudo wee_extension --install weewx-belchertown-new.tgz
 
 2) Restart weewx:
 
@@ -17,9 +17,9 @@ sudo /etc/init.d/weewx start
 
 3) Wait for an archive period, or run wee_reports
 
-4) Look at the result in the 'belchertown' subdirectory.
+4) Look at the result in the 'new-belchertown' subdirectory.
 
-public_html/belchertown
+public_html/new-belchertown
 
 
 Configuration options:
@@ -32,13 +32,13 @@ It is recommended that any option you want to override to add it to the weewx.co
 file. This way your changes do not get erased on skin or WeeWX upgrades. 
 
 For example, to add a logo to your site, you would want to open your weewx.conf and
-find the Belchertown skin section. Add an [[[Extras]]] stanza and then the logo_image variable
+find the New Belchertown skin section. Add an [[[Extras]]] stanza and then the logo_image variable
 and the location of the logo. 
 
 Example:
 
 [StdReport]
-    [[Belchertown]]
+    [[new-belchertown]]
         [[[Extras]]]
             logo_image = "https://belchertownweather.com/images/content/btownwx-logo-slim.png"
     

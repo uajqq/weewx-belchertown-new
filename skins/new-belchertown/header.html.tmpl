@@ -1,6 +1,6 @@
 #encoding UTF-8
 ## Determine initial skin theme CSS class from config
-## Auto theme setting determines which CSS class to use based on the hour
+## Auto theme uses this sunrise/sunset value as the no-JS and legacy-browser fallback.
 #set $bodyTheme = ""
 #set $themeSwitchChecked = ""
 #if $Extras.theme == "dark" or $Extras.pi_theme == "dark"
@@ -146,9 +146,9 @@
         </noscript>
         <link rel='stylesheet' href='$relative_url/style${asset_suffix}.css?ver=$asset_version' type='text/css' media='all' id="belchertownStyle" />
         #if $bodyTheme == "dark"
-        <link rel='stylesheet' href='$relative_url/belchertown-dark.min.css?ver=$asset_version' type='text/css' media='all' id="belchertownDarkStyle" />
+        <link rel='stylesheet' href='$relative_url/new-belchertown-dark.min.css?ver=$asset_version' type='text/css' media='all' id="belchertownDarkStyle" />
         #else
-        <link rel='prefetch' href='$relative_url/belchertown-dark.min.css?ver=$asset_version' as='style' id="belchertownDarkPrefetch" />
+        <link rel='prefetch' href='$relative_url/new-belchertown-dark.min.css?ver=$asset_version' as='style' id="belchertownDarkPrefetch" />
         #end if
         #if $page == "kiosk"
         <link rel='stylesheet' href='$relative_url/kiosk${asset_suffix}.css?ver=$asset_version' type='text/css' media='all' id="belchertownCustomStyle" />
@@ -245,9 +245,9 @@
         #if $load_bootstrap_js
         <script defer type='text/javascript' src='//stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js'></script>
         #end if
-        <script defer type='text/javascript' src='$relative_url/js/belchertown-utils${asset_suffix}.js?ver=$asset_version'></script>
+        <script defer type='text/javascript' src='$relative_url/js/new-belchertown-utils${asset_suffix}.js?ver=$asset_version'></script>
         #if $load_core_js
-        <script defer type='text/javascript' src='$relative_url/js/belchertown${asset_suffix}.js?ver=$asset_version'></script>
+        <script defer type='text/javascript' src='$relative_url/js/new-belchertown${asset_suffix}.js?ver=$asset_version'></script>
         #else
         <script>
             window.addEventListener("DOMContentLoaded", function() {
@@ -258,13 +258,13 @@
         </script>
         #end if
         #if $load_forecast_js
-        <script defer type='text/javascript' src='$relative_url/js/belchertown-forecast${asset_suffix}.js?ver=$asset_version'></script>
+        <script defer type='text/javascript' src='$relative_url/js/new-belchertown-forecast${asset_suffix}.js?ver=$asset_version'></script>
         #end if
         #if $load_mqtt_js
-        <script defer type='text/javascript' src='$relative_url/js/belchertown-mqtt${asset_suffix}.js?ver=$asset_version'></script>
+        <script defer type='text/javascript' src='$relative_url/js/new-belchertown-mqtt${asset_suffix}.js?ver=$asset_version'></script>
         #end if
         #if $load_highcharts_js
-        <script defer type='text/javascript' src='$relative_url/js/belchertown-charts${asset_suffix}.js?ver=$asset_version'></script>
+        <script defer type='text/javascript' src='$relative_url/js/new-belchertown-charts${asset_suffix}.js?ver=$asset_version'></script>
         #end if
         #if $page == "pi"
         <script>
@@ -279,10 +279,10 @@
         #else
         <script>
             // Set the session variables for the theme
-            if ( sessionStorage.getItem('theme') === null ) {
+            if ( sessionStorage.getItem('theme') !== 'toggleOverride' ) {
                 sessionStorage.setItem('theme', '$Extras.theme');
             }
-            if ( sessionStorage.getItem('currentTheme') === null ) {
+            if ( sessionStorage.getItem('currentTheme') === null || sessionStorage.getItem('theme') !== 'toggleOverride' ) {
                 sessionStorage.setItem('currentTheme', '$bodyTheme');
             }
         </script>
@@ -300,7 +300,7 @@
                     darkStylesheet.rel = "stylesheet";
                     darkStylesheet.type = "text/css";
                     darkStylesheet.media = "all";
-                    darkStylesheet.href = "$relative_url/belchertown-dark.min.css?ver=$asset_version";
+                    darkStylesheet.href = "$relative_url/new-belchertown-dark.min.css?ver=$asset_version";
                     document.head.appendChild(darkStylesheet);
                 }
 
@@ -338,6 +338,70 @@
                     }
                 }
 
+                function getSimplePreferredColorSchemeTheme() {
+                    if (typeof window.matchMedia !== "function") {
+                        return null;
+                    }
+
+                    try {
+                        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+                            return "dark";
+                        }
+                        if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+                            return "light";
+                        }
+                    } catch (err) {
+                        return null;
+                    }
+
+                    return null;
+                }
+
+                function getSimpleAutoTheme() {
+                    var fallbackTheme = "$bodyTheme";
+                    var preferredTheme = getSimplePreferredColorSchemeTheme();
+
+                    if (preferredTheme === "dark" || preferredTheme === "light") {
+                        return preferredTheme;
+                    }
+
+                    if (fallbackTheme !== "dark" && fallbackTheme !== "light") {
+                        fallbackTheme = "light";
+                    }
+
+                    return fallbackTheme;
+                }
+
+                function watchSimpleAutoTheme() {
+                    if (typeof window.matchMedia !== "function" || watchSimpleAutoTheme.isAttached) {
+                        return;
+                    }
+
+                    try {
+                        var colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+                        var colorSchemeChanged = function(event) {
+                            if (sessionStorage.getItem("theme") === "auto") {
+                                setSimpleTheme(event.matches ? "dark" : "light", false);
+                            }
+                        };
+
+                        if (typeof colorSchemeQuery.addEventListener === "function") {
+                            colorSchemeQuery.addEventListener("change", colorSchemeChanged);
+                            watchSimpleAutoTheme.isAttached = true;
+                        } else if (typeof colorSchemeQuery.addListener === "function") {
+                            colorSchemeQuery.addListener(colorSchemeChanged);
+                            watchSimpleAutoTheme.isAttached = true;
+                        }
+                    } catch (err) {
+                        return;
+                    }
+                }
+
+                function applySimpleAutoTheme() {
+                    setSimpleTheme(getSimpleAutoTheme(), false);
+                    watchSimpleAutoTheme();
+                }
+
                 function initSimpleTheme() {
                     var requestedTheme = "";
                     try {
@@ -350,9 +414,11 @@
                         setSimpleTheme(requestedTheme, true);
                     } else if (requestedTheme === "auto") {
                         sessionStorage.setItem("theme", "auto");
-                        setSimpleTheme("$bodyTheme", false);
+                        applySimpleAutoTheme();
                     } else if (sessionStorage.getItem("theme") === "toggleOverride") {
                         setSimpleTheme(sessionStorage.getItem("currentTheme") || "$bodyTheme", false);
+                    } else if (sessionStorage.getItem("theme") === "auto") {
+                        applySimpleAutoTheme();
                     }
 
                     var themeSwitch = document.getElementById("themeSwitch");
