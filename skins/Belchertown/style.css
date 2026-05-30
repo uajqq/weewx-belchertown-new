@@ -1246,6 +1246,65 @@ p.entry-meta {
   .obs-wind-divider {
     display: none;
   }
+
+  .frontpage .wx-stn-info-container {
+    text-align: center;
+  }
+
+  .frontpage .wx-stn-name,
+  .frontpage .wx-stn-info {
+    float: none;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
+
+  .frontpage .wx-stn-name h1 {
+    margin-bottom: 4px;
+  }
+
+  .frontpage .wx-stn-info {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .frontpage .updated-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    float: none;
+    margin-bottom: 5px;
+    text-align: center;
+  }
+
+  .frontpage .onlineMarkerOuter {
+    position: relative;
+    display: block;
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    float: none;
+    flex: 0 0 10px;
+  }
+
+  .frontpage .onlineMarkerOuter .loadingMarker:before,
+  .frontpage .onlineMarkerOuter .offlineMarker:before,
+  .frontpage .onlineMarkerOuter .onlineMarker:before {
+    top: 50%;
+    left: 50%;
+    margin: -4px 0 0 -4px;
+  }
+
+  .frontpage .onlineMarkerOuter .onlineMarker:after {
+    top: 50%;
+    left: 50%;
+    margin: -16px 0 0 -16px;
+  }
+
+  .frontpage .updated {
+    display: block;
+  }
 }
 
 /* iPad Landscape */
@@ -1919,26 +1978,6 @@ p.entry-meta {
 
 .wx-stn-name h1 {
   font-size: 32px;
-}
-
-.frontpage .wx-stn-info-container {
-  text-align: center;
-}
-
-.frontpage .wx-stn-name,
-.frontpage .wx-stn-info {
-  float: none;
-  margin-left: auto;
-  margin-right: auto;
-  text-align: center;
-}
-
-.frontpage .wx-stn-name h1 {
-  margin-bottom: 4px;
-}
-
-.frontpage .wx-stn-info {
-  margin-bottom: 6px;
 }
 
 .wx-stn-share,
@@ -5713,13 +5752,6 @@ input:checked+.slider:before {
   .wx-stn-info {
     display: none;
     float: none !important;
-    text-align: center;
-  }
-
-  .frontpage .wx-stn-info {
-    display: block;
-    float: none !important;
-    margin: 0 auto 6px;
     text-align: center;
   }
 
