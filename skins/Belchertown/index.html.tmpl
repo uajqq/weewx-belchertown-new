@@ -26,7 +26,7 @@
     // #elif $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours == '24'
     defaultForecastInterval = 24;
     // #end if
-    window.moment_locale = "$system_locale_js";
+    window.moment_locale = "$moment_locale_js";
     moment.locale(window.moment_locale);
 
     window.homepage_chartgroup = "$Extras.highcharts_homepage_chartgroup";

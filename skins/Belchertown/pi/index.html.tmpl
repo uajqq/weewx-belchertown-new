@@ -19,7 +19,7 @@
     window.mqttMsg = window.mqttMsg || null;
     window.mqttclient = "website" + Math.floor(Math.random() * 999999999);
     //#end if
-    window.moment_locale = "$system_locale_js";
+    window.moment_locale = "$moment_locale_js";
     moment.locale(window.moment_locale);
 
     ajaxweewx(); // Initial call to load from WeeWX (date, daily high, low, etc)

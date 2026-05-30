@@ -61,6 +61,12 @@ log.info(f"version {VERSION}")
 # Default timeout for all HTTP requests (seconds)
 DEFAULT_HTTP_TIMEOUT = 15
 
+# Moment.js uses "nb" for Norwegian Bokmal while some upstream forecast APIs
+# and older configs use "no".
+MOMENT_LOCALE_ALIASES = {
+    "no": "nb",
+}
+
 # HTTP Headers for different services
 HTTP_HEADERS = {
     "PIRATE_WEATHER": {
@@ -220,6 +226,33 @@ def _http_get_text(url, headers=None, timeout=DEFAULT_HTTP_TIMEOUT):
     with urlopen(req, timeout=timeout) as resp:
         charset = resp.headers.get_content_charset() or "utf-8"
         return resp.read().decode(charset, "replace")
+
+
+def _locale_to_js(locale_value):
+    """Normalize a Python/WeeWX locale string for browser APIs."""
+    value = str(locale_value or "").strip()
+    if not value or value.lower() == "auto":
+        return ""
+
+    value = value.split(".", 1)[0].replace("_", "-")
+    parts = [part for part in value.split("-") if part]
+    if not parts:
+        return ""
+
+    normalized = [parts[0].lower()]
+    for part in parts[1:]:
+        normalized.append(part.upper() if len(part) == 2 else part)
+    return "-".join(normalized)
+
+
+def _moment_locale_to_js(locale_value):
+    """Normalize a locale/language string for Moment's locale registry."""
+    locale_js = _locale_to_js(locale_value)
+    if not locale_js:
+        return ""
+
+    language = locale_js.split("-", 1)[0]
+    return MOMENT_LOCALE_ALIASES.get(language, locale_js)
 
 
 def _get_minifier_dependency_status():
@@ -3906,8 +3939,9 @@ class getData(SearchList):
         # https://stackoverflow.com/a/14053631/1177153
         highcharts_timezoneoffset = moment_js_utc_offset * -1
 
-        # If theme locale is auto, get the system locale for use with
-        # moment.js, and the system decimal for use with highcharts
+        # If theme locale is auto, get the system locale for numeric formatting
+        # and Highcharts separators. Moment uses the active WeeWX report language
+        # below so relative dates match translated labels.
         belchertown_locale = extras_dict["belchertown_locale"]
         if belchertown_locale == "auto":
             try:
@@ -3927,7 +3961,9 @@ class getData(SearchList):
             except Exception as e:
                 # The system can't find the locale requested, so just set the
                 # variables anyways for JavaScript's use.
-                system_locale, locale_encoding = belchertown_locale.split(".")
+                locale_parts = str(belchertown_locale).split(".", 1)
+                system_locale = locale_parts[0]
+                locale_encoding = locale_parts[1] if len(locale_parts) > 1 else "UTF-8"
                 if belchertown_debug:
                     log.error(
                         f"Error using locale {belchertown_locale}. "
@@ -3943,12 +3979,29 @@ class getData(SearchList):
             # Unable to determine locale_encoding. Fallback to UTF-8
             locale_encoding = "UTF-8"
 
-        try:
-            system_locale_js = system_locale.replace(
-                "_", "-"
-            )  # Python's locale is underscore. JS uses dashes.
-        except Exception:
-            system_locale_js = "en-US"  # Error finding locale, set to en-US
+        system_locale_js = _locale_to_js(system_locale) or "en-US"
+
+        moment_locale_js = ""
+        std_report_dict = config_dict.get("StdReport", {})
+        if not isinstance(std_report_dict, (dict, configobj.Section)):
+            std_report_dict = {}
+
+        for moment_locale_candidate in (
+            report_dict.get("lang"),
+            report_dict.get("language"),
+            skin_dict.get("lang"),
+            skin_dict.get("language"),
+            std_report_dict.get("lang"),
+            std_report_dict.get("language"),
+            config_dict.get("lang"),
+            config_dict.get("language"),
+        ):
+            moment_locale_js = _moment_locale_to_js(moment_locale_candidate)
+            if moment_locale_js:
+                break
+
+        if not moment_locale_js:
+            moment_locale_js = _moment_locale_to_js(system_locale_js) or "en"
 
         # Cache locale conversion for highcharts settings
         locale_conv = locale.localeconv()
@@ -6095,6 +6148,7 @@ class getData(SearchList):
             "highcharts_timezoneoffset": highcharts_timezoneoffset,
             "system_locale": system_locale,
             "system_locale_js": system_locale_js,
+            "moment_locale_js": moment_locale_js,
             "locale_encoding": locale_encoding,
             "highcharts_decimal": highcharts_decimal,
             "highcharts_thousands": highcharts_thousands,

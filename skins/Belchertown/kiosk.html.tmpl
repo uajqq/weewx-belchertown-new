@@ -27,7 +27,7 @@
     // #elif $Extras.has_key("forecast_interval_hours_kiosk") and $Extras.forecast_interval_hours_kiosk == '24'
     defaultForecastInterval = 24;
     // #end if
-    window.moment_locale = "$system_locale_js";
+    window.moment_locale = "$moment_locale_js";
     moment.locale(window.moment_locale);
 
     function autoRefreshPage() {
