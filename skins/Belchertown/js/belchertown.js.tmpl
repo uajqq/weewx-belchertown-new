@@ -747,27 +747,33 @@ function build_windbarb_svg(knots) {
     // Hard-coded visual slant tuned to match the pennant edge.
     var barbRise = 5.18;
     var barbY = shaftTop;
+    var markerTop = shaftTop - pennantHeight;
 
     var parts = [];
     parts.push('<line x1="' + shaftX + '" y1="' + shaftVisibleBottom + '" x2="' + shaftX + '" y2="' + shaftTop + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="butt"/>');
 
     if (rounded >= 5) {
         while (rounded >= 50) {
+            markerTop = Math.min(markerTop, barbY);
             parts.push('<polygon points="' + shaftX + ',' + barbY + ' ' + shaftX + ',' + (barbY + pennantHeight) + ' ' + (shaftX + pennantLen) + ',' + (barbY + (pennantHeight / 2)) + '" fill="' + color + '"/>');
             rounded -= 50;
             barbY += pennantHeight + pennantGap;
         }
         while (rounded >= 10) {
-            parts.push('<line x1="' + shaftX + '" y1="' + barbY + '" x2="' + (shaftX + barbLen) + '" y2="' + (barbY - barbRise) + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="round"/>');
+            var barbTipY = barbY - barbRise;
+            markerTop = Math.min(markerTop, barbTipY - (stroke / 2));
+            parts.push('<line x1="' + shaftX + '" y1="' + barbY + '" x2="' + (shaftX + barbLen) + '" y2="' + barbTipY + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="round"/>');
             rounded -= 10;
             barbY += barbStep;
         }
         if (rounded >= 5) {
-            parts.push('<line x1="' + shaftX + '" y1="' + barbY + '" x2="' + (shaftX + barbLen * 0.55) + '" y2="' + (barbY - (barbRise * 0.55)) + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="round"/>');
+            var halfBarbTipY = barbY - (barbRise * 0.55);
+            markerTop = Math.min(markerTop, halfBarbTipY - (stroke / 2));
+            parts.push('<line x1="' + shaftX + '" y1="' + barbY + '" x2="' + (shaftX + barbLen * 0.55) + '" y2="' + halfBarbTipY + '" stroke="' + color + '" stroke-width="' + stroke + '" stroke-linecap="round"/>');
         }
     }
 
-    var viewBoxY = Math.min(0, shaftTop - pennantHeight - 4);
+    var viewBoxY = Math.floor(Math.min(0, markerTop - 4));
     var viewBoxHeight = 100 - viewBoxY;
 
     return '<svg class="windbarb-svg" viewBox="0 ' + viewBoxY + ' 100 ' + viewBoxHeight + '" aria-hidden="true" focusable="false">' + parts.join("") + '</svg>';

@@ -3385,7 +3385,7 @@ table.celestial td.label {
   flex-direction: column;
 }
 
-.frontpage .homepage-card--wind:has(.windbarb-marker) {
+.frontpage .homepage-card--windbarb {
   padding-top: 30px;
   padding-bottom: 30px;
 }
@@ -4213,6 +4213,11 @@ table.celestial td.label {
   .frontpage .homepage-card {
     padding: 20px;
     border-radius: 16px;
+  }
+
+  .frontpage .homepage-card.homepage-card--windbarb {
+    padding-top: 30px;
+    padding-bottom: 30px;
   }
 
   /* Keep almanac vertically compact even when generic card padding increases

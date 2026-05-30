@@ -261,7 +261,7 @@
                             </div>
                         </section>
 
-                        <section class="homepage-card homepage-card--wind">
+                        <section class="homepage-card homepage-card--wind#if $Extras.has_key('wind_compass_marker') and str($Extras.wind_compass_marker).strip() == 'windbarb'# homepage-card--windbarb#end if#">
                             <div class="homepage-card-body">
                                 <div class="row windrow">
                                     <div class="col-sm-12 current_wind">
