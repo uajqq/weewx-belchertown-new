@@ -321,18 +321,19 @@ function forecast_alert_in_effect_text(alertObj) {
     var startTimestamp = alertObj['onset'] || alertObj['effective'];
     var endTimestamp = alertObj['ends'];
     var startEpoch = forecast_number(startTimestamp);
+    var startIsPast = startEpoch !== null && startEpoch <= (Date.now() / 1000);
     var startText = forecast_format_alert_start_time(startTimestamp);
     var endText = forecast_format_alert_time(endTimestamp);
 
     if (startText && endText) {
-        if (startEpoch !== null && startEpoch <= (Date.now() / 1000)) {
-            return "$obs.label.alert_in_effect_since " + startText + " $obs.label.alert_until " + endText;
+        if (startIsPast) {
+            return "$obs.label.alert_in_effect_now $obs.label.alert_until " + endText;
         }
         return "$obs.label.alert_in_effect_starting " + startText + " $obs.label.alert_until " + endText;
     }
     if (startText) {
-        if (startEpoch !== null && startEpoch <= (Date.now() / 1000)) {
-            return "$obs.label.alert_in_effect_since " + startText;
+        if (startIsPast) {
+            return "$obs.label.alert_in_effect_now";
         }
         return "$obs.label.alert_in_effect_starting " + startText;
     }
