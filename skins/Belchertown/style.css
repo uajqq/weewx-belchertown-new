@@ -1921,6 +1921,26 @@ p.entry-meta {
   font-size: 32px;
 }
 
+.frontpage .wx-stn-info-container {
+  text-align: center;
+}
+
+.frontpage .wx-stn-name,
+.frontpage .wx-stn-info {
+  float: none;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.frontpage .wx-stn-name h1 {
+  margin-bottom: 4px;
+}
+
+.frontpage .wx-stn-info {
+  margin-bottom: 6px;
+}
+
 .wx-stn-share,
 .wx-stn-info {
   float: right;
@@ -5693,6 +5713,13 @@ input:checked+.slider:before {
   .wx-stn-info {
     display: none;
     float: none !important;
+    text-align: center;
+  }
+
+  .frontpage .wx-stn-info {
+    display: block;
+    float: none !important;
+    margin: 0 auto 6px;
     text-align: center;
   }
 
