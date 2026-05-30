@@ -35,9 +35,131 @@ function getURLvar(k) {
 
 // Title case strings. https://stackoverflow.com/a/45253072/1177153
 function titleCase(str) {
+    str = belchertown_decode_html_entities(str);
     return str.toLowerCase().split(' ').map(function(word) {
         return word.replace(word[0], word[0].toUpperCase());
     }).join(' ');
+}
+
+function belchertown_decode_html_entities(value) {
+    var text = value == null ? "" : String(value);
+    var textarea = document.createElement("textarea");
+    var decoded = text;
+    var previous;
+    var i;
+
+    for (i = 0; i < 3 && decoded.indexOf("&") !== -1; i++) {
+        previous = decoded;
+        textarea.innerHTML = previous;
+        decoded = textarea.value;
+        if (decoded === previous) {
+            break;
+        }
+    }
+
+    return decoded;
+}
+
+function belchertown_escape_html(value) {
+    var div = document.createElement("div");
+    div.textContent = value == null ? "" : String(value);
+    return div.innerHTML;
+}
+
+function belchertown_label_text(value) {
+    return belchertown_decode_html_entities(value);
+}
+
+function belchertown_label_html(value) {
+    return belchertown_escape_html(belchertown_label_text(value));
+}
+
+function belchertown_decode_text_node_filter(textNode) {
+    var parent = textNode.parentNode;
+    var tagName;
+
+    while (parent && parent.nodeType === 1) {
+        tagName = parent.tagName ? parent.tagName.toLowerCase() : "";
+        if (tagName === "script" || tagName === "style" || tagName === "textarea" || tagName === "code" || tagName === "pre") {
+            return false;
+        }
+        parent = parent.parentNode;
+    }
+
+    return true;
+}
+
+function belchertown_decode_text_nodes(root) {
+    var node = root && root.jquery ? root[0] : root;
+    var walker;
+    var textNode;
+    var showText = typeof NodeFilter !== "undefined" ? NodeFilter.SHOW_TEXT : 4;
+    var filterAccept = typeof NodeFilter !== "undefined" ? NodeFilter.FILTER_ACCEPT : 1;
+    var filterReject = typeof NodeFilter !== "undefined" ? NodeFilter.FILTER_REJECT : 2;
+
+    if (!node || typeof document.createTreeWalker !== "function") {
+        return;
+    }
+
+    walker = document.createTreeWalker(node, showText, {
+        acceptNode: function(textNode) {
+            return belchertown_decode_text_node_filter(textNode) ? filterAccept : filterReject;
+        }
+    }, false);
+    while ((textNode = walker.nextNode())) {
+        textNode.nodeValue = belchertown_decode_html_entities(textNode.nodeValue);
+    }
+}
+
+function belchertown_decode_label_attributes(root) {
+    var node = root && root.jquery ? root[0] : root;
+    var selector = "[aria-label], [alt], [title], [placeholder], [data-original-title], [data-responsive-menu-label]";
+    var attrs = ["aria-label", "alt", "title", "placeholder", "data-original-title", "data-responsive-menu-label"];
+    var elements = [];
+
+    function decodeElementAttributes(element) {
+        attrs.forEach(function(attr) {
+            if (element.hasAttribute(attr)) {
+                element.setAttribute(attr, belchertown_decode_html_entities(element.getAttribute(attr)));
+            }
+        });
+    }
+
+    if (!node) {
+        return;
+    }
+
+    if (node.nodeType === 1 && typeof node.matches === "function" && node.matches(selector)) {
+        elements.push(node);
+    }
+    if (typeof node.querySelectorAll === "function") {
+        elements = elements.concat(Array.prototype.slice.call(node.querySelectorAll(selector)));
+    }
+
+    elements.forEach(decodeElementAttributes);
+}
+
+function belchertown_decode_meta_labels(root) {
+    var node = root && root.jquery ? root[0] : root;
+    var selector = "meta[name='description'], meta[property='og:title'], meta[property='og:description'], meta[property='og:site_name']";
+    var elements;
+
+    if (!node || typeof node.querySelectorAll !== "function") {
+        return;
+    }
+
+    elements = Array.prototype.slice.call(node.querySelectorAll(selector));
+    elements.forEach(function(element) {
+        if (element.hasAttribute("content")) {
+            element.setAttribute("content", belchertown_decode_html_entities(element.getAttribute("content")));
+        }
+    });
+}
+
+function belchertown_decode_document_labels(root) {
+    belchertown_decode_text_nodes(root);
+    belchertown_decode_label_attributes(root);
+    belchertown_decode_meta_labels(root);
 }
 
 function tzAdjustedMoment(input) {

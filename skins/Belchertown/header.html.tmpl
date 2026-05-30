@@ -245,9 +245,17 @@
         #if $load_bootstrap_js
         <script defer type='text/javascript' src='//stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js'></script>
         #end if
-        #if $load_core_js
         <script defer type='text/javascript' src='$relative_url/js/belchertown-utils${asset_suffix}.js?ver=$asset_version'></script>
+        #if $load_core_js
         <script defer type='text/javascript' src='$relative_url/js/belchertown${asset_suffix}.js?ver=$asset_version'></script>
+        #else
+        <script>
+            window.addEventListener("DOMContentLoaded", function() {
+                if (typeof belchertown_decode_document_labels === "function") {
+                    belchertown_decode_document_labels(document.documentElement);
+                }
+            });
+        </script>
         #end if
         #if $load_forecast_js
         <script defer type='text/javascript' src='$relative_url/js/belchertown-forecast${asset_suffix}.js?ver=$asset_version'></script>

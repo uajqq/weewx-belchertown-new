@@ -75,7 +75,7 @@ mqtt_stale_timeout_seconds = Math.max(mqtt_stale_timeout_seconds, 30);
 var mqtt_stale_timeout_ms = mqtt_stale_timeout_seconds * 1000;
 
 function mqtt_restart_button_html() {
-    return " <button type='button' class='btn btn-primary restart-interval'>$obs.label.mqtt_websockets_continue</button>";
+    return " <button type='button' class='btn btn-primary restart-interval'>" + belchertown_label_html("$obs.label.mqtt_websockets_continue") + "</button>";
 }
 
 function mqtt_status_details_enabled() {
@@ -93,7 +93,7 @@ function mqtt_ensure_status_info_button() {
     }
 
     updated.after(
-        " <button type='button' class='mqtt-status-info' aria-label='$obs.label.mqtt_live_update_details'>" +
+        " <button type='button' class='mqtt-status-info' aria-label='" + belchertown_label_html("$obs.label.mqtt_live_update_details") + "'>" +
         "<i class='fa fa-info' aria-hidden='true'></i>" +
         "</button>"
     );
@@ -113,18 +113,18 @@ function mqtt_ensure_status_modal() {
     modal += "<div class='modal-dialog modal-sm' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
-    modal += "<button type='button' class='close mqtt-status-modal-dismiss' data-dismiss='modal' aria-label='$obs.label.close'><span aria-hidden='true'>&times;</span></button>";
-    modal += "<h4 class='modal-title' id='mqtt-status-modal-title'>$obs.label.mqtt_live_update_details</h4>";
+    modal += "<button type='button' class='close mqtt-status-modal-dismiss' data-dismiss='modal' aria-label='" + belchertown_label_html("$obs.label.close") + "'><span aria-hidden='true'>&times;</span></button>";
+    modal += "<h4 class='modal-title' id='mqtt-status-modal-title'>" + belchertown_label_html("$obs.label.mqtt_live_update_details") + "</h4>";
     modal += "</div>";
     modal += "<div class='modal-body'>";
     modal += "<dl class='mqtt-status-detail-list'>";
-    modal += "<dt>$obs.label.status</dt><dd class='mqtt-status-detail-message'></dd>";
-    modal += "<dt>$obs.label.displayed_time</dt><dd class='mqtt-status-detail-relative'></dd>";
-    modal += "<dt>$obs.label.exact_time</dt><dd class='mqtt-status-detail-absolute'></dd>";
+    modal += "<dt>" + belchertown_label_html("$obs.label.status") + "</dt><dd class='mqtt-status-detail-message'></dd>";
+    modal += "<dt>" + belchertown_label_html("$obs.label.displayed_time") + "</dt><dd class='mqtt-status-detail-relative'></dd>";
+    modal += "<dt>" + belchertown_label_html("$obs.label.exact_time") + "</dt><dd class='mqtt-status-detail-absolute'></dd>";
     modal += "</dl>";
     modal += "</div>";
     modal += "<div class='modal-footer'>";
-    modal += "<button type='button' class='btn btn-primary mqtt-status-modal-dismiss' data-dismiss='modal'>$obs.label.close</button>";
+    modal += "<button type='button' class='btn btn-primary mqtt-status-modal-dismiss' data-dismiss='modal'>" + belchertown_label_html("$obs.label.close") + "</button>";
     modal += "</div>";
     modal += "</div>";
     modal += "</div>";
@@ -145,7 +145,7 @@ function mqtt_render_status_modal() {
 
 function mqtt_set_status_detail(message, epoch) {
     mqtt_status_detail = {
-        message: String(message || "").trim(),
+        message: belchertown_decode_html_entities(message).trim(),
         relative_time: mqtt_relative_time(epoch),
         absolute_time: mqtt_absolute_time(epoch)
     };
@@ -204,13 +204,13 @@ function mqtt_relative_time(epoch) {
 
 function mqtt_absolute_time(epoch) {
     var timestamp = parseFloat(epoch);
-    return isFinite(timestamp) ? tzAdjustedMoment(timestamp).format("$obs.label.time_last_updated") : "";
+    return isFinite(timestamp) ? tzAdjustedMoment(timestamp).format(belchertown_label_text("$obs.label.time_last_updated")) : "";
 }
 
 function mqtt_sentence_text(parts) {
     var text = parts
         .map(function(part) {
-            return String(part || "").trim();
+            return belchertown_decode_html_entities(part).trim();
         })
         .filter(function(part) {
             return part !== "";
@@ -286,10 +286,16 @@ function mqtt_set_updated_html(html) {
     jQuery(".updated").removeAttr("title").html(html);
 }
 
+function mqtt_set_updated_text(text) {
+    mqtt_clear_relative_updated_status();
+    mqtt_clear_receiving_indicator();
+    jQuery(".updated").removeAttr("title").text(belchertown_label_text(text));
+}
+
 function mqtt_set_relative_updated_status(message, epoch, suffix_html, detail_message) {
     var timestamp = parseFloat(epoch);
     if (!isFinite(timestamp)) {
-        mqtt_set_updated_html(message + (suffix_html || ""));
+        mqtt_set_updated_html(belchertown_label_html(message) + (suffix_html || ""));
         return;
     }
 
@@ -307,7 +313,7 @@ function mqtt_restart_live_updates(event) {
     }
 
     jQuery(".restart-interval").prop("disabled", true);
-    mqtt_set_updated_html("$obs.label.mqtt_websockets_connecting");
+    mqtt_set_updated_text("$obs.label.mqtt_websockets_connecting");
 
     var reloadPromise;
     if (typeof ajaxweewx === "function") {
@@ -385,7 +391,7 @@ function mqtt_set_disconnected_status(message, epoch, show_restart) {
     var updated_epoch = epoch || mqtt_last_data_epoch || "$current.dateTime.raw";
     var restart_button = show_restart ? mqtt_restart_button_html() : "";
     mqtt_set_relative_updated_status(
-        message + " $obs.label.header_last_updated",
+        belchertown_label_text(message) + " " + belchertown_label_text("$obs.label.header_last_updated"),
         updated_epoch,
         restart_button,
         message
@@ -482,14 +488,14 @@ function connect() {
 
     belchertown_debug("MQTT: [" + new Date().toISOString() + "] Starting connection sequence");
     if (reconnect_using_inactive_timestamp) {
-        updated = tzAdjustedMoment(inactive_timestamp).format("$obs.label.time_last_updated");
+        updated = tzAdjustedMoment(inactive_timestamp).format(belchertown_label_text("$obs.label.time_last_updated"));
         belchertown_debug("MQTT: Reconnecting using inactive timestamp: " + inactive_timestamp);
     } else {
-        updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
+        updated = tzAdjustedMoment("$current.dateTime.raw").format(belchertown_label_text("$obs.label.time_last_updated"));
         belchertown_debug("MQTT: Initial connection attempt");
     }
-    reported = "$obs.label.mqtt_websockets_connecting $obs.label.header_last_updated " + updated;
-    mqtt_set_updated_html(reported);
+    reported = belchertown_label_text("$obs.label.mqtt_websockets_connecting") + " " + belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
+    mqtt_set_updated_text(reported);
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").hide();
     jQuery(".loadingMarker").show();
@@ -566,18 +572,18 @@ function onConnect() {
     belchertown_debug("MQTT: [" + new Date().toISOString() + "] Successfully connected to broker");
     belchertown_debug("MQTT: Client state is now CONNECTED");
     if (reconnect_using_inactive_timestamp) {
-        updated = tzAdjustedMoment(inactive_timestamp).format("$obs.label.time_last_updated");
+        updated = tzAdjustedMoment(inactive_timestamp).format(belchertown_label_text("$obs.label.time_last_updated"));
         belchertown_debug("MQTT: Reconnection successful after inactivity");
     } else {
-        updated = tzAdjustedMoment("$current.dateTime.raw").format("$obs.label.time_last_updated");
+        updated = tzAdjustedMoment("$current.dateTime.raw").format(belchertown_label_text("$obs.label.time_last_updated"));
         belchertown_debug("MQTT: Initial connection successful");
     }
     if (pageName == "pi") {
-        reported = "$obs.label.mqtt_websockets_waiting_pi $obs.label.header_last_updated " + updated;
+        reported = belchertown_label_text("$obs.label.mqtt_websockets_waiting_pi") + " " + belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
     } else {
-        reported = "$obs.label.mqtt_websockets_waiting $obs.label.header_last_updated " + updated;
+        reported = belchertown_label_text("$obs.label.mqtt_websockets_waiting") + " " + belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
     }
-    mqtt_set_updated_html(reported);
+    mqtt_set_updated_text(reported);
     jQuery(".onlineMarker").hide();
     jQuery(".offlineMarker").hide();
     jQuery(".loadingMarker").show();
@@ -961,9 +967,9 @@ function update_current_wx(data) {
         // Only show the updated time on non-archive packets
         epoch = parseFloat(data["dateTime"]).toFixed(0);
         if (pageName == "pi") {
-            updated_text = "$obs.label.mqtt_websockets_connected_pi";
+            updated_text = belchertown_label_text("$obs.label.mqtt_websockets_connected_pi");
         } else {
-            updated_text = "$obs.label.mqtt_websockets_connected";
+            updated_text = belchertown_label_text("$obs.label.mqtt_websockets_connected");
         }
         mqtt_set_relative_updated_status(updated_text, epoch);
     }
@@ -1046,12 +1052,12 @@ function update_current_wx(data) {
 
     // Apparent Temperature US
     if (data.hasOwnProperty("appTemp_F")) {
-        jQuery(".feelslike").html("$obs.label.feels_like " + parseFloat(parseFloat(data["appTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " $unit.label.outTemp");
+        jQuery(".feelslike").text(belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
     }
 
     // Apparent Temperature Metric
     if (data.hasOwnProperty("appTemp_C")) {
-        jQuery(".feelslike").html("$obs.label.feels_like " + parseFloat(parseFloat(data["appTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " $unit.label.outTemp");
+        jQuery(".feelslike").text(belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
     }
 
     // Wind
@@ -1103,10 +1109,10 @@ function update_current_wx(data) {
     }
 
     if (data.hasOwnProperty("windchill")) {
-        jQuery(".curwindchill").html(parseFloat(parseFloat(data["windchill"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + "$unit.label.outTemp");
+        jQuery(".curwindchill").text(parseFloat(parseFloat(data["windchill"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
     }
     if (data.hasOwnProperty("windchill_C")) {
-        jQuery(".curwindchill").html(parseFloat(parseFloat(data["windchill_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + "$unit.label.outTemp");
+        jQuery(".curwindchill").text(parseFloat(parseFloat(data["windchill_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
     }
 };
 // #end if

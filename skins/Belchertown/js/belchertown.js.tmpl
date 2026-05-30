@@ -398,6 +398,7 @@ function belchertown_apply_readable_color(selector, color, minimumRatio) {
 }
 
 jQuery(document).ready(function() {
+    belchertown_decode_document_labels(document.documentElement);
 
     // Bootstrap hover tooltips
     if (jQuery.fn.tooltip) {
@@ -1109,6 +1110,7 @@ function setAlmanacDiagramHorizonBounds() {
 function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitude, currentTs, currentX) {
     var point = null;
     var bodyKey = selector.indexOf("--moon") !== -1 ? "moon" : "sun";
+    var displayLabel = belchertown_decode_html_entities(label);
     var alt = parseFloat(altitude);
     var marker = jQuery(selector);
     var projectedX;
@@ -1140,7 +1142,7 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     if (!point) {
         if (isFinite(alt)) {
             marker.show();
-            marker.find("title").text(label);
+            marker.find("title").text(displayLabel);
             return;
         }
         marker.hide();
@@ -1152,7 +1154,7 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
         .attr("transform", "translate(" + point.x.toFixed(1) + " " + point.y.toFixed(1) + ")")
         .toggleClass("is-below-horizon", point.belowHorizon || (isFinite(alt) && alt < 0));
 
-    marker.find("title").text(label);
+    marker.find("title").text(displayLabel);
 }
 
 function fitAlmanacDiagramViewBox(diagramData) {
@@ -1461,17 +1463,17 @@ function enhanceAlmanacExtrasModal(almanacData) {
     var daylightValue;
     var sunriseEpoch;
     var sunsetEpoch;
-    var totalDaylightLabel = "$obs.label.total_daylight".toLowerCase();
-    var phaseLabel = "$obs.label.phase".toLowerCase();
+    var totalDaylightLabel = belchertown_decode_html_entities("$obs.label.total_daylight").toLowerCase();
+    var phaseLabel = belchertown_decode_html_entities("$obs.label.phase").toLowerCase();
     var moonAgeValue = "";
-    var moonAgeLabel = "$obs.label.moon_age";
-    var dataSourceLabel = "$obs.label.data_source";
-    var sourceNoneLabel = "$obs.label.source_none";
-    var hourShort = "$obs.label.hour_short";
-    var minuteShort = "$obs.label.minute_short";
-    var secondShort = "$obs.label.second_short";
-    var almanacDateTimeFormat = "$obs.label.time_records_page_full_date";
-    var almanacTimeFormat = "$obs.label.time_sunrise";
+    var moonAgeLabel = belchertown_decode_html_entities("$obs.label.moon_age");
+    var dataSourceLabel = belchertown_decode_html_entities("$obs.label.data_source");
+    var sourceNoneLabel = belchertown_decode_html_entities("$obs.label.source_none");
+    var hourShort = belchertown_decode_html_entities("$obs.label.hour_short");
+    var minuteShort = belchertown_decode_html_entities("$obs.label.minute_short");
+    var secondShort = belchertown_decode_html_entities("$obs.label.second_short");
+    var almanacDateTimeFormat = belchertown_label_text("$obs.label.time_records_page_full_date");
+    var almanacTimeFormat = belchertown_label_text("$obs.label.time_sunrise");
 
     if (!moonAgeLabel || moonAgeLabel === "moon_age") {
         moonAgeLabel = "Moon age";
@@ -1501,6 +1503,8 @@ function enhanceAlmanacExtrasModal(almanacData) {
     if (!modalBody.length) {
         return;
     }
+
+    belchertown_decode_text_nodes(modalBody);
 
     modalBody.find("table.celestial").each(function() {
         var table = jQuery(this);
@@ -1588,10 +1592,10 @@ function enhanceAlmanacExtrasModal(almanacData) {
     });
 
     if (almanacData && almanacData["moon"]) {
-        moonAgeValue = String(almanacData["moon"]["moon_age"] || "").replace(/\u00a0/g, " ").trim();
+        moonAgeValue = belchertown_decode_html_entities(almanacData["moon"]["moon_age"]).replace(/\u00a0/g, " ").trim();
     }
     if (!moonAgeValue && weewx_data && weewx_data["almanac"] && weewx_data["almanac"]["moon"]) {
-        moonAgeValue = String(weewx_data["almanac"]["moon"]["moon_age"] || "").replace(/\u00a0/g, " ").trim();
+        moonAgeValue = belchertown_decode_html_entities(weewx_data["almanac"]["moon"]["moon_age"]).replace(/\u00a0/g, " ").trim();
     }
     if (moonAgeValue && moonAgeValue !== "--") {
         var moonTable = modalBody.find("table.celestial").eq(1);
@@ -1678,7 +1682,12 @@ function enhanceAlmanacExtrasModal(almanacData) {
         sourceNoteSmall = jQuery("<small></small>");
         sourceNote.empty().append(sourceNoteSmall);
     }
-    sourceNoteSmall.html(dataSourceLabel + ": <strong>" + sourceLabel + "</strong>");
+    sourceNoteSmall.html(
+        belchertown_escape_html(dataSourceLabel) +
+        ": <strong>" +
+        belchertown_escape_html(sourceLabel) +
+        "</strong>"
+    );
 
     detailsContainer = modalBody.find("#celestial_details").first();
     if (detailsContainer.length) {
@@ -1817,15 +1826,15 @@ function update_weewx_data(data) {
     updateMonthlySnapshot(data, monthKey);
 
     // Sunrise and Sunset            
-    jQuery(".sunrise-value").html(tzAdjustedMoment(parseFloat(data["almanac"]["sunrise_epoch"]).toFixed(0)).format("$obs.label.time_sunrise"));
-    jQuery(".sunset-value").html(tzAdjustedMoment(parseFloat(data["almanac"]["sunset_epoch"]).toFixed(0)).format("$obs.label.time_sunset"));
-    jQuery(".moonrise-value").html(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_rise_epoch"]).toFixed(0)).format("$obs.label.time_sunrise"));
-    jQuery(".moonset-value").html(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_set_epoch"]).toFixed(0)).format("$obs.label.time_sunrise"));
+    jQuery(".sunrise-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["sunrise_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunrise")));
+    jQuery(".sunset-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["sunset_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunset")));
+    jQuery(".moonrise-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_rise_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunrise")));
+    jQuery(".moonset-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_set_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunrise")));
 
     // Moon icon, phase and illumination percent
     jQuery(".moon-container > .moon-icon").html(render_moon_icon_html(data));
-    jQuery(".moon-phase").html(titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
-    jQuery(".moon-visible").html("<strong>" + data["almanac"]["moon"]["moon_fullness"] + "%</strong> $obs.label.moon_visible");
+    jQuery(".moon-phase").text(titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
+    jQuery(".moon-visible").html("<strong>" + belchertown_escape_html(data["almanac"]["moon"]["moon_fullness"]) + "%</strong> " + belchertown_label_html("$obs.label.moon_visible"));
 
     // Do not synthesize daylight text in JS. Keep server-rendered daylight
     // string authoritative (includes change-vs-yesterday when available).
@@ -1838,11 +1847,12 @@ function update_weewx_data(data) {
     }
     if (data["almanac"] && typeof data["almanac"]["almanac_extras_modal_html"] === "string" && data["almanac"]["almanac_extras_modal_html"].length > 0) {
         jQuery(".almanac-extras-modal-body").html(data["almanac"]["almanac_extras_modal_html"]);
+        belchertown_decode_text_nodes(jQuery(".almanac-extras-modal-body"));
     }
     enhanceAlmanacExtrasModal(data["almanac"]);
     try {
-        almanac_updated = "$obs.label.header_last_updated " + tzAdjustedMoment(data["current"]["datetime_raw"]).format("$obs.label.time_last_updated");
-        jQuery(".almanac_last_updated").html(almanac_updated);
+        almanac_updated = belchertown_label_text("$obs.label.header_last_updated") + " " + tzAdjustedMoment(data["current"]["datetime_raw"]).format(belchertown_label_text("$obs.label.time_last_updated"));
+        jQuery(".almanac_last_updated").text(almanac_updated);
     } catch (err) {
         // Returned "current" data does not have this value
     }

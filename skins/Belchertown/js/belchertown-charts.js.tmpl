@@ -768,7 +768,7 @@ function showChart(json_file, prepend_renderTo = false) {
             });
             if (missingSeriesIndex >= 0) {
                 var missingSeries = options.series[missingSeriesIndex] || {};
-                var missingObs = missingSeries.obsType || missingSeries.observation_type || missingSeries.name || "$obs.label.unknown_observation";
+                var missingObs = missingSeries.obsType || missingSeries.observation_type || missingSeries.name || belchertown_label_text("$obs.label.unknown_observation");
                 throw new Error("Unavailable observation value for chart series: " + missingObs);
             }
 
@@ -977,7 +977,7 @@ function showChart(json_file, prepend_renderTo = false) {
 
             var seriesAnalysis = analyzeSeriesData(options.series);
             if (seriesAnalysis.missingSeries) {
-                var unavailableObs = seriesAnalysis.missingSeries.obsType || seriesAnalysis.missingSeries.observation_type || seriesAnalysis.missingSeries.name || "$obs.label.unknown_observation";
+                var unavailableObs = seriesAnalysis.missingSeries.obsType || seriesAnalysis.missingSeries.observation_type || seriesAnalysis.missingSeries.name || belchertown_label_text("$obs.label.unknown_observation");
                 throw new Error("Unavailable observation value for chart series: " + unavailableObs);
             }
 
@@ -1146,7 +1146,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     }
                 }
                 if (observation_type == "aqi" && !gaugeUnitLabel) {
-                    gaugeUnitLabel = "$obs.label.aqi_unknown";
+                    gaugeUnitLabel = belchertown_label_text("$obs.label.aqi_unknown");
                 }
 
                 // Build color stops from colorX / colorX_position pairs if defined
@@ -1279,7 +1279,7 @@ function showChart(json_file, prepend_renderTo = false) {
                             var rounding = point.series.userOptions.rounding;
                             var mirrored = point.series.userOptions.mirrored_value;
                             var numberFormat = point.series.userOptions.numberFormat ? point.series.userOptions.numberFormat : "";
-                            return "<strong>" + tzAdjustedMoment(point.x / 1000).format(tooltip_date_format) + "</strong><br><span style='color:" + options.series[0].color + "'>●</span> $obs.label.highest_temperature: " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + options.series[0].color + "'>●</span> $obs.label.lowest_temperature: " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat);
+                            return "<strong>" + belchertown_escape_html(tzAdjustedMoment(point.x / 1000).format(tooltip_date_format)) + "</strong><br><span style='color:" + options.series[0].color + "'>●</span> " + belchertown_label_html("$obs.label.highest_temperature") + ": " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + options.series[0].color + "'>●</span> " + belchertown_label_html("$obs.label.lowest_temperature") + ": " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat);
                         });
                     }
                 }
@@ -1467,7 +1467,7 @@ function showChart(json_file, prepend_renderTo = false) {
                             var header = (xAxis_categories.length >= 1)
                                 ? xAxis_categories[point.x]
                                 : tzAdjustedMoment(point.x / 1000).format(tooltip_date_format);
-                            return "<strong>" + header + "</strong><br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.high, true) + "'>●</span> $obs.label.highest_temperature: " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.low, true) + "'>●</span> $obs.label.lowest_temperature: " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.average, true) + "'>●</span> $obs.label.average_temperature: " + highcharts_tooltip_factory(point.point.average, observation_type, true, rounding, mirrored, numberFormat);
+                            return "<strong>" + belchertown_escape_html(header) + "</strong><br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.high, true) + "'>●</span> " + belchertown_label_html("$obs.label.highest_temperature") + ": " + highcharts_tooltip_factory(point.point.high, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.low, true) + "'>●</span> " + belchertown_label_html("$obs.label.lowest_temperature") + ": " + highcharts_tooltip_factory(point.point.low, observation_type, true, rounding, mirrored, numberFormat) + "<br><span style='color:" + get_outTemp_color(point.series.userOptions.obsUnit, point.point.average, true) + "'>●</span> " + belchertown_label_html("$obs.label.average_temperature") + ": " + highcharts_tooltip_factory(point.point.average, observation_type, true, rounding, mirrored, numberFormat);
                         });
                     }
                 }
@@ -1609,11 +1609,11 @@ function showChart(json_file, prepend_renderTo = false) {
                 if (typeof options !== "undefined" && options.chart && options.chart.renderTo) {
                     var failedChart = jQuery("#" + options.chart.renderTo);
                     if (failedChart.length) {
-                        var unavailableObs = observation_type || plotname || "$obs.label.unknown_observation";
+                        var unavailableObs = observation_type || plotname || belchertown_label_text("$obs.label.unknown_observation");
                         failedChart.html(
                             '<div class="chart-unavailable" style="padding:14px 10px;text-align:center;color:#888;">' +
-                            '<div>$obs.label.chart_unavailable ($obs.label.chart_unavailable_detail)</div>' +
-                            '<div style="margin-top:6px;font-weight:500;">$obs.label.observation: ' + unavailableObs + '</div>' +
+                            '<div>' + belchertown_label_html("$obs.label.chart_unavailable") + ' (' + belchertown_label_html("$obs.label.chart_unavailable_detail") + ')</div>' +
+                            '<div style="margin-top:6px;font-weight:500;">' + belchertown_label_html("$obs.label.observation") + ': ' + belchertown_escape_html(unavailableObs) + '</div>' +
                             '</div>'
                         );
                     }

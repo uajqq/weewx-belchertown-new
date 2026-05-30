@@ -16,13 +16,25 @@
     function enhanceRecordsPage(snapshotData) {
         function decodeHtmlEntities(value) {
             var text = String(value || "");
-            if (text.indexOf("&") === -1) {
-                return text;
+            if (typeof belchertown_decode_html_entities === "function") {
+                return belchertown_decode_html_entities(text);
             }
 
             var textarea = document.createElement("textarea");
-            textarea.innerHTML = text;
-            return textarea.value;
+            var decoded = text;
+            var previous;
+            var i;
+
+            for (i = 0; i < 3 && decoded.indexOf("&") !== -1; i++) {
+                previous = decoded;
+                textarea.innerHTML = previous;
+                decoded = textarea.value;
+                if (decoded === previous) {
+                    break;
+                }
+            }
+
+            return decoded;
         }
 
         function displayText(value) {

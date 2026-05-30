@@ -42,9 +42,9 @@
         connect(); // Begin mqtt after WeeWX initial load
 
         // Update the Last Updated timestamp with moment.js,
-        updated = tzAdjustedMoment($current.dateTime.raw).format("$obs.label.time_last_updated");
-        updated_text = "$obs.label.header_last_updated " + updated;
-        jQuery(".updated").html(updated_text);
+        updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
+        updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
+        jQuery(".updated").text(updated_text);
 
         // #end if
     });

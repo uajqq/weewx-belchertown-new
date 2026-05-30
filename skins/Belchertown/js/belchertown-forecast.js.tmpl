@@ -42,11 +42,11 @@ function ajaxforecast() {
 }
 
 function forecast_trim_sentence_end(value) {
-    return String(value || "").trim().replace(/[\.\s]+$/, "");
+    return belchertown_decode_html_entities(value).trim().replace(/[\.\s]+$/, "");
 }
 
 function forecast_label_text(value) {
-    return String(value || "").trim().replace(/\s+([.,;:!?])/g, "$1");
+    return belchertown_decode_html_entities(value).trim().replace(/\s+([.,;:!?])/g, "$1");
 }
 
 function forecast_sentence_text(parts) {
@@ -68,19 +68,34 @@ function forecast_relative_time(epoch) {
 
 function forecast_absolute_time(epoch, formatString) {
     const timestamp = forecast_number(epoch);
-    return timestamp === null ? "" : tzAdjustedMoment(timestamp).format(formatString);
+    return timestamp === null ? "" : tzAdjustedMoment(timestamp).format(belchertown_label_text(formatString));
 }
 
 function forecast_escape_html(value) {
-    return jQuery("<div>").text(value == null ? "" : String(value)).html();
+    return belchertown_escape_html(value);
 }
 
 function forecast_template_text(template, replacements) {
+    template = belchertown_decode_html_entities(template);
     var index = 0;
     return String(template || "").replace(/%s/g, function() {
         var value = replacements[index++];
-        return value == null ? "" : String(value);
+        return belchertown_decode_html_entities(value);
     });
+}
+
+function forecast_template_html(template, replacements) {
+    template = belchertown_decode_html_entities(template);
+    replacements = replacements || [];
+
+    var index = 0;
+    return String(template || "").split("%s").map(function(part) {
+        var html = forecast_escape_html(part);
+        if (index < replacements.length) {
+            html += replacements[index++];
+        }
+        return html;
+    }).join("");
 }
 
 function forecast_provider_label(provider) {
@@ -90,7 +105,7 @@ function forecast_provider_label(provider) {
     if (providerKey === "pirateweather" || providerKey === "pirate-weather") return "Pirate Weather";
     if (providerKey === "xweather") return "Xweather";
     if (providerKey === "aeris") return "Aeris/Xweather";
-    return provider ? String(provider) : "$obs.label.forecast_data";
+    return provider ? String(provider) : forecast_label_text("$obs.label.forecast_data");
 }
 
 function forecast_payload_source(data, fallbackProvider) {
@@ -101,8 +116,8 @@ function forecast_payload_source(data, fallbackProvider) {
 function forecast_render_source(data) {
     const source = forecast_payload_source(data, "");
     jQuery(".forecast-source")
-        .text(forecast_sentence_text(["$obs.label.source: " + source]))
-        .attr("title", "$obs.label.forecast_source: " + source);
+        .text(forecast_sentence_text([forecast_label_text("$obs.label.source") + ": " + source]))
+        .attr("title", forecast_label_text("$obs.label.forecast_source") + ": " + source);
 }
 
 function forecast_current_observation_epoch(data) {
@@ -119,7 +134,7 @@ function forecast_observation_label(row, fallback) {
 function forecast_observation_age_sentence(epoch) {
     const timestamp = forecast_number(epoch);
     if (timestamp === null) {
-        return "$obs.label.observation_time_unavailable";
+        return forecast_label_text("$obs.label.observation_time_unavailable");
     }
 
     return forecast_template_text("$obs.label.observation_time_reported", [forecast_relative_time(timestamp)]);
@@ -135,12 +150,12 @@ function forecast_ensure_observation_modal() {
     modal += "<div class='modal-dialog modal-sm' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
-    modal += "<button type='button' class='close' data-dismiss='modal' aria-label='$obs.label.close'><span aria-hidden='true'>&times;</span></button>";
-    modal += "<h4 class='modal-title' id='observation-source-modal-title'>$obs.label.observation_source</h4>";
+    modal += "<button type='button' class='close' data-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'><span aria-hidden='true'>&times;</span></button>";
+    modal += "<h4 class='modal-title' id='observation-source-modal-title'>" + forecast_escape_html(forecast_label_text("$obs.label.observation_source")) + "</h4>";
     modal += "</div>";
     modal += "<div class='modal-body observation-source-modal-body'></div>";
     modal += "<div class='modal-footer'>";
-    modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>$obs.label.close</button>";
+    modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
     modal += "</div>";
     modal += "</div>";
     modal += "</div>";
@@ -157,7 +172,7 @@ function forecast_render_observation_modal(observationKey) {
     const label = forecast_escape_html(info["label"]);
     const source = forecast_escape_html(info["source"]);
     const observedAt = forecast_absolute_time(info["epoch"], '$obs.label.time_current_conditions_last_updated');
-    let body = "<p>" + forecast_template_text("$obs.label.observation_source_provider", ["<strong>" + label + "</strong>", source]) + "</p>";
+    let body = "<p>" + forecast_template_html("$obs.label.observation_source_provider", ["<strong>" + label + "</strong>", source]) + "</p>";
     body += "<p>" + forecast_escape_html(forecast_observation_age_sentence(info["epoch"])) + "</p>";
     if (observedAt) {
         body += "<p class='observation-source-modal-time'>" + forecast_escape_html(observedAt) + "</p>";
@@ -245,7 +260,7 @@ function forecast_render_relative_timestamps() {
     if (forecast_last_updated_epoch !== null) {
         const forecastLabel = forecast_timestamp_label("$obs.label.forecast_last_updated");
         jQuery(".forecast-subtitle")
-            .html(forecast_sentence_text([forecastLabel, forecast_relative_time(forecast_last_updated_epoch)]))
+            .text(forecast_sentence_text([forecastLabel, forecast_relative_time(forecast_last_updated_epoch)]))
             .attr("title", forecast_absolute_time(forecast_last_updated_epoch, '$obs.label.time_forecast_last_updated'));
     }
 
@@ -268,12 +283,12 @@ function forecast_start_relative_timer() {
 
 function forecast_compact_alert_title(title) {
     if (title == null) {
-        return "$obs.label.alert";
+        return forecast_label_text("$obs.label.alert");
     }
 
     var compactTitle = String(title).replace(/\s+/g, " ").trim();
     if (!compactTitle) {
-        return "$obs.label.alert";
+        return forecast_label_text("$obs.label.alert");
     }
 
     var lowerTitle = compactTitle.toLowerCase();
@@ -298,7 +313,7 @@ function forecast_compact_alert_title(title) {
         }
     }
 
-    return compactTitle || "$obs.label.alert";
+    return compactTitle || forecast_label_text("$obs.label.alert");
 }
 
 function forecast_format_alert_time(timestamp) {
@@ -306,7 +321,7 @@ function forecast_format_alert_time(timestamp) {
         return "";
     }
 
-    return tzAdjustedMoment(timestamp).format('$obs.label.time_forecast_alert_expires');
+    return tzAdjustedMoment(timestamp).format(belchertown_label_text('$obs.label.time_forecast_alert_expires'));
 }
 
 function forecast_format_alert_start_time(timestamp) {
@@ -327,18 +342,18 @@ function forecast_alert_in_effect_text(alertObj) {
 
     if (startText && endText) {
         if (startIsPast) {
-            return "$obs.label.alert_in_effect_now $obs.label.alert_until " + endText;
+            return forecast_label_text("$obs.label.alert_in_effect_now") + " " + forecast_label_text("$obs.label.alert_until") + " " + endText;
         }
-        return "$obs.label.alert_in_effect_starting " + startText + " $obs.label.alert_until " + endText;
+        return forecast_label_text("$obs.label.alert_in_effect_starting") + " " + startText + " " + forecast_label_text("$obs.label.alert_until") + " " + endText;
     }
     if (startText) {
         if (startIsPast) {
-            return "$obs.label.alert_in_effect_now";
+            return forecast_label_text("$obs.label.alert_in_effect_now");
         }
-        return "$obs.label.alert_in_effect_starting " + startText;
+        return forecast_label_text("$obs.label.alert_in_effect_starting") + " " + startText;
     }
     if (endText) {
-        return "$obs.label.alert_in_effect " + endText;
+        return forecast_label_text("$obs.label.alert_in_effect") + " " + endText;
     }
 
     return "";
@@ -360,7 +375,7 @@ function show_forcast_alert(data) {
                 ? ""
                 : String(alertObj['description']);
             forecast_alert_title = (alertObj['title'] == null)
-                ? "$obs.label.alert"
+                ? forecast_label_text("$obs.label.alert")
                 : forecast_compact_alert_title(alertObj['title']);
             forecast_alert_body = alertDescription.replace(/\n/g, '<br>');
             forecast_alert_link = forecast_alert_title;
@@ -396,14 +411,14 @@ function show_forcast_alert(data) {
             forecast_alert_modal += "<div class='modal-dialog' role='document'>";
             forecast_alert_modal += "<div class='modal-content'>";
             forecast_alert_modal += "<div class='modal-header'>";
-            forecast_alert_modal += "<button type='button' class='close' data-dismiss='modal' aria-label='$obs.label.close'><span aria-hidden='true'>&times;</span></button>";
+            forecast_alert_modal += "<button type='button' class='close' data-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'><span aria-hidden='true'>&times;</span></button>";
             forecast_alert_modal += "<h4 class='modal-title' id='" + forecastAlertTitleId + "'>" + forecast_alerts[i]["title"] + "</h4>";
             forecast_alert_modal += "</div>";
             forecast_alert_modal += "<div class='modal-body'>";
             forecast_alert_modal += forecast_alerts[i]["body"];
             forecast_alert_modal += "</div>";
             forecast_alert_modal += "<div class='modal-footer'>";
-            forecast_alert_modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>$obs.label.close</button>";
+            forecast_alert_modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
             forecast_alert_modal += "</div>";
             forecast_alert_modal += "</div>";
             forecast_alert_modal += "</div>";
@@ -427,7 +442,7 @@ function forecast_aqi_translate(data) {
     else if (data === "hazardous") data = "$obs.label.aqi_hazardous";
     else data = "$obs.label.aqi_unknown";
 
-    return data;
+    return forecast_label_text(data);
 }
 
 function update_current_conditions(data) {
@@ -582,7 +597,7 @@ function forecast_wind_html(row, includeGust) {
     let html = '<div class="forecast-wind">';
     html += '<i class="wi wi-strong-wind"></i> <span>' + windSpeedText + '</span>';
     if (includeGust) {
-        html += ' | <span> ' + forecast_plain_number_text(row["windGust"]) + '$unit.label.windSpeed';
+        html += ' | <span> ' + forecast_plain_number_text(row["windGust"]) + belchertown_label_html("$unit.label.windSpeed") + '</span>';
     }
     html += '</div>';
     return html;
@@ -674,7 +689,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
     for (let i = 0; i < tileCount; i++) {
         const row = displayRows[i] || {};
         const rowMoment = tzAdjustedMoment(row["time"]);
-        const rawLabel = rowMoment.format("$obs.label.time_forecast_time");
+        const rawLabel = rowMoment.format(belchertown_label_text("$obs.label.time_forecast_time"));
         const previousTime = i === 0 ? Date.now() / 1000 : (displayRows[i - 1] || {})["time"];
         const showDay = !rowMoment.isSame(tzAdjustedMoment(previousTime), "day");
         const timeLabel = forecast_time(i, forecastInterval, rawLabel, showDay);
@@ -726,7 +741,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
 
     for (let i = 0; i < tileCount; i++) {
         const row = dailySource[i] || {};
-        const dayLabel = tzAdjustedMoment((row["time"] || 0) + 7200).format("$obs.label.time_forecast_date");
+        const dayLabel = tzAdjustedMoment((row["time"] || 0) + 7200).format(belchertown_label_text("$obs.label.time_forecast_date"));
         const imageUrl = forecast_icon_url(row["icon"]);
 
         html += '<div class="forecast-day forecast-24hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
@@ -756,14 +771,14 @@ function forecast_update_aqi(data) {
             const aqiPeriod = data["aqi"][0]["response"][0]["periods"][0];
             const aqiValue = aqiPeriod["aqi"];
             const aqiCategory = forecast_aqi_translate(aqiPeriod["category"]);
-            jQuery(".wx-aqi").html(aqiValue);
-            jQuery(".wx-aqi-category").html(aqiCategory);
+            jQuery(".wx-aqi").text(aqiValue);
+            jQuery(".wx-aqi-category").text(aqiCategory);
             if ("$Extras.aqi_location_enabled" === "1") {
                 const aqiPlace = data["aqi"][0]["response"][0]["place"]["name"] || "";
                 jQuery(".aqi_location_outer").html(aqiPlace ? "<br>" + aqiPlace : "").css('textTransform', 'capitalize');
             }
             try {
-                jQuery(".station-observations .aqi").html(aqiValue + " (" + aqiCategory + ")");
+                jQuery(".station-observations .aqi").text(aqiValue + " (" + aqiCategory + ")");
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
@@ -773,11 +788,11 @@ function forecast_update_aqi(data) {
             });
         } else if (data["aqi"] && data["aqi"][0] && data["aqi"][0]["success"] && data["aqi"][0]["error"] && data["aqi"][0]["error"]["code"] === "warn_no_data") {
             const aqiNoDataCategory = forecast_aqi_translate("");
-            jQuery(".wx-aqi").html("$obs.label.no_data");
-            jQuery(".wx-aqi-category").html(aqiNoDataCategory);
+            jQuery(".wx-aqi").text(forecast_label_text("$obs.label.no_data"));
+            jQuery(".wx-aqi-category").text(aqiNoDataCategory);
             if ("$Extras.aqi_location_enabled" === "1") jQuery(".aqi_location_outer").html("");
             try {
-                jQuery(".station-observations .aqi").html("$obs.label.no_data (" + aqiNoDataCategory + ")");
+                jQuery(".station-observations .aqi").text(forecast_label_text("$obs.label.no_data") + " (" + aqiNoDataCategory + ")");
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }

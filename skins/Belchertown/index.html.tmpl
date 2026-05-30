@@ -87,16 +87,16 @@
             );
 
             // Update the Last Updated timestamp with moment.js,
-            updated = tzAdjustedMoment($current.dateTime.raw).format("$obs.label.time_last_updated");
-            updated_text = "$obs.label.header_last_updated " + updated;
-            jQuery(".updated").html(updated_text);
+            updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
+            updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
+            jQuery(".updated").text(updated_text);
 
             // #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'            
             if (moment.unix("$earthquake_time").isValid()) {
                 // Check that the time is the time (number) and not the "no earthquake available" wording
-                jQuery(".earthquake-time").html(tzAdjustedMoment("$earthquake_time").format("$obs.label.time_earthquake"));
+                jQuery(".earthquake-time").text(tzAdjustedMoment("$earthquake_time").format(belchertown_label_text("$obs.label.time_earthquake")));
             } else {
-                jQuery(".earthquake-time").html("$earthquake_time");
+                jQuery(".earthquake-time").text(belchertown_label_text("$earthquake_time"));
             }
             // #end if
 
@@ -165,16 +165,16 @@
             // Check if we need to alert on old information - if time now, minus the last update is greater than the threshold, show an alert.
             if ((Math.floor(new Date().getTime() / 1000.0) - $Extras.last_updated_alert_threshold) > $current.dateTime.raw) {
                 belchertown_debug("Last Updated Alert: The WeeWX report timestamp is " + $current.dateTime.raw + ". The current timestamp is " + Math.floor(new Date().getTime() / 1000.0) + ". The threshold is " + $Extras.last_updated_alert_threshold + ". Report timestamp is greater than threshold of current time, showing no update alert.");
-                last_updated_alert_text = "<i class='fa fa-exclamation-triangle' style='color:red;'></i> $obs.label.header_last_updated_alert";
+                last_updated_alert_text = "<i class='fa fa-exclamation-triangle' style='color:red;'></i> " + belchertown_label_html("$obs.label.header_last_updated_alert");
                 jQuery(".last-updated-alert").html(last_updated_alert_text);
                 jQuery(".last-updated-alert").show();
             }
             // #end if
 
             // Update the Last Updated timestamp with moment.js,
-            updated = tzAdjustedMoment($current.dateTime.raw).format("$obs.label.time_last_updated");
-            updated_text = "$obs.label.header_last_updated " + updated;
-            jQuery(".updated").html(updated_text);
+            updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
+            updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
+            jQuery(".updated").text(updated_text);
 
             // #end if
 
