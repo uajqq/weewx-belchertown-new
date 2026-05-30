@@ -6115,6 +6115,12 @@ class getData(SearchList):
             "beaufort12": label_dict["beaufort12"],
             "mqtt_websockets_port_kiosk": mqtt_websockets_port_kiosk,
             "mqtt_websockets_ssl_kiosk": mqtt_websockets_ssl_kiosk,
+            "mqtt_websockets_username_json": json.dumps(
+                str(extras_dict.get("mqtt_websockets_username", ""))
+            ),
+            "mqtt_websockets_password_json": json.dumps(
+                str(extras_dict.get("mqtt_websockets_password", ""))
+            ),
         }
         # Finally, return our extension as a list:
         return [search_list_extension]

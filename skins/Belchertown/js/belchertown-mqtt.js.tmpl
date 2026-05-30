@@ -61,6 +61,8 @@ var mqtt_relative_updated_timer = null;
 var mqtt_receiving_indicator_timeout = null;
 var mqtt_restart_handler_bound = false;
 var mqtt_status_info_handler_bound = false;
+var mqtt_websockets_username = $mqtt_websockets_username_json;
+var mqtt_websockets_password = $mqtt_websockets_password_json;
 var mqtt_status_detail = {
     message: "",
     relative_time: "",
@@ -532,10 +534,6 @@ function connect() {
     belchertown_debug("MQTT: Event handlers registered (onConnectionLost, onMessageArrived)");
     var options = {
         useSSL: useSSL,
-        // #if $Extras.has_key("mqtt_websockets_username") and $Extras.has_key("mqtt_websockets_password") and $Extras.mqtt_websockets_username != "" and $Extras.mqtt_websockets_password != ""
-        userName: "$Extras.mqtt_websockets_username",
-        password: "$Extras.mqtt_websockets_password",
-        // #end if
         // mqttVersion: 4 is spec MQTTv3.1.1 - mqttVersion: 3 is spec MQTTv3.1
         mqttVersion: 4,
         // If mqttVersionExplicit is true, it will force the connection to use the selected MQTT Version or will fail to connect.
@@ -545,11 +543,17 @@ function connect() {
         reconnect: true,
         onSuccess: onConnect,
         onFailure: onFailure
-    }
+    };
     belchertown_debug("MQTT: Connection options configured - MQTT Version: 4, Auto-reconnect: enabled, mqttVersionExplicit: false");
-    // #if $Extras.has_key("mqtt_websockets_username") and $Extras.has_key("mqtt_websockets_password") and $Extras.mqtt_websockets_username != "" and $Extras.mqtt_websockets_password != ""
-    belchertown_debug("MQTT: Authentication credentials configured");
-    // #end if
+    if (mqtt_websockets_username !== "") {
+        options.userName = mqtt_websockets_username;
+        if (mqtt_websockets_password !== "") {
+            options.password = mqtt_websockets_password;
+        }
+        belchertown_debug("MQTT: Authentication credentials configured");
+    } else if (mqtt_websockets_password !== "") {
+        belchertown_debug("MQTT: Password configured without username; MQTT authentication will not be sent");
+    }
     belchertown_debug("MQTT: [" + new Date().toISOString() + "] Initiating connection to broker");
     client.connect(options);
 }
@@ -585,7 +589,8 @@ function onConnect() {
 }
 
 // MQTT Failure
-function onFailure() {
+function onFailure(responseObject) {
+    responseObject = responseObject || {};
     mqttConnected = false;
     var d = new Date();
     epoch = parseFloat((d / 1000)).toFixed(0); // Convert millis to seconds
@@ -598,7 +603,13 @@ function onFailure() {
     reconnect_using_inactive_timestamp = true;
     inactive_timestamp = epoch;
     mqtt_set_disconnected_status("$obs.label.mqtt_websockets_failed", epoch, true);
-    console.error("MQTT: " + timestamp + " - Connection Failed - Unable to connect to MQTT broker");
+    if (typeof responseObject.errorCode !== "undefined") {
+        var errorMsg = "Error Code: " + responseObject.errorCode + " - " + (responseObject.errorMessage || "Unknown error");
+        console.error("MQTT: " + timestamp + " - Connection Failed: " + errorMsg);
+        belchertown_debug("MQTT: Failure details - " + errorMsg);
+    } else {
+        console.error("MQTT: " + timestamp + " - Connection Failed - Unable to connect to MQTT broker");
+    }
     belchertown_debug("MQTT: UI markers updated for failure state");
 }
 
