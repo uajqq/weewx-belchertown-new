@@ -548,6 +548,20 @@ def _nws_parse_metar_visibility_m(raw_message):
     return parsed.get("visibility_m") if parsed else None
 
 
+def _nws_visibility_quantity_qualifier(visibility_m):
+    """Infer NWS METAR display qualifier from numeric visibility when raw METAR is unavailable."""
+    value = _safe_float(visibility_m)
+    if value is None:
+        return ""
+
+    # The NWS API can omit rawMessage but still expose 10SM as 16093.44 m.
+    # In US METAR this is the normal cap for "10 statute miles or more".
+    if value >= (10.0 * 1609.344) - 0.5:
+        return ">"
+
+    return ""
+
+
 NWS_FORECAST_TARGET_TEMP_UNIT = {
     "si": "degree_C",
     "ca": "degree_C",
@@ -815,6 +829,8 @@ def _nws_build_current(obs_payload, forecast_units):
         else _nws_quantity_value(props.get("visibility"))
     )
     visibility_qualifier = metar_visibility.get("qualifier") if metar_visibility else ""
+    if not visibility_qualifier:
+        visibility_qualifier = _nws_visibility_quantity_qualifier(visibility_m)
     wind_mps = _nws_quantity_value(props.get("windSpeed"))
     gust_mps = _nws_quantity_value(props.get("windGust"))
     pressure_pa = _nws_quantity_value(props.get("barometricPressure"))
