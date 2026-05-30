@@ -3737,12 +3737,16 @@ table.celestial td.label {
   font-size: 20px;
   line-height: 1.2;
   margin-bottom: 2px;
+  text-align: center;
 }
 
 .frontpage .homepage-card--records .snapshot-period-select {
   font-size: 16px;
   font-weight: 300;
   line-height: 1.2;
+  width: auto;
+  max-width: 100%;
+  padding: 7px 28px 7px 10px;
 }
 
 .frontpage .homepage-card--records .stn-quick-stats td:nth-child(1),
@@ -4454,20 +4458,19 @@ table.celestial td.label {
   .frontpage .homepage-card--records .homepage-card-body > .row {
     display: flex;
     flex-wrap: nowrap;
-    gap: 8px;
-    min-width: 100%;
+    gap: 6px;
+    min-width: 0;
   }
 
   .frontpage .homepage-card--records .homepage-card-body {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: visible;
+    overflow-y: visible;
   }
 
   .frontpage .homepage-card--records .stn-quick-stats {
-    width: 50%;
-    flex: 1 0 180px;
-    min-width: 180px;
+    width: calc(50% - 3px);
+    flex: 1 1 0;
+    min-width: 0;
     float: none;
     padding-left: 0;
     padding-right: 0;
@@ -4475,7 +4478,7 @@ table.celestial td.label {
 
   .frontpage .homepage-card--records .snapshot-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3px;
+    gap: 2px;
   }
 
   .frontpage .homepage-card--records .stats-title {
@@ -4483,22 +4486,24 @@ table.celestial td.label {
   }
 
   .frontpage .homepage-card--records .snapshot-period-select {
-    font-size: 15px;
-    padding: 10px 12px;
+    font-size: 14px;
+    width: 100%;
+    padding: 8px 22px 8px 7px;
   }
 
   .frontpage .homepage-card--records .snapshot-metric {
-    padding: 6px 6px;
-    min-height: 54px;
-    gap: 3px;
+    padding: 5px 4px;
+    min-height: 52px;
+    gap: 2px;
   }
 
   .frontpage .homepage-card--records .snapshot-metric-label {
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.15;
   }
 
   .frontpage .homepage-card--records .snapshot-metric-value {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .frontpage .homepage-card--almanac .almanac-main {
@@ -4988,6 +4993,8 @@ span.highcharts-title {
   color: #1f2937;
   background: transparent;
   border: 0;
+  font-size: 13px;
+  line-height: 1.35;
   overflow-x: visible;
   white-space: pre;
   overflow-wrap: normal;
@@ -5417,6 +5424,10 @@ span.highcharts-title {
 }
 
 @media only screen and (max-width: 500px) {
+  .reports #noaa_contents {
+    font-size: 12px;
+  }
+
   .records .records-sections {
     gap: 16px;
     margin-bottom: 16px;
@@ -6106,14 +6117,6 @@ body.pi::-webkit-scrollbar {
 }
 
 @media (pointer: coarse) {
-  .onlineMarker.mqtt-receiving:after,
-  .onlineMarker:after {
-    -webkit-animation: none;
-    animation: none;
-    box-shadow: none;
-    opacity: 0;
-  }
-
   #btn-back-to-top:hover .fa-arrow-up {
     animation: none;
   }

@@ -3610,83 +3610,17 @@ class getData(SearchList):
         value = str(value or "").lower()
         return value.startswith(("https://", "http://", "//"))
 
-    @staticmethod
-    def _unescape_radar_markup_quotes(value):
-        """Normalize copied iframe markup that contains backslash-escaped quotes."""
-        return str(value or "").replace('\\"', '"').replace("\\'", "'")
-
-    @staticmethod
-    def _find_radar_attr(value, attr_name):
-        """Find an iframe attribute without matching similarly named attributes."""
-        attr = re.escape(attr_name)
-        src_match = re.search(
-            rf"""(?is)(?<![\w:-]){attr}\s*=\s*(['"])(.*?)\1""",
-            str(value or ""),
-        )
-        if src_match:
-            return src_match.group(2)
-
-        src_match = re.search(
-            rf"""(?is)(?<![\w:-]){attr}\s*=\s*([^\s>]+)""",
-            str(value or ""),
-        )
-        if src_match:
-            return src_match.group(1)
-
-        return None
-
-    @staticmethod
-    def _is_blank_radar_src(value):
-        value = str(value or "").strip().lower()
-        return value == "" or value.startswith("about:blank")
-
-    def _find_radar_src_attr(self, value):
-        """Find the actual iframe src attribute without matching data-src."""
-        return self._find_radar_attr(value, "src")
-
-    def _find_radar_data_src_attr(self, value):
-        """Find a deferred iframe data-src attribute."""
-        return self._find_radar_attr(value, "data-src")
-
-    @staticmethod
-    def _prefer_eager_radar_iframe(markup):
-        """Avoid native lazy iframe placeholders for the visible radar embed."""
-        def replace_quoted_loading(match_obj):
-            return f"{match_obj.group(1)}{match_obj.group(2)}eager{match_obj.group(2)}"
-
-        markup = re.sub(
-            r"""(?is)(<iframe\b[^>]*?\sloading\s*=\s*)(['"])lazy\2""",
-            replace_quoted_loading,
-            str(markup or ""),
-            count=1,
-        )
-        return re.sub(
-            r"""(?is)(<iframe\b[^>]*?\sloading\s*=\s*)lazy(?=[\s>])""",
-            r"\1eager",
-            markup,
-            count=1,
-        )
-
     def _normalize_radar_src(self, value):
         """Return a clean URL from a bare URL, quoted URL, or iframe snippet."""
-        src = self._strip_wrapping_url_quotes(value)
-        if self._is_absolute_radar_url(src):
-            return src
+        raw_src = str(value or "").strip()
+        src_match = re.search(r"""(?is)\bsrc\s*=\s*(['"])(.*?)\1""", raw_src)
+        if src_match:
+            return self._strip_wrapping_url_quotes(src_match.group(2))
 
-        for candidate in (
-            str(value or "").strip(),
-            src,
-            self._unescape_radar_markup_quotes(src),
-        ):
-            src_attr = self._find_radar_src_attr(candidate)
-            data_src_attr = self._find_radar_data_src_attr(candidate)
-            if src_attr is not None and not self._is_blank_radar_src(src_attr):
-                return self._strip_wrapping_url_quotes(src_attr)
-            if data_src_attr is not None:
-                return self._strip_wrapping_url_quotes(data_src_attr)
-            if src_attr is not None:
-                return self._strip_wrapping_url_quotes(src_attr)
-
+        src = self._strip_wrapping_url_quotes(raw_src)
+        src_match = re.search(r"""(?is)\bsrc\s*=\s*(['"])(.*?)\1""", src)
+        if src_match:
+            src = self._strip_wrapping_url_quotes(src_match.group(2))
         return src
 
     def _build_radar_iframe_from_src(self, src, width, height):
@@ -3696,7 +3630,8 @@ class getData(SearchList):
         escaped_height = html.escape(str(height), quote=True)
         return (
             f'<iframe width="{escaped_width}px" height="{escaped_height}px" '
-            f'src="{escaped_src}" frameborder="0" title="Radar map"></iframe>'
+            f'src="{escaped_src}" frameborder="0" loading="lazy" '
+            f'title="Radar map"></iframe>'
         )
 
     def _normalize_custom_radar_html(self, value, width, height):
@@ -3709,42 +3644,19 @@ class getData(SearchList):
         if self._is_absolute_radar_url(normalized_url):
             return self._build_radar_iframe_from_src(normalized_url, width, height)
 
-        markup = self._unescape_radar_markup_quotes(markup)
-        fallback_src = self._find_radar_data_src_attr(markup)
-
         def normalize_src_attr(match_obj):
-            raw_src = match_obj.group(3)
-            if fallback_src and self._is_blank_radar_src(raw_src):
-                raw_src = fallback_src
             src = html.escape(
-                self._normalize_radar_src(raw_src),
+                self._normalize_radar_src(match_obj.group(3)),
                 quote=True,
             )
             return f"{match_obj.group(1)}{match_obj.group(2)}{src}{match_obj.group(2)}"
 
-        normalized_markup, replacements = re.subn(
-            r"""(?is)((?<![\w:-])src\s*=\s*)(['"])(.*?)\2""",
+        return re.sub(
+            r"""(?is)(\bsrc\s*=\s*)(['"])(.*?)\2""",
             normalize_src_attr,
             markup,
             count=1,
         )
-        if replacements:
-            return self._prefer_eager_radar_iframe(normalized_markup)
-
-        def promote_data_src_attr(match_obj):
-            src = html.escape(
-                self._normalize_radar_src(match_obj.group(2)),
-                quote=True,
-            )
-            return f"src={match_obj.group(1)}{src}{match_obj.group(1)}"
-
-        promoted_markup = re.sub(
-            r"""(?is)(?<![\w:-])data-src\s*=\s*(['"])(.*?)\1""",
-            promote_data_src_attr,
-            markup,
-            count=1,
-        )
-        return self._prefer_eager_radar_iframe(promoted_markup)
 
     def _get_radar_html(self, extras_dict, lat, lon, zoom, width, height,
                         rain, wind, temp, marker, overlay):
