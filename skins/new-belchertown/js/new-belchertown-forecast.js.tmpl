@@ -696,7 +696,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
         const tempNum = forecast_number(row["temperature"]);
         const imageUrl = forecast_icon_url(row["icon"]);
 
-        html += '<div class="forecast-day ' + tileClass + ' pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/' + maxTiles + '); max-width:calc(100%/' + maxTiles + ');">';
+        html += '<div class="forecast-day ' + tileClass + ' forecast-tile ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/' + maxTiles + '); max-width:calc(100%/' + maxTiles + ');">';
         html += '<div class="forecast-card-label"><span id="weekday">' + timeLabel + '</span></div>';
 
         if (forecastInterval === "forecast_1hr") {
@@ -744,7 +744,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
         const dayLabel = tzAdjustedMoment((row["time"] || 0) + 7200).format(belchertown_label_text("$obs.label.time_forecast_date"));
         const imageUrl = forecast_icon_url(row["icon"]);
 
-        html += '<div class="forecast-day forecast-24hour pirateweather-forecast ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
+        html += '<div class="forecast-day forecast-24hour forecast-tile ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
         html += '<div class="forecast-card-label"><span id="weekday">' + dayLabel + '</span></div>';
         html += '<div class="forecast-conditions">';
         html += '<img class="forecast-icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async">';

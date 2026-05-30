@@ -51,6 +51,7 @@ var chartpage_content = $chartpage_content;
 var moon_tilt_template_value = $moon_tilt_template_value;
 var belchertownAutoThemeMediaListenerAttached = false;
 var belchertownAutoThemeMediaQuery = null;
+var belchertownWindyRadarResizeTimer = null;
 
 // ---- Forecast icon helpers (Dark Sky-style icon names) ----
 const DS_ICON_TO_W34 = {
@@ -242,6 +243,188 @@ function belchertown_load_deferred_iframes(root) {
         frame.setAttribute("src", src);
         frame.removeAttribute("data-src");
     });
+
+    belchertown_scale_windy_radar_iframes(scope);
+}
+
+function belchertown_parse_radar_dimension(value) {
+    var parsed = parseFloat(String(value || "").replace("px", ""));
+    return isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function belchertown_windy_radar_src(frame) {
+    return frame.getAttribute("src") || frame.getAttribute("data-src") || "";
+}
+
+function belchertown_windy_radar_container(frame) {
+    if (frame.closest) {
+        return frame.closest(".radar_image") || frame.parentElement;
+    }
+
+    var node = frame.parentElement;
+    while (node) {
+        if (node.className && String(node.className).indexOf("radar_image") !== -1) {
+            return node;
+        }
+        node = node.parentElement;
+    }
+
+    return frame.parentElement;
+}
+
+function belchertown_clear_windy_radar_scale(frame, container) {
+    if (container) {
+        if (container.classList) {
+            container.classList.remove("radar_image--scaled-frame");
+        }
+        container.style.removeProperty("--radar-frame-display-height");
+    }
+
+    frame.style.removeProperty("width");
+    frame.style.removeProperty("height");
+    frame.style.removeProperty("max-width");
+    frame.style.removeProperty("min-height");
+    frame.style.removeProperty("transform");
+    frame.style.removeProperty("transform-origin");
+}
+
+function belchertown_windy_radar_original_src(frame) {
+    var originalSrc = frame.getAttribute("data-radar-original-src");
+    var currentSrc = belchertown_windy_radar_src(frame);
+
+    if (!originalSrc && currentSrc) {
+        originalSrc = currentSrc;
+        frame.setAttribute("data-radar-original-src", originalSrc);
+    }
+
+    return originalSrc || currentSrc;
+}
+
+function belchertown_windy_radar_zoomed_src(src, zoomOffset) {
+    try {
+        var url = new URL(src, window.location.href);
+        var zoom = parseFloat(url.searchParams.get("zoom"));
+        if (!isFinite(zoom)) {
+            return src;
+        }
+
+        url.searchParams.set("zoom", String(Math.max(0, zoom + zoomOffset)));
+        return url.toString();
+    } catch (e) {
+        return src;
+    }
+}
+
+function belchertown_set_windy_radar_mobile_zoom(frame, enabled) {
+    var originalSrc = belchertown_windy_radar_original_src(frame);
+    if (!originalSrc) {
+        return;
+    }
+
+    var targetSrc = enabled
+        ? belchertown_windy_radar_zoomed_src(originalSrc, 1)
+        : originalSrc;
+    var srcAttribute = frame.getAttribute("data-src") ? "data-src" : "src";
+
+    if (frame.getAttribute(srcAttribute) !== targetSrc) {
+        frame.setAttribute(srcAttribute, targetSrc);
+    }
+}
+
+function belchertown_scale_windy_radar_iframes(root) {
+    var scope = (root && root.querySelectorAll) ? root : document;
+    var frames = scope.querySelectorAll(".radar_image iframe");
+
+    frames.forEach(function(frame) {
+        var src = belchertown_windy_radar_src(frame);
+        if (src.indexOf("embed.windy.com") === -1) {
+            return;
+        }
+
+        var container = belchertown_windy_radar_container(frame);
+        if (!container) {
+            return;
+        }
+
+        var shouldScaleForMobile = window.matchMedia
+            ? window.matchMedia("(max-width: 800px)").matches
+            : window.innerWidth <= 800;
+        if (!shouldScaleForMobile) {
+            belchertown_set_windy_radar_mobile_zoom(frame, false);
+            belchertown_clear_windy_radar_scale(frame, container);
+            return;
+        }
+        belchertown_set_windy_radar_mobile_zoom(frame, true);
+
+        if (container.classList && container.classList.contains("radar_image--scaled-frame")) {
+            container.style.removeProperty("--radar-frame-display-height");
+        }
+
+        var containerRect = container.getBoundingClientRect();
+        var containerWidth = containerRect.width;
+        if (!containerWidth) {
+            return;
+        }
+        var targetHeight = containerRect.height;
+        var frameArea = container.parentElement;
+        if (frameArea) {
+            var frameAreaHeight = frameArea.getBoundingClientRect().height;
+            if (frameAreaHeight > targetHeight) {
+                targetHeight = frameAreaHeight;
+            }
+        }
+
+        var baseWidth = belchertown_parse_radar_dimension(frame.getAttribute("data-radar-base-width"));
+        var baseHeight = belchertown_parse_radar_dimension(frame.getAttribute("data-radar-base-height"));
+
+        if (!baseWidth) {
+            baseWidth = belchertown_parse_radar_dimension(frame.getAttribute("width"));
+        }
+        if (!baseHeight) {
+            baseHeight = belchertown_parse_radar_dimension(frame.getAttribute("height"));
+        }
+
+        if (!baseWidth || baseWidth < 480) {
+            baseWidth = 650;
+        }
+        if (!baseHeight || baseHeight < 260) {
+            baseHeight = Math.round(baseWidth * 360 / 650);
+        }
+
+        frame.setAttribute("data-radar-base-width", baseWidth);
+        frame.setAttribute("data-radar-base-height", baseHeight);
+
+        if (containerWidth >= baseWidth) {
+            belchertown_clear_windy_radar_scale(frame, container);
+            return;
+        }
+
+        var scale = containerWidth / baseWidth;
+        var frameHeight = baseHeight;
+        if (targetHeight) {
+            frameHeight = Math.max(baseHeight, Math.ceil(targetHeight / scale));
+        }
+        var displayHeight = Math.ceil(frameHeight * scale);
+
+        if (container.classList) {
+            container.classList.add("radar_image--scaled-frame");
+        }
+        container.style.setProperty("--radar-frame-display-height", displayHeight + "px");
+
+        frame.style.width = baseWidth + "px";
+        frame.style.height = frameHeight + "px";
+        frame.style.maxWidth = "none";
+        frame.style.minHeight = "0";
+        frame.style.transform = "scale(" + scale + ")";
+        frame.style.transformOrigin = "top left";
+    });
+}
+
+function belchertown_schedule_windy_radar_scale(root) {
+    window.clearTimeout(belchertownWindyRadarResizeTimer);
+    belchertownWindyRadarResizeTimer = window.setTimeout(function() {
+        belchertown_scale_windy_radar_iframes(root || document);
+    }, 100);
 }
 
 function belchertown_schedule_deferred_iframes(root, delayMs, options) {
@@ -413,6 +596,13 @@ jQuery(document).ready(function() {
 
     // Fail-open for pages generated with deferred iframe markup.
     belchertown_schedule_deferred_iframes(document, 0);
+    belchertown_schedule_windy_radar_scale(document);
+    jQuery(window).on("resize orientationchange", function() {
+        belchertown_schedule_windy_radar_scale(document);
+    });
+    jQuery(document).on("click", "#tabs-container .tabs-menu a", function() {
+        belchertown_schedule_windy_radar_scale(document);
+    });
 
     // If the visitor has overridden the theme, keep that theme going throughout the full site and their visit.
     if (sessionStorage.getItem('theme') == "toggleOverride") {
