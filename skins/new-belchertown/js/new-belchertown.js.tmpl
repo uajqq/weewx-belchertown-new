@@ -1030,6 +1030,67 @@ if (wind_compass_source !== "windGust") {
 }
 
 var wind_compass_calm_threshold_knots = 1;
+var wind_compass_default_unit_label = "$unit.label.windSpeed";
+
+function wind_compass_unit_label(obsName) {
+    if (
+        typeof unit_label_array === "object" &&
+        unit_label_array !== null &&
+        unit_label_array.hasOwnProperty(obsName)
+    ) {
+        return unit_label_array[obsName];
+    }
+    if (
+        typeof unit_label_array === "object" &&
+        unit_label_array !== null &&
+        unit_label_array.hasOwnProperty("windSpeed")
+    ) {
+        return unit_label_array["windSpeed"];
+    }
+    if (typeof jQuery === "function") {
+        var label = jQuery(".wind-table td.mph").first().text();
+        if (label) {
+            return label;
+        }
+    }
+    return wind_compass_default_unit_label;
+}
+
+function wind_compass_value_to_knots(value, unitLabel) {
+    var parsed = parse_wind_compass_knots(value);
+    if (parsed === null) {
+        return null;
+    }
+
+    var unit = String(unitLabel || "").replace(/&nbsp;/g, " ").trim().toLowerCase();
+    if (unit === "mph" || unit.indexOf("mile") !== -1) {
+        return parsed * 0.8689758;
+    }
+    if (unit === "km/h" || unit === "kph" || unit.indexOf("km") !== -1) {
+        return parsed * 0.5399568;
+    }
+    if (unit === "m/s" || unit.indexOf("meter") !== -1 || unit.indexOf("metre") !== -1) {
+        return parsed * 1.943844;
+    }
+    if (unit === "kt" || unit === "kts" || unit.indexOf("knot") !== -1) {
+        return parsed;
+    }
+    if (unit === "bft" || unit.indexOf("beaufort") !== -1) {
+        return beaufort_to_knots(parsed);
+    }
+
+    return null;
+}
+
+function displayed_wind_compass_knots(obsName) {
+    if (typeof jQuery !== "function") {
+        return null;
+    }
+
+    var selector = obsName == "windGust" ? ".curwindgust" : ".curwindspeed";
+    var displayedValue = jQuery(selector).first().text();
+    return wind_compass_value_to_knots(displayedValue, wind_compass_unit_label(obsName));
+}
 
 function knots_from_mqtt_payload(payload, obsName) {
     var windObs = obsName || "windSpeed";
@@ -1049,6 +1110,14 @@ function knots_from_mqtt_payload(payload, obsName) {
     if (payload.hasOwnProperty(windObs + "_beaufort")) {
         return beaufort_to_knots(payload[windObs + "_beaufort"]);
     }
+    if (payload.hasOwnProperty(windObs)) {
+        return wind_compass_value_to_knots(payload[windObs], wind_compass_unit_label(windObs));
+    }
+
+    var lowerWindObs = windObs.toLowerCase();
+    if (payload.hasOwnProperty(lowerWindObs)) {
+        return wind_compass_value_to_knots(payload[lowerWindObs], wind_compass_unit_label(windObs));
+    }
 
     return null;
 }
@@ -1060,6 +1129,9 @@ function build_windbarb_svg(knots) {
     }
 
     var rounded = Math.max(0, Math.round(value / 5) * 5);
+    if (rounded === 0 && value >= wind_compass_calm_threshold_knots) {
+        rounded = 5;
+    }
 
     var color = "#c50a1d";
     var stroke = 5;
@@ -1136,7 +1208,9 @@ function wind_compass_is_calm(windSpeedKnots, windGustKnots) {
 
 function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     var rotation = parseFloat(direction);
-    var selectedKnots = wind_compass_source == "windGust" ? parse_wind_compass_knots(windGustKnots) : parse_wind_compass_knots(windSpeedKnots);
+    var parsedWindSpeedKnots = parse_wind_compass_knots(windSpeedKnots);
+    var parsedWindGustKnots = parse_wind_compass_knots(windGustKnots);
+    var selectedKnots = wind_compass_source == "windGust" ? parsedWindGustKnots : parsedWindSpeedKnots;
     var arrow = jQuery(".arrow");
 
     if (arrow.length === 0) {
@@ -1160,9 +1234,14 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
 
     if (wind_compass_marker == "windbarb") {
         arrow.addClass("windbarb-marker");
+        if (selectedKnots === null) {
+            selectedKnots = parsedWindSpeedKnots !== null ? parsedWindSpeedKnots : parsedWindGustKnots;
+        }
         var svg = build_windbarb_svg(selectedKnots);
         if (svg) {
             arrow.html(svg);
+        } else {
+            arrow.removeClass("windbarb-marker").empty();
         }
     } else {
         arrow.removeClass("windbarb-marker").empty();
@@ -1175,9 +1254,29 @@ function initialize_wind_compass_marker(direction, windSpeedKnots, windGustKnots
     var parsedDirection = parseFloat(direction);
     var parsedWindSpeedKnots = parseFloat(windSpeedKnots);
     var parsedWindGustKnots = parseFloat(windGustKnots);
+    var displayedWindSpeedKnots = displayed_wind_compass_knots("windSpeed");
+    var displayedWindGustKnots = displayed_wind_compass_knots("windGust");
 
     if (isFinite(parsedDirection)) {
         live_wind_compass_state.direction = parsedDirection;
+    }
+    if (
+        displayedWindSpeedKnots !== null &&
+        (!isFinite(parsedWindSpeedKnots) || (
+            parsedWindSpeedKnots < wind_compass_calm_threshold_knots &&
+            displayedWindSpeedKnots >= wind_compass_calm_threshold_knots
+        ))
+    ) {
+        parsedWindSpeedKnots = displayedWindSpeedKnots;
+    }
+    if (
+        displayedWindGustKnots !== null &&
+        (!isFinite(parsedWindGustKnots) || (
+            parsedWindGustKnots < wind_compass_calm_threshold_knots &&
+            displayedWindGustKnots >= wind_compass_calm_threshold_knots
+        ))
+    ) {
+        parsedWindGustKnots = displayedWindGustKnots;
     }
     if (isFinite(parsedWindSpeedKnots)) {
         live_wind_compass_state.windSpeedKnots = parsedWindSpeedKnots;
@@ -1199,7 +1298,13 @@ function update_wind_compass_marker(payload) {
     var windGustKnots = knots_from_mqtt_payload(payload, "windGust");
 
     if (windSpeedKnots === null || !isFinite(windSpeedKnots)) {
+        windSpeedKnots = displayed_wind_compass_knots("windSpeed");
+    }
+    if (windSpeedKnots === null || !isFinite(windSpeedKnots)) {
         windSpeedKnots = live_wind_compass_state.windSpeedKnots;
+    }
+    if (windGustKnots === null || !isFinite(windGustKnots)) {
+        windGustKnots = displayed_wind_compass_knots("windGust");
     }
     if (windGustKnots === null || !isFinite(windGustKnots)) {
         windGustKnots = live_wind_compass_state.windGustKnots;
