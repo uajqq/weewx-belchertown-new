@@ -12,7 +12,7 @@ import sys
 # -------- extension info -----------
 
 VERSION = "2.0-rc1"
-NAME = "New Belchertown"
+NAME = "new-belchertown"
 DESCRIPTION = "A clean, modern skin with real time streaming updates and interactive charts. Modeled after BelchertownWeather.com"
 AUTHOR = "Pat OBrien and uajqq"
 AUTHOR_EMAIL = "https://github.com/uajqq/weewx-belchertown-new"
