@@ -99,10 +99,10 @@ function forecast_template_html(template, replacements) {
 }
 
 function forecast_provider_label(provider) {
-    const providerKey = String(provider || "").toLowerCase().replace(/_/g, "-");
+    const providerKey = String(provider || "");
     if (providerKey === "nws") return "NWS";
-    if (providerKey === "openmeteo" || providerKey === "open-meteo") return "Open-Meteo";
-    if (providerKey === "pirateweather" || providerKey === "pirate-weather") return "Pirate Weather";
+    if (providerKey === "open-meteo") return "Open-Meteo";
+    if (providerKey === "pirateweather") return "Pirate Weather";
     if (providerKey === "xweather") return "Xweather";
     if (providerKey === "aeris") return "Aeris/Xweather";
     return provider ? String(provider) : forecast_label_text("$obs.label.forecast_data");
@@ -460,9 +460,6 @@ function forecast_current_fallback_period(forecastData) {
 
 function update_current_conditions(data, forecastData) {
     forecast_provider = "$Extras.forecast_provider";
-    if (forecast_provider == "openmeteo" || forecast_provider == "open_meteo") {
-        forecast_provider = "open-meteo";
-    }
     belchertown_debug("Current Conditions: Provider is " + forecast_provider);
     belchertown_debug("Current Conditions: Updating data");
     belchertown_debug(data);
@@ -858,9 +855,6 @@ function forecast_render_common(data) {
 
 function update_forecast_data(data) {
     forecast_provider = "$Extras.forecast_provider";
-    if (forecast_provider == "openmeteo" || forecast_provider == "open_meteo") {
-        forecast_provider = "open-meteo";
-    }
     belchertown_debug("Forecast: Provider is " + forecast_provider);
     belchertown_debug("Forecast: Updating data");
     belchertown_debug(data);

@@ -145,6 +145,77 @@ METEOALARM_COUNTRY_SLUG_ALIASES = {
     "united-kingdom-of-great-britain-and-northern-ireland": "united-kingdom",
 }
 
+VALID_FORECAST_PROVIDERS = (
+    "nws",
+    "open-meteo",
+    "xweather",
+    "aeris",
+    "pirateweather",
+)
+
+METEOALARM_COUNTRY_SLUG_BY_TIMEZONE = {
+    "africa/ceuta": "spain",
+    "arctic/longyearbyen": "norway",
+    "asia/famagusta": "cyprus",
+    "asia/jerusalem": "israel",
+    "asia/nicosia": "cyprus",
+    "atlantic/azores": "portugal",
+    "atlantic/canary": "spain",
+    "atlantic/faroe": "denmark",
+    "atlantic/madeira": "portugal",
+    "atlantic/reykjavik": "iceland",
+    "europe/amsterdam": "netherlands",
+    "europe/andorra": "andorra",
+    "europe/athens": "greece",
+    "europe/belgrade": "serbia",
+    "europe/berlin": "germany",
+    "europe/bratislava": "slovakia",
+    "europe/brussels": "belgium",
+    "europe/bucharest": "romania",
+    "europe/budapest": "hungary",
+    "europe/busingen": "germany",
+    "europe/chisinau": "moldova",
+    "europe/copenhagen": "denmark",
+    "europe/dublin": "ireland",
+    "europe/gibraltar": "united-kingdom",
+    "europe/guernsey": "united-kingdom",
+    "europe/helsinki": "finland",
+    "europe/isle_of_man": "united-kingdom",
+    "europe/jersey": "united-kingdom",
+    "europe/kiev": "ukraine",
+    "europe/kyiv": "ukraine",
+    "europe/lisbon": "portugal",
+    "europe/ljubljana": "slovenia",
+    "europe/london": "united-kingdom",
+    "europe/luxembourg": "luxembourg",
+    "europe/madrid": "spain",
+    "europe/malta": "malta",
+    "europe/mariehamn": "finland",
+    "europe/monaco": "france",
+    "europe/oslo": "norway",
+    "europe/paris": "france",
+    "europe/podgorica": "montenegro",
+    "europe/prague": "czechia",
+    "europe/riga": "latvia",
+    "europe/rome": "italy",
+    "europe/san_marino": "italy",
+    "europe/sarajevo": "bosnia-herzegovina",
+    "europe/simferopol": "ukraine",
+    "europe/skopje": "republic-of-north-macedonia",
+    "europe/sofia": "bulgaria",
+    "europe/stockholm": "sweden",
+    "europe/tallinn": "estonia",
+    "europe/uzhgorod": "ukraine",
+    "europe/vaduz": "switzerland",
+    "europe/vatican": "italy",
+    "europe/vienna": "austria",
+    "europe/vilnius": "lithuania",
+    "europe/warsaw": "poland",
+    "europe/zagreb": "croatia",
+    "europe/zaporozhye": "ukraine",
+    "europe/zurich": "switzerland",
+}
+
 # Shared AQI/pollutant extraction map for forecast/current-condition fallback.
 AQI_OBS_MAP = {
     "aqi": {"pollutant": None, "value_key": "aqi"},
@@ -1208,8 +1279,29 @@ def _meteoalarm_country_slug_from_geocode(geocode_values):
     return ""
 
 
-def _meteoalarm_feed_url(extras_dict):
-    """Build the MeteoAlarm Atom feed URL from explicit config."""
+def _meteoalarm_country_slug_from_timezone(timezone_value):
+    """Infer a MeteoAlarm country feed slug from an IANA timezone."""
+    timezone_values = _config_list_values(timezone_value)
+    if not timezone_values:
+        return ""
+    return METEOALARM_COUNTRY_SLUG_BY_TIMEZONE.get(timezone_values[0].lower(), "")
+
+
+def _meteoalarm_country_slug_from_openmeteo_payload(openmeteo_payload):
+    """Infer a MeteoAlarm country feed slug from Open-Meteo metadata."""
+    if not isinstance(openmeteo_payload, dict):
+        return ""
+
+    for country_key in ("country_code", "countryCode"):
+        country_slug = _meteoalarm_country_slug(openmeteo_payload.get(country_key))
+        if country_slug:
+            return country_slug
+
+    return _meteoalarm_country_slug_from_timezone(openmeteo_payload.get("timezone"))
+
+
+def _meteoalarm_feed_url(extras_dict, openmeteo_payload=None):
+    """Build the MeteoAlarm Atom feed URL from config or Open-Meteo metadata."""
     feed_url_values = _config_list_values(
         (extras_dict or {}).get("meteoalarm_feed_url")
     )
@@ -1222,6 +1314,10 @@ def _meteoalarm_feed_url(extras_dict):
     if not country_slug:
         country_slug = _meteoalarm_country_slug_from_geocode(
             (extras_dict or {}).get("meteoalarm_geocode")
+        )
+    if not country_slug:
+        country_slug = _meteoalarm_country_slug_from_openmeteo_payload(
+            openmeteo_payload
         )
     if not country_slug:
         return ""
@@ -1321,13 +1417,16 @@ def _meteoalarm_build_alerts(feed_xml, geocode_filters=None, area_filters=None):
     return output
 
 
-def _fetch_meteoalarm_alerts(extras_dict):
-    """Fetch configured MeteoAlarm fallback alerts."""
-    feed_url = _meteoalarm_feed_url(extras_dict)
+def _fetch_meteoalarm_alerts(extras_dict, openmeteo_payload=None):
+    """Fetch MeteoAlarm fallback alerts."""
+    feed_url = _meteoalarm_feed_url(
+        extras_dict,
+        openmeteo_payload=openmeteo_payload,
+    )
     if not feed_url:
         log.info(
-            "MeteoAlarm alert fallback skipped; configure meteoalarm_geocode, "
-            "meteoalarm_country, or meteoalarm_feed_url."
+            "MeteoAlarm alert fallback skipped; unable to infer a supported "
+            "MeteoAlarm country from Open-Meteo metadata."
         )
         return None
 
@@ -1343,7 +1442,7 @@ def _fetch_meteoalarm_alerts(extras_dict):
     )
 
 
-def _fetch_openmeteo_alerts(latitude, longitude, extras_dict):
+def _fetch_openmeteo_alerts(latitude, longitude, extras_dict, openmeteo_payload=None):
     """Fetch Open-Meteo alerts, preferring NWS with MeteoAlarm fallback."""
     if str((extras_dict or {}).get("forecast_alert_enabled", "0")).strip() != "1":
         return ([], "")
@@ -1360,7 +1459,10 @@ def _fetch_openmeteo_alerts(latitude, longitude, extras_dict):
         )
 
     try:
-        meteoalarm_alerts = _fetch_meteoalarm_alerts(extras_dict)
+        meteoalarm_alerts = _fetch_meteoalarm_alerts(
+            extras_dict,
+            openmeteo_payload=openmeteo_payload,
+        )
         if meteoalarm_alerts is None:
             return ([], "")
         return (_limit_alerts(meteoalarm_alerts, alert_limit), "meteoalarm")
@@ -1797,20 +1899,14 @@ def _parse_aeris_json(obj):
         return {}
 
 
-def _apply_legacy_option_mappings(section_dict, section_name, legacy_mapping):
-    """Apply legacy option mappings to a configuration section.
-
-    If a legacy key is present, it is always used for now (backward
-    compatibility) and mapped onto the current key name, with a warning.
-    """
+def _warn_legacy_option_names(section_dict, section_name, legacy_mapping):
+    """Warn about legacy option names without treating them as aliases."""
 
     for legacy_key, new_key in legacy_mapping.items():
         if legacy_key in section_dict:
-            section_dict[new_key] = section_dict[legacy_key]
             log.warning(
                 f"New Belchertown: Deprecated option '{legacy_key}' found in [{section_name}]. "
-                f"Using it as '{new_key}' for backward compatibility. "
-                f"Please rename it in weewx.conf."
+                f"It is ignored. Please rename it to '{new_key}' in weewx.conf."
             )
 
     return section_dict
@@ -1832,17 +1928,13 @@ LABELS_GENERIC_LEGACY_MAPPING = {
 }
 
 
-def _validate_and_fix_legacy_options(extras_dict, label_generic_dict=None):
-    """Check for deprecated/legacy option names and warn users.
+def _warn_legacy_options(extras_dict, label_generic_dict=None):
+    """Check for deprecated/legacy option names and warn users."""
 
-    Maps legacy naming patterns to current ones in supported sections.
-    Legacy values take precedence when present for backward compatibility.
-    """
-
-    _apply_legacy_option_mappings(extras_dict, "Extras", EXTRAS_LEGACY_MAPPING)
+    _warn_legacy_option_names(extras_dict, "Extras", EXTRAS_LEGACY_MAPPING)
 
     if label_generic_dict is not None:
-        _apply_legacy_option_mappings(
+        _warn_legacy_option_names(
             label_generic_dict, "Labels][Generic", LABELS_GENERIC_LEGACY_MAPPING
         )
 
@@ -2342,28 +2434,25 @@ def _apply_almanac_diagram_extras_overrides(extras_dict):
     if not isinstance(extras_dict, dict):
         return
 
-    mode_raw = extras_dict.get("align_solar_path")
-    if mode_raw is None:
-        mode_raw = extras_dict.get("align_luminary_path")
-    if mode_raw is None:
-        mode_raw = extras_dict.get("align_sky_path")
-    if mode_raw is None:
-        legacy_mode_raw = extras_dict.get("almanac_diagram")
-        if legacy_mode_raw is not None:
-            legacy_mode = str(legacy_mode_raw).strip().lower()
-            if legacy_mode == "shared":
-                mode_raw = "now"
-            elif legacy_mode == "per_body":
-                mode_raw = "transit"
-            elif legacy_mode == "off":
-                mode_raw = "off"
-            else:
-                mode_raw = legacy_mode
+    for legacy_key in ("align_luminary_path", "align_sky_path", "almanac_diagram"):
+        if legacy_key in extras_dict:
+            log.warning(
+                "New Belchertown: Deprecated option '%s' found in [Extras]. "
+                "It is ignored. Please use 'align_solar_path'.",
+                legacy_key,
+            )
 
+    mode_raw = extras_dict.get("align_solar_path")
     if mode_raw is not None:
-        mode = str(mode_raw).strip().lower()
+        mode = str(mode_raw).strip()
         if mode in ("off", "now", "transit"):
             ALMANAC_DIAGRAM_DEFAULTS["center_apex_mode"] = mode
+        else:
+            log.warning(
+                "New Belchertown: Invalid align_solar_path '%s'. "
+                "Valid values are: off, now, transit. Using default 'transit'.",
+                mode_raw,
+            )
 
 # Resolution for sampled day tracks used to build sun/moon SVG path geometry.
 # Smaller values produce denser curves that better align with live alt/az points.
@@ -3796,12 +3885,12 @@ class getData(SearchList):
         report_extras_dict = report_dict.get("Extras", {})
         report_label_generic_dict = report_dict.get("Labels", {}).get("Generic", {})
 
-        _apply_legacy_option_mappings(
+        _warn_legacy_option_names(
             report_extras_dict,
             f"StdReport][{report_name}][Extras",
             EXTRAS_LEGACY_MAPPING,
         )
-        _apply_legacy_option_mappings(
+        _warn_legacy_option_names(
             report_label_generic_dict,
             f"StdReport][{report_name}][Labels][Generic",
             LABELS_GENERIC_LEGACY_MAPPING,
@@ -3815,29 +3904,21 @@ class getData(SearchList):
             if key in report_label_generic_dict:
                 label_generic_dict[key] = report_label_generic_dict[key]
 
-        # Backward compatibility for users who put page headers under Extras.
         if "graphs_page_header" in report_extras_dict:
-            label_generic_dict["charts_page_header"] = report_extras_dict[
-                "graphs_page_header"
-            ]
             log.warning(
                 "New Belchertown: Deprecated option 'graphs_page_header' found in "
-                f"[StdReport][{report_name}][Extras]. Using it as "
-                "'charts_page_header' for backward compatibility. "
-                f"Please move it to [StdReport][{report_name}][Labels][Generic]."
+                f"[StdReport][{report_name}][Extras]. It is ignored. Please use "
+                f"'charts_page_header' under [StdReport][{report_name}][Labels][Generic]."
             )
         elif "charts_page_header" in report_extras_dict:
-            label_generic_dict["charts_page_header"] = report_extras_dict[
-                "charts_page_header"
-            ]
             log.warning(
                 "New Belchertown: Option 'charts_page_header' found in "
-                f"[StdReport][{report_name}][Extras]. Using it, but this option "
-                f"belongs under [StdReport][{report_name}][Labels][Generic]."
+                f"[StdReport][{report_name}][Extras]. It is ignored. Please move it "
+                f"to [StdReport][{report_name}][Labels][Generic]."
             )
         
-        # Validate and fix any legacy configuration options
-        extras_dict = _validate_and_fix_legacy_options(
+        # Warn about legacy configuration options without treating them as valid aliases.
+        extras_dict = _warn_legacy_options(
             extras_dict, label_generic_dict
         )
         _apply_almanac_diagram_extras_overrides(extras_dict)
@@ -4697,19 +4778,13 @@ class getData(SearchList):
         # ==============================================================================
 
         # provider switch (default NWS)
-        forecast_provider = extras_dict.get("forecast_provider", "nws").strip().lower()
-        if forecast_provider in ("openmeteo", "open_meteo"):
-            forecast_provider = "open-meteo"
-        if forecast_provider not in (
-            "pirateweather",
-            "aeris",
-            "xweather",
-            "nws",
-            "open-meteo",
-        ):
+        forecast_provider = str(extras_dict.get("forecast_provider", "nws")).strip()
+        if forecast_provider not in VALID_FORECAST_PROVIDERS:
             log.warning(
-                "Unknown forecast_provider '%s'. Falling back to default 'nws'.",
+                "Invalid forecast_provider '%s'. Valid values are: %s. "
+                "Falling back to default 'nws'.",
                 forecast_provider,
+                ", ".join(VALID_FORECAST_PROVIDERS),
             )
             forecast_provider = "nws"
 
@@ -5105,7 +5180,12 @@ class getData(SearchList):
                             (
                                 normalized["alerts"],
                                 alert_provider,
-                            ) = _fetch_openmeteo_alerts(om_lat, om_lon, extras_dict)
+                            ) = _fetch_openmeteo_alerts(
+                                om_lat,
+                                om_lon,
+                                extras_dict,
+                                openmeteo_payload=om_raw,
+                            )
                             if alert_provider:
                                 normalized["alert_provider"] = alert_provider
                             _write_json_file(forecast_file, normalized)
