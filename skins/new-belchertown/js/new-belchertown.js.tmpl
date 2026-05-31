@@ -105,7 +105,9 @@ function resolveIconForProvider(iconRaw, provider) {
         .split(',')[0]
         .trim()
         .toLowerCase()
-        .replace(/-/g, '_');
+        .replace(/-/g, '_')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
 
     if (!token) {
         return 'unknown';
@@ -128,12 +130,22 @@ function resolveIconForProvider(iconRaw, provider) {
     const nwsIconMap = {
         'skc': dayNight('clear-day', 'clear-night'),
         'clear': dayNight('clear-day', 'clear-night'),
+        'mostly_clear': dayNight('mostly-clear-day', 'mostly-clear-night'),
         'sunny': 'clear-day',
+        'mostly_sunny': 'mostly-clear-day',
         'fair': dayNight('mostly-clear-day', 'mostly-clear-night'),
         'few': dayNight('mostly-clear-day', 'mostly-clear-night'),
+        'few_clouds': dayNight('mostly-clear-day', 'mostly-clear-night'),
+        'a_few_clouds': dayNight('mostly-clear-day', 'mostly-clear-night'),
         'sct': dayNight('partly-cloudy-day', 'partly-cloudy-night'),
+        'scattered_clouds': dayNight('partly-cloudy-day', 'partly-cloudy-night'),
+        'partly_cloudy': dayNight('partly-cloudy-day', 'partly-cloudy-night'),
+        'partly_sunny': 'partly-cloudy-day',
         'bkn': dayNight('mostly-cloudy-day', 'mostly-cloudy-night'),
+        'mostly_cloudy': dayNight('mostly-cloudy-day', 'mostly-cloudy-night'),
         'ovc': 'cloudy',
+        'overcast': 'cloudy',
+        'cloudy': 'cloudy',
         'wind_skc': 'wind',
         'wind_few': 'wind',
         'wind_sct': 'wind',
@@ -141,6 +153,11 @@ function resolveIconForProvider(iconRaw, provider) {
         'wind_ovc': 'wind',
         'rain': 'rain',
         'ra': 'rain',
+        'light_rain': 'rain',
+        'heavy_rain': 'rain',
+        'rain_fog_mist': 'rain',
+        'drizzle': 'rain',
+        'light_drizzle': 'rain',
         'shra': 'rain',
         'shwrs': 'rain',
         'hi_shwrs': 'rain',
@@ -151,27 +168,37 @@ function resolveIconForProvider(iconRaw, provider) {
         'rain_sleet': 'sleet',
         'rain_fzra': 'sleet',
         'tsra': 'thunderstorm',
+        'thunderstorm': 'thunderstorm',
+        'thunderstorms': 'thunderstorm',
         'tsra_sct': 'thunderstorm',
         'tsra_hi': 'thunderstorm',
         'hi_tsra': 'thunderstorm',
         'snow': 'snow',
         'sn': 'snow',
+        'light_snow': 'snow',
+        'heavy_snow': 'snow',
         'blizzard': 'snow',
         'snow_sleet': 'sleet',
         'snow_fzra': 'sleet',
         'sleet': 'sleet',
         'fzra': 'sleet',
+        'freezing_rain': 'sleet',
         'ip': 'sleet',
+        'ice_pellets': 'sleet',
         'mix': 'sleet',
         'hail': 'sleet',
         'fg': 'fog',
         'fog': 'fog',
+        'fog_mist': 'fog',
+        'mist': 'fog',
         'smoke': 'fog',
         'haze': 'fog',
         'dust': 'fog',
         'tornado': 'wind',
         'hurricane': 'wind',
         'tropical_storm': 'wind',
+        'breezy': 'wind',
+        'windy': 'wind',
         'hot': 'clear-day',
         'cold': dayNight('clear-day', 'clear-night')
     };
@@ -205,6 +232,12 @@ function resolveIconForProvider(iconRaw, provider) {
     if (token.includes('wind') || token.includes('hurricane') || token.includes('tropical') || token.includes('tornado')) {
         return 'wind';
     }
+    if (token.includes('partly')) {
+        return dayNight('partly-cloudy-day', 'partly-cloudy-night');
+    }
+    if (token.includes('mostly_cloudy')) {
+        return dayNight('mostly-cloudy-day', 'mostly-cloudy-night');
+    }
     if (token.includes('ovc') || token.includes('cloudy')) {
         return 'cloudy';
     }
@@ -217,7 +250,10 @@ function resolveIconForProvider(iconRaw, provider) {
     if (token.includes('few')) {
         return dayNight('mostly-clear-day', 'mostly-clear-night');
     }
-    if (token.includes('skc') || token.includes('clear')) {
+    if (token.includes('mostly_clear') || token.includes('mostly_sunny')) {
+        return dayNight('mostly-clear-day', 'mostly-clear-night');
+    }
+    if (token.includes('skc') || token.includes('clear') || token.includes('sunny') || token.includes('fair')) {
         return dayNight('clear-day', 'clear-night');
     }
 
@@ -894,6 +930,8 @@ if (wind_compass_source !== "windGust") {
     wind_compass_source = "windSpeed";
 }
 
+var wind_compass_calm_threshold_knots = 1;
+
 function knots_from_mqtt_payload(payload, obsName) {
     var windObs = obsName || "windSpeed";
 
@@ -978,23 +1016,42 @@ var live_wind_compass_state = {
     direction: null,
 };
 
+function parse_wind_compass_knots(knots) {
+    var value = parseFloat(knots);
+
+    return isFinite(value) ? value : null;
+}
+
+function wind_compass_is_calm(windSpeedKnots, windGustKnots) {
+    var values = [
+        parse_wind_compass_knots(windSpeedKnots),
+        parse_wind_compass_knots(windGustKnots)
+    ].filter(function(value) {
+        return value !== null;
+    });
+
+    return values.length > 0 && values.every(function(value) {
+        return value < wind_compass_calm_threshold_knots;
+    });
+}
+
 function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     var rotation = parseFloat(direction);
-    var selectedKnots = wind_compass_source == "windGust" ? parseFloat(windGustKnots) : parseFloat(windSpeedKnots);
-    var calmThresholdKnots = 2.5;
-    var speedIsCalm = isFinite(parseFloat(windSpeedKnots)) && parseFloat(windSpeedKnots) < calmThresholdKnots;
-    var gustIsCalm = isFinite(parseFloat(windGustKnots)) && parseFloat(windGustKnots) < calmThresholdKnots;
+    var selectedKnots = wind_compass_source == "windGust" ? parse_wind_compass_knots(windGustKnots) : parse_wind_compass_knots(windSpeedKnots);
     var arrow = jQuery(".arrow");
 
-    if (arrow.length === 0 || !isFinite(rotation)) {
+    if (arrow.length === 0) {
         return;
     }
 
-    // Calm wind: hide both indicator styles (triangle and windbarb)
-    // only when *both* speed and gust are below the calm threshold.
-    if (speedIsCalm && gustIsCalm) {
+    // Calm wind: hide both indicator styles (triangle and windbarb).
+    if (wind_compass_is_calm(windSpeedKnots, windGustKnots)) {
         arrow.removeClass("windbarb-marker").empty().css("visibility", "hidden");
         jQuery(".wind-arrow").css("visibility", "hidden");
+        return;
+    }
+
+    if (!isFinite(rotation)) {
         return;
     }
 
@@ -1050,10 +1107,12 @@ function update_wind_compass_marker(payload) {
     }
 
     if (!isFinite(direction)) {
-        return;
+        direction = live_wind_compass_state.direction;
     }
 
-    live_wind_compass_state.direction = direction;
+    if (isFinite(direction)) {
+        live_wind_compass_state.direction = direction;
+    }
     live_wind_compass_state.windSpeedKnots = windSpeedKnots;
     live_wind_compass_state.windGustKnots = windGustKnots;
 

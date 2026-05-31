@@ -745,13 +745,13 @@ def _nws_cloud_cover_fraction(cloud_layers):
 
 
 def _nws_icon_to_darksky(icon_value, is_daytime=True):
-    """Map NWS icon URL/code to Weather34 icon keys used by this skin."""
+    """Map NWS icon URL/code/description to Weather34 icon keys used by this skin."""
     icon = str(icon_value or "").lower()
     if not icon:
         return "unknown"
 
     token = icon.split("/")[-1].split("?")[0].split(",")[0].strip()
-    token = token.replace("-", "_")
+    token = re.sub(r"[^a-z0-9]+", "_", token.replace("-", "_")).strip("_")
 
     if "/night/" in icon or (token.startswith("n") and len(token) > 1):
         is_daytime = False
@@ -761,12 +761,22 @@ def _nws_icon_to_darksky(icon_value, is_daytime=True):
     mapping = {
         "skc": "clear-day" if is_daytime else "clear-night",
         "clear": "clear-day" if is_daytime else "clear-night",
+        "mostly_clear": "mostly-clear-day" if is_daytime else "mostly-clear-night",
         "sunny": "clear-day",
+        "mostly_sunny": "mostly-clear-day",
         "fair": "mostly-clear-day" if is_daytime else "mostly-clear-night",
         "few": "mostly-clear-day" if is_daytime else "mostly-clear-night",
+        "few_clouds": "mostly-clear-day" if is_daytime else "mostly-clear-night",
+        "a_few_clouds": "mostly-clear-day" if is_daytime else "mostly-clear-night",
         "sct": "partly-cloudy-day" if is_daytime else "partly-cloudy-night",
+        "scattered_clouds": "partly-cloudy-day" if is_daytime else "partly-cloudy-night",
+        "partly_cloudy": "partly-cloudy-day" if is_daytime else "partly-cloudy-night",
+        "partly_sunny": "partly-cloudy-day",
         "bkn": "mostly-cloudy-day" if is_daytime else "mostly-cloudy-night",
+        "mostly_cloudy": "mostly-cloudy-day" if is_daytime else "mostly-cloudy-night",
         "ovc": "cloudy",
+        "overcast": "cloudy",
+        "cloudy": "cloudy",
         "wind_skc": "wind",
         "wind_few": "wind",
         "wind_sct": "wind",
@@ -774,6 +784,11 @@ def _nws_icon_to_darksky(icon_value, is_daytime=True):
         "wind_ovc": "wind",
         "rain": "rain",
         "ra": "rain",
+        "light_rain": "rain",
+        "heavy_rain": "rain",
+        "rain_fog_mist": "rain",
+        "drizzle": "rain",
+        "light_drizzle": "rain",
         "shra": "rain",
         "shwrs": "rain",
         "hi_shwrs": "rain",
@@ -784,27 +799,37 @@ def _nws_icon_to_darksky(icon_value, is_daytime=True):
         "rain_sleet": "sleet",
         "rain_fzra": "sleet",
         "tsra": "thunderstorm",
+        "thunderstorm": "thunderstorm",
+        "thunderstorms": "thunderstorm",
         "tsra_sct": "thunderstorm",
         "tsra_hi": "thunderstorm",
         "hi_tsra": "thunderstorm",
         "snow": "snow",
         "sn": "snow",
+        "light_snow": "snow",
+        "heavy_snow": "snow",
         "blizzard": "snow",
         "snow_sleet": "sleet",
         "snow_fzra": "sleet",
         "sleet": "sleet",
         "fzra": "sleet",
+        "freezing_rain": "sleet",
         "ip": "sleet",
+        "ice_pellets": "sleet",
         "mix": "sleet",
         "hail": "sleet",
         "fg": "fog",
         "fog": "fog",
+        "fog_mist": "fog",
+        "mist": "fog",
         "smoke": "fog",
         "haze": "fog",
         "dust": "fog",
         "tornado": "wind",
         "hurricane": "wind",
         "tropical_storm": "wind",
+        "breezy": "wind",
+        "windy": "wind",
         "hot": "clear-day",
         "cold": "clear-night" if not is_daytime else "clear-day",
     }
@@ -831,6 +856,10 @@ def _nws_icon_to_darksky(icon_value, is_daytime=True):
         return "fog"
     if any(part in token for part in ("wind", "hurricane", "tropical", "tornado")):
         return "wind"
+    if "partly" in token:
+        return "partly-cloudy-day" if is_daytime else "partly-cloudy-night"
+    if "mostly_cloudy" in token:
+        return "mostly-cloudy-day" if is_daytime else "mostly-cloudy-night"
     if "ovc" in token or "cloudy" in token:
         return "cloudy"
     if "bkn" in token:
@@ -839,7 +868,9 @@ def _nws_icon_to_darksky(icon_value, is_daytime=True):
         return "partly-cloudy-day" if is_daytime else "partly-cloudy-night"
     if "few" in token:
         return "mostly-clear-day" if is_daytime else "mostly-clear-night"
-    if "skc" in token or "clear" in token:
+    if "mostly_clear" in token or "mostly_sunny" in token:
+        return "mostly-clear-day" if is_daytime else "mostly-clear-night"
+    if "skc" in token or "clear" in token or "sunny" in token or "fair" in token:
         return "clear-day" if is_daytime else "clear-night"
 
     return "unknown"
@@ -879,6 +910,10 @@ def _nws_build_current(obs_payload, forecast_units):
     icon_text = str(icon_raw or "")
     if "/night/" in icon_text or icon_text.split("/")[-1].startswith("n"):
         is_day = False
+    summary = props.get("textDescription") or ""
+    current_icon = _nws_icon_to_darksky(icon_raw, is_daytime=is_day)
+    if current_icon == "unknown":
+        current_icon = _nws_icon_to_darksky(summary, is_daytime=is_day)
 
     temp_target_unit = NWS_FORECAST_TARGET_TEMP_UNIT.get(
         forecast_units, "degree_F"
@@ -904,8 +939,8 @@ def _nws_build_current(obs_payload, forecast_units):
 
     return {
         "time": _iso_to_epoch(props.get("timestamp")) or int(time.time()),
-        "summary": props.get("textDescription") or "",
-        "icon": _nws_icon_to_darksky(icon_raw, is_daytime=is_day),
+        "summary": summary,
+        "icon": current_icon,
         "temperature": temp_out,
         "apparentTemperature": apparent_out,
         "windSpeed": wind_out,
@@ -1344,8 +1379,17 @@ def _nws_transform_to_belch(
     """Map NWS responses to the compact structure this skin uses."""
     hourly_all = _nws_build_hourly(hourly_payload, forecast_units)
     hourly = _slice_from_current_period(hourly_all, 1)
+    current = _nws_build_current(observation_payload, forecast_units)
+    if current.get("icon") == "unknown" and hourly_all:
+        fallback_hourly = hourly_all[0] or {}
+        fallback_icon = fallback_hourly.get("icon")
+        if fallback_icon and fallback_icon != "unknown":
+            current["icon"] = fallback_icon
+        if not current.get("summary") and fallback_hourly.get("summary"):
+            current["summary"] = fallback_hourly.get("summary")
+
     return {
-        "current": _nws_build_current(observation_payload, forecast_units),
+        "current": current,
         "hourly": hourly,
         "threeHourly": _pick_three_hourly_from_current_period(hourly_all),
         "daily": _nws_build_daily(forecast_payload, forecast_units),
@@ -5814,7 +5858,7 @@ class getData(SearchList):
                 obs_rain_output = (
                     f"<span class='dayRain'>{dayRain_sum}</span>"
                 )
-                obs_rain_output += "&nbsp;<span class='border-left'>&nbsp;</span>"
+                obs_rain_output += "<br class='station-observation-break'>"
                 obs_rain_output += f"<span class='rainRate'>{getattr(current, 'rainRate')}</span>"
 
                 # Empty field for the JSON "current" output
@@ -5856,7 +5900,7 @@ class getData(SearchList):
                 "<td>",
             ]
             if obs == "rainWithRainRate":
-                # Add special rain + rainRate one liner
+                # Add special rain + rainRate stacked value
                 row_parts.append(obs_rain_output)
             elif obs == "cloud_cover" and obs_output_str not in ("", "N/A"):
                 cloud_cover_unit_label = skin_dict["Units"]["Labels"].get(
@@ -5898,7 +5942,7 @@ class getData(SearchList):
                     except Exception:
                         humabs_val = None
                 if humabs_val is not None:
-                    obs_humabs_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
+                    obs_humabs_output = "<br class='station-observation-break'>"
                     obs_humabs_output += (
                         "<span class='outHumAbs'>%s</span>" % humabs_val
                     )
@@ -5912,7 +5956,7 @@ class getData(SearchList):
                     except Exception:
                         maxSolarRad_val = None
                 if maxSolarRad_val is not None:
-                    obs_maxSolarRad_output = "&nbsp;<span class='border-left'>&nbsp;</span>"
+                    obs_maxSolarRad_output = "<br class='station-observation-break'>"
                     obs_maxSolarRad_output += (
                         "<span class='maxSolarRad'>%s</span>" % maxSolarRad_val
                     )

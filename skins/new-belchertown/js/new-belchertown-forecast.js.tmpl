@@ -33,7 +33,7 @@ function ajaxforecast() {
 
     jQuery.when.apply(jQuery, promises)
         .then(function() {
-            update_current_conditions(current_conditions_data);
+            update_current_conditions(current_conditions_data, forecast_data);
             update_forecast_data(forecast_data);
         })
         .fail(function(err) {
@@ -445,7 +445,20 @@ function forecast_aqi_translate(data) {
     return forecast_label_text(data);
 }
 
-function update_current_conditions(data) {
+function forecast_current_fallback_period(forecastData) {
+    const sections = ["hourly", "threeHourly", "daily"];
+
+    for (let s = 0; s < sections.length; s++) {
+        const rows = (forecastData || {})[sections[s]] || [];
+        if (rows.length && rows[0]) {
+            return rows[0];
+        }
+    }
+
+    return {};
+}
+
+function update_current_conditions(data, forecastData) {
     forecast_provider = "$Extras.forecast_provider";
     if (forecast_provider == "openmeteo" || forecast_provider == "open_meteo") {
         forecast_provider = "open-meteo";
@@ -461,12 +474,23 @@ function update_current_conditions(data) {
 
     try {
         const cc = data["current"][0];
-        const w34icon = resolveIconForProvider(cc["icon"] || "unknown", "pirateweather");
+        const fallbackPeriod = forecast_current_fallback_period(forecastData);
+        const sourceProvider = data["provider"] || forecast_provider;
+        let w34icon = resolveIconForProvider(cc["icon"] || "", sourceProvider);
+        if (w34icon === "unknown" && cc["summary"]) {
+            w34icon = resolveIconForProvider(cc["summary"], sourceProvider);
+        }
+        if (w34icon === "unknown" && fallbackPeriod["icon"]) {
+            w34icon = resolveIconForProvider(fallbackPeriod["icon"], sourceProvider);
+        }
+        if (w34icon === "unknown" && fallbackPeriod["summary"]) {
+            w34icon = resolveIconForProvider(fallbackPeriod["summary"], sourceProvider);
+        }
         const wxicon = get_relative_url() + "/images/" + w34icon + ".png";
         jQuery("#wxicon").attr("src", wxicon);
 
         try {
-            jQuery(".current-obs-text").html(cc["summary"] || "");
+            jQuery(".current-obs-text").html(cc["summary"] || fallbackPeriod["summary"] || "");
         } catch (err) { /* silent */}
 
         try {
