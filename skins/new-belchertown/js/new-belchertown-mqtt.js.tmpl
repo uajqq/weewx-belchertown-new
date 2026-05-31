@@ -110,7 +110,7 @@ function mqtt_ensure_status_modal() {
 
     var modal = "";
     modal += "<div class='modal fade mqtt-status-modal' id='mqtt-status-modal' tabindex='-1' role='dialog' aria-labelledby='mqtt-status-modal-title' aria-hidden='true'>";
-    modal += "<div class='modal-dialog modal-sm' role='document'>";
+    modal += "<div class='modal-dialog mqtt-status-modal-dialog' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
     modal += "<button type='button' class='close mqtt-status-modal-dismiss' data-dismiss='modal' aria-label='" + belchertown_label_html("$obs.label.close") + "'><span aria-hidden='true'>&times;</span></button>";
@@ -122,6 +122,10 @@ function mqtt_ensure_status_modal() {
     modal += "<dt>" + belchertown_label_html("$obs.label.displayed_time") + "</dt><dd class='mqtt-status-detail-relative'></dd>";
     modal += "<dt>" + belchertown_label_html("$obs.label.exact_time") + "</dt><dd class='mqtt-status-detail-absolute'></dd>";
     modal += "</dl>";
+    modal += "<div class='mqtt-status-live-data'>";
+    modal += "<h5 class='mqtt-status-section-title'>MQTT packet</h5>";
+    modal += "<div class='mqtt-status-live-data-rows'></div>";
+    modal += "</div>";
     modal += "</div>";
     modal += "<div class='modal-footer'>";
     modal += "<button type='button' class='btn btn-primary mqtt-status-modal-dismiss' data-dismiss='modal'>" + belchertown_label_html("$obs.label.close") + "</button>";
@@ -130,6 +134,80 @@ function mqtt_ensure_status_modal() {
     modal += "</div>";
     modal += "</div>";
     jQuery("body").append(modal);
+}
+
+function mqtt_modal_normalized_text(value) {
+    return belchertown_decode_html_entities(value)
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+\/\s+/g, " / ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function mqtt_packet_value_text(value) {
+    if (value === null) {
+        return "null";
+    }
+    if (typeof value === "undefined") {
+        return "";
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+        return String(value);
+    }
+    if (typeof value === "string") {
+        return mqtt_modal_normalized_text(value);
+    }
+
+    try {
+        return JSON.stringify(value);
+    } catch (e) {
+        return String(value);
+    }
+}
+
+function mqtt_set_latest_packet_data(payload) {
+    mqtt_latest_packet_rows = [];
+
+    if (!payload || typeof payload !== "object") {
+        mqtt_render_status_modal();
+        return;
+    }
+
+    Object.keys(payload).forEach(function(key) {
+        mqtt_latest_packet_rows.push({
+            label: key,
+            value: mqtt_packet_value_text(payload[key])
+        });
+    });
+
+    mqtt_render_status_modal();
+}
+
+function mqtt_render_live_data_modal(modal) {
+    var container = modal.find(".mqtt-status-live-data");
+    var rows = mqtt_latest_packet_rows;
+    var html = "";
+
+    if (!container.length) {
+        return;
+    }
+
+    if (!rows.length) {
+        container.hide();
+        return;
+    }
+
+    html += "<table class='mqtt-status-live-data-table'><tbody>";
+    rows.forEach(function(row) {
+        html += "<tr>";
+        html += "<th scope='row'>" + belchertown_escape_html(row.label) + "</th>";
+        html += "<td>" + belchertown_escape_html(row.value) + "</td>";
+        html += "</tr>";
+    });
+    html += "</tbody></table>";
+
+    container.find(".mqtt-status-live-data-rows").html(html);
+    container.show();
 }
 
 function mqtt_render_status_modal() {
@@ -141,6 +219,7 @@ function mqtt_render_status_modal() {
     modal.find(".mqtt-status-detail-message").text(mqtt_status_detail.message || "");
     modal.find(".mqtt-status-detail-relative").text(mqtt_status_detail.relative_time || "");
     modal.find(".mqtt-status-detail-absolute").text(mqtt_status_detail.absolute_time || "");
+    mqtt_render_live_data_modal(modal);
 }
 
 function mqtt_set_status_detail(message, epoch) {
@@ -676,6 +755,7 @@ function inactive() {
 var mqtt_payload = "";
 var mqtt_message_count = 0;
 var mqtt_latest_payload = null;
+var mqtt_latest_packet_rows = [];
 var mqtt_update_scheduled = false;
 var mqttStatusElements = null;
 var mqttGtagConfigured = false;
@@ -778,6 +858,7 @@ function onMessageArrived(message) {
     belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message received - Size: " + payload_size + " bytes, Topic: " + message.destinationName);
     try {
         mqtt_payload = jQuery.parseJSON(message.payloadString);
+        mqtt_set_latest_packet_data(mqtt_payload);
         schedule_mqtt_ui_update(mqtt_payload);
         belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message processed successfully");
     } catch (e) {
@@ -1114,5 +1195,6 @@ function update_current_wx(data) {
     if (data.hasOwnProperty("windchill_C")) {
         jQuery(".curwindchill").text(parseFloat(parseFloat(data["windchill_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
     }
+    mqtt_render_status_modal();
 };
 // #end if

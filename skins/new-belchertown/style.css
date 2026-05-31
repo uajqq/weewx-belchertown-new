@@ -1811,6 +1811,58 @@ p.entry-meta {
   margin-bottom: 0;
 }
 
+.mqtt-status-live-data {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.mqtt-status-live-data-rows {
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.mqtt-status-section-title {
+  margin: 0 0 8px;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mqtt-status-live-data-table {
+  width: 100%;
+  margin: 0;
+  table-layout: fixed;
+}
+
+.mqtt-status-live-data-table th,
+.mqtt-status-live-data-table td {
+  padding: 5px 0;
+  border-top: 1px solid #edf2f7;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.mqtt-status-live-data-table tr:first-child th,
+.mqtt-status-live-data-table tr:first-child td {
+  border-top: 0;
+}
+
+.mqtt-status-live-data-table th {
+  width: 44%;
+  padding-right: 12px;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.mqtt-status-live-data-table td {
+  color: #1f2937;
+  text-align: left;
+}
+
 .dark .mqtt-status-info {
   background: rgba(49, 49, 49, 0.88);
   color: #cbd5e1;
@@ -1823,6 +1875,33 @@ p.entry-meta {
 
 .dark .mqtt-status-detail-list dd {
   color: #f8fafc;
+}
+
+.dark .mqtt-status-live-data {
+  border-top-color: rgba(226, 232, 240, 0.18);
+}
+
+.dark .mqtt-status-section-title {
+  color: #f8fafc;
+}
+
+.dark .mqtt-status-live-data-table td {
+  color: #f8fafc;
+}
+
+.dark .mqtt-status-live-data-table th {
+  color: #cbd5e1;
+}
+
+.dark .mqtt-status-live-data-table th,
+.dark .mqtt-status-live-data-table td {
+  border-top-color: rgba(226, 232, 240, 0.12);
+}
+
+@media (min-width: 768px) {
+  .mqtt-status-modal-dialog {
+    width: 720px;
+  }
 }
 
 .onlineMarkerOuter {
