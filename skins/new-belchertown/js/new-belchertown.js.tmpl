@@ -52,6 +52,7 @@ var moon_tilt_template_value = $moon_tilt_template_value;
 var belchertownAutoThemeMediaListenerAttached = false;
 var belchertownAutoThemeMediaQuery = null;
 var belchertownWindyRadarResizeTimer = null;
+var belchertownWindyRadarViewportWidth = null;
 var belchertownWebcamReloadTimers = [];
 
 function belchertown_radar_tab_containers() {
@@ -90,7 +91,7 @@ function belchertown_activate_radar_tab(tabLink, animate) {
         activePanel.fadeIn();
     }
 
-    belchertown_schedule_windy_radar_scale(document);
+    belchertown_schedule_windy_radar_scale(document, true);
 }
 
 function belchertown_initialize_radar_tabs() {
@@ -475,10 +476,6 @@ function belchertown_scale_windy_radar_iframes(root) {
         }
         belchertown_set_windy_radar_mobile_zoom(frame, true);
 
-        if (container.classList && container.classList.contains("radar_image--scaled-frame")) {
-            container.style.removeProperty("--radar-frame-display-height");
-        }
-
         var containerRect = container.getBoundingClientRect();
         var containerWidth = containerRect.width;
         if (!containerWidth) {
@@ -488,7 +485,7 @@ function belchertown_scale_windy_radar_iframes(root) {
         var frameArea = container.parentElement;
         if (frameArea) {
             var frameAreaHeight = frameArea.getBoundingClientRect().height;
-            if (frameAreaHeight > targetHeight) {
+            if (frameAreaHeight) {
                 targetHeight = frameAreaHeight;
             }
         }
@@ -528,18 +525,42 @@ function belchertown_scale_windy_radar_iframes(root) {
         if (container.classList) {
             container.classList.add("radar_image--scaled-frame");
         }
-        container.style.setProperty("--radar-frame-display-height", displayHeight + "px");
+        var displayHeightValue = displayHeight + "px";
+        if (container.style.getPropertyValue("--radar-frame-display-height") !== displayHeightValue) {
+            container.style.setProperty("--radar-frame-display-height", displayHeightValue);
+        }
 
-        frame.style.width = baseWidth + "px";
-        frame.style.height = frameHeight + "px";
-        frame.style.maxWidth = "none";
-        frame.style.minHeight = "0";
-        frame.style.transform = "scale(" + scale + ")";
-        frame.style.transformOrigin = "top left";
+        var frameWidthValue = baseWidth + "px";
+        var frameHeightValue = frameHeight + "px";
+        var frameTransformValue = "scale(" + scale + ")";
+        if (frame.style.width !== frameWidthValue) {
+            frame.style.width = frameWidthValue;
+        }
+        if (frame.style.height !== frameHeightValue) {
+            frame.style.height = frameHeightValue;
+        }
+        if (frame.style.maxWidth !== "none") {
+            frame.style.maxWidth = "none";
+        }
+        if (frame.style.minHeight !== "0px" && frame.style.minHeight !== "0") {
+            frame.style.minHeight = "0";
+        }
+        if (frame.style.transform !== frameTransformValue) {
+            frame.style.transform = frameTransformValue;
+        }
+        if (frame.style.transformOrigin !== "left top" && frame.style.transformOrigin !== "top left") {
+            frame.style.transformOrigin = "top left";
+        }
     });
 }
 
-function belchertown_schedule_windy_radar_scale(root) {
+function belchertown_schedule_windy_radar_scale(root, force) {
+    var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    if (!force && belchertownWindyRadarViewportWidth === viewportWidth) {
+        return;
+    }
+    belchertownWindyRadarViewportWidth = viewportWidth;
+
     window.clearTimeout(belchertownWindyRadarResizeTimer);
     belchertownWindyRadarResizeTimer = window.setTimeout(function() {
         belchertown_scale_windy_radar_iframes(root || document);
