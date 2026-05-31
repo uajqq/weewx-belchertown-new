@@ -5,7 +5,9 @@ See other example at https://github.com/poblabs/weewx-belchertown/issues/703 -->
 #else
 #set $default_radar_html = $radar_html
 #end if
-<div id="tabs-container" class="belchertown-radar-tabs">
+## Webcam image cache-busting interval in milliseconds. Set to 0 to disable.
+#set $webcam_reload_interval_ms = 300000
+<div id="tabs-container" class="belchertown-radar-tabs" data-webcam-reload-interval-ms="$webcam_reload_interval_ms">
     <!-- Nav tabs -->
     <ul class="nav nav-tabs tabs-menu" role="tablist">
         <li role="presentation" class="active"><a href="#radar" aria-controls="radar" role="tab">Radar</a></li>
@@ -21,33 +23,6 @@ See other example at https://github.com/poblabs/weewx-belchertown/issues/703 -->
         </div>
     </div>
 </div>
-
-<script type="text/javascript">
-jQuery(document).ready(function() {
-    reloadWebcam(); // Force the cache on each load
-    setInterval('reloadWebcam()', 300000); // 5 mins in millis
-});
-
-function reloadWebcam() {
-    jQuery('#webcam img').each(function() {
-        new_image_url = jQuery(this).attr('src').split('?')[0] + "?" + Math.floor(Math.random() * 999999999);
-        jQuery(this).attr('src', new_image_url);
-    });
-}
-
-jQuery('#tabs-container .tabs-menu a').click(function(event) {
-    event.preventDefault();
-
-    // Toggle active class on tab buttons
-    jQuery(this).parent().addClass("active");
-    jQuery(this).parent().siblings().removeClass("active");
-
-    // display only active tab content
-    var activeTab = jQuery(this).attr("href");
-    jQuery('#tabs-container .belchertown-radar-tab-panel').not(activeTab).removeClass("is-active").css("display","none");
-    jQuery(activeTab).addClass("is-active").fadeIn();
-});
-</script>
 
 <style>
 .dark .tabs-menu > li > a {

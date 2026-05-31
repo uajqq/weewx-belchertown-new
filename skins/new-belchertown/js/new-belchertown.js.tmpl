@@ -52,6 +52,89 @@ var moon_tilt_template_value = $moon_tilt_template_value;
 var belchertownAutoThemeMediaListenerAttached = false;
 var belchertownAutoThemeMediaQuery = null;
 var belchertownWindyRadarResizeTimer = null;
+var belchertownWebcamReloadTimers = [];
+
+function belchertown_radar_tab_containers() {
+    return jQuery(".belchertown-radar-tabs").add("#tabs-container").filter(function() {
+        return jQuery(this).find(".tabs-menu a").length && jQuery(this).find(".belchertown-radar-tab-panel").length;
+    });
+}
+
+function belchertown_activate_radar_tab(tabLink, animate) {
+    var link = jQuery(tabLink);
+    var container = link.closest(".belchertown-radar-tabs");
+    var activeTab = link.attr("href");
+
+    if (!container.length) {
+        container = link.closest("#tabs-container");
+    }
+    if (!container.length || !activeTab || activeTab.charAt(0) !== "#") {
+        return;
+    }
+
+    var activePanel = container.find(activeTab);
+    if (!activePanel.length) {
+        activePanel = jQuery(activeTab);
+    }
+    if (!activePanel.length) {
+        return;
+    }
+
+    link.parent().addClass("active");
+    link.parent().siblings().removeClass("active");
+    container.find(".belchertown-radar-tab-panel").not(activePanel).removeClass("is-active").hide();
+    activePanel.addClass("is-active");
+    if (animate === false) {
+        activePanel.show();
+    } else {
+        activePanel.fadeIn();
+    }
+
+    belchertown_schedule_windy_radar_scale(document);
+}
+
+function belchertown_initialize_radar_tabs() {
+    belchertown_radar_tab_containers().each(function() {
+        var container = jQuery(this);
+        var activeLink = container.find(".tabs-menu li.active a").first();
+        var activePanel = container.find(".belchertown-radar-tab-panel.is-active").first();
+
+        if (!activeLink.length && activePanel.length && activePanel.attr("id")) {
+            activeLink = container.find('.tabs-menu a[href="#' + activePanel.attr("id") + '"]').first();
+        }
+        if (!activeLink.length) {
+            activeLink = container.find(".tabs-menu a").first();
+        }
+        if (activeLink.length) {
+            belchertown_activate_radar_tab(activeLink, false);
+        }
+    });
+}
+
+function belchertown_webcam_reload_interval(container) {
+    var interval = parseInt(jQuery(container).attr("data-webcam-reload-interval-ms"), 10);
+
+    if (isNaN(interval)) {
+        return 300000;
+    }
+
+    return interval;
+}
+
+function belchertown_reload_webcam_images(container) {
+    var containers = container ? jQuery(container) : belchertown_radar_tab_containers();
+
+    containers.find("#webcam img").each(function() {
+        var image = jQuery(this);
+        var imageUrl = image.attr("src");
+
+        if (!imageUrl) {
+            return;
+        }
+
+        image.attr("src", imageUrl.split("?")[0] + "?" + Math.floor(Math.random() * 999999999));
+    });
+}
 
 // ---- Forecast icon helpers (Dark Sky-style icon names) ----
 const DS_ICON_TO_W34 = {
@@ -633,10 +716,26 @@ jQuery(document).ready(function() {
     // Fail-open for pages generated with deferred iframe markup.
     belchertown_schedule_deferred_iframes(document, 0);
     belchertown_schedule_windy_radar_scale(document);
+    var radarTabContainers = belchertown_radar_tab_containers();
+    if (radarTabContainers.length) {
+        belchertown_initialize_radar_tabs();
+        radarTabContainers.each(function() {
+            var container = this;
+            var reloadInterval = belchertown_webcam_reload_interval(container);
+
+            belchertown_reload_webcam_images(container);
+            if (reloadInterval > 0) {
+                belchertownWebcamReloadTimers.push(window.setInterval(function() {
+                    belchertown_reload_webcam_images(container);
+                }, reloadInterval));
+            }
+        });
+        radarTabContainers.on("click", ".tabs-menu a", function(event) {
+            event.preventDefault();
+            belchertown_activate_radar_tab(this);
+        });
+    }
     jQuery(window).on("resize orientationchange", function() {
-        belchertown_schedule_windy_radar_scale(document);
-    });
-    jQuery(document).on("click", "#tabs-container .tabs-menu a", function() {
         belchertown_schedule_windy_radar_scale(document);
     });
 
