@@ -3693,12 +3693,11 @@ table.celestial td.label {
   padding-bottom: 8px;
 }
 
-.frontpage .homepage-card--earthquake {
-  padding-bottom: 16px;
-}
-
 .frontpage .homepage-card--records {
   align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   height: auto;
 }
 
@@ -3920,7 +3919,7 @@ table.celestial td.label {
   align-items: stretch;
   position: relative;
   margin-top: 0;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   padding-top: 0;
   width: 100%;
   min-height: 0;
@@ -4400,8 +4399,10 @@ table.celestial td.label {
     padding-right: 20px;
   }
 
+  .frontpage .homepage-card--records,
   .frontpage .homepage-card--earthquake {
-    padding-bottom: 14px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 
   .frontpage .homepage-card--observations {
@@ -4479,7 +4480,7 @@ table.celestial td.label {
   }
 
   .frontpage .homepage-card--earthquake .earthquake-map-wrap {
-    margin-bottom: 8px;
+    margin-bottom: 0;
   }
 
   .frontpage .homepage-card--earthquake .earthquake-map {
