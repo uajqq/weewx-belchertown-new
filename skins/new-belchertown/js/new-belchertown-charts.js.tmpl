@@ -318,6 +318,194 @@ function belchertown_ensure_highcharts_modules(moduleSet) {
     return Promise.all(loaderPromises);
 }
 
+function belchertown_has_own(obj, key) {
+    return obj && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function belchertown_is_finite_number(v) {
+    return v !== null && typeof v !== "undefined" && v !== "" && isFinite(parseFloat(v));
+}
+
+function belchertown_axis_option_number(obj, key) {
+    if (!belchertown_has_own(obj, key) || !belchertown_is_finite_number(obj[key])) {
+        return null;
+    }
+    return parseFloat(obj[key]);
+}
+
+function belchertown_series_exists_in_data(series) {
+    return series && Array.isArray(series.data) && series.data.length > 0;
+}
+
+function belchertown_series_data_points(series) {
+    var obsType = (series && (series.obsType || series.observation_type)) || "";
+    if (obsType === "windBarb" && series && Array.isArray(series.windspeedData) && series.windspeedData.length > 0) {
+        return series.windspeedData;
+    }
+    return series && Array.isArray(series.data) ? series.data : [];
+}
+
+function belchertown_series_point_values(point, obsType) {
+    if (point === null || typeof point === "undefined") {
+        return [];
+    }
+    if (obsType === "weatherRange" || obsType === "haysChart") {
+        if (Array.isArray(point)) {
+            return [point[1], point[2], point[3]];
+        }
+        if (typeof point === "object") {
+            return [point.low, point.high, point.average];
+        }
+        return [];
+    }
+    if (obsType === "windBarb") {
+        if (Array.isArray(point)) {
+            return [point[1]];
+        }
+        if (typeof point === "object") {
+            return [point.value, point.y];
+        }
+        return [];
+    }
+    if (Array.isArray(point)) {
+        return [point[1]];
+    }
+    if (typeof point === "object") {
+        return [point.y, point.value];
+    }
+    return [point];
+}
+
+function belchertown_analyze_chart_series(seriesList) {
+    var analysis = {
+        axisExtents: {},
+        missingSeries: [],
+        usableSeriesIndexes: [],
+        usableSeriesCount: 0
+    };
+
+    (Array.isArray(seriesList) ? seriesList : []).forEach(function(series, seriesIndex) {
+        var obsType = (series && (series.obsType || series.observation_type)) || "";
+        var axisIndex = parseInt(series && series.yAxis, 10);
+        var seriesData = belchertown_series_data_points(series);
+        var hasUsableData = obsType === "windRose" && belchertown_series_exists_in_data(series);
+
+        if (!isFinite(axisIndex)) {
+            axisIndex = 0;
+        }
+        if (!analysis.axisExtents[axisIndex]) {
+            analysis.axisExtents[axisIndex] = {min: null, max: null};
+        }
+
+        if (obsType !== "windRose") {
+            seriesData.forEach(function(point) {
+                belchertown_series_point_values(point, obsType).forEach(function(rawValue) {
+                    if (!belchertown_is_finite_number(rawValue)) {
+                        return;
+                    }
+                    var value = parseFloat(rawValue);
+                    hasUsableData = true;
+                    if (analysis.axisExtents[axisIndex].min === null || value < analysis.axisExtents[axisIndex].min) {
+                        analysis.axisExtents[axisIndex].min = value;
+                    }
+                    if (analysis.axisExtents[axisIndex].max === null || value > analysis.axisExtents[axisIndex].max) {
+                        analysis.axisExtents[axisIndex].max = value;
+                    }
+                });
+            });
+        }
+
+        if (hasUsableData) {
+            analysis.usableSeriesCount++;
+            analysis.usableSeriesIndexes.push(seriesIndex);
+        } else {
+            analysis.missingSeries.push(series || {});
+        }
+    });
+
+    return analysis;
+}
+
+function belchertown_filter_unusable_chart_series(options, seriesAnalysis) {
+    if (!options || !Array.isArray(options.series) || !seriesAnalysis || seriesAnalysis.missingSeries.length === 0) {
+        return;
+    }
+
+    var usableByIndex = {};
+    seriesAnalysis.usableSeriesIndexes.forEach(function(seriesIndex) {
+        usableByIndex[seriesIndex] = true;
+    });
+
+    options.series = options.series.filter(function(series, seriesIndex) {
+        return usableByIndex[seriesIndex] === true;
+    });
+
+    var axesWithSeries = {};
+    options.series.forEach(function(series) {
+        var axisIndex = parseInt(series && series.yAxis, 10);
+        if (!isFinite(axisIndex)) {
+            axisIndex = 0;
+        }
+        axesWithSeries[axisIndex] = true;
+        if (Array.isArray(options.yAxis) && options.yAxis[axisIndex] && series.yAxis_label) {
+            options.yAxis[axisIndex].title = options.yAxis[axisIndex].title || {};
+            options.yAxis[axisIndex].title.text = series.yAxis_label;
+        }
+    });
+
+    if (Array.isArray(options.yAxis)) {
+        options.yAxis.forEach(function(axis, axisIndex) {
+            if (!axis || axesWithSeries[axisIndex]) {
+                return;
+            }
+            axis.visible = false;
+            axis.showEmpty = false;
+            axis.title = axis.title || {};
+            axis.title.text = null;
+        });
+    }
+}
+
+function belchertown_apply_flat_axis_ranges(options, seriesAnalysis) {
+    if (!options || !Array.isArray(options.yAxis) || !seriesAnalysis || !seriesAnalysis.axisExtents) {
+        return;
+    }
+
+    Object.keys(seriesAnalysis.axisExtents).forEach(function(axisIndex) {
+        var extent = seriesAnalysis.axisExtents[axisIndex];
+        var axis = options.yAxis[axisIndex];
+        if (!axis || extent.min === null || extent.max === null || extent.min !== extent.max) {
+            return;
+        }
+
+        var flatValue = extent.min;
+        var padding = Math.max(Math.abs(flatValue) * 0.05, 1);
+        var configuredMin = belchertown_is_finite_number(axis.min);
+        var configuredMax = belchertown_is_finite_number(axis.max);
+        var currentMin = configuredMin ? parseFloat(axis.min) : null;
+        var currentMax = configuredMax ? parseFloat(axis.max) : null;
+
+        if (configuredMin && configuredMax && currentMin === currentMax) {
+            axis.min = flatValue === 0 ? 0 : flatValue - padding;
+            axis.max = flatValue + padding;
+        } else if (flatValue === 0) {
+            if (!configuredMin) {
+                axis.min = 0;
+            }
+            if (!configuredMax || currentMax <= 0) {
+                axis.max = 1;
+            }
+        } else {
+            if (!configuredMin || currentMin >= flatValue) {
+                axis.min = flatValue - padding;
+            }
+            if (!configuredMax || currentMax <= flatValue) {
+                axis.max = flatValue + padding;
+            }
+        }
+    });
+}
+
 function showChart(json_file, prepend_renderTo = false) {
     var highchartsCorePromise = belchertown_ensure_highcharts_core().then(function() {
         return null;
@@ -742,114 +930,8 @@ function showChart(json_file, prepend_renderTo = false) {
                 i++;
             });
 
-            // Confirm each configured series has data before axis setup. The
-            // numeric usability check happens in the single analysis pass below.
-            var hasOwn = function(obj, key) {
-                return obj && Object.prototype.hasOwnProperty.call(obj, key);
-            };
-
-            var isFiniteNumber = function(v) {
-                return v !== null && typeof v !== "undefined" && v !== "" && isFinite(parseFloat(v));
-            };
-
-            var axisOptionNumber = function(obj, key) {
-                if (!hasOwn(obj, key) || !isFiniteNumber(obj[key])) {
-                    return null;
-                }
-                return parseFloat(obj[key]);
-            };
-
-            var seriesExistsInData = function(series) {
-                return series && Array.isArray(series.data) && series.data.length > 0;
-            };
-
-            var missingSeriesIndex = options.series.findIndex(function(series) {
-                return !seriesExistsInData(series);
-            });
-            if (missingSeriesIndex >= 0) {
-                var missingSeries = options.series[missingSeriesIndex] || {};
-                var missingObs = missingSeries.obsType || missingSeries.observation_type || missingSeries.name || belchertown_label_text("$obs.label.unknown_observation");
-                throw new Error("Unavailable observation value for chart series: " + missingObs);
-            }
-
-            // Flat datasets (especially all-zero observations) need a real
-            // y-range; min == max can leave Highcharts with nothing to draw.
-            var seriesPointValues = function(point, obsType) {
-                if (point === null || typeof point === "undefined") {
-                    return [];
-                }
-                if (obsType === "weatherRange" || obsType === "haysChart") {
-                    if (Array.isArray(point)) {
-                        return [point[1], point[2], point[3]];
-                    }
-                    if (typeof point === "object") {
-                        return [point.low, point.high, point.average];
-                    }
-                    return [];
-                }
-                if (obsType === "windBarb") {
-                    if (Array.isArray(point)) {
-                        return [point[1]];
-                    }
-                    if (typeof point === "object") {
-                        return [point.value];
-                    }
-                    return [];
-                }
-                if (Array.isArray(point)) {
-                    return [point[1]];
-                }
-                if (typeof point === "object") {
-                    return [point.y];
-                }
-                return [point];
-            };
-
-            var analyzeSeriesData = function(seriesList) {
-                var analysis = {
-                    axisExtents: {},
-                    missingSeries: null
-                };
-
-                seriesList.forEach(function(series) {
-                    var obsType = series.obsType || series.observation_type || "";
-                    var axisIndex = parseInt(series.yAxis, 10);
-                    var hasUsableData = obsType === "windRose" && seriesExistsInData(series);
-
-                    if (!isFinite(axisIndex)) {
-                        axisIndex = 0;
-                    }
-                    if (!analysis.axisExtents[axisIndex]) {
-                        analysis.axisExtents[axisIndex] = {min: null, max: null};
-                    }
-
-                    if (obsType === "windRose") {
-                        return;
-                    }
-
-                    series.data.forEach(function(point) {
-                        seriesPointValues(point, obsType).forEach(function(rawValue) {
-                            if (!isFiniteNumber(rawValue)) {
-                                return;
-                            }
-                            var value = parseFloat(rawValue);
-                            hasUsableData = true;
-                            if (analysis.axisExtents[axisIndex].min === null || value < analysis.axisExtents[axisIndex].min) {
-                                analysis.axisExtents[axisIndex].min = value;
-                            }
-                            if (analysis.axisExtents[axisIndex].max === null || value > analysis.axisExtents[axisIndex].max) {
-                                analysis.axisExtents[axisIndex].max = value;
-                            }
-                        });
-                    });
-
-                    if (!hasUsableData && !analysis.missingSeries) {
-                        analysis.missingSeries = series;
-                    }
-                });
-
-                return analysis;
-            };
+            var isFiniteNumber = belchertown_is_finite_number;
+            var axisOptionNumber = belchertown_axis_option_number;
 
             /* yAxis customization handler and label handling
             Take the following example. 
@@ -975,45 +1057,23 @@ function showChart(json_file, prepend_renderTo = false) {
 
             });
 
-            var seriesAnalysis = analyzeSeriesData(options.series);
-            if (seriesAnalysis.missingSeries) {
-                var unavailableObs = seriesAnalysis.missingSeries.obsType || seriesAnalysis.missingSeries.observation_type || seriesAnalysis.missingSeries.name || belchertown_label_text("$obs.label.unknown_observation");
+            var seriesAnalysis = belchertown_analyze_chart_series(options.series);
+            if (seriesAnalysis.usableSeriesCount === 0) {
+                var unavailableSeries = seriesAnalysis.missingSeries[0] || {};
+                var unavailableObs = unavailableSeries.obsType || unavailableSeries.observation_type || unavailableSeries.name || belchertown_label_text("$obs.label.unknown_observation");
                 throw new Error("Unavailable observation value for chart series: " + unavailableObs);
             }
+            if (seriesAnalysis.missingSeries.length > 0) {
+                belchertown_debug(
+                    options.chart.renderTo + ": skipping unavailable chart series: " +
+                    seriesAnalysis.missingSeries.map(function(series) {
+                        return series.obsType || series.observation_type || series.name || belchertown_label_text("$obs.label.unknown_observation");
+                    }).join(", ")
+                );
+                belchertown_filter_unusable_chart_series(options, seriesAnalysis);
+            }
 
-            Object.keys(seriesAnalysis.axisExtents).forEach(function(axisIndex) {
-                var extent = seriesAnalysis.axisExtents[axisIndex];
-                var axis = options.yAxis[axisIndex];
-                if (!axis || extent.min === null || extent.max === null || extent.min !== extent.max) {
-                    return;
-                }
-
-                var flatValue = extent.min;
-                var padding = Math.max(Math.abs(flatValue) * 0.05, 1);
-                var configuredMin = isFiniteNumber(axis.min);
-                var configuredMax = isFiniteNumber(axis.max);
-                var currentMin = configuredMin ? parseFloat(axis.min) : null;
-                var currentMax = configuredMax ? parseFloat(axis.max) : null;
-
-                if (configuredMin && configuredMax && currentMin === currentMax) {
-                    axis.min = flatValue === 0 ? 0 : flatValue - padding;
-                    axis.max = flatValue + padding;
-                } else if (flatValue === 0) {
-                    if (!configuredMin) {
-                        axis.min = 0;
-                    }
-                    if (!configuredMax || currentMax <= 0) {
-                        axis.max = 1;
-                    }
-                } else {
-                    if (!configuredMin || currentMin >= flatValue) {
-                        axis.min = flatValue - padding;
-                    }
-                    if (!configuredMax || currentMax <= flatValue) {
-                        axis.max = flatValue + padding;
-                    }
-                }
-            });
+            belchertown_apply_flat_axis_ranges(options, seriesAnalysis);
 
             // If windRose is present, configure a special chart to show that data
             if (observation_type == "windRose") {
@@ -1527,13 +1587,15 @@ function showChart(json_file, prepend_renderTo = false) {
                 var wbDataMap = {};
                 var windBarbData = [];
                 var calmThresholdMs = 2.5 * 0.514444;
+                var rawWindBarbData = Array.isArray(windBarbSeries.data) ? windBarbSeries.data : [];
+                var windSpeedLineData = Array.isArray(windBarbSeries.windspeedData) ? windBarbSeries.windspeedData : [];
 
                 // Wind speed line series — carry rounding/obsType so the default formatter works
                 options.series.push({
                     type: "line",
                     id: "windbarb-windspeed",
                     name: windBarbSeries.name,
-                    data: windBarbSeries.windspeedData,
+                    data: windSpeedLineData,
                     color: windBarbSeries.color,
                     obsType: windBarbSeries.obsType,
                     rounding: windBarbSeries.rounding,
@@ -1554,7 +1616,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Convert [[ts, m/s, dir], ...] to [{x: , value: , direction: }, ...]
                 // Keep calm points (<2.5 knots) even when direction is null; Highcharts
                 // windbarb renders a circle for calm conditions.
-                windBarbSeries.data.forEach(function(d) {
+                rawWindBarbData.forEach(function(d) {
                     if (d[2] !== null) {
                         wbDataMap[d[0]] = d[2]; // d[0]=ts, d[2]=direction
                     }
