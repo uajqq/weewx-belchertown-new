@@ -369,10 +369,13 @@ def _http_get_text(url, headers=None, timeout=DEFAULT_HTTP_TIMEOUT):
 def _locale_to_js(locale_value):
     """Normalize a Python/WeeWX locale string for browser APIs."""
     value = str(locale_value or "").strip()
-    if not value or value.lower() == "auto":
+    if not value or value.lower() in ("auto", "c", "posix"):
         return ""
 
     value = value.split(".", 1)[0].replace("_", "-")
+    if value.lower() in ("c", "posix"):
+        return ""
+
     parts = [part for part in value.split("-") if part]
     if not parts:
         return ""
@@ -4045,7 +4048,8 @@ class getData(SearchList):
 
         # If theme locale is auto, get the system locale for numeric formatting
         # and Highcharts separators. Moment uses the active WeeWX report language
-        # below so relative dates match translated labels.
+        # below, but keeps the configured locale region when the language matches
+        # so date order follows belchertown_locale.
         belchertown_locale = extras_dict["belchertown_locale"]
         if belchertown_locale == "auto":
             try:
@@ -4085,7 +4089,7 @@ class getData(SearchList):
 
         system_locale_js = _locale_to_js(system_locale) or "en-US"
 
-        moment_locale_js = ""
+        moment_language_locale_js = ""
         std_report_dict = config_dict.get("StdReport", {})
         if not isinstance(std_report_dict, (dict, configobj.Section)):
             std_report_dict = {}
@@ -4100,12 +4104,22 @@ class getData(SearchList):
             config_dict.get("lang"),
             config_dict.get("language"),
         ):
-            moment_locale_js = _moment_locale_to_js(moment_locale_candidate)
-            if moment_locale_js:
+            moment_language_locale_js = _moment_locale_to_js(moment_locale_candidate)
+            if moment_language_locale_js:
                 break
 
-        if not moment_locale_js:
-            moment_locale_js = _moment_locale_to_js(system_locale_js) or "en"
+        moment_date_locale_js = _moment_locale_to_js(system_locale_js)
+        if moment_language_locale_js:
+            moment_language = moment_language_locale_js.split("-", 1)[0]
+            moment_date_language = (
+                moment_date_locale_js.split("-", 1)[0] if moment_date_locale_js else ""
+            )
+            if moment_date_locale_js and moment_date_language == moment_language:
+                moment_locale_js = moment_date_locale_js
+            else:
+                moment_locale_js = moment_language_locale_js
+        else:
+            moment_locale_js = moment_date_locale_js or "en"
 
         # Cache locale conversion for highcharts settings
         locale_conv = locale.localeconv()

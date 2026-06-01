@@ -74,6 +74,105 @@ function belchertown_label_html(value) {
     return belchertown_escape_html(belchertown_label_text(value));
 }
 
+function belchertown_locale_date_order(localeName) {
+    var localeValue = localeName || "$system_locale_js" || "$moment_locale_js" || "en-US";
+    var sampleDate = new Date(Date.UTC(2020, 10, 22, 12, 0, 0));
+    var i;
+
+    if (typeof Intl !== "undefined" && typeof Intl.DateTimeFormat === "function") {
+        try {
+            var parts = new Intl.DateTimeFormat(localeValue, {
+                day: "numeric",
+                month: "numeric"
+            }).formatToParts(sampleDate);
+
+            for (i = 0; i < parts.length; i++) {
+                if (parts[i].type === "day") {
+                    return "day_month";
+                }
+                if (parts[i].type === "month") {
+                    return "month_day";
+                }
+            }
+        } catch (e) {
+            // Fall back below.
+        }
+    }
+
+    localeValue = String(localeValue || "").toLowerCase();
+    if (localeValue === "c" || localeValue === "posix") {
+        return "month_day";
+    }
+    if (/^en-(gb|au|nz|ie|za|in|sg|my|hk)\b/.test(localeValue)) {
+        return "day_month";
+    }
+    if (/^en\b/.test(localeValue)) {
+        return "month_day";
+    }
+    return "day_month";
+}
+
+function belchertown_moment_compact_date_format(includeYear) {
+    if (belchertown_locale_date_order() === "month_day") {
+        return includeYear ? "MMM D, YYYY" : "MMM D";
+    }
+    return includeYear ? "D MMM YYYY" : "D MMM";
+}
+
+function belchertown_forecast_date_format(configuredFormat) {
+    var format = belchertown_label_text(configuredFormat);
+    if (format && format !== "time_forecast_date" && format !== "ddd M/DD" && format !== "ddd M/D") {
+        return format;
+    }
+
+    return belchertown_locale_date_order() === "month_day" ? "ddd M/D" : "ddd D/M";
+}
+
+function belchertown_highcharts_compact_date_format(includeTime) {
+    var baseFormat = belchertown_locale_date_order() === "month_day" ? "%b %e" : "%e %b";
+    return includeTime ? baseFormat + " %H:%M" : baseFormat;
+}
+
+function belchertown_date_time_parse_formats() {
+    var monthFirstFormats = [
+        "MM/DD/YYYY HH:mm:ss",
+        "M/D/YYYY H:mm:ss",
+        "MM/DD/YYYY HH:mm",
+        "M/D/YYYY H:mm",
+        "MM/DD/YYYY h:mm:ss A",
+        "M/D/YYYY h:mm:ss A",
+        "MM/DD/YYYY h:mm A",
+        "M/D/YYYY h:mm A"
+    ];
+    var dayFirstFormats = [
+        "DD/MM/YYYY HH:mm:ss",
+        "D/M/YYYY H:mm:ss",
+        "DD/MM/YYYY HH:mm",
+        "D/M/YYYY H:mm",
+        "DD/MM/YYYY h:mm:ss A",
+        "D/M/YYYY h:mm:ss A",
+        "DD/MM/YYYY h:mm A",
+        "D/M/YYYY h:mm A"
+    ];
+    var commonFormats = [
+        "YYYY-MM-DD HH:mm:ss",
+        "YYYY-MM-DD HH:mm",
+        "YYYY-MM-DD h:mm A",
+        "ll LT",
+        "lll",
+        "LLL"
+    ];
+    var formats = belchertown_locale_date_order() === "month_day"
+        ? monthFirstFormats.concat(dayFirstFormats)
+        : dayFirstFormats.concat(monthFirstFormats);
+
+    if (typeof moment !== "undefined" && moment.ISO_8601) {
+        formats.unshift(moment.ISO_8601);
+    }
+
+    return formats.concat(commonFormats);
+}
+
 function belchertown_decode_text_node_filter(textNode) {
     var parent = textNode.parentNode;
     var tagName;

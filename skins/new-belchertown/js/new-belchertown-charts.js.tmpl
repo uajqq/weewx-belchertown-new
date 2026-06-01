@@ -721,9 +721,9 @@ function showChart(json_file, prepend_renderTo = false) {
 
                 xAxis: {
                     dateTimeLabelFormats: {
-                        day: '%e %b',
-                        week: '%e %b',
-                        month: '%b %e',
+                        day: belchertown_highcharts_compact_date_format(false),
+                        week: belchertown_highcharts_compact_date_format(false),
+                        month: belchertown_highcharts_compact_date_format(false),
                     },
                     lineColor: '#555',
                     minRange: 900000,
@@ -821,7 +821,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     enabled: true,
                     crosshairs: true,
                     dateTimeLabelFormats: {
-                        hour: '%e %b %H:%M'
+                        hour: belchertown_highcharts_compact_date_format(true)
                     },
                     // For locale control with moment.js
                     formatter: function(tooltip) {
@@ -1438,9 +1438,9 @@ function showChart(json_file, prepend_renderTo = false) {
 
                 options.xAxis = {
                     dateTimeLabelFormats: {
-                        day: '%e %b',
-                        week: '%e %b',
-                        month: '%b %e',
+                        day: belchertown_highcharts_compact_date_format(false),
+                        week: belchertown_highcharts_compact_date_format(false),
+                        month: belchertown_highcharts_compact_date_format(false),
                     },
                     showLastLabel: true,
                     crosshair: true,

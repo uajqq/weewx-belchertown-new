@@ -406,20 +406,7 @@
                 }
             }
 
-            var m = moment(text, [
-                "MM/DD/YYYY HH:mm:ss",
-                "M/D/YYYY HH:mm:ss",
-                "MM/DD/YYYY HH:mm",
-                "M/D/YYYY HH:mm",
-                "MM/DD/YYYY h:mm A",
-                "M/D/YYYY h:mm A",
-                "YYYY-MM-DD HH:mm:ss",
-                "YYYY-MM-DD HH:mm",
-                "YYYY-MM-DD h:mm A",
-                "ll LT",
-                "lll",
-                "LLL"
-            ], true);
+            var m = moment(text, belchertown_date_time_parse_formats(), true);
 
             if (!m.isValid()) {
                 m = moment(text);
@@ -465,7 +452,7 @@
                 if (/^\d{4}$/.test(sourceText)) {
                     dateLine = sourceText;
                 } else if (parsed && parsed.isValid()) {
-                    dateLine = periodKey === "alltime" ? parsed.format("MMM D, YYYY") : parsed.format("MMM D");
+                    dateLine = parsed.format(belchertown_moment_compact_date_format(periodKey === "alltime"));
                 } else {
                     dateLine = sourceText;
                 }
@@ -494,7 +481,7 @@
             }
 
             if (parsed && parsed.isValid()) {
-                var dateLine = periodKey === "alltime" ? parsed.format("MMM D, YYYY") : parsed.format("MMM D");
+                var dateLine = parsed.format(belchertown_moment_compact_date_format(periodKey === "alltime"));
                 var timeLine = parsed.format("LT");
                 return '<span class="records-record-period__date-line">' + escapeHtml(dateLine) + '</span>' +
                        '<span class="records-record-period__time-line">' + escapeHtml(timeLine) + '</span>';

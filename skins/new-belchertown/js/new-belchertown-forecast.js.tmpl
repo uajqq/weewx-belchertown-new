@@ -762,7 +762,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
 
     for (let i = 0; i < tileCount; i++) {
         const row = dailySource[i] || {};
-        const dayLabel = tzAdjustedMoment((row["time"] || 0) + 7200).format(belchertown_label_text("$obs.label.time_forecast_date"));
+        const dayLabel = tzAdjustedMoment((row["time"] || 0) + 7200).format(belchertown_forecast_date_format("$obs.label.time_forecast_date"));
         const imageUrl = forecast_icon_url(row["icon"]);
 
         html += '<div class="forecast-day forecast-24hour forecast-tile ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';

@@ -2104,14 +2104,7 @@ function enhanceAlmanacExtrasModal(almanacData) {
             if (looksLikeDateTime && valueText && valueText !== "--") {
                 var parsed = moment(
                     valueText,
-                    [
-                        moment.ISO_8601,
-                        "MM/DD/YYYY HH:mm:ss",
-                        "M/D/YYYY H:mm:ss",
-                        "YYYY-MM-DD HH:mm:ss",
-                        "MM/DD/YYYY hh:mm:ss A",
-                        "M/D/YYYY h:mm:ss A"
-                    ],
+                    belchertown_date_time_parse_formats(),
                     true
                 );
                 if (parsed.isValid()) {
