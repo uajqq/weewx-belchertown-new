@@ -4,9 +4,12 @@
 ## actually in Latin-1, then you should replace the string "UTF-8" with "latin-1"
 ## If you do this, you should also change the 'Content-Type' metadata below.
 #encoding UTF-8
-#from user.new_belchertown import build_almanac_template_context
+#from user.new_belchertown import build_almanac_template_context, build_wind_compass_marker_context
 ##
 #set global $page = "kiosk"
+#set $wind_compass_marker_context = build_wind_compass_marker_context($current.windDir.formatted, $current.windSpeed.knot.toString(addLabel=False, NONE_string=''), $current.windGust.knot.toString(addLabel=False, NONE_string=''))
+#set $wind_compass_marker_class = $wind_compass_marker_context.get("marker_class", "")
+#set $wind_compass_marker_style_attr = $wind_compass_marker_context.get("style_attr", "")
 
     #include "header.html.tmpl"
     <!-- end of header -->
@@ -283,7 +286,7 @@
                                                     #end if
                                                     </span>
                                                 </div>
-                                                <div class="arrow"></div>
+                                                <div class="arrow$wind_compass_marker_class"$wind_compass_marker_style_attr></div>
                                             </div>
                                         </div>
                                         <div class="col-sm-6 windspeedtable">

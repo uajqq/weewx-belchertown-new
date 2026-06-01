@@ -1240,8 +1240,8 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
 
     // Calm wind: hide both indicator styles (triangle and windbarb).
     if (wind_compass_is_calm(windSpeedKnots, windGustKnots)) {
-        arrow.removeClass("windbarb-marker").empty().css("visibility", "hidden");
-        jQuery(".wind-arrow").css("visibility", "hidden");
+        arrow.removeClass("windbarb-marker").addClass("wind-compass-marker--hidden").empty().css("visibility", "hidden");
+        jQuery(".wind-arrow").addClass("wind-compass-marker--hidden").css("visibility", "hidden");
         return;
     }
 
@@ -1250,8 +1250,8 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     }
 
     // Wind is not calm: ensure indicators are visible.
-    arrow.css("visibility", "visible");
-    jQuery(".wind-arrow").css("visibility", "visible");
+    arrow.removeClass("wind-compass-marker--hidden").css("visibility", "visible");
+    jQuery(".wind-arrow").removeClass("wind-compass-marker--hidden").css("visibility", "visible");
 
     if (wind_compass_marker == "windbarb") {
         arrow.addClass("windbarb-marker");

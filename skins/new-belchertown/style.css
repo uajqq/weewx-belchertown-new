@@ -2260,6 +2260,11 @@ p.entry-meta {
   transition: -webkit-transform 1s ease-in;
 }
 
+.wind-arrow.wind-compass-marker--hidden,
+.arrow.wind-compass-marker--hidden {
+  visibility: hidden;
+}
+
 .arrow.windbarb-marker {
   display: block;
 }

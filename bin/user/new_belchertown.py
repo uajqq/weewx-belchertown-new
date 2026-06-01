@@ -268,6 +268,8 @@ WINDROSE_SPEED_RANGE_LABELS = {
     "beaufort": ["0", "1", "2", "3", "4", "5", "6+"],
 }
 
+WIND_COMPASS_CALM_THRESHOLD_KNOTS = 1.0
+
 # Cached minifier dependency status: (all_available: bool, missing: tuple[str, ...])
 _MINIFIER_DEPS_STATUS = None
 _MINIFIER_DEPS_MISSING_LOGGED = False
@@ -277,6 +279,71 @@ EXTERNAL_STATION_OBSERVATION_SOURCES = {
     "cloud_cover": {"source_key": "current_conditions"},
     "aqi": {"source_key": "aqi"},
 }
+
+
+# Module-level helper functions for wind compass rendering
+
+
+def _wind_compass_float(value):
+    if value is None:
+        return None
+
+    raw_value = getattr(value, "raw", value)
+    text = str(raw_value).replace("\u00a0", " ").strip()
+    if not text:
+        return None
+
+    if "," in text and "." not in text:
+        text = text.replace(",", ".")
+    else:
+        text = text.replace(",", "")
+
+    match_value = re.search(r"[-+]?\d+(?:\.\d+)?", text)
+    if not match_value:
+        return None
+
+    try:
+        parsed = float(match_value.group(0))
+    except (TypeError, ValueError):
+        return None
+
+    return parsed if math.isfinite(parsed) else None
+
+
+def _wind_compass_degrees_text(value):
+    parsed = _wind_compass_float(value)
+    if parsed is None:
+        return ""
+
+    return f"{parsed % 360:.3f}".rstrip("0").rstrip(".")
+
+
+def build_wind_compass_marker_context(
+    direction,
+    wind_speed_knots,
+    wind_gust_knots,
+    calm_threshold_knots=WIND_COMPASS_CALM_THRESHOLD_KNOTS,
+):
+    wind_values = [
+        value for value in (
+            _wind_compass_float(wind_speed_knots),
+            _wind_compass_float(wind_gust_knots),
+        )
+        if value is not None
+    ]
+    is_calm = bool(wind_values) and all(
+        value < calm_threshold_knots for value in wind_values
+    )
+    direction_text = _wind_compass_degrees_text(direction)
+
+    return {
+        "marker_class": " wind-compass-marker--hidden" if is_calm else "",
+        "style_attr": (
+            f' style="-webkit-transform: rotate({direction_text}deg); '
+            f'transform: rotate({direction_text}deg);"'
+            if direction_text else ""
+        ),
+    }
 
 
 # Module-level helper functions for HTTP and JSON processing
