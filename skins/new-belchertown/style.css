@@ -2458,11 +2458,12 @@ p.entry-meta {
 }
 
 .almanac-diagram-object {
-  transition: transform 0.25s ease, opacity 0.25s ease;
+  transition: transform 0.25s ease, filter 0.25s ease;
 }
 
 .almanac-diagram-object.is-below-horizon {
-  opacity: 0.5;
+  filter: saturate(0.7) brightness(0.75);
+  opacity: 1;
 }
 
 .almanac-diagram-object--sun .almanac-diagram-object-core {
