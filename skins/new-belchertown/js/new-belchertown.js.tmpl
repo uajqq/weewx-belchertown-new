@@ -832,10 +832,12 @@ jQuery(document).ready(function() {
     // #end if
 
     initializeAlmanacDiagramFromDOM();
+    startAlmanacDiagramHorizonTimer();
     // iPhone/Safari can occasionally compute the first almanac layout before
     // final widths are settled. Force one follow-up render after first paint.
     window.requestAnimationFrame(function() {
         initializeAlmanacDiagramFromDOM();
+        refreshAlmanacDiagramHorizonStateFromSchedule();
     });
 
     // Style legacy celestial table markup as modern sub-cards in the extras modal.
@@ -1518,6 +1520,100 @@ function readAlmanacDiagramNumber(diagram, attrName, dataKey) {
     return isFinite(dataValue) ? dataValue : null;
 }
 
+function writeAlmanacDiagramNumber(diagram, attrName, dataKey, value) {
+    var parsed = parseFloat(value);
+
+    if (!isFinite(parsed)) {
+        diagram.removeAttr(attrName);
+        diagram.removeData(dataKey);
+        return;
+    }
+
+    diagram.attr(attrName, parsed.toFixed(3));
+    diagram.data(dataKey, parsed);
+}
+
+function almanacEventBelowHorizon(riseEpoch, setEpoch, nowEpoch) {
+    var rise = parseFloat(riseEpoch);
+    var set = parseFloat(setEpoch);
+    var now = parseFloat(nowEpoch);
+    var aboveHorizon;
+
+    if (!isFinite(rise) || !isFinite(set) || !isFinite(now) || rise === set) {
+        return null;
+    }
+
+    if (rise < set) {
+        aboveHorizon = now >= rise && now < set;
+    } else {
+        aboveHorizon = now >= rise || now < set;
+    }
+
+    return !aboveHorizon;
+}
+
+function setAlmanacDiagramBodyBelowHorizon(bodyKey, belowHorizon) {
+    var key = bodyKey === "moon" ? "moon" : "sun";
+
+    jQuery(".almanac-diagram-object--" + key).toggleClass("is-below-horizon", belowHorizon);
+    jQuery(".almanac-diagram-track--" + key).toggleClass("is-below-horizon", belowHorizon);
+
+    if (key === "sun" && !jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
+        jQuery(".almanac-diagram-track").toggleClass("is-below-horizon", belowHorizon);
+    }
+}
+
+function refreshAlmanacDiagramHorizonStateFromSchedule(nowEpoch) {
+    var diagram = jQuery(".almanac-diagram").first();
+    var now = parseFloat(nowEpoch);
+    var sunBelowHorizon;
+    var moonBelowHorizon;
+
+    if (!diagram.length) {
+        return;
+    }
+
+    if (!isFinite(now)) {
+        now = Date.now() / 1000;
+    }
+
+    sunBelowHorizon = almanacEventBelowHorizon(
+        readAlmanacDiagramNumber(diagram, "data-sun-rise-epoch", "sunRiseEpoch"),
+        readAlmanacDiagramNumber(diagram, "data-sun-set-epoch", "sunSetEpoch"),
+        now
+    );
+    moonBelowHorizon = almanacEventBelowHorizon(
+        readAlmanacDiagramNumber(diagram, "data-moon-rise-epoch", "moonRiseEpoch"),
+        readAlmanacDiagramNumber(diagram, "data-moon-set-epoch", "moonSetEpoch"),
+        now
+    );
+
+    if (sunBelowHorizon !== null) {
+        setAlmanacDiagramBodyBelowHorizon("sun", sunBelowHorizon);
+    }
+    if (moonBelowHorizon !== null) {
+        setAlmanacDiagramBodyBelowHorizon("moon", moonBelowHorizon);
+    }
+}
+
+var almanacDiagramHorizonTimer = null;
+
+function startAlmanacDiagramHorizonTimer() {
+    if (!jQuery(".almanac-diagram").length) {
+        return;
+    }
+
+    refreshAlmanacDiagramHorizonStateFromSchedule();
+
+    if (almanacDiagramHorizonTimer !== null) {
+        return;
+    }
+
+    almanacDiagramHorizonTimer = window.setInterval(function() {
+        refreshAlmanacDiagramHorizonStateFromSchedule();
+    }, 30000);
+}
+
 function almanacExistingMarkerX(marker) {
     var transformText = String(marker.attr("transform") || "");
     var match = transformText.match(/translate\(\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/i);
@@ -1618,6 +1714,7 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     if (!point) {
         if (isFinite(alt)) {
             marker.show();
+            marker.toggleClass("is-below-horizon", alt < 0);
             marker.find("title").text(displayLabel);
             return;
         }
@@ -1678,6 +1775,10 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
     var sunAlt = parseFloat(diagramData["sun"]["altitude"]);
     var moonAz = parseFloat(diagramData["moon"]["azimuth"]);
     var moonAlt = parseFloat(diagramData["moon"]["altitude"]);
+    var sunRiseEpoch = parseFloat(diagramData["sun"]["rise_epoch"]);
+    var sunSetEpoch = parseFloat(diagramData["sun"]["set_epoch"]);
+    var moonRiseEpoch = parseFloat(diagramData["moon"]["rise_epoch"]);
+    var moonSetEpoch = parseFloat(diagramData["moon"]["set_epoch"]);
     var sunXOffset = parseFloat(diagramData["sun"]["x_offset"]);
     var moonXOffset = parseFloat(diagramData["moon"]["x_offset"]);
     var centeringMode = String(diagramData["centering_mode"] || "off").toLowerCase();
@@ -1707,6 +1808,10 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         diagram.attr("data-moon-alt", moonAlt.toFixed(3));
         diagram.data("moonAlt", moonAlt);
     }
+    writeAlmanacDiagramNumber(diagram, "data-sun-rise-epoch", "sunRiseEpoch", sunRiseEpoch);
+    writeAlmanacDiagramNumber(diagram, "data-sun-set-epoch", "sunSetEpoch", sunSetEpoch);
+    writeAlmanacDiagramNumber(diagram, "data-moon-rise-epoch", "moonRiseEpoch", moonRiseEpoch);
+    writeAlmanacDiagramNumber(diagram, "data-moon-set-epoch", "moonSetEpoch", moonSetEpoch);
     if (isFinite(sunXOffset)) {
         diagram.attr("data-sun-x-offset", sunXOffset.toFixed(3));
         diagram.data("sunXOffset", sunXOffset);
@@ -1760,6 +1865,7 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         currentTs,
         resolvedCurrentX
     );
+    refreshAlmanacDiagramHorizonStateFromSchedule();
 
     if (!preserveViewBox) {
         fitAlmanacDiagramViewBox(diagramData);
@@ -1793,11 +1899,15 @@ function initializeAlmanacDiagramFromDOM() {
         sun: {
             azimuth: readNumericAttr("data-sun-az", "sunAz"),
             altitude: readNumericAttr("data-sun-alt", "sunAlt"),
+            rise_epoch: readNumericAttr("data-sun-rise-epoch", "sunRiseEpoch"),
+            set_epoch: readNumericAttr("data-sun-set-epoch", "sunSetEpoch"),
             x_offset: readNumericAttr("data-sun-x-offset", "sunXOffset")
         },
         moon: {
             azimuth: readNumericAttr("data-moon-az", "moonAz"),
             altitude: readNumericAttr("data-moon-alt", "moonAlt"),
+            rise_epoch: readNumericAttr("data-moon-rise-epoch", "moonRiseEpoch"),
+            set_epoch: readNumericAttr("data-moon-set-epoch", "moonSetEpoch"),
             x_offset: readNumericAttr("data-moon-x-offset", "moonXOffset")
         },
         centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase(),

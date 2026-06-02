@@ -3136,6 +3136,10 @@ def _build_almanac_inline_markup(payload, image_root="."):
     sun_alt_attr = str(payload.get("sun_alt_attr", "") or "")
     moon_az_attr = str(payload.get("moon_az_attr", "") or "")
     moon_alt_attr = str(payload.get("moon_alt_attr", "") or "")
+    sun_rise_epoch_attr = str(payload.get("sun_rise_epoch_attr", "") or "")
+    sun_set_epoch_attr = str(payload.get("sun_set_epoch_attr", "") or "")
+    moon_rise_epoch_attr = str(payload.get("moon_rise_epoch_attr", "") or "")
+    moon_set_epoch_attr = str(payload.get("moon_set_epoch_attr", "") or "")
     diagram_vertical_scale_attr = str(payload.get("diagram_vertical_scale_attr", "") or "")
     sun_x_offset_attr = str(payload.get("sun_x_offset_attr", "0.000") or "0.000")
     moon_x_offset_attr = str(payload.get("moon_x_offset_attr", "0.000") or "0.000")
@@ -3161,6 +3165,10 @@ def _build_almanac_inline_markup(payload, image_root="."):
         f'data-sun-alt="{html.escape(sun_alt_attr)}" '
         f'data-moon-az="{html.escape(moon_az_attr)}" '
         f'data-moon-alt="{html.escape(moon_alt_attr)}" '
+        f'data-sun-rise-epoch="{html.escape(sun_rise_epoch_attr)}" '
+        f'data-sun-set-epoch="{html.escape(sun_set_epoch_attr)}" '
+        f'data-moon-rise-epoch="{html.escape(moon_rise_epoch_attr)}" '
+        f'data-moon-set-epoch="{html.escape(moon_set_epoch_attr)}" '
         f'data-vertical-scale="{html.escape(diagram_vertical_scale_attr)}" '
         f'data-sun-x-offset="{html.escape(sun_x_offset_attr)}" '
         f'data-moon-x-offset="{html.escape(moon_x_offset_attr)}" '
@@ -3356,6 +3364,10 @@ def build_almanac_diagram_payload(
         "sun_alt_attr": "",
         "moon_az_attr": "",
         "moon_alt_attr": "",
+        "sun_rise_epoch_attr": "",
+        "sun_set_epoch_attr": "",
+        "moon_rise_epoch_attr": "",
+        "moon_set_epoch_attr": "",
         "sun_rise_az_attr": "",
         "sun_rise_alt_attr": "",
         "sun_transit_az_attr": "",
@@ -3421,6 +3433,11 @@ def build_almanac_diagram_payload(
     moon_rise_raw = _safe_getattr_chain(almanac_obj, ("moon", "rise", "raw"))
     moon_set_raw = _safe_getattr_chain(almanac_obj, ("moon", "set", "raw"))
     moon_transit_raw = _safe_getattr_chain(almanac_obj, ("moon", "transit", "raw"))
+
+    payload["sun_rise_epoch_attr"] = _format_attr(sun_rise_raw)
+    payload["sun_set_epoch_attr"] = _format_attr(sun_set_raw)
+    payload["moon_rise_epoch_attr"] = _format_attr(moon_rise_raw)
+    payload["moon_set_epoch_attr"] = _format_attr(moon_set_raw)
 
     # Event alt/az snapshots
     def _fill_event(prefix, ts_raw, body_name):
@@ -3586,6 +3603,10 @@ def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, ima
         "sun_alt_attr": "",
         "moon_az_attr": "",
         "moon_alt_attr": "",
+        "sun_rise_epoch_attr": "",
+        "sun_set_epoch_attr": "",
+        "moon_rise_epoch_attr": "",
+        "moon_set_epoch_attr": "",
         "sun_rise_az_attr": "",
         "sun_rise_alt_attr": "",
         "sun_transit_az_attr": "",
@@ -3652,6 +3673,10 @@ def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, ima
             "sun_alt_attr",
             "moon_az_attr",
             "moon_alt_attr",
+            "sun_rise_epoch_attr",
+            "sun_set_epoch_attr",
+            "moon_rise_epoch_attr",
+            "moon_set_epoch_attr",
             "sun_rise_az_attr",
             "sun_rise_alt_attr",
             "sun_transit_az_attr",

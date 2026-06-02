@@ -952,11 +952,15 @@ function update_almanac_diagram_from_mqtt(payload) {
         sun: {
             azimuth: getDiagramValue("sunAz"),
             altitude: getDiagramValue("sunAlt"),
+            rise_epoch: getDiagramValue("sunRiseEpoch"),
+            set_epoch: getDiagramValue("sunSetEpoch"),
             x_offset: getDiagramValue("sunXOffset")
         },
         moon: {
             azimuth: getDiagramValue("moonAz"),
             altitude: getDiagramValue("moonAlt"),
+            rise_epoch: getDiagramValue("moonRiseEpoch"),
+            set_epoch: getDiagramValue("moonSetEpoch"),
             x_offset: getDiagramValue("moonXOffset")
         },
         centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase(),

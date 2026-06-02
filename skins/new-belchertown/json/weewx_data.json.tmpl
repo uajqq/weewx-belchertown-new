@@ -90,6 +90,10 @@
 #set $sun_alt_attr = $almanac_diagram_context.get("sun_alt_attr", "")
 #set $moon_az_attr = $almanac_diagram_context.get("moon_az_attr", "")
 #set $moon_alt_attr = $almanac_diagram_context.get("moon_alt_attr", "")
+#set $sun_rise_epoch_attr = $almanac_diagram_context.get("sun_rise_epoch_attr", "")
+#set $sun_set_epoch_attr = $almanac_diagram_context.get("sun_set_epoch_attr", "")
+#set $moon_rise_epoch_attr = $almanac_diagram_context.get("moon_rise_epoch_attr", "")
+#set $moon_set_epoch_attr = $almanac_diagram_context.get("moon_set_epoch_attr", "")
 #set $sun_rise_az_attr = $almanac_diagram_context.get("sun_rise_az_attr", "")
 #set $sun_rise_alt_attr = $almanac_diagram_context.get("sun_rise_alt_attr", "")
 #set $sun_transit_az_attr = $almanac_diagram_context.get("sun_transit_az_attr", "")
@@ -772,6 +776,8 @@
                 "azimuth": #if $sun_az_attr != ""##echo $sun_az_attr##else#null#end if#,
                 "altitude": #if $sun_alt_attr != ""##echo $sun_alt_attr##else#null#end if#,
                 "x_offset": #if $sun_x_offset_attr != ""##echo $sun_x_offset_attr##else#0#end if#,
+                "rise_epoch": #if $sun_rise_epoch_attr != ""##echo $sun_rise_epoch_attr##else#null#end if#,
+                "set_epoch": #if $sun_set_epoch_attr != ""##echo $sun_set_epoch_attr##else#null#end if#,
                 "track_points": "$sun_track_points_attr",
                 "path_d": "$sun_track_path_attr",
                 "rise": {
@@ -791,6 +797,8 @@
                 "azimuth": #if $moon_az_attr != ""##echo $moon_az_attr##else#null#end if#,
                 "altitude": #if $moon_alt_attr != ""##echo $moon_alt_attr##else#null#end if#,
                 "x_offset": #if $moon_x_offset_attr != ""##echo $moon_x_offset_attr##else#0#end if#,
+                "rise_epoch": #if $moon_rise_epoch_attr != ""##echo $moon_rise_epoch_attr##else#null#end if#,
+                "set_epoch": #if $moon_set_epoch_attr != ""##echo $moon_set_epoch_attr##else#null#end if#,
                 "track_points": "$moon_track_points_attr",
                 "path_d": "$moon_track_path_attr",
                 "rise": {

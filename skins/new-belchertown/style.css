@@ -2465,6 +2465,10 @@ p.entry-meta {
   opacity: 1;
 }
 
+.almanac-diagram-object-core {
+  transition: fill 0.25s ease, stroke 0.25s ease;
+}
+
 .almanac-diagram-object--sun .almanac-diagram-object-core {
   fill: #fbbf24;
   stroke: #b45309;
