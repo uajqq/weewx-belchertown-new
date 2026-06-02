@@ -4,6 +4,7 @@ This extension builds search list extensions as well
 as a crude "cron" to download necessary files.
 
 Pat O'Brien, August 19, 2018
+uajqq, since 2025
 """
 
 import calendar
@@ -55,7 +56,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-VERSION = "2.0-rc1"
+VERSION = "2.0"
 log.info(f"version {VERSION}")
 
 # Default timeout for all HTTP requests (seconds)
