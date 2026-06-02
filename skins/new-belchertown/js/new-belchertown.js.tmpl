@@ -2671,6 +2671,10 @@ function forecast_sync_row_height() {
         return;
     }
 
+    if (typeof forecast_fit_daily_condition_text === "function") {
+        forecast_fit_daily_condition_text();
+    }
+
     var maxHeight = 0;
     var rowWidth = row.clientWidth || row.getBoundingClientRect().width;
     ["1", "3", "24"].forEach(function(interval) {

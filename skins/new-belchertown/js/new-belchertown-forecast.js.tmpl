@@ -785,6 +785,34 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
     return html;
 }
 
+function forecast_fit_daily_condition_text() {
+    const minFontSize = 11;
+
+    jQuery(".day_forecasts .forecast-day.forecast-tile").each(function() {
+        const tile = this;
+        const conditions = tile.querySelector(".forecast-conditions");
+        const text = tile.querySelector(".forecast-condition-text");
+        if (!conditions || !text || conditions.offsetParent === null) {
+            return;
+        }
+
+        tile.style.removeProperty("--forecast-condition-band-height");
+        text.style.removeProperty("font-size");
+        text.style.removeProperty("line-height");
+
+        let fontSize = parseFloat(window.getComputedStyle(text).fontSize) || 14;
+        while (fontSize > minFontSize && conditions.scrollHeight > conditions.clientHeight + 1) {
+            fontSize -= 1;
+            text.style.fontSize = fontSize + "px";
+            text.style.lineHeight = "1.08";
+        }
+
+        if (conditions.scrollHeight > conditions.clientHeight + 1) {
+            tile.style.setProperty("--forecast-condition-band-height", Math.ceil(conditions.scrollHeight) + "px");
+        }
+    });
+}
+
 function forecast_update_aqi(data) {
     try {
         const aqiPayload = data["aqi"] && data["aqi"][0] ? data["aqi"][0] : null;
