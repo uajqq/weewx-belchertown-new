@@ -6133,20 +6133,6 @@ class getData(SearchList):
                         "<span class='outHumAbs'>%s</span>" % humabs_val
                     )
                     row_parts.append(obs_humabs_output)
-            if obs=='radiation':
-                maxSolarRad_output = getattr(current,'maxSolarRad',None)
-                maxSolarRad_val = None
-                if maxSolarRad_output is not None:
-                    try:
-                        maxSolarRad_val = maxSolarRad_output.watt_per_meter_squared
-                    except Exception:
-                        maxSolarRad_val = None
-                if maxSolarRad_val is not None:
-                    obs_maxSolarRad_output = "<br class='station-observation-break'>"
-                    obs_maxSolarRad_output += (
-                        "<span class='maxSolarRad'>%s</span>" % maxSolarRad_val
-                    )
-                    row_parts.append(obs_maxSolarRad_output)
             row_parts.append("</td>")
             row_parts.append("</tr>")
             station_obs_parts.append("".join(row_parts))
