@@ -49,6 +49,10 @@ var mqtt_connect_retry_count = 0;
 var mqtt_max_connect_retries = 20;
 var mqtt_activity_timeout = null;
 var mqtt_stale_timeout = null;
+var mqtt_reconnect_timeout = null;
+var mqtt_reconnect_attempt_count = 0;
+var mqtt_reconnect_initial_delay_ms = 2000;
+var mqtt_reconnect_max_delay_ms = 60000;
 var mqtt_last_message_received_ms = 0;
 var mqtt_last_data_epoch = "";
 var mqtt_inactive_disconnect_requested = false;
@@ -392,6 +396,8 @@ function mqtt_restart_live_updates(event) {
     }
 
     jQuery(".restart-interval").prop("disabled", true);
+    mqtt_clear_reconnect_timeout();
+    mqtt_reset_reconnect_backoff();
     mqtt_set_updated_text("$obs.label.mqtt_websockets_connecting");
 
     var reloadPromise;
@@ -414,12 +420,14 @@ function mqtt_restart_live_updates(event) {
         if (typeof ajaximages === "function") {
             ajaximages();
         }
+        mqtt_reset_reconnect_backoff();
         connect();
         if (typeof renderHomepageCharts === "function") {
             renderHomepageCharts(true);
         }
     }).catch(function(e) {
         console.log(e);
+        mqtt_reset_reconnect_backoff();
         connect();
     });
 }
@@ -457,6 +465,45 @@ function mqtt_clear_stale_timeout() {
         clearTimeout(mqtt_stale_timeout);
         mqtt_stale_timeout = null;
     }
+}
+
+function mqtt_clear_reconnect_timeout() {
+    if (mqtt_reconnect_timeout) {
+        clearTimeout(mqtt_reconnect_timeout);
+        mqtt_reconnect_timeout = null;
+    }
+}
+
+function mqtt_reset_reconnect_backoff() {
+    mqtt_reconnect_attempt_count = 0;
+}
+
+function mqtt_next_reconnect_delay_ms() {
+    var delay_ms = mqtt_reconnect_initial_delay_ms * Math.pow(2, Math.min(mqtt_reconnect_attempt_count, 5));
+    mqtt_reconnect_attempt_count++;
+    return Math.min(delay_ms, mqtt_reconnect_max_delay_ms);
+}
+
+function mqtt_schedule_reconnect(reason, reset_backoff) {
+    if (reset_backoff) {
+        mqtt_reset_reconnect_backoff();
+    }
+    if (mqtt_reconnect_timeout) {
+        belchertown_debug("MQTT: Reconnect already scheduled; skipping duplicate request");
+        return;
+    }
+
+    var delay_ms = mqtt_next_reconnect_delay_ms();
+    belchertown_debug("MQTT: Scheduling reconnect attempt " + mqtt_reconnect_attempt_count + " in " + delay_ms + " ms" + (reason ? " after " + reason : ""));
+    mqtt_reconnect_timeout = setTimeout(function() {
+        mqtt_reconnect_timeout = null;
+        if (mqtt_safe_client_connected()) {
+            belchertown_debug("MQTT: Reconnect skipped because client is already connected");
+            mqtt_reset_reconnect_backoff();
+            return;
+        }
+        connect();
+    }, delay_ms);
 }
 
 function mqtt_set_disconnected_status(message, epoch, show_restart) {
@@ -525,6 +572,7 @@ function mqtt_schedule_stale_timeout() {
             belchertown_debug("MQTT: Disconnect after stale timeout failed: " + e.message);
         }
         mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true);
+        mqtt_schedule_reconnect("stale data timeout", true);
     }, mqtt_stale_timeout_ms + 1000);
 }
 
@@ -545,6 +593,7 @@ function mqtt_note_message_activity(data) {
 function connect() {
     mqtt_clear_activity_timeout();
     mqtt_clear_stale_timeout();
+    mqtt_clear_reconnect_timeout();
     mqtt_inactive_disconnect_requested = false;
 
     if (typeof window.Paho === "undefined" || typeof window.Paho.Client !== "function") {
@@ -615,9 +664,8 @@ function connect() {
     client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, clientId);
     // #end if
     client.onConnectionLost = onConnectionLost;
-    client.onConnected = onConnected;
     client.onMessageArrived = onMessageArrived;
-    belchertown_debug("MQTT: Event handlers registered (onConnected, onConnectionLost, onMessageArrived)");
+    belchertown_debug("MQTT: Event handlers registered (onConnectionLost, onMessageArrived)");
     var options = {
         useSSL: useSSL,
         // mqttVersion: 4 is spec MQTTv3.1.1 - mqttVersion: 3 is spec MQTTv3.1
@@ -626,11 +674,11 @@ function connect() {
         // If mqttVersionExplicit is false and mqttVersion is 4, it will try mqttVersion: 4 and if it fails it will fallback to mqttVersion: 3
         // Here's the relevant code: https://github.com/eclipse/paho.mqtt.javascript/blob/f5859463aba9a9b7c19f99ab7c4849a723f8d832/src/paho-mqtt.js#L1610
         mqttVersionExplicit: false,
-        reconnect: true,
+        reconnect: false,
         onSuccess: onConnect,
         onFailure: onFailure
     };
-    belchertown_debug("MQTT: Connection options configured - MQTT Version: 4, Auto-reconnect: enabled, mqttVersionExplicit: false");
+    belchertown_debug("MQTT: Connection options configured - MQTT Version: 4, internal reconnect scheduler enabled, mqttVersionExplicit: false");
     if (mqtt_websockets_username !== "") {
         options.userName = mqtt_websockets_username;
         if (mqtt_websockets_password !== "") {
@@ -648,6 +696,8 @@ function connect() {
 function onConnect() {
     mqttConnected = true;
     mqtt_inactive_disconnect_requested = false;
+    mqtt_clear_reconnect_timeout();
+    mqtt_reset_reconnect_backoff();
     mqtt_last_message_received_ms = Date.now();
     belchertown_debug("MQTT: [" + new Date().toISOString() + "] Successfully connected to broker");
     belchertown_debug("MQTT: Client state is now CONNECTED");
@@ -674,16 +724,6 @@ function onConnect() {
     mqtt_schedule_stale_timeout();
 }
 
-// MQTT automatic reconnect callback
-function onConnected(reconnect, uri) {
-    if (!reconnect) {
-        return;
-    }
-
-    belchertown_debug("MQTT: [" + new Date().toISOString() + "] Automatic reconnect completed" + (uri ? " via " + uri : ""));
-    onConnect();
-}
-
 // MQTT Failure
 function onFailure(responseObject) {
     responseObject = responseObject || {};
@@ -707,6 +747,7 @@ function onFailure(responseObject) {
         console.error("MQTT: " + timestamp + " - Connection Failed - Unable to connect to MQTT broker");
     }
     belchertown_debug("MQTT: UI markers updated for failure state");
+    mqtt_schedule_reconnect("connection failure", false);
 }
 
 // MQTT connection lost
@@ -738,6 +779,7 @@ function onConnectionLost(responseObject) {
         belchertown_debug("MQTT: Connection lost (normal/graceful)");
     }
     belchertown_debug("MQTT: UI markers updated for disconnected state");
+    mqtt_schedule_reconnect("connection lost", false);
 }
 
 function inactive() {
@@ -749,6 +791,8 @@ function inactive() {
     reconnect_using_inactive_timestamp = true; // Set a flag to use the inactive timestamp in case we reconnect we have the latest last updated time
     inactive_timestamp = epoch; // Store this timestamp in case we reconnect
     mqtt_inactive_disconnect_requested = true;
+    mqtt_clear_reconnect_timeout();
+    mqtt_reset_reconnect_backoff();
     try {
         if (mqtt_safe_client_connected()) {
             client.disconnect(); // Disconnect mqtt
