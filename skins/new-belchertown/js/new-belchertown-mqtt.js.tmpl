@@ -615,8 +615,9 @@ function connect() {
     client = new Paho.Client("$Extras.mqtt_websockets_host", $Extras.mqtt_websockets_port, clientId);
     // #end if
     client.onConnectionLost = onConnectionLost;
+    client.onConnected = onConnected;
     client.onMessageArrived = onMessageArrived;
-    belchertown_debug("MQTT: Event handlers registered (onConnectionLost, onMessageArrived)");
+    belchertown_debug("MQTT: Event handlers registered (onConnected, onConnectionLost, onMessageArrived)");
     var options = {
         useSSL: useSSL,
         // mqttVersion: 4 is spec MQTTv3.1.1 - mqttVersion: 3 is spec MQTTv3.1
@@ -671,6 +672,16 @@ function onConnect() {
     belchertown_debug("MQTT: Topic subscription request sent");
     mqtt_schedule_activity_timeout();
     mqtt_schedule_stale_timeout();
+}
+
+// MQTT automatic reconnect callback
+function onConnected(reconnect, uri) {
+    if (!reconnect) {
+        return;
+    }
+
+    belchertown_debug("MQTT: [" + new Date().toISOString() + "] Automatic reconnect completed" + (uri ? " via " + uri : ""));
+    onConnect();
 }
 
 // MQTT Failure
