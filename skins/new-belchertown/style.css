@@ -2458,11 +2458,10 @@ p.entry-meta {
 }
 
 .almanac-diagram-object {
-  transition: transform 0.25s ease, filter 0.25s ease;
+  transition: transform 0.25s ease;
 }
 
 .almanac-diagram-object.is-below-horizon {
-  filter: saturate(0.7) brightness(0.75);
   opacity: 1;
 }
 
@@ -2472,10 +2471,20 @@ p.entry-meta {
   stroke-width: 4.8;
 }
 
+.almanac-diagram-object--sun.is-below-horizon .almanac-diagram-object-core {
+  fill: #c8922f;
+  stroke: #854d0e;
+}
+
 .almanac-diagram-object--moon .almanac-diagram-object-core {
   fill: #d7e0f2;
   stroke: #64748b;
   stroke-width: 4.8;
+}
+
+.almanac-diagram-object--moon.is-below-horizon .almanac-diagram-object-core {
+  fill: #9aa7bb;
+  stroke: #475569;
 }
 
 .dark .almanac-diagram-object--moon .almanac-diagram-object-core {
@@ -2484,10 +2493,20 @@ p.entry-meta {
   stroke-width: 4.8;
 }
 
+.dark .almanac-diagram-object--moon.is-below-horizon .almanac-diagram-object-core {
+  fill: #8f9bad;
+  stroke: #aeb8c8;
+}
+
 .dark .almanac-diagram-object--sun .almanac-diagram-object-core {
   fill: #fbbf24;
   stroke: #fcd34d;
   stroke-width: 4.8;
+}
+
+.dark .almanac-diagram-object--sun.is-below-horizon .almanac-diagram-object-core {
+  fill: #b98228;
+  stroke: #d6a537;
 }
 
 .almanac-diagram-object-symbol {
