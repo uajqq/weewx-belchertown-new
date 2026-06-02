@@ -34,3 +34,7 @@ If you are upgrading from a pre-2.0 version, make sure you read the installation
 * Highcharts Dark Unica CSS for the Highcharts dark mode
 * Brian at [weather34.com](http://weather34.com) for the weather icons from the simplicty 2015 theme. Used with agreement
 * Some icons remixed by michaelundwd. Thanks!
+
+### License notes
+
+Core New Belchertown project code is licensed under the GNU GPLv3; see [LICENSE](LICENSE). Highcharts, as well as some bundled assets, copied CSS, browser-loaded libraries, and optional runtime services, are under separate terms as noted above. Highcharts can be disabled entirely in the settings if desired. 
