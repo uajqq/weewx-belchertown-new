@@ -4,6 +4,18 @@
 
 This skin is a fork of [Pat O'Brien](https://github.com/poblabs)'s excellent Belchertown skin for the [WeeWX weather software](http://weewx.com) and is modeled after [BelchertownWeather.com](https://belchertownweather.com). 
 
+<table>
+  <tr>
+    <td width="50%">
+      <img alt="Light mode front page example" src="https://github.com/user-attachments/assets/fbbf416e-9cc2-4b2b-8995-ebf9abb96bc3" width="100%" />
+    </td>
+    <td width="50%">
+      <img alt="Dark mode front page example" src="https://github.com/user-attachments/assets/a2ff7663-c9ee-4027-88ab-5277bacc3e8b" width="100%" />
+    </td>
+  </tr>
+</table>
+<img width="1443" height="1344" alt="Beverly Hospital Weather Conditions2" src="https://github.com/user-attachments/assets/bfbcbca4-ec82-4d3a-be4b-8300e4095767" />
+
 Features include:
 * Modern, responsive card-based layoutd
 * Real-time streaming updates
