@@ -843,9 +843,9 @@
             "moon_age": "$moon_age_display",
             "moon_age_days": #if $moon_age_days is not None##echo "%.6f" % $moon_age_days##else#null#end if#,
             "moon_rise": "$almanac.moon.rise",
-            "moon_rise_epoch": "$almanac.moon.rise.raw",
+            "moon_rise_epoch": #if $moon_rise_epoch_attr != ""##echo $moon_rise_epoch_attr##else#null#end if#,
             "moon_set": "$almanac.moon.set",
-            "moon_set_epoch": "$almanac.moon.set.raw"
+            "moon_set_epoch": #if $moon_set_epoch_attr != ""##echo $moon_set_epoch_attr##else#null#end if#
         }
     }
 }

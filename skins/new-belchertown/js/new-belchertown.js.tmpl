@@ -2119,6 +2119,23 @@ async function ajaxweewx() {
 var unit_rounding_array = "";
 var unit_label_array = "";
 var weewx_data = "";
+
+function formatAlmanacEpochTime(epoch, formatString, unavailableText) {
+    var timestamp = parseFloat(epoch);
+    var adjusted;
+
+    if (!isFinite(timestamp)) {
+        return unavailableText;
+    }
+
+    adjusted = tzAdjustedMoment(timestamp);
+    if (adjusted && typeof adjusted.isValid === "function" && adjusted.isValid()) {
+        return adjusted.format(formatString);
+    }
+
+    return unavailableText;
+}
+
 function enhanceAlmanacExtrasModal(almanacData) {
     var modalBody = jQuery("#almanac-modal .almanac-extras-modal-body");
     var sourceRaw;
@@ -2484,11 +2501,11 @@ function update_weewx_data(data) {
     var monthKey = jQuery("#snapshot-month-select").val() || "month";
     updateMonthlySnapshot(data, monthKey);
 
-    // Sunrise and Sunset            
-    jQuery(".sunrise-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["sunrise_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunrise")));
-    jQuery(".sunset-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["sunset_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunset")));
-    jQuery(".moonrise-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_rise_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunrise")));
-    jQuery(".moonset-value").text(tzAdjustedMoment(parseFloat(data["almanac"]["moon"]["moon_set_epoch"]).toFixed(0)).format(belchertown_label_text("$obs.label.time_sunrise")));
+    // Sunrise, sunset, moonrise and moonset
+    jQuery(".sunrise-value").text(formatAlmanacEpochTime(data["almanac"]["sunrise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["sunrise"] || "N/A"));
+    jQuery(".sunset-value").text(formatAlmanacEpochTime(data["almanac"]["sunset_epoch"], belchertown_label_text("$obs.label.time_sunset"), data["almanac"]["sunset"] || "N/A"));
+    jQuery(".moonrise-value").text(formatAlmanacEpochTime(data["almanac"]["moon"]["moon_rise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_rise"] || "N/A"));
+    jQuery(".moonset-value").text(formatAlmanacEpochTime(data["almanac"]["moon"]["moon_set_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_set"] || "N/A"));
 
     // Moon icon, phase and illumination percent
     jQuery(".moon-container > .moon-icon").html(render_moon_icon_html(data));
