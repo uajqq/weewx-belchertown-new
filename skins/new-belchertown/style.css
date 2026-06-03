@@ -5166,12 +5166,21 @@ span.highcharts-title {
 
 .records .records-section-card__header {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
   margin-bottom: 18px;
   padding: 0;
   text-align: center;
+}
+
+.records .records-section-card__header::after {
+  content: "";
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  border-top: 1px solid var(--homepage-card-border);
 }
 
 .records .records-section-card__title {
@@ -5203,12 +5212,17 @@ span.highcharts-title {
 }
 
 .records .records-section-card__table {
+  --records-sticky-column-bg: #fff;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+}
+
+.dark .records .records-section-card__table {
+  --records-sticky-column-bg: #222;
 }
 
 .records .records-section-card__period-header {
@@ -5222,7 +5236,14 @@ span.highcharts-title {
 }
 
 .records .records-section-card__period-header-spacer {
+  position: -webkit-sticky;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  align-self: stretch;
   min-width: 0;
+  background-color: var(--records-sticky-column-bg);
+  box-shadow: 6px 0 0 var(--records-sticky-column-bg);
 }
 
 .records .records-section-card__period-header-cell {
@@ -5264,15 +5285,20 @@ span.highcharts-title {
 
 .records .records-record-card__title {
   display: flex;
+  position: -webkit-sticky;
+  position: sticky;
+  left: 0;
+  z-index: 2;
   align-items: center;
   justify-content: flex-start;
   margin: 0;
   min-width: 0;
   padding: 8px 4px;
   border-radius: 0;
-  background: transparent !important;
-  background-color: transparent !important;
+  background: var(--records-sticky-column-bg) !important;
+  background-color: var(--records-sticky-column-bg) !important;
   border: 0;
+  box-shadow: 6px 0 0 var(--records-sticky-column-bg);
   font-size: 16px;
   line-height: 1.2;
   text-align: left;
