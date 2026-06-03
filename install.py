@@ -1428,6 +1428,7 @@ files = [
             "skins/new-belchertown/lang/da.conf",
             "skins/new-belchertown/lang/de.conf",
             "skins/new-belchertown/lang/es.conf",
+            "skins/new-belchertown/lang/fi.conf",
             "skins/new-belchertown/lang/fr.conf",
             "skins/new-belchertown/lang/it.conf",
             "skins/new-belchertown/lang/nb.conf",
