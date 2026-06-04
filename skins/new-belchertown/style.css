@@ -5207,12 +5207,15 @@ span.highcharts-title {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: var(--records-grid-min-width);
 }
 
 .records .records-section-card__table {
   --records-sticky-column-bg: #fff;
+  --records-grid-gap: 6px;
+  --records-grid-columns: minmax(112px, 120px) repeat(5, minmax(116px, 1fr));
+  --records-grid-min-width: 722px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -5227,11 +5230,11 @@ span.highcharts-title {
 
 .records .records-section-card__period-header {
   display: grid;
-  grid-template-columns: minmax(112px, 120px) repeat(5, minmax(58px, 1fr));
-  gap: 6px;
+  grid-template-columns: var(--records-grid-columns);
+  gap: var(--records-grid-gap);
   align-items: end;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: var(--records-grid-min-width);
   margin-bottom: 8px;
 }
 
@@ -5263,11 +5266,11 @@ span.highcharts-title {
 
 .records .records-record-card {
   display: grid;
-  grid-template-columns: minmax(112px, 120px) repeat(5, minmax(58px, 1fr));
-  gap: 6px;
+  grid-template-columns: var(--records-grid-columns);
+  gap: var(--records-grid-gap);
   align-items: stretch;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: var(--records-grid-min-width);
   padding: 0;
   border-radius: 16px;
   background: transparent !important;
@@ -5578,12 +5581,9 @@ span.highcharts-title {
     width: 100%;
   }
 
-  .records .records-record-card {
-    grid-template-columns: minmax(108px, 114px) repeat(5, minmax(56px, 1fr));
-  }
-
-  .records .records-section-card__period-header {
-    grid-template-columns: minmax(108px, 114px) repeat(5, minmax(56px, 1fr));
+  .records .records-section-card__table {
+    --records-grid-columns: minmax(108px, 114px) repeat(5, minmax(108px, 1fr));
+    --records-grid-min-width: 678px;
   }
 }
 
@@ -5614,14 +5614,17 @@ span.highcharts-title {
   }
 
   .records .records-record-card {
-    gap: 6px;
-    grid-template-columns: minmax(100px, 106px) repeat(5, minmax(56px, 1fr));
+    gap: var(--records-grid-gap);
   }
 
   .records .records-section-card__period-header {
-    gap: 6px;
-    grid-template-columns: minmax(100px, 106px) repeat(5, minmax(56px, 1fr));
+    gap: var(--records-grid-gap);
     margin-bottom: 6px;
+  }
+
+  .records .records-section-card__table {
+    --records-grid-columns: minmax(100px, 106px) repeat(5, minmax(104px, 1fr));
+    --records-grid-min-width: 650px;
   }
 
   .records .records-section-card__period-header-cell {
