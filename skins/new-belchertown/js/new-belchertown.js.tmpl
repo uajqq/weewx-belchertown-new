@@ -2444,6 +2444,7 @@ function updateMonthlySnapshot(data, key) {
     jQuery(".monthstatsuvmax").html(getNestedValue(d, ["uv", "max"]));
     jQuery(".monthstatsradiationavg").html(getNestedValue(d, ["solar_radiation", "average"]));
     jQuery(".monthstatsradiationmax").html(getNestedValue(d, ["solar_radiation", "max"]));
+    jQuery(".monthstatssunshineDur").html(getNestedValue(d, ["sunshineDur", "sum"]));
 }
 
 jQuery(document).on("change", "#snapshot-day-select", function() {
