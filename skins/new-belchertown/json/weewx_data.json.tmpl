@@ -241,6 +241,7 @@
             "max": "$day.outTemp.max",
             "max_formatted": "$day.outTemp.max.formatted",
             "maxtime": "$day.outTemp.maxtime",
+            "average": "$day.outTemp.avg",
             "min": "$day.outTemp.min",
             "min_formatted": "$day.outTemp.min.formatted",
             "mintime": "$day.outTemp.mintime"
@@ -330,6 +331,7 @@
             "max": "$span(time_delta=604800).outTemp.max",
             "maxtime": "$span(time_delta=604800).outTemp.maxtime",
             "maxtime_raw": "$span(time_delta=604800).outTemp.maxtime.raw",
+            "average": "$span(time_delta=604800).outTemp.avg",
             "min": "$span(time_delta=604800).outTemp.min",
             "mintime": "$span(time_delta=604800).outTemp.mintime",
             "mintime_raw": "$span(time_delta=604800).outTemp.mintime.raw"
@@ -431,6 +433,7 @@
             "max": "$month.outTemp.max",
             "maxtime": "$month.outTemp.maxtime",
             "maxtime_raw": "$month.outTemp.maxtime.raw",
+            "average": "$month.outTemp.avg",
             "min": "$month.outTemp.min",
             "mintime": "$month.outTemp.mintime",
             "mintime_raw": "$month.outTemp.mintime.raw"
@@ -504,6 +507,11 @@
             "average": "$month.UV.avg",
             "min": "$month.UV.min",
             "mintime": "$month.UV.mintime"
+        },
+        #end if
+        #if $month.sunshineDur.has_data
+        "sunshineDur": {
+            "sum": "$month.sunshineDur.sum"
         },
         #end if
         #if $month.radiation.has_data
@@ -588,6 +596,11 @@
             "mintime": "$year.UV.mintime"
         },
         #end if
+        #if $year.sunshineDur.has_data
+        "sunshineDur": {
+            "sum": "$year.sunshineDur.sum"
+        },
+        #end if
         #if $year.radiation.has_data
         "solar_radiation": {
             "max": "$year.radiation.max",
@@ -608,6 +621,7 @@
             "max": "$yesterday.outTemp.max",
             "maxtime": "$yesterday.outTemp.maxtime",
             "maxtime_raw": "$yesterday.outTemp.maxtime.raw",
+            "average": "$yesterday.outTemp.avg",
             "min": "$yesterday.outTemp.min",
             "mintime": "$yesterday.outTemp.mintime",
             "mintime_raw": "$yesterday.outTemp.mintime.raw"
@@ -698,7 +712,8 @@
     "last365": {
         "outTemp": {
             "max": "$span(time_delta=31536000).outTemp.max",
-            "min": "$span(time_delta=31536000).outTemp.min"
+            "min": "$span(time_delta=31536000).outTemp.min",
+            "average": "$span(time_delta=31536000).outTemp.avg"
         },
         "wind": {
             "max": "$span(time_delta=31536000).wind.max",
@@ -714,6 +729,11 @@
         "solar_radiation": {
             "max": "$span(time_delta=31536000).radiation.max",
             "average": "$span(time_delta=31536000).radiation.avg"
+        },
+        #end if
+        #if $year.sunshineDur.has_data
+        "sunshineDur": {
+            "sum": "$span(time_delta=31536000).sunshineDur.sum"
         },
         #end if
         "rain": {
