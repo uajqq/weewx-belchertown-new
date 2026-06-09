@@ -5215,7 +5215,7 @@ span.highcharts-title {
   --records-sticky-column-bg: #fff;
   --records-grid-gap: 6px;
   --records-grid-columns: minmax(112px, 120px) repeat(6, minmax(116px, 1fr));
-  --records-grid-min-width: 722px;
+  --records-grid-min-width: 844px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -5583,7 +5583,7 @@ span.highcharts-title {
 
   .records .records-section-card__table {
     --records-grid-columns: minmax(108px, 114px) repeat(6, minmax(108px, 1fr));
-    --records-grid-min-width: 678px;
+    --records-grid-min-width: 792px;
   }
 }
 
@@ -5624,7 +5624,7 @@ span.highcharts-title {
 
   .records .records-section-card__table {
     --records-grid-columns: minmax(100px, 106px) repeat(6, minmax(104px, 1fr));
-    --records-grid-min-width: 650px;
+    --records-grid-min-width: 760px;
   }
 
   .records .records-section-card__period-header-cell {

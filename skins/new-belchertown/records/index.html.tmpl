@@ -74,7 +74,7 @@
             var hasWindRun = "$year.windrun.has_data" === "True" && "$alltime.windrun.has_data" === "True";
             var hasRadiation = "$year.radiation.has_data" === "True";
             var hasUv = "$year.UV.has_data" === "True";
-            var hassunshineDur = "$year.sunshineDur.has_data" === "True";
+            var hasSunshineDur = "$year.sunshineDur.has_data" === "True";
 
             var temperatureRows = [
                 makeRecord(
@@ -88,7 +88,7 @@
                     "$obs.label.records_avg_temp",
                     metric("outTemp", "average"),
                     { value: "$year.outTemp.avg" },
-                    { value: "$alltime.outTemp.avg"},
+                    { value: "$alltime.outTemp.avg" },
                     { hideDatePeriods: ["day", "yesterday", "week", "month", "year", "alltime"] }
                 ),
                 makeRecord(
@@ -227,8 +227,8 @@
                             null,
                             { value: "$year_rainiest_month[1] $unit.label.rain", dateText: "$year_rainiest_month[0]", dateRaw: null },
                             { value: "$at_rainiest_month[1] $unit.label.rain", dateText: "$at_rainiest_month[0]", dateRaw: null },
-                            { 
-                              dashPeriods: ["day", "yesterday", "week", "month"],
+                            {
+                                dashPeriods: ["day", "yesterday", "week", "month"]
                             }
                         ),
                         makeRecord(
@@ -328,7 +328,7 @@
                 }
             ];
 
-            if (hasRadiation || hasUv) {
+            if (hasRadiation || hasUv || hasSunshineDur) {
                 var sunRows = [];
 
                 if (hasUv) {
@@ -353,34 +353,18 @@
                             { hideDatePeriods: ["day"] }
                         )
                     );
-                    if (hassunshineDur) {
-                        sunRows.push(
-                            makeRecord(
-                                "$obs.label.records_total_sunshine",
-                                metric("sunshineDur", "sum"),
-                                { value: "$year.sunshineDur.sum", dateText: null },
-                                { value: "$alltime.sunshineDur.sum", dateText: null },
-                                { omitTime: true, hideDatePeriods: ["day", "yesterday", "week", "month", "year", "alltime"] }
-                            ),
-                            ##makeRecord(
-                            ##   "$obs.label.records_month_high_sunshine",
-                            ##    null,
-                            ##    { value: "$year_suniest_month[1] $unit.label.sunshineDur", dateText: "$year_suniest_month[0]", dateRaw: null },
-                            ##    { value: "$at_suniest_month[1] $unit.label.sunshineDur", dateText:"$at_suniest_month[0]", dateRaw: null },
-                            ##    { dashPeriods: ["day", "yesterday", "week", "month"] }
-                            ##),
-                            ##makeRecord(
-                            ##    "$obs.label.records_year_hight_sunshine",
-                            ##    null,
-                            ##    { value: "$year.sunshineDur.sum" , dateText: "$current.dateTime.format('%Y')", dateRaw: null  },
-                            ##    { value: "$at_sunshineDur_highest_year[1] $unit.label.sunshineDur", dateText: "$at_sunshineDur_highest_year[0]", dateRaw: null },
-                            ##    { 
-                            ##      dashPeriods: ["day", "yesterday", "week", "month"],
-                            ##    }
-                            ##),
+                }
 
-                        );
-                    }
+                if (hasSunshineDur) {
+                    sunRows.push(
+                        makeRecord(
+                            "$obs.label.records_total_sunshine",
+                            metric("sunshineDur", "sum"),
+                            { value: "$year.sunshineDur.sum", dateText: null },
+                            { value: "$alltime.sunshineDur.sum", dateText: null },
+                            { omitTime: true, hideDatePeriods: ["day", "yesterday", "week", "month", "year", "alltime"] }
+                        )
+                    );
                 }
 
                 sections.push({
@@ -798,11 +782,6 @@
         } else {
             enhanceRecordsPage(null);
         }
-
-        // #if $year.sunshineDur.has_data
-        jQuery("#year-suniest-day-ts").text( tzAdjustedMoment($suniest_day[0]).format( "$obs.label.time_records_page_month_day_year" ) );
-        jQuery("#at-suniest-day-ts").text( tzAdjustedMoment($at_suniest_day[0] - 0).format( "$obs.label.time_records_page_month_day_year" ) );
-        // #end if
 
     });
 
