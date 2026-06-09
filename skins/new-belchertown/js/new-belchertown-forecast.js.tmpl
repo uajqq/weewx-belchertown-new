@@ -1,19 +1,58 @@
 // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
 var forecast_last_updated_epoch = null;
 var forecast_relative_timer = null;
+var forecast_refresh_timer = null;
+var forecast_refresh_in_progress = false;
+var forecast_last_fetch_ms = 0;
+var forecast_resume_refresh_min_ms = 60000;
+var forecast_refresh_interval_seconds = 3540;
+var forecast_current_conditions_refresh_interval_seconds = 3540;
+var forecast_resume_events_bound = false;
 var forecast_external_observations = {};
 var forecast_observation_info_bound = false;
 var forecast_station_observation_sources = $station_obs_source_json;
+// #if $Extras.has_key("forecast_stale")
+forecast_refresh_interval_seconds = "$Extras.forecast_stale";
+// #end if
+// #if $Extras.has_key("current_conditions_stale")
+forecast_current_conditions_refresh_interval_seconds = "$Extras.current_conditions_stale";
+// #end if
+
+function forecast_refresh_seconds(value, fallback) {
+    const seconds = parseFloat(value);
+    return isFinite(seconds) && seconds > 0 ? seconds : fallback;
+}
+
+function forecast_refresh_interval_ms() {
+    const forecastSeconds = forecast_refresh_seconds(forecast_refresh_interval_seconds, 3540);
+    const currentConditionsSeconds = forecast_refresh_seconds(forecast_current_conditions_refresh_interval_seconds, 3540);
+    return Math.max(Math.min(forecastSeconds, currentConditionsSeconds), 60) * 1000;
+}
+
+function forecast_json_url(filename) {
+    return get_relative_url() + "/json/" + filename + "?_=" + Date.now();
+}
 
 function ajaxforecast() {
+    const nowMs = Date.now();
+    forecast_bind_resume_events();
+    forecast_start_refresh_timer();
+
+    if (forecast_refresh_in_progress) {
+        return jQuery.Deferred().resolve().promise();
+    }
+
+    forecast_refresh_in_progress = true;
+    forecast_last_fetch_ms = nowMs;
     forecast_data = {};
     current_conditions_data = {};
 
     const pCurrent = jQuery
         .ajax({
-            url: get_relative_url() + "/json/current_conditions.json",
+            url: forecast_json_url("current_conditions.json"),
             dataType: "json",
-            headers: {"Cache-Control": "no-cache"},
+            cache: false,
+            headers: {"Cache-Control": "no-cache, no-store"},
         })
         .done(function(current_conditions) {
             current_conditions_data = current_conditions;
@@ -21,9 +60,10 @@ function ajaxforecast() {
 
     const pForecast = jQuery
         .ajax({
-            url: get_relative_url() + "/json/forecast.json",
+            url: forecast_json_url("forecast.json"),
             dataType: "json",
-            headers: {"Cache-Control": "no-cache"},
+            cache: false,
+            headers: {"Cache-Control": "no-cache, no-store"},
         })
         .done(function(forecast) {
             forecast_data = forecast;
@@ -31,14 +71,51 @@ function ajaxforecast() {
 
     const promises = [pCurrent, pForecast];
 
-    jQuery.when.apply(jQuery, promises)
+    return jQuery.when.apply(jQuery, promises)
         .then(function() {
             update_current_conditions(current_conditions_data, forecast_data);
             update_forecast_data(forecast_data);
         })
         .fail(function(err) {
             console.error("Forecast fetch failed:", err);
+        })
+        .always(function() {
+            forecast_refresh_in_progress = false;
         });
+}
+
+function forecast_start_refresh_timer() {
+    if (forecast_refresh_timer !== null) {
+        return;
+    }
+    forecast_refresh_timer = window.setInterval(function() {
+        if (!document.hidden) {
+            ajaxforecast();
+        }
+    }, forecast_refresh_interval_ms());
+}
+
+function forecast_refresh_after_resume() {
+    if (document.hidden) {
+        return;
+    }
+    forecast_render_relative_timestamps();
+    if (forecast_last_fetch_ms && (Date.now() - forecast_last_fetch_ms) < forecast_resume_refresh_min_ms) {
+        return;
+    }
+    ajaxforecast();
+}
+
+function forecast_bind_resume_events() {
+    if (forecast_resume_events_bound) {
+        return;
+    }
+    forecast_resume_events_bound = true;
+
+    document.addEventListener("visibilitychange", forecast_refresh_after_resume);
+    window.addEventListener("focus", forecast_refresh_after_resume);
+    window.addEventListener("pageshow", forecast_refresh_after_resume);
+    window.addEventListener("online", forecast_refresh_after_resume);
 }
 
 function forecast_trim_sentence_end(value) {
