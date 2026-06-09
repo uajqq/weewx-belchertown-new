@@ -1205,6 +1205,24 @@ p.entry-meta {
 .forecast-card-bottom {
   align-self: end;
   margin-top: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.forecast-temp-range,
+.forecast-wind-speed,
+.forecast-wind-gust {
+  white-space: nowrap;
+}
+
+.forecast-wind {
+  align-items: baseline;
+  column-gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  line-height: 1.35;
+  max-width: 100%;
 }
 
 .snow-precip,
@@ -3707,8 +3725,8 @@ table.celestial td.label {
 }
 
 .frontpage .homepage-card--forecast .forecast-24hour {
-  flex: 0 1 165px;
-  min-width: 120px;
+  flex: 1 1 165px;
+  min-width: 132px;
   width: 165px;
   max-width: none;
   padding-left: 8px;
@@ -5745,31 +5763,30 @@ span.highcharts-title {
 .threehr_forecasts .forecast-3hour,
 .day_forecasts .forecast-24hour {
   box-sizing: border-box;
-  flex-shrink: 1;
   max-width: none;
 }
 
 .forecasts .forecast-day {
-  flex: 0 1 165px;
+  flex: 1 1 165px;
   min-width: 120px;
   width: 165px;
 }
 
 .onehr_forecasts .forecast-1hour {
-  flex: 0 1 72px;
+  flex: 1 1 72px;
   min-width: 56px;
   width: 72px;
 }
 
 .threehr_forecasts .forecast-3hour {
-  flex: 0 1 144px;
+  flex: 1 1 144px;
   min-width: 108px;
   width: 144px;
 }
 
 .day_forecasts .forecast-24hour {
-  flex: 0 1 165px;
-  min-width: 120px;
+  flex: 1 1 165px;
+  min-width: 132px;
   width: 165px;
 }
 

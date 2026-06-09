@@ -693,9 +693,9 @@ function forecast_metric_rows(row) {
 function forecast_wind_html(row, includeGust) {
     const windSpeedText = forecast_plain_number_text(row["windSpeed"]);
     let html = '<div class="forecast-wind">';
-    html += '<i class="wi wi-strong-wind"></i> <span>' + windSpeedText + '</span>';
+    html += '<i class="wi wi-strong-wind"></i> <span class="forecast-wind-speed">' + windSpeedText + '</span>';
     if (includeGust) {
-        html += ' | <span> ' + forecast_plain_number_text(row["windGust"]) + belchertown_label_html("$unit.label.windSpeed") + '</span>';
+        html += '<span class="forecast-wind-separator">|</span><span class="forecast-wind-gust">' + forecast_plain_number_text(row["windGust"]) + belchertown_label_html("$unit.label.windSpeed") + '</span>';
     }
     html += '</div>';
     return html;
@@ -794,7 +794,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
         const tempNum = forecast_number(row["temperature"]);
         const imageUrl = forecast_icon_url(row["icon"]);
 
-        html += '<div class="forecast-day ' + tileClass + ' forecast-tile ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/' + maxTiles + '); max-width:calc(100%/' + maxTiles + ');">';
+        html += '<div class="forecast-day ' + tileClass + ' forecast-tile ' + (i === 0 ? 'forecast-today' : 'border-left') + '">';
         html += '<div class="forecast-card-label"><span id="weekday">' + timeLabel + '</span></div>';
 
         if (forecastInterval === "forecast_1hr") {
@@ -842,7 +842,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
         const dayLabel = tzAdjustedMoment((row["time"] || 0) + 7200).format(belchertown_forecast_date_format("$obs.label.time_forecast_date"));
         const imageUrl = forecast_icon_url(row["icon"]);
 
-        html += '<div class="forecast-day forecast-24hour forecast-tile ' + (i === 0 ? 'forecast-today' : 'border-left') + '" style="flex:0 0 calc(100%/7); max-width:calc(100%/7);">';
+        html += '<div class="forecast-day forecast-24hour forecast-tile ' + (i === 0 ? 'forecast-today' : 'border-left') + '">';
         html += '<div class="forecast-card-label"><span id="weekday">' + dayLabel + '</span></div>';
         html += '<div class="forecast-conditions">';
         html += '<img class="forecast-icon" src="' + imageUrl + '" alt="" width="128" height="101" loading="lazy" decoding="async">';
@@ -850,7 +850,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
         html += '<span class="forecast-condition-text">' + (row["summary"] || "") + '</span>';
         html += '</div>';
         html += '<div class="forecast-card-bottom">';
-        html += '<span class="forecast-high">' + forecast_temp_text(row["temperatureHigh"]) + '</span> | <span class="forecast-low">' + forecast_temp_text(row["temperatureLow"]) + '</span>';
+        html += '<span class="forecast-temp-range"><span class="forecast-high">' + forecast_temp_text(row["temperatureHigh"]) + '</span> | <span class="forecast-low">' + forecast_temp_text(row["temperatureLow"]) + '</span></span>';
         html += '<br>';
         html += '<div class="forecast-precip">' + forecast_metric_rows(row) + '</div>';
         html += forecast_wind_html(row, true);
