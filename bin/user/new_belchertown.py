@@ -154,6 +154,26 @@ VALID_FORECAST_PROVIDERS = (
     "pirateweather",
 )
 
+VALID_FORECAST_UNITS = (
+    "us",
+    "si",
+    "ca",
+    "uk2",
+)
+
+FORECAST_UNIT_ALIASES = {
+    "imperial": "us",
+    "metric": "ca",
+    "metricwx": "si",
+}
+
+OPENMETEO_UNIT_PARAMS = {
+    "us": ("fahrenheit", "mph", "inch"),
+    "si": ("celsius", "ms", "mm"),
+    "ca": ("celsius", "kmh", "mm"),
+    "uk2": ("celsius", "mph", "mm"),
+}
+
 METEOALARM_COUNTRY_SLUG_BY_TIMEZONE = {
     "africa/ceuta": "spain",
     "arctic/longyearbyen": "norway",
@@ -469,7 +489,7 @@ def _compact_alert_title(*candidates, default="Alert"):
     return default
 
 
-def _pw_transform_to_belch(pw):
+def _pw_transform_to_belch(pw, forecast_units=None):
     """Map Dark Sky-style JSON from Pirate Weather to the compact structure
     this skin uses: current, hourly[], daily[], alerts[].
     """
@@ -525,6 +545,7 @@ def _pw_transform_to_belch(pw):
         "daily": daily,
         "alerts": alerts,
         "provider": "pirateweather",
+        "units": forecast_units,
         "schema": "belchertown.forecast.v1",
         "generated_at": int(time.time()),
     }
@@ -547,6 +568,86 @@ def _write_json_file(file_path, payload):
         json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
 
 
+def _canonical_forecast_provider(provider):
+    """Return the provider key used in normalized forecast payloads."""
+    provider_key = str(provider or "").strip().lower()
+    if provider_key == "xweather":
+        return "aeris"
+    return provider_key
+
+
+def _forecast_units_from_weewx_target(config_dict):
+    """Map WeeWX StdConvert target_unit nicknames to forecast API units."""
+    try:
+        target_unit = (
+            (config_dict or {})
+            .get("StdConvert", {})
+            .get("target_unit", "US")
+        )
+    except Exception:
+        target_unit = "US"
+
+    target_unit = str(target_unit or "").strip().lower()
+    if target_unit == "metricwx":
+        return "si"
+    if target_unit == "metric":
+        return "ca"
+    return "us"
+
+
+def _normalize_forecast_units(forecast_units, config_dict=None):
+    """Normalize configured forecast units to us, si, ca, or uk2."""
+    unit_key = str(forecast_units or "").strip().lower()
+    if unit_key in ("", "auto", "weewx"):
+        return _forecast_units_from_weewx_target(config_dict)
+
+    unit_key = FORECAST_UNIT_ALIASES.get(unit_key, unit_key)
+    if unit_key in VALID_FORECAST_UNITS:
+        return unit_key
+
+    fallback = _forecast_units_from_weewx_target(config_dict)
+    log.warning(
+        "Invalid forecast_units '%s'. Valid values are: %s. "
+        "Using '%s' from WeeWX target_unit.",
+        forecast_units,
+        ", ".join(VALID_FORECAST_UNITS),
+        fallback,
+    )
+    return fallback
+
+
+def _openmeteo_unit_params(forecast_units):
+    """Return Open-Meteo API unit parameters for a normalized forecast unit key."""
+    return OPENMETEO_UNIT_PARAMS.get(forecast_units, OPENMETEO_UNIT_PARAMS["us"])
+
+
+def _forecast_cache_matches_config(forecast_file, forecast_provider, forecast_units):
+    """Return True when cached forecast JSON was generated for this provider/units."""
+    try:
+        with open(forecast_file, "r", encoding="utf-8") as read_file:
+            cached = json.load(read_file)
+    except Exception as e:
+        log.debug(f"Forecast cache metadata check failed: {e}")
+        return False
+
+    if not isinstance(cached, dict):
+        return False
+
+    cached_provider = _canonical_forecast_provider(cached.get("provider"))
+    expected_provider = _canonical_forecast_provider(forecast_provider)
+    provider_matches = (
+        cached_provider == expected_provider
+        or (expected_provider == "nws" and cached_provider == "open-meteo")
+    )
+    cached_units = _normalize_forecast_units(cached.get("units"), None)
+
+    return (
+        cached.get("schema") == "belchertown.forecast.v1"
+        and provider_matches
+        and cached_units == forecast_units
+    )
+
+
 def _write_current_conditions_from_forecast(forecast_file, current_conditions_file):
     """Write current_conditions.json from forecast.json current object."""
     with open(forecast_file, "r", encoding="utf-8") as rf:
@@ -555,6 +656,7 @@ def _write_current_conditions_from_forecast(forecast_file, current_conditions_fi
     cc_out = {
         "timestamp": int(time.time()),
         "provider": data_cc.get("provider"),
+        "units": data_cc.get("units"),
         "source": "forecast",
         "current": [data_cc.get("current", {})],
     }
@@ -740,6 +842,7 @@ def _nws_visibility_quantity_qualifier(visibility_m):
 NWS_FORECAST_TARGET_TEMP_UNIT = {
     "si": "degree_C",
     "ca": "degree_C",
+    "uk2": "degree_C",
 }
 
 NWS_FORECAST_TARGET_SPEED_UNIT = {
@@ -848,7 +951,7 @@ def _precip_mm_to_forecast_units(precip_mm, forecast_units):
     precip_mm_float = _safe_float(precip_mm)
     if precip_mm_float is None:
         return None
-    if forecast_units in ("si", "ca"):
+    if forecast_units in ("si", "ca", "uk2"):
         return precip_mm_float
     return precip_mm_float / 25.4
 
@@ -1594,6 +1697,7 @@ def _nws_transform_to_belch(
         "daily": _nws_build_daily(forecast_payload, forecast_units),
         "alerts": _nws_build_alerts(alerts_payload),
         "provider": "nws",
+        "units": forecast_units,
         "schema": "belchertown.forecast.v1",
         "generated_at": int(time.time()),
     }
@@ -1974,6 +2078,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
         "daily": daily,
         "alerts": [],
         "provider": "open-meteo",
+        "units": forecast_units,
         "schema": "belchertown.forecast.v1",
         "generated_at": generated_at,
     }
@@ -2420,6 +2525,7 @@ def _aeris_transform_to_belch(aeris_payload, forecast_units, label_dict, icon_ma
         "alerts": _aeris_alerts_to_common(aeris_payload, label_dict),
         "aqi": aeris_payload.get("aqi", []),
         "provider": "aeris",
+        "units": forecast_units,
         "schema": "belchertown.forecast.v1",
         "generated_at": _safe_epoch(aeris_payload.get("timestamp")) or int(time.time()),
     }
@@ -2480,7 +2586,7 @@ def _aeris_current_to_common(current_payload, current_conditions, forecast_units
         "pressure": _safe_float(current_data.get("pressureMB")),
         "visibility": visibility,
         "dewPoint": dewpoint,
-        "precipIntensity": _safe_float(current_data.get("precipMM" if forecast_units in ("si", "ca") else "precipIN")),
+        "precipIntensity": _safe_float(current_data.get("precipMM" if forecast_units in ("si", "ca", "uk2") else "precipIN")),
         "precipProbability": None,
         "cloudCover": _safe_float(current_data.get("sky")),
         "weatherCode": current_data.get("weatherPrimaryCoded"),
@@ -2495,6 +2601,7 @@ def _aeris_current_to_common(current_payload, current_conditions, forecast_units
     return {
         "timestamp": _safe_epoch(current_payload.get("timestamp")) or int(time.time()),
         "provider": "aeris",
+        "units": forecast_units,
         "schema": "belchertown.current.v1",
         "current": [current],
     }
@@ -4911,7 +5018,7 @@ class getData(SearchList):
         # ==============================================================================
 
         # provider switch (default NWS)
-        forecast_provider = str(extras_dict.get("forecast_provider", "nws")).strip()
+        forecast_provider = str(extras_dict.get("forecast_provider", "nws")).strip().lower()
         if forecast_provider not in VALID_FORECAST_PROVIDERS:
             log.warning(
                 "Invalid forecast_provider '%s'. Valid values are: %s. "
@@ -4961,7 +5068,17 @@ class getData(SearchList):
 
                 forecast_api_id = extras_dict.get("forecast_api_id", "")
                 forecast_api_secret = extras_dict.get("forecast_api_secret", "")
-                forecast_units = extras_dict.get("forecast_units", "us").lower()
+                forecast_units_config = extras_dict.get("forecast_units", "auto")
+                if (
+                    "forecast_units" not in report_extras_dict
+                    and str(forecast_units_config or "").strip().lower() == "us"
+                ):
+                    forecast_units_config = "auto"
+                forecast_units = _normalize_forecast_units(
+                    forecast_units_config,
+                    config_dict,
+                )
+                extras_dict["forecast_units"] = forecast_units
                 forecast_lang = extras_dict.get("forecast_lang", "en").lower()
 
                 latitude = config_dict["Station"]["latitude"]
@@ -5030,6 +5147,7 @@ class getData(SearchList):
                 )
                 current_time = int(time.time())
 
+                forecast_cache_config_changed = False
                 if os.path.isfile(forecast_file):
                     # new_belchertown.py is called 12 times per archive, so the last condition ensures forecast on the hour is only downloaded once
                     forecast_stat = os.stat(forecast_file)
@@ -5045,6 +5163,18 @@ class getData(SearchList):
                             and (current_time - file_modtime) > archive_interval
                         )
                     )
+                    if not _forecast_cache_matches_config(
+                        forecast_file,
+                        forecast_provider,
+                        forecast_units,
+                    ):
+                        cache_already_stale = forecast_is_stale
+                        forecast_is_stale = True
+                        forecast_cache_config_changed = True
+                        if not cache_already_stale:
+                            log.info(
+                                "Forecast cache provider or units changed; refreshing forecast data."
+                            )
                 else:
                     forecast_is_stale = True
                 current_conditions_is_stale = True
@@ -5056,6 +5186,8 @@ class getData(SearchList):
                     ) > current_conditions_stale_timer or (
                         current_conditions_stat.st_size == 0
                     )
+                if forecast_cache_config_changed:
+                    current_conditions_is_stale = True
 
                 if forecast_provider == "pirateweather":
                     # Fetch → normalize → write forecast
@@ -5063,7 +5195,10 @@ class getData(SearchList):
                         try:
                             url = f"https://api.pirateweather.net/forecast/{forecast_api_id}/{forecast_place}?units={forecast_units}&lang={forecast_lang}&exclude=minutely"
                             pw_raw = _http_get_json(url)
-                            normalized = _pw_transform_to_belch(pw_raw)
+                            normalized = _pw_transform_to_belch(
+                                pw_raw,
+                                forecast_units,
+                            )
                             _write_json_file(forecast_file, normalized)
                             log.debug(
                                 f"New Pirate Weather forecast cached to {forecast_file}"
@@ -5271,14 +5406,9 @@ class getData(SearchList):
                     )
 
                     # Open-Meteo free API supports direct unit selection.
-                    if forecast_units in ("si", "ca"):
-                        om_temp_unit = "celsius"
-                        om_wind_unit = "kmh"
-                        om_precip_unit = "mm"
-                    else:
-                        om_temp_unit = "fahrenheit"
-                        om_wind_unit = "mph"
-                        om_precip_unit = "inch"
+                    om_temp_unit, om_wind_unit, om_precip_unit = _openmeteo_unit_params(
+                        forecast_units
+                    )
 
                     if forecast_is_stale:
                         try:
@@ -5451,6 +5581,7 @@ class getData(SearchList):
                                     forecast_file_result = response.read()
                                 dev_payload = _parse_aeris_json(forecast_file_result)
                                 if dev_payload.get("schema") == "belchertown.forecast.v1":
+                                    dev_payload["units"] = forecast_units
                                     forecast_file_result = json.dumps(dev_payload)
                                 else:
                                     forecast_file_result = json.dumps(
@@ -5595,6 +5726,7 @@ class getData(SearchList):
                                     forecast_file_result = response.read()
                                 current_payload = _parse_aeris_json(forecast_file_result)
                                 if current_payload.get("schema") == "belchertown.current.v1":
+                                    current_payload["units"] = forecast_units
                                     forecast_file_result = json.dumps(current_payload)
                                 else:
                                     forecast_file_result = json.dumps(
