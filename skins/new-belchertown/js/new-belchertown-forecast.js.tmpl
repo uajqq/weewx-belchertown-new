@@ -436,14 +436,82 @@ function forecast_alert_in_effect_text(alertObj) {
     return "";
 }
 
+function forecast_active_alert_modal() {
+    return jQuery(".modal.in[id^='forecast-alert-'], .modal.show[id^='forecast-alert-']").first();
+}
+
+function forecast_alert_modal_by_id(id) {
+    return id ? jQuery(document.getElementById(id)) : jQuery();
+}
+
+function forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, alertData) {
+    var modal = "";
+    modal += "<!-- Forecast Alert Modal -->";
+    modal += "<div class='modal fade forecast-alert-modal' id='" + forecastAlertId + "' tabindex='-1' role='dialog' aria-labelledby='" + forecastAlertTitleId + "'>";
+    modal += "<div class='modal-dialog' role='document'>";
+    modal += "<div class='modal-content'>";
+    modal += "<div class='modal-header'>";
+    modal += "<button type='button' class='close' data-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'><span aria-hidden='true'>&times;</span></button>";
+    modal += "<h4 class='modal-title' id='" + forecastAlertTitleId + "'>" + forecast_escape_html(alertData["title"]) + "</h4>";
+    modal += "</div>";
+    modal += "<div class='modal-body'>";
+    modal += alertData["body"];
+    modal += "</div>";
+    modal += "<div class='modal-footer'>";
+    modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
+    modal += "</div>";
+    modal += "</div>";
+    modal += "</div>";
+    modal += "</div>";
+    return modal;
+}
+
+function forecast_update_alert_modal(modal, forecastAlertTitleId, alertData) {
+    modal
+        .addClass("forecast-alert-modal")
+        .attr("aria-labelledby", forecastAlertTitleId);
+    modal.find(".modal-title")
+        .attr("id", forecastAlertTitleId)
+        .html(forecast_escape_html(alertData["title"]));
+    modal.find(".modal-body").html(alertData["body"]);
+}
+
+function forecast_remove_stale_alert_modals(currentAlertIds, activeAlertId) {
+    jQuery(".forecast-alert-modal, .modal[id^='forecast-alert-']").each(function() {
+        var modal = jQuery(this);
+        var modalId = modal.attr("id");
+
+        if (currentAlertIds[modalId]) {
+            return;
+        }
+
+        if (modalId === activeAlertId) {
+            modal.one("hidden.bs.modal", function() {
+                jQuery(this).remove();
+            });
+            return;
+        }
+
+        modal.remove();
+    });
+}
+
 function show_forcast_alert(data) {
     belchertown_debug("Forecast: Updating alert data");
     var i, forecast_alerts, forecast_alert_title, forecast_alert_body;
     var forecast_alert_link, forecast_alert_expires, forecast_alert_in_effect, alert_link;
+    var activeAlertModal = forecast_active_alert_modal();
+    var activeAlertId = activeAlertModal.attr("id") || "";
+    var currentAlertIds = {};
+    var alertContainer = jQuery(".wx-stn-alert-text");
     forecast_alerts = [];
 
-    // Empty anything that's been appended to the modal from the previous run
-    jQuery(".wx-stn-alert-text").empty();
+    if (activeAlertModal.length && activeAlertModal.closest(".wx-stn-alert-text").length) {
+        activeAlertModal.detach().appendTo("body");
+    }
+
+    // Empty the alert links from the previous run without removing any active modal node.
+    alertContainer.empty();
 
     if (Array.isArray(data['alerts'])) {
         for (i = 0; i < data['alerts'].length; i++) {
@@ -454,7 +522,7 @@ function show_forcast_alert(data) {
             forecast_alert_title = (alertObj['title'] == null)
                 ? forecast_label_text("$obs.label.alert")
                 : forecast_compact_alert_title(alertObj['title']);
-            forecast_alert_body = alertDescription.replace(/\n/g, '<br>');
+            forecast_alert_body = forecast_escape_html(alertDescription).replace(/\n/g, '<br>');
             forecast_alert_link = forecast_alert_title;
             forecast_alert_expires = forecast_format_alert_time(alertObj['expires']);
             forecast_alert_in_effect = forecast_alert_in_effect_text(alertObj);
@@ -479,35 +547,24 @@ function show_forcast_alert(data) {
                 alertLinkText += " " + forecast_alerts[i]["in_effect"];
             }
 
-            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-toggle='modal' data-target='#" + forecastAlertId + "'>" + alertLinkText + "</a><br>";
-            jQuery(".wx-stn-alert-text").append(alert_link);
+            currentAlertIds[forecastAlertId] = true;
+            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-toggle='modal' data-target='#" + forecastAlertId + "'>" + forecast_escape_html(alertLinkText) + "</a><br>";
+            alertContainer.append(alert_link);
 
-            var forecast_alert_modal = "";
-            forecast_alert_modal += "<!-- Forecast Alert Modal " + i + " -->";
-            forecast_alert_modal += "<div class='modal fade' id='" + forecastAlertId + "' tabindex='-1' role='dialog' aria-labelledby='" + forecastAlertTitleId + "'>";
-            forecast_alert_modal += "<div class='modal-dialog' role='document'>";
-            forecast_alert_modal += "<div class='modal-content'>";
-            forecast_alert_modal += "<div class='modal-header'>";
-            forecast_alert_modal += "<button type='button' class='close' data-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'><span aria-hidden='true'>&times;</span></button>";
-            forecast_alert_modal += "<h4 class='modal-title' id='" + forecastAlertTitleId + "'>" + forecast_alerts[i]["title"] + "</h4>";
-            forecast_alert_modal += "</div>";
-            forecast_alert_modal += "<div class='modal-body'>";
-            forecast_alert_modal += forecast_alerts[i]["body"];
-            forecast_alert_modal += "</div>";
-            forecast_alert_modal += "<div class='modal-footer'>";
-            forecast_alert_modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
-            forecast_alert_modal += "</div>";
-            forecast_alert_modal += "</div>";
-            forecast_alert_modal += "</div>";
-            forecast_alert_modal += "</div>";
-
-            jQuery(".wx-stn-alert-text").append(forecast_alert_modal);
+            var forecast_alert_modal = forecast_alert_modal_by_id(forecastAlertId);
+            if (forecast_alert_modal.length) {
+                forecast_update_alert_modal(forecast_alert_modal, forecastAlertTitleId, forecast_alerts[i]);
+            } else {
+                jQuery("body").append(forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, forecast_alerts[i]));
+            }
         }
         jQuery(".wx-stn-alert").show();
     } else {
         belchertown_debug("Forecast: There are no forecast alerts");
         jQuery(".wx-stn-alert").hide();
     }
+
+    forecast_remove_stale_alert_modals(currentAlertIds, activeAlertId);
 }
 
 function forecast_aqi_translate(data) {
