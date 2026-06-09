@@ -1295,6 +1295,32 @@ def _config_list_values(value):
     return [str(part).strip() for part in parts if str(part).strip()]
 
 
+def _station_observation_name_and_binding(observation):
+    """Return the observation name and any per-observation data binding."""
+    obs = str(observation).strip()
+    if "(" not in obs or ")" not in obs:
+        return obs, None
+
+    obs_name, options_text = obs.split("(", 1)
+    options_text = options_text.rsplit(")", 1)[0]
+    for option_text in options_text.split(","):
+        option_name, separator, option_value = option_text.partition("=")
+        if separator and option_name.strip() == "data_binding":
+            data_binding = option_value.strip().strip("\"'")
+            return obs_name.strip(), data_binding or None
+    return obs_name.strip(), None
+
+
+def _station_observation_entries(station_observations):
+    """Return station observations with per-entry options parsed."""
+    if not isinstance(station_observations, (list, tuple)):
+        station_observations = station_observations.split()
+    return [
+        _station_observation_name_and_binding(observation)
+        for observation in station_observations
+    ]
+
+
 def _forecast_alert_limit_value(extras_dict):
     """Return a sane forecast alert limit."""
     limit_value = to_int((extras_dict or {}).get("forecast_alert_limit", 1))
@@ -5982,41 +6008,34 @@ class getData(SearchList):
         # Get Current Station Observation Data for the table html
         # ==============================================================================
 
-        station_obs_binding = None
         station_obs_json = OrderedDict()
         station_obs_source_json = OrderedDict()
         station_obs_parts = []
-        station_observations = extras_dict["station_observations"]
-        # Check if this is a list. If not then we have 1 item, so force it into a list
-        if not isinstance(station_observations, list):
-            station_observations = station_observations.split()
-        current_stamp = manager.lastGoodStamp()
-        current_record = manager.getRecord(current_stamp)
-        current = weewx.tags.CurrentObj(
+        station_observations = _station_observation_entries(
+            extras_dict["station_observations"]
+        )
+        default_current_stamp = manager.lastGoodStamp()
+        default_current_record = manager.getRecord(default_current_stamp)
+        default_current = weewx.tags.CurrentObj(
             db_lookup,
-            station_obs_binding,
-            current_stamp,
+            None,
+            default_current_stamp,
             self.generator.formatter,
             self.generator.converter,
             None,
-            current_record,
+            default_current_record,
         )
-        for obs in station_observations:
+        for obs, obs_binding in station_observations:
             obs_source = None
-            if "data_binding" in obs:
-                station_obs_binding = obs[obs.find("(") + 1 : obs.rfind(")")].split(
-                    "="
-                )[
-                    1
-                ]  # Thanks https://stackoverflow.com/a/40811994/1177153
-                obs = obs.split("(")[0]
-            if station_obs_binding is not None:
-                obs_binding_manager = db_binder.get_manager(station_obs_binding)
+            current = default_current
+            current_stamp = default_current_stamp
+            if obs_binding is not None:
+                obs_binding_manager = db_binder.get_manager(obs_binding)
                 current_stamp = obs_binding_manager.lastGoodStamp()
                 current_record = obs_binding_manager.getRecord(current_stamp)
                 current = weewx.tags.CurrentObj(
                     db_lookup,
-                    station_obs_binding,
+                    obs_binding,
                     current_stamp,
                     self.generator.formatter,
                     self.generator.converter,
