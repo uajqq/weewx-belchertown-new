@@ -4663,52 +4663,52 @@ class getData(SearchList):
             at_rain_highest_year = ["N/A", 0.0]
 
         try:
-            suniest_day_sql = """
+            sunniest_day_sql = """
                 SELECT dateTime, sum FROM archive_day_sunshineDur
                 WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
             """
-            suniest_day_query = wx_manager.getSql(suniest_day_sql, (year_start_epoch,))
-            if suniest_day_query is not None and len(suniest_day_query) >= 2:
-                suniest_day_tuple = (
-                    suniest_day_query[1],
+            sunniest_day_query = wx_manager.getSql(sunniest_day_sql, (year_start_epoch,))
+            if sunniest_day_query is not None and len(sunniest_day_query) >= 2:
+                sunniest_day_tuple = (
+                    sunniest_day_query[1],
                     sunshineDur_unit,
                     "group_deltatime",
                 )
-                suniest_day_converted = (
+                sunniest_day_converted = (
                     sunshineDur_round
-                    % self.generator.converter.convert(suniest_day_tuple)[0]
+                    % self.generator.converter.convert(sunniest_day_tuple)[0]
                 )
-                suniest_day = [
-                    suniest_day_query[0],
-                    locale.format_string("%g", float(suniest_day_converted)),
+                sunniest_day = [
+                    sunniest_day_query[0],
+                    locale.format_string("%g", float(sunniest_day_converted)),
                 ]
             else:
-                suniest_day = [
+                sunniest_day = [
                     calendar.timegm(time.gmtime()),
                     locale.format_string("%.2f", 0),
                 ]
 
-            at_suniest_day_sql = """
+            at_sunniest_day_sql = """
                 SELECT dateTime, sum FROM archive_day_sunshineDur
                 ORDER BY sum DESC LIMIT 1;
             """
-            at_suniest_day_query = wx_manager.getSql(at_suniest_day_sql)
-            if at_suniest_day_query is not None and len(at_suniest_day_query) >= 2:
-                at_suniest_day_tuple = (
-                    at_suniest_day_query[1],
+            at_sunniest_day_query = wx_manager.getSql(at_sunniest_day_sql)
+            if at_sunniest_day_query is not None and len(at_sunniest_day_query) >= 2:
+                at_sunniest_day_tuple = (
+                    at_sunniest_day_query[1],
                     sunshineDur_unit,
                     "group_deltatime",
                 )
-                at_suniest_day_converted = (
+                at_sunniest_day_converted = (
                     sunshineDur_round
-                    % self.generator.converter.convert(at_suniest_day_tuple)[0]
+                    % self.generator.converter.convert(at_sunniest_day_tuple)[0]
                 )
-                at_suniest_day = [
-                    at_suniest_day_query[0],
-                    locale.format_string("%g", float(at_suniest_day_converted)),
+                at_sunniest_day = [
+                    at_sunniest_day_query[0],
+                    locale.format_string("%g", float(at_sunniest_day_converted)),
                 ]
             else:
-                at_suniest_day = [
+                at_sunniest_day = [
                     calendar.timegm(time.gmtime()),
                     locale.format_string("%.2f", 0),
                 ]
@@ -4718,13 +4718,13 @@ class getData(SearchList):
             database_type = config_dict["Databases"][database]["database_type"]
             driver = config_dict["DatabaseTypes"][database_type]["driver"]
             if driver == "weedb.sqlite":
-                year_suniest_month_sql = """
+                year_sunniest_month_sql = """
                     SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, SUM(sum) AS total
                     FROM archive_day_sunshineDur
                     WHERE dateTime >= ? AND dateTime < ?
                     GROUP BY month ORDER BY total DESC LIMIT 1;
                 """
-                at_suniest_month_sql = """
+                at_sunniest_month_sql = """
                     SELECT strftime('%m', datetime(dateTime, 'unixepoch', 'localtime')) AS month, strftime('%Y', datetime(dateTime, 'unixepoch', 'localtime')) AS year, SUM(sum) AS total
                     FROM archive_day_sunshineDur
                     GROUP BY month, year ORDER BY total DESC LIMIT 1;
@@ -4735,13 +4735,13 @@ class getData(SearchList):
                     GROUP BY year ORDER BY total DESC LIMIT 1;
                 """
             elif driver == "weedb.mysql":
-                year_suniest_month_sql = """
+                year_sunniest_month_sql = """
                     SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, ROUND(SUM(sum), 2) AS total
                     FROM archive_day_sunshineDur
                     WHERE dateTime >= ? AND dateTime < ?
                     GROUP BY month ORDER BY total DESC LIMIT 1;
                 """
-                at_suniest_month_sql = """
+                at_sunniest_month_sql = """
                     SELECT FROM_UNIXTIME(dateTime, '%%m') AS month, FROM_UNIXTIME(dateTime, '%%Y') AS year, ROUND(SUM(sum), 2) AS total
                     FROM archive_day_sunshineDur
                     GROUP BY month, year ORDER BY total DESC LIMIT 1;
@@ -4752,47 +4752,47 @@ class getData(SearchList):
                     GROUP BY year ORDER BY total DESC LIMIT 1;
                 """
 
-            year_suniest_month_query = wx_manager.getSql(
-                year_suniest_month_sql, (year_start_epoch, next_year_start_epoch)
+            year_sunniest_month_query = wx_manager.getSql(
+                year_sunniest_month_sql, (year_start_epoch, next_year_start_epoch)
             )
-            if year_suniest_month_query is not None and len(year_suniest_month_query) >= 2:
-                year_suniest_month_tuple = (
-                    year_suniest_month_query[1],
+            if year_sunniest_month_query is not None and len(year_sunniest_month_query) >= 2:
+                year_sunniest_month_tuple = (
+                    year_sunniest_month_query[1],
                     sunshineDur_unit,
                     "group_deltatime",
                 )
-                year_suniest_month_converted = (
+                year_sunniest_month_converted = (
                     sunshineDur_round
-                    % self.generator.converter.convert(year_suniest_month_tuple)[0]
+                    % self.generator.converter.convert(year_sunniest_month_tuple)[0]
                 )
-                year_suniest_month_name = calendar.month_name[
-                    int(year_suniest_month_query[0])
+                year_sunniest_month_name = calendar.month_name[
+                    int(year_sunniest_month_query[0])
                 ]
-                year_suniest_month = [
-                    year_suniest_month_name,
-                    locale.format_string("%g", float(year_suniest_month_converted)),
+                year_sunniest_month = [
+                    year_sunniest_month_name,
+                    locale.format_string("%g", float(year_sunniest_month_converted)),
                 ]
             else:
-                year_suniest_month = ["N/A", 0.0]
+                year_sunniest_month = ["N/A", 0.0]
 
-            at_suniest_month_query = wx_manager.getSql(at_suniest_month_sql)
-            if at_suniest_month_query is not None and len(at_suniest_month_query) >= 3:
-                at_suniest_month_tuple = (
-                    at_suniest_month_query[2],
+            at_sunniest_month_query = wx_manager.getSql(at_sunniest_month_sql)
+            if at_sunniest_month_query is not None and len(at_sunniest_month_query) >= 3:
+                at_sunniest_month_tuple = (
+                    at_sunniest_month_query[2],
                     sunshineDur_unit,
                     "group_deltatime",
                 )
-                at_suniest_month_converted = (
+                at_sunniest_month_converted = (
                     sunshineDur_round
-                    % self.generator.converter.convert(at_suniest_month_tuple)[0]
+                    % self.generator.converter.convert(at_sunniest_month_tuple)[0]
                 )
-                at_suniest_month_name = calendar.month_name[int(at_suniest_month_query[0])]
-                at_suniest_month = [
-                    f"{at_suniest_month_name} {at_suniest_month_query[1]}",
-                    locale.format_string("%g", float(at_suniest_month_converted)),
+                at_sunniest_month_name = calendar.month_name[int(at_sunniest_month_query[0])]
+                at_sunniest_month = [
+                    f"{at_sunniest_month_name} {at_sunniest_month_query[1]}",
+                    locale.format_string("%g", float(at_sunniest_month_converted)),
                 ]
             else:
-                at_suniest_month = ["N/A", 0.0]
+                at_sunniest_month = ["N/A", 0.0]
 
             at_sunshineDur_highest_year_query = wx_manager.getSql(
                 at_sunshineDur_highest_year_sql
@@ -4824,16 +4824,16 @@ class getData(SearchList):
                 )
             else:
                 log.debug(f"Skipping sunshine duration stats: {e}")
-            suniest_day = [
+            sunniest_day = [
                 calendar.timegm(time.gmtime()),
                 locale.format_string("%.2f", 0),
             ]
-            at_suniest_day = [
+            at_sunniest_day = [
                 calendar.timegm(time.gmtime()),
                 locale.format_string("%.2f", 0),
             ]
-            year_suniest_month = ["N/A", 0.0]
-            at_suniest_month = ["N/A", 0.0]
+            year_sunniest_month = ["N/A", 0.0]
+            at_sunniest_month = ["N/A", 0.0]
             at_sunshineDur_highest_year = ["N/A", 0.0]
 
         # Consecutive days with/without rainfall (best streak in each period window).
@@ -6457,12 +6457,12 @@ class getData(SearchList):
             "at_outTemp_range_min": at_outTemp_range_min,
             "rainiest_day": rainiest_day,
             "at_rainiest_day": at_rainiest_day,
-            "suniest_day": suniest_day,
-            "at_suniest_day": at_suniest_day,
+            "sunniest_day": sunniest_day,
+            "at_sunniest_day": at_sunniest_day,
             "year_rainiest_month": year_rainiest_month,
             "at_rainiest_month": at_rainiest_month,
-            "year_suniest_month": year_suniest_month,
-            "at_suniest_month": at_suniest_month,
+            "year_sunniest_month": year_sunniest_month,
+            "at_sunniest_month": at_sunniest_month,
             "at_rain_highest_year": at_rain_highest_year,
             "at_sunshineDur_highest_year": at_sunshineDur_highest_year,
             "yesterday_days_with_rain": yesterday_days_with_rain,
