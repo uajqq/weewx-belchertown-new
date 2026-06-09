@@ -74,19 +74,29 @@
             var hasWindRun = "$year.windrun.has_data" === "True" && "$alltime.windrun.has_data" === "True";
             var hasRadiation = "$year.radiation.has_data" === "True";
             var hasUv = "$year.UV.has_data" === "True";
+            var hasSunshineDur = "$year.sunshineDur.has_data" === "True";
 
             var temperatureRows = [
                 makeRecord(
                     "$obs.label.records_high_temp",
                     metric("outTemp", "max", "maxtime", "maxtime_raw"),
                     { value: "$year.outTemp.max", dateText: "$year.outTemp.maxtime", dateRaw: "$year.outTemp.maxtime.raw" },
-                    { value: "$alltime.outTemp.max", dateText: "$alltime.outTemp.maxtime", dateRaw: "$alltime.outTemp.maxtime.raw" }
+                    { value: "$alltime.outTemp.max", dateText: "$alltime.outTemp.maxtime", dateRaw: "$alltime.outTemp.maxtime.raw" },
+                    { hideDatePeriods: ["day"] }
+                ),
+                makeRecord(
+                    "$obs.label.records_avg_temp",
+                    metric("outTemp", "average"),
+                    { value: "$year.outTemp.avg" },
+                    { value: "$alltime.outTemp.avg" },
+                    { hideDatePeriods: ["day", "yesterday", "week", "month", "year", "alltime"] }
                 ),
                 makeRecord(
                     "$obs.label.records_low_temp",
                     metric("outTemp", "min", "mintime", "mintime_raw"),
                     { value: "$year.outTemp.min", dateText: "$year.outTemp.mintime", dateRaw: "$year.outTemp.mintime.raw" },
-                    { value: "$alltime.outTemp.min", dateText: "$alltime.outTemp.mintime", dateRaw: "$alltime.outTemp.mintime.raw" }
+                    { value: "$alltime.outTemp.min", dateText: "$alltime.outTemp.mintime", dateRaw: "$alltime.outTemp.mintime.raw" },
+                    { hideDatePeriods: ["day"] }
                 )
             ];
 
@@ -96,13 +106,15 @@
                         "$obs.label.records_high_apptemp",
                         metric("appTemp", "max", "maxtime", "maxtime_raw"),
                         { value: "$year.appTemp.max", dateText: "$year.appTemp.maxtime", dateRaw: "$year.appTemp.maxtime.raw" },
-                        { value: "$alltime.appTemp.max", dateText: "$alltime.appTemp.maxtime", dateRaw: "$alltime.appTemp.maxtime.raw" }
+                        { value: "$alltime.appTemp.max", dateText: "$alltime.appTemp.maxtime", dateRaw: "$alltime.appTemp.maxtime.raw" },
+                        { hideDatePeriods: ["day"] }
                     ),
                     makeRecord(
                         "$obs.label.records_low_apptemp",
                         metric("appTemp", "min", "mintime", "mintime_raw"),
                         { value: "$year.appTemp.min", dateText: "$year.appTemp.mintime", dateRaw: "$year.appTemp.mintime.raw" },
-                        { value: "$alltime.appTemp.min", dateText: "$alltime.appTemp.mintime", dateRaw: "$alltime.appTemp.mintime.raw" }
+                        { value: "$alltime.appTemp.min", dateText: "$alltime.appTemp.mintime", dateRaw: "$alltime.appTemp.mintime.raw" },
+                        { hideDatePeriods: ["day"] }
                     )
                 );
             }
@@ -112,13 +124,15 @@
                     "$obs.label.records_high_heatindex",
                     metric("heatindex", "max", "maxtime", "maxtime_raw"),
                     { value: "$year.heatindex.max", dateText: "$year.heatindex.maxtime", dateRaw: "$year.heatindex.maxtime.raw" },
-                    { value: "$alltime.heatindex.max", dateText: "$alltime.heatindex.maxtime", dateRaw: "$alltime.heatindex.maxtime.raw" }
+                    { value: "$alltime.heatindex.max", dateText: "$alltime.heatindex.maxtime", dateRaw: "$alltime.heatindex.maxtime.raw" },
+                    { hideDatePeriods: ["day"] }
                 ),
                 makeRecord(
                     "$obs.label.records_low_windchill",
                     metric("windchill", "max", "maxtime", "maxtime_raw"),
                     { value: "$year.windchill.min", dateText: "$year.windchill.mintime", dateRaw: "$year.windchill.mintime.raw" },
-                    { value: "$alltime.windchill.min", dateText: "$alltime.windchill.mintime", dateRaw: "$alltime.windchill.mintime.raw" }
+                    { value: "$alltime.windchill.min", dateText: "$alltime.windchill.mintime", dateRaw: "$alltime.windchill.mintime.raw" },
+                    { hideDatePeriods: ["day"] }
                 ),
                 makeRecord(
                     "$obs.label.records_largest_temp_range",
@@ -127,7 +141,8 @@
                     { value: "$at_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($at_outTemp_range_max[2] - $at_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$at_outTemp_range_max[0]", dateRaw: "$at_outTemp_range_max[0]" },
                     {
                         omitTime: true,
-                        hideDatePeriods: ["yesterday"],
+                        hideDatePeriods: ["day"],
+                        blankPeriods: ["day"],
                         periodValues: {
                             yesterday: { value: "$yesterday_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($yesterday_outTemp_range_max[2] - $yesterday_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$yesterday_outTemp_range_max[0]", dateRaw: "$yesterday_outTemp_range_max[0]" },
                             week: { value: "$week_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($week_outTemp_range_max[2] - $week_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$week_outTemp_range_max[0]", dateRaw: "$week_outTemp_range_max[0]" },
@@ -142,7 +157,8 @@
                     { value: "$at_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($at_outTemp_range_min[2] - $at_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$at_outTemp_range_min[0]", dateRaw: "$at_outTemp_range_min[0]" },
                     {
                         omitTime: true,
-                        hideDatePeriods: ["yesterday"],
+                        ##hideDatePeriods: ["day"],
+                        blankPeriods: ["day", "yesterday"],
                         periodValues: {
                             yesterday: { value: "$yesterday_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($yesterday_outTemp_range_min[2] - $yesterday_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$yesterday_outTemp_range_min[0]", dateRaw: "$yesterday_outTemp_range_min[0]" },
                             week: { value: "$week_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($week_outTemp_range_min[2] - $week_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$week_outTemp_range_min[0]", dateRaw: "$week_outTemp_range_min[0]" },
@@ -157,7 +173,8 @@
                     "$obs.label.records_strongest_wind",
                     metric("wind", "max", "maxtime", "maxtime_raw"),
                     { value: "$year.windGust.max", dateText: "$year.windGust.maxtime", dateRaw: "$year.windGust.maxtime.raw" },
-                    { value: "$alltime.windGust.max", dateText: "$alltime.windGust.maxtime", dateRaw: "$alltime.windGust.maxtime.raw" }
+                    { value: "$alltime.windGust.max", dateText: "$alltime.windGust.maxtime", dateRaw: "$alltime.windGust.maxtime.raw" },
+                    { hideDatePeriods: ["day"] }
                 )
             ];
 
@@ -168,7 +185,7 @@
                         metric("wind", "windrun", "windrun_maxtime", "windrun_maxtime_raw"),
                         { value: "$year.windrun.maxsum", dateText: "$year.windrun.maxsumtime", dateRaw: "$year.windrun.maxsumtime.raw" },
                         { value: "$alltime.windrun.maxsum", dateText: "$alltime.windrun.maxsumtime", dateRaw: "$alltime.windrun.maxsumtime.raw" },
-                        { omitTime: true, hideDatePeriods: ["yesterday"] }
+                        { omitTime: true, hideDatePeriods: ["day", "yesterday"] }
                     )
                 );
             }
@@ -196,27 +213,30 @@
                             metric("rain", "sum", "maxtime", "maxtime_raw"),
                             { value: "$rainiest_day[1] $unit.label.rain", dateText: "$rainiest_day[0]", dateRaw: "$rainiest_day[0]" },
                             { value: "$at_rainiest_day[1] $unit.label.rain", dateText: "$at_rainiest_day[0]", dateRaw: "$at_rainiest_day[0]" },
-                            { omitTime: true, hideDatePeriods: ["yesterday"] }
+                            { omitTime: true, hideDatePeriods: ["day", "yesterday"] }
                         ),
                         makeRecord(
                             "$obs.label.records_highest_daily_rainrate",
                             metric("rain", "max", "maxtime", "maxtime_raw"),
                             { value: "$year.rainRate.max", dateText: "$year.rainRate.maxtime", dateRaw: "$year.rainRate.maxtime.raw" },
-                            { value: "$alltime.rainRate.max", dateText: "$alltime.rainRate.maxtime", dateRaw: "$alltime.rainRate.maxtime.raw" }
+                            { value: "$alltime.rainRate.max", dateText: "$alltime.rainRate.maxtime", dateRaw: "$alltime.rainRate.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
                         ),
                         makeRecord(
                             "$obs.label.records_month_high_rainfall",
                             null,
                             { value: "$year_rainiest_month[1] $unit.label.rain", dateText: "$year_rainiest_month[0]", dateRaw: null },
                             { value: "$at_rainiest_month[1] $unit.label.rain", dateText: "$at_rainiest_month[0]", dateRaw: null },
-                            { dashPeriods: ["yesterday", "week", "month"] }
+                            {
+                                dashPeriods: ["day", "yesterday", "week", "month"]
+                            }
                         ),
                         makeRecord(
                             "$obs.label.records_total_rainfall",
                             metric("rain", "sum", null, null),
                             { value: "$year.rain.sum", dateText: "$current.dateTime.format('%Y')", dateRaw: null },
                             { value: "$at_rain_highest_year[1] $unit.label.rain", dateText: "$at_rain_highest_year[0]", dateRaw: null },
-                            { omitTime: true, hideDatePeriods: ["yesterday"], hideAlltimeLabel: true }
+                            { omitTime: true, hideDatePeriods: ["day", "yesterday"], hideAlltimeLabel: true }
                         ),
                         makeRecord(
                             "$obs.label.records_consec_days_with_rain",
@@ -226,7 +246,7 @@
                             {
                                 omitTime: true,
                                 datePrefix: "$obs.label.records_ending ",
-                                blankPeriods: ["yesterday"],
+                                blankPeriods: ["day", "yesterday"],
                                 periodValues: {
                                     week: { value: "$week_days_with_rain[0] $obs.label.records_days_text", dateText: "$week_days_with_rain[1]", dateRaw: "$week_days_with_rain[1]" },
                                     month: { value: "$month_days_with_rain[0] $obs.label.records_days_text", dateText: "$month_days_with_rain[1]", dateRaw: "$month_days_with_rain[1]" }
@@ -241,7 +261,7 @@
                             {
                                 omitTime: true,
                                 datePrefix: "$obs.label.records_ending ",
-                                blankPeriods: ["yesterday"],
+                                blankPeriods: ["day", "yesterday"],
                                 periodValues: {
                                     week: { value: "$week_days_without_rain[0] $obs.label.records_days_text", dateText: "$week_days_without_rain[1]", dateRaw: "$week_days_without_rain[1]" },
                                     month: { value: "$month_days_without_rain[0] $obs.label.records_days_text", dateText: "$month_days_without_rain[1]", dateRaw: "$month_days_without_rain[1]" }
@@ -259,25 +279,29 @@
                             "$obs.label.records_high_humidity",
                             metric("humidity", "max", "maxtime", "maxtime_raw"),
                             { value: "$year.outHumidity.max", dateText: "$year.outHumidity.maxtime", dateRaw: "$year.outHumidity.maxtime.raw" },
-                            { value: "$alltime.outHumidity.max", dateText: "$alltime.outHumidity.maxtime", dateRaw: "$alltime.outHumidity.maxtime.raw" }
+                            { value: "$alltime.outHumidity.max", dateText: "$alltime.outHumidity.maxtime", dateRaw: "$alltime.outHumidity.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
                         ),
                         makeRecord(
                             "$obs.label.records_lowest_humidity",
                             metric("humidity", "min", "mintime", "mintime_raw"),
                             { value: "$year.outHumidity.min", dateText: "$year.outHumidity.mintime", dateRaw: "$year.outHumidity.mintime.raw" },
-                            { value: "$alltime.outHumidity.min", dateText: "$alltime.outHumidity.mintime", dateRaw: "$alltime.outHumidity.mintime.raw" }
+                            { value: "$alltime.outHumidity.min", dateText: "$alltime.outHumidity.mintime", dateRaw: "$alltime.outHumidity.mintime.raw" },
+                            { hideDatePeriods: ["day"] }
                         ),
                         makeRecord(
                             "$obs.label.records_highest_dewpoint",
                             metric("dewpoint", "max", "maxtime", "maxtime_raw"),
                             { value: "$year.dewpoint.max", dateText: "$year.dewpoint.maxtime", dateRaw: "$year.dewpoint.maxtime.raw" },
-                            { value: "$alltime.dewpoint.max", dateText: "$alltime.dewpoint.maxtime", dateRaw: "$alltime.dewpoint.maxtime.raw" }
+                            { value: "$alltime.dewpoint.max", dateText: "$alltime.dewpoint.maxtime", dateRaw: "$alltime.dewpoint.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
                         ),
                         makeRecord(
                             "$obs.label.records_lowest_dewpoint",
                             metric("dewpoint", "min", "mintime", "mintime_raw"),
                             { value: "$year.dewpoint.min", dateText: "$year.dewpoint.mintime", dateRaw: "$year.dewpoint.mintime.raw" },
-                            { value: "$alltime.dewpoint.min", dateText: "$alltime.dewpoint.mintime", dateRaw: "$alltime.dewpoint.mintime.raw" }
+                            { value: "$alltime.dewpoint.min", dateText: "$alltime.dewpoint.mintime", dateRaw: "$alltime.dewpoint.mintime.raw" },
+                            { hideDatePeriods: ["day"] }
                         )
                     ]
                 },
@@ -290,31 +314,22 @@
                             "$obs.label.records_high_barometer",
                             metric("barometer", "max", "maxtime", "maxtime_raw"),
                             { value: "$year.barometer.max", dateText: "$year.barometer.maxtime", dateRaw: "$year.barometer.maxtime.raw" },
-                            { value: "$alltime.barometer.max", dateText: "$alltime.barometer.maxtime", dateRaw: "$alltime.barometer.maxtime.raw" }
+                            { value: "$alltime.barometer.max", dateText: "$alltime.barometer.maxtime", dateRaw: "$alltime.barometer.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
                         ),
                         makeRecord(
                             "$obs.label.records_low_barometer",
                             metric("barometer", "min", "mintime", "mintime_raw"),
                             { value: "$year.barometer.min", dateText: "$year.barometer.mintime", dateRaw: "$year.barometer.mintime.raw" },
-                            { value: "$alltime.barometer.min", dateText: "$alltime.barometer.mintime", dateRaw: "$alltime.barometer.mintime.raw" }
+                            { value: "$alltime.barometer.min", dateText: "$alltime.barometer.mintime", dateRaw: "$alltime.barometer.mintime.raw" },
+                            { hideDatePeriods: ["day"] }
                         )
                     ]
                 }
             ];
 
-            if (hasRadiation || hasUv) {
+            if (hasRadiation || hasUv || hasSunshineDur) {
                 var sunRows = [];
-
-                if (hasRadiation) {
-                    sunRows.push(
-                        makeRecord(
-                            "$obs.label.records_high_solar_rad",
-                            metric("solar_radiation", "max", "maxtime", "maxtime_raw"),
-                            { value: "$year.radiation.max", dateText: "$year.radiation.maxtime", dateRaw: "$year.radiation.maxtime.raw" },
-                            { value: "$alltime.radiation.max", dateText: "$alltime.radiation.maxtime", dateRaw: "$alltime.radiation.maxtime.raw" }
-                        )
-                    );
-                }
 
                 if (hasUv) {
                     sunRows.push(
@@ -322,7 +337,32 @@
                             "$obs.label.records_high_uv",
                             metric("uv", "max", "maxtime", "maxtime_raw"),
                             { value: "$year.UV.max", dateText: "$year.UV.maxtime", dateRaw: "$year.UV.maxtime.raw" },
-                            { value: "$alltime.UV.max", dateText: "$alltime.UV.maxtime", dateRaw: "$alltime.UV.maxtime.raw" }
+                            { value: "$alltime.UV.max", dateText: "$alltime.UV.maxtime", dateRaw: "$alltime.UV.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
+                        )
+                    );
+                }
+
+                if (hasRadiation) {
+                    sunRows.push(
+                        makeRecord(
+                            "$obs.label.records_high_solar_rad",
+                            metric("solar_radiation", "max", "maxtime", "maxtime_raw"),
+                            { value: "$year.radiation.max", dateText: "$year.radiation.maxtime", dateRaw: "$year.radiation.maxtime.raw" },
+                            { value: "$alltime.radiation.max", dateText: "$alltime.radiation.maxtime", dateRaw: "$alltime.radiation.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
+                        )
+                    );
+                }
+
+                if (hasSunshineDur) {
+                    sunRows.push(
+                        makeRecord(
+                            "$obs.label.records_total_sunshine",
+                            metric("sunshineDur", "sum"),
+                            { value: "$year.sunshineDur.sum", dateText: null },
+                            { value: "$alltime.sunshineDur.sum", dateText: null },
+                            { omitTime: true, hideDatePeriods: ["day", "yesterday", "week", "month", "year", "alltime"] }
                         )
                     );
                 }
@@ -343,6 +383,7 @@
                 return;
             }
 
+            section.find(".records-section-card__period-header-cell--day").text(displayText("$obs.label.snapshot_period_day"));
             section.find(".records-section-card__period-header-cell--yesterday").text(displayText("$obs.label.snapshot_period_yesterday"));
             section.find(".records-section-card__period-header-cell--week").text(displayText("$obs.label.snapshot_period_7days"));
             section.find(".records-section-card__period-header-cell--month").text(displayText("$obs.label.snapshot_period_month"));
@@ -480,6 +521,14 @@
                 return '<span class="records-record-period__time-line">--</span>';
             }
 
+            if (periodKey === "day") {
+                if (parsed && parsed.isValid()) {
+                    return '<span class="records-record-period__time-line">' + escapeHtml(parsed.format("LT")) + '</span>';
+                }
+
+                return '<span class="records-record-period__time-line">--</span>';
+            }
+
             if (parsed && parsed.isValid()) {
                 var dateLine = parsed.format(belchertown_moment_compact_date_format(periodKey === "alltime"));
                 var timeLine = parsed.format("LT");
@@ -585,6 +634,7 @@
                         '<div class="records-section-card__table">' +
                             '<div class="records-section-card__period-header">' +
                                 '<div class="records-section-card__period-header-spacer" aria-hidden="true"></div>' +
+                                '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--day"></div>' +
                                 '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--yesterday"></div>' +
                                 '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--week"></div>' +
                                 '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--month"></div>' +
@@ -609,6 +659,11 @@
                 var recordCard = jQuery(
                 '<article class="records-record-card">' +
                     '<h3 class="records-record-card__title"></h3>' +
+                    '<section class="records-record-period records-record-period--day">' +
+                        '<div class="records-record-period__label"></div>' +
+                        '<div class="records-record-period__value"></div>' +
+                        '<div class="records-record-period__date"></div>' +
+                    '</section>' +
                     '<section class="records-record-period records-record-period--yesterday">' +
                         '<div class="records-record-period__label"></div>' +
                         '<div class="records-record-period__value"></div>' +
@@ -658,6 +713,16 @@
                     dateRaw: yearDateRaw
                 };
 
+                applyPeriod(
+                    recordCard,
+                    ".records-record-period--day",
+                    "$obs.label.snapshot_period_day",
+                    "day",
+                    snapshotData ? snapshotData["day"] : null,
+                    rowConfig.metric,
+                    fallback,
+                    rowOptions
+                );
                 applyPeriod(
                     recordCard,
                     ".records-record-period--yesterday",
