@@ -532,27 +532,27 @@
                                 <div class="snapshot-metric-grid">
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_high</span>
-                                        <span class="snapshot-metric-value dailystatshigh">$day.outTemp.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatshigh">#echo str($day.outTemp.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_low</span>
-                                        <span class="snapshot-metric-value dailystatslow">$day.outTemp.min</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatslow">#echo str($day.outTemp.min).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_avg_wind</span>
-                                        <span class="snapshot-metric-value dailystatswindavg">$day.wind.avg</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatswindavg">#echo str($day.wind.avg).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_high_wind</span>
-                                        <span class="snapshot-metric-value dailystatswindmax">$day.wind.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatswindmax">#echo str($day.wind.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_rain</span>
-                                        <span class="snapshot-metric-value dailystatsrain">$day.rain.sum</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatsrain">#echo str($day.rain.sum).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_rainrate</span>
-                                        <span class="snapshot-metric-value dailystatsrainrate">$day.rainRate.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatsrainrate">#echo str($day.rainRate.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                 </div>
                             </div>
@@ -570,27 +570,27 @@
                                 <div class="snapshot-metric-grid">
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_high</span>
-                                        <span class="snapshot-metric-value monthstatshigh">$month.outTemp.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatshigh">#echo str($month.outTemp.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_low</span>
-                                        <span class="snapshot-metric-value monthstatslow">$month.outTemp.min</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatslow">#echo str($month.outTemp.min).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_avg_wind</span>
-                                        <span class="snapshot-metric-value monthstatswindavg">$month.wind.avg</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatswindavg">#echo str($month.wind.avg).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_high_wind</span>
-                                        <span class="snapshot-metric-value monthstatswindmax">$month.wind.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatswindmax">#echo str($month.wind.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_rain</span>
-                                        <span class="snapshot-metric-value monthstatsrain">$month.rain.sum</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatsrain">#echo str($month.rain.sum).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_rainrate</span>
-                                        <span class="snapshot-metric-value monthstatsrainrate">$month.rainRate.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatsrainrate">#echo str($month.rainRate.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                 </div>
                             </div>

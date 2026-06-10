@@ -2414,39 +2414,46 @@ function getNestedValue(obj, path, fallback = "N/A") {
     }
 }
 
+function formatSnapshotMetricValue(value) {
+    if (value === null || value === undefined || value === "") {
+        return "N/A";
+    }
+    return String(value).replace(/\//g, "&NoBreak;/&NoBreak;");
+}
+
 function updateDailySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".dailystatshigh").html(getNestedValue(d, ["outTemp", "max"]));
-    jQuery(".dailystatslow").html(getNestedValue(d, ["outTemp", "min"]));
-    jQuery(".dailystatswindavg").html(getNestedValue(d, ["wind", "average"]));
-    jQuery(".dailystatswindmax").html(getNestedValue(d, ["wind", "max"]));
-    jQuery(".dailystatsrain").html(getNestedValue(d, ["rain", "sum"]));
-    jQuery(".dailystatsrainrate").html(getNestedValue(d, ["rain", "max"]));
-    jQuery(".dailystatsuvavg").html(getNestedValue(d, ["uv", "average"]));
-    jQuery(".dailystatsuvmax").html(getNestedValue(d, ["uv", "max"]));
-    jQuery(".dailystatsradiationavg").html(getNestedValue(d, ["solar_radiation", "average"]));
-    jQuery(".dailystatsradiationmax").html(getNestedValue(d, ["solar_radiation", "max"]));
-    jQuery(".dailystatssunshineDur").html(getNestedValue(d, ["sunshineDur", "sum"]));
+    jQuery(".dailystatshigh").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
+    jQuery(".dailystatslow").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
+    jQuery(".dailystatswindavg").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
+    jQuery(".dailystatswindmax").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
+    jQuery(".dailystatsrain").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
+    jQuery(".dailystatsrainrate").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
+    jQuery(".dailystatsuvavg").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
+    jQuery(".dailystatsuvmax").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
+    jQuery(".dailystatsradiationavg").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
+    jQuery(".dailystatsradiationmax").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
+    jQuery(".dailystatssunshineDur").html(formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
     if (d["wind"] && d["wind"]["windrun"]) {
-        jQuery(".dailywindrun").html(d["wind"]["windrun"]);
+        jQuery(".dailywindrun").html(formatSnapshotMetricValue(d["wind"]["windrun"]));
     }
 }
 
 function updateMonthlySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".monthstatshigh").html(getNestedValue(d, ["outTemp", "max"]));
-    jQuery(".monthstatslow").html(getNestedValue(d, ["outTemp", "min"]));
-    jQuery(".monthstatswindavg").html(getNestedValue(d, ["wind", "average"]));
-    jQuery(".monthstatswindmax").html(getNestedValue(d, ["wind", "max"]));
-    jQuery(".monthstatsrain").html(getNestedValue(d, ["rain", "sum"]));
-    jQuery(".monthstatsrainrate").html(getNestedValue(d, ["rain", "max"]));
-    jQuery(".monthstatsuvavg").html(getNestedValue(d, ["uv", "average"]));
-    jQuery(".monthstatsuvmax").html(getNestedValue(d, ["uv", "max"]));
-    jQuery(".monthstatsradiationavg").html(getNestedValue(d, ["solar_radiation", "average"]));
-    jQuery(".monthstatsradiationmax").html(getNestedValue(d, ["solar_radiation", "max"]));
-    jQuery(".monthstatssunshineDur").html(getNestedValue(d, ["sunshineDur", "sum"]));
+    jQuery(".monthstatshigh").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
+    jQuery(".monthstatslow").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
+    jQuery(".monthstatswindavg").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
+    jQuery(".monthstatswindmax").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
+    jQuery(".monthstatsrain").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
+    jQuery(".monthstatsrainrate").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
+    jQuery(".monthstatsuvavg").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
+    jQuery(".monthstatsuvmax").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
+    jQuery(".monthstatsradiationavg").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
+    jQuery(".monthstatsradiationmax").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
+    jQuery(".monthstatssunshineDur").html(formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
 }
 
 jQuery(document).on("change", "#snapshot-day-select", function() {
