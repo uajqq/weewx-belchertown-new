@@ -4197,7 +4197,7 @@ table.celestial td.label {
 .frontpage .homepage-card--radar iframe,
 .frontpage .homepage-card--radar img {
   height: 100%;
-  min-height: 100%;
+  min-height: 0;
 }
 
 .frontpage .homepage-card--radar iframe,
@@ -4348,7 +4348,7 @@ table.celestial td.label {
   }
 
   .frontpage .homepage-card--radar .homepage-radar-content {
-    min-height: 100%;
+    min-height: 0;
     height: 100%;
     aspect-ratio: auto;
   }
