@@ -3639,6 +3639,7 @@ table.celestial td.label {
   padding-right: 16px;
   container-type: inline-size;
   container-name: forecast-card;
+  --forecast-meta-size: 14px;
 }
 
 .frontpage .homepage-card--forecast,

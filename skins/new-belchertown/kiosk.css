@@ -10,7 +10,8 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 /* normalize.css v3.0.1 | MIT License | git.io/normalize */
 
 html {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .site-inner {
@@ -53,10 +54,317 @@ html {
   margin-top: 16px;
 }
 
+.frontpage .homepage-card--forecast .forecast-title {
+  font-size: 20px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.frontpage .homepage-card--forecast .forecast-subtitle,
+.frontpage .homepage-card--forecast .forecast-source {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+/* Keep the standard homepage composition on 1280px-wide kiosk displays. */
+@media only screen and (min-width: 1280px) and (max-width: 1366px) {
+  .frontpage .homepage-hero {
+    grid-template-areas: none;
+    grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .frontpage .homepage-primary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .frontpage .homepage-card--temperature,
+  .frontpage .homepage-card--wind,
+  .frontpage .homepage-card--observations,
+  .frontpage .homepage-card--almanac,
+  .frontpage .homepage-card--radar {
+    grid-area: auto;
+  }
+
+  .frontpage .homepage-card--observations {
+    align-self: stretch;
+    min-height: var(--homepage-info-card-min-height);
+    --homepage-observation-tile-min: 112px;
+  }
+
+  .frontpage .homepage-card--almanac,
+  .frontpage .homepage-card--radar {
+    align-self: stretch;
+  }
+}
+
+/* Let observation cards size from content so late image/font/layout updates cannot overlap rows. */
+@media only screen and (min-width: 801px) and (max-width: 1279px) {
+  .frontpage .homepage-card--observations .homepage-card-body,
+  .frontpage .homepage-card--observations .homepage-card-body table,
+  .frontpage .homepage-card--observations .station-observations,
+  .frontpage .homepage-card--observations .station-observations tbody {
+    height: auto;
+    min-height: 0;
+    flex: none;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody {
+    grid-auto-rows: minmax(56px, auto);
+    align-content: start;
+  }
+}
+
+/* Kiosk-height compaction: favor showing all cards over preserving roomy desktop spacing. */
+@media only screen and (min-width: 801px) and (max-height: 850px) {
+  .site-inner {
+    margin-bottom: 0;
+  }
+
+  .site-footer {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .frontpage .homepage-layout {
+    gap: 14px;
+    margin-top: 8px;
+  }
+
+  .frontpage .homepage-hero,
+  .frontpage .homepage-primary-grid {
+    gap: 14px;
+  }
+
+  .frontpage .homepage-card {
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .frontpage .homepage-card--temperature,
+  .frontpage .homepage-card--wind,
+  .frontpage .homepage-card--almanac {
+    min-height: 0;
+  }
+
+  .frontpage .homepage-card--temperature,
+  .frontpage .homepage-card--observations {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .frontpage .homepage-card--temperature .homepage-card-body {
+    gap: 6px;
+  }
+
+  .frontpage .homepage-card--temperature .temp-observation,
+  .frontpage .homepage-card--temperature .homepage-temperature-details {
+    gap: 8px;
+  }
+
+  .frontpage .homepage-card--temperature .current_obs_top {
+    min-height: 72px;
+  }
+
+  .frontpage .homepage-card--temperature #wxicon {
+    max-width: min(100%, 88px);
+  }
+
+  .frontpage .homepage-card--temperature .current_temp .outtemp_outer {
+    font-size: 46px;
+  }
+
+  .frontpage .homepage-card--temperature .current-obs-text,
+  .frontpage .homepage-card--temperature .aqi_outer,
+  .frontpage .homepage-card--temperature .feelslike,
+  .frontpage .homepage-card--temperature .stn-high-low-table td {
+    font-size: 14px;
+  }
+
+  .frontpage .homepage-card--observations {
+    min-height: 0;
+    --homepage-observation-tile-min: 100px;
+  }
+
+  .frontpage .homepage-card--observations .homepage-card-body,
+  .frontpage .homepage-card--observations .homepage-card-body table,
+  .frontpage .homepage-card--observations .station-observations,
+  .frontpage .homepage-card--observations .station-observations tbody {
+    height: auto;
+    min-height: 0;
+    flex: none;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody {
+    grid-auto-rows: minmax(50px, auto);
+    gap: 3px;
+    align-content: start;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody tr {
+    min-height: 50px;
+    padding: 5px 6px;
+    gap: 2px;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody tr td:first-child {
+    font-size: 11px;
+  }
+
+  .frontpage .homepage-card--observations .station-observations tbody tr td:last-child {
+    font-size: 14px;
+  }
+
+  .frontpage .homepage-card--wind {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .frontpage .homepage-card--wind .compass {
+    width: 88px;
+    height: 88px;
+  }
+
+  .frontpage .homepage-card--wind .direction .curwinddir {
+    font-size: 22px;
+    padding-top: 18px;
+  }
+
+  .frontpage .homepage-card--wind .direction .curwinddeg {
+    font-size: 18px;
+  }
+
+  .frontpage .homepage-card--wind .arrow:after {
+    left: 33px;
+  }
+
+  .frontpage .homepage-card--wind .windtext {
+    font-size: 17px;
+  }
+
+  .frontpage .homepage-card--wind .curwindspeed,
+  .frontpage .homepage-card--wind .curwindgust {
+    font-size: 26px;
+  }
+
+  .frontpage .homepage-card--wind .wind-table td.mph {
+    font-size: 16px !important;
+  }
+
+  .frontpage .homepage-card--almanac {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-main {
+    --almanac-diagram-width: 150px;
+    --almanac-moon-size: 34px;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-diagram-svg {
+    width: 150px;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .frontpage .homepage-card--almanac .almanac-sun-time,
+  .frontpage .homepage-card--almanac .sun,
+  .frontpage .homepage-card--almanac .moon,
+  .frontpage .homepage-card--almanac .moon-container,
+  .frontpage .homepage-card--almanac .almanac-details-link {
+    font-size: 13px;
+  }
+
+  .frontpage .homepage-card--almanac .daylight-change {
+    font-size: 13px;
+    margin-top: -2px;
+    margin-bottom: 1px;
+  }
+
+  .frontpage .homepage-card--almanac .small-almanac {
+    margin-top: 2px;
+    margin-bottom: 4px;
+  }
+
+  .frontpage .homepage-card--forecast {
+    padding: 8px 10px;
+  }
+
+  .frontpage .homepage-card--forecast .forecastrow {
+    margin-bottom: 0;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-title {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-menu,
+  .frontpage .homepage-card--forecast .forecast-subtitle,
+  .frontpage .homepage-card--forecast .forecast-source {
+    font-size: 12px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-button {
+    margin-top: 4px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-day.forecast-tile {
+    --forecast-label-band-height: 30px;
+    --forecast-condition-band-height: 126px;
+    --forecast-bottom-band-min-height: 54px;
+    min-height: 216px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-1hour,
+  .frontpage .homepage-card--forecast .forecast-3hour,
+  .frontpage .homepage-card--forecast .forecast-24hour {
+    min-height: 216px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-temp-chart,
+  .frontpage .homepage-card--forecast .forecast-temp-chart-1hour {
+    height: 126px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-image {
+    height: 42px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-icon {
+    max-width: 64px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-high,
+  .frontpage .homepage-card--forecast .forecast-low,
+  .frontpage .homepage-card--forecast .forecast-temp-chart {
+    font-size: 17px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-precip,
+  .frontpage .homepage-card--forecast .forecast-wind {
+    font-size: 13px;
+  }
+}
+
 @media only screen and (max-width: 800px) {
   .frontpage .homepage-card {
     border-radius: 14px;
     padding: 14px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-title {
+    font-size: 16px;
+  }
+
+  .frontpage .homepage-card--forecast .forecast-subtitle,
+  .frontpage .homepage-card--forecast .forecast-source {
+    font-size: 12px;
   }
 
   .frontpage .homepage-card--forecast {
