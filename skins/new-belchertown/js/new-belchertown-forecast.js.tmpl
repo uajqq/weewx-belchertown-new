@@ -138,9 +138,45 @@ function forecast_timestamp_label(value) {
     return forecast_trim_sentence_end(value).replace(/\s+(on|at)$/i, "");
 }
 
+// Show exact minutes for changes older than 45 minutes, including those
+// over 1 hour, instead of displaying "last hour" for 46–59 minutes ago.
 function forecast_relative_time(epoch) {
     const timestamp = forecast_number(epoch);
-    return timestamp === null ? "" : tzAdjustedMoment(timestamp).fromNow();
+
+    if (timestamp === null) {
+        return "";
+    }
+
+    // Get the current time in seconds and calculate the difference
+    const now = Math.floor(Date.now() / 1000);
+    const diffInSeconds = now - timestamp;
+
+    // Handle very recent updates
+    if (diffInSeconds < 60) {
+        return "just now";
+    }
+
+    // Calculate total elapsed minutes using floor rounding
+    const totalMinutes = Math.floor(diffInSeconds / 60);
+
+    // Case 1: Under 60 minutes -> Display strictly as minutes (up to 59 minutes ago)
+    if (totalMinutes < 60) {
+        return totalMinutes + " minute" + (totalMinutes !== 1 ? "s" : "") + " ago";
+    }
+
+    // Case 2: 60 minutes or more -> Break it down into hours and remaining minutes
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    let hourString = hours + " hour" + (hours !== 1 ? "s" : "");
+    let minuteString = "";
+
+    // Append the minutes only if there are leftover minutes
+    if (minutes > 0) {
+        minuteString = " and " + minutes + " minute" + (minutes !== 1 ? "s" : "");
+    }
+
+    return hourString + minuteString + " ago";
 }
 
 function forecast_absolute_time(epoch, formatString) {
