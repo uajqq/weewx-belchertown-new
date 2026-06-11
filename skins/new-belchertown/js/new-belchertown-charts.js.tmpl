@@ -53,6 +53,55 @@ function belchertown_configure_highcharts_defaults() {
     belchertown_highcharts_defaults_applied = true;
 }
 
+function belchertown_zoom_range_to_ms(zoomRange) {
+    if (typeof zoomRange === "undefined" || zoomRange === null) {
+        return null;
+    }
+
+    var normalized = String(zoomRange).trim().toLowerCase();
+    if (!normalized || normalized === "false" || normalized === "none") {
+        return null;
+    }
+
+    var keywordRanges = {
+        hour: 3600000,
+        day: 86400000,
+        today: 86400000,
+        week: 604800000,
+        month: 2592000000,
+        year: 31536000000
+    };
+    if (Object.prototype.hasOwnProperty.call(keywordRanges, normalized)) {
+        return keywordRanges[normalized];
+    }
+
+    var seconds = parseFloat(normalized);
+    if (isFinite(seconds) && seconds > 0) {
+        return seconds * 1000;
+    }
+
+    return null;
+}
+
+function belchertown_apply_initial_zoom_range(chart, zoomRange) {
+    var rangeMs = belchertown_zoom_range_to_ms(zoomRange);
+    if (!rangeMs || !chart || !chart.xAxis || !chart.xAxis[0]) {
+        return;
+    }
+
+    var axis = chart.xAxis[0];
+    var dataMax = typeof axis.dataMax === "number" ? axis.dataMax : axis.max;
+    var dataMin = typeof axis.dataMin === "number" ? axis.dataMin : axis.min;
+    if (!isFinite(dataMax) || !isFinite(dataMin) || dataMax <= dataMin) {
+        return;
+    }
+
+    var min = Math.max(dataMin, dataMax - rangeMs);
+    if (min < dataMax) {
+        axis.setExtremes(min, dataMax, true, false);
+    }
+}
+
 function belchertown_is_element_near_viewport(element, rootMarginPx = 0) {
     if (!element || !element.getBoundingClientRect) {
         return true;
@@ -527,6 +576,8 @@ function showChart(json_file, prepend_renderTo = false) {
             var observation_type = undefined;
             xAxis_categories = [];
             plot_tooltip_date_format = undefined;
+            var zoom_enabled = false;
+            var zoom_range = "";
 
             try {
 
@@ -625,6 +676,12 @@ function showChart(json_file, prepend_renderTo = false) {
                         break;
                     case "exporting":
                         exporting_enabled = optionVal;
+                        break;
+                    case "zoom":
+                        zoom_enabled = optionVal;
+                        break;
+                    case "zoom_range":
+                        zoom_range = optionVal;
                         break;
                 }
             });
@@ -806,7 +863,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     },
                 },
 
-                // Highstock is needed for gapsize. Disable these 3 to make it look like standard Highcharts
+                // Highstock is needed for gapsize. Disable these by default to make it look like standard Highcharts.
                 scrollbar: {
                     enabled: false
                 },
@@ -1566,8 +1623,9 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             // Finally all options are done, now show the chart
-            // Wind rose and category charts must use Highcharts.chart(), not stockChart()
-            // Highstock forces a datetime axis internally and ignores type: 'category'
+            // Datetime charts use stockChart for consistent axis behavior.
+            // Wind rose and category charts must use Highcharts.chart() because
+            // Highstock forces a datetime axis internally and ignores type: 'category'.
             // weatherRange always uses datetime data even when xAxis_categories provides custom labels
 
             // Wind barb chart: mirrors https://www.highcharts.com/samples/highcharts/demo/windbarb-series
@@ -1601,6 +1659,10 @@ function showChart(json_file, prepend_renderTo = false) {
                     rounding: windBarbSeries.rounding,
                     numberFormat: windBarbSeries.numberFormat,
                     showInLegend: true,
+                    showInNavigator: true,
+                    dataGrouping: {
+                        enabled: false
+                    },
                     states: {
                         inactive: { opacity: 1 }
                     }
@@ -1609,6 +1671,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Reconfigure as a Highcharts windbarb series
                 windBarbSeries.type = "windbarb";
                 windBarbSeries.showInLegend = false;
+                windBarbSeries.showInNavigator = false;
                 windBarbSeries.vectorLength = 24;
                 windBarbSeries.enableMouseTracking = false;
                 delete windBarbSeries.tooltip;
@@ -1625,6 +1688,14 @@ function showChart(json_file, prepend_renderTo = false) {
                     }
                 });
                 windBarbSeries.data = windBarbData;
+
+                options.series.forEach(function(series) {
+                    if (series.type !== "windbarb") {
+                        series.dataGrouping = {
+                            enabled: false
+                        };
+                    }
+                });
 
                 // Custom tooltip: show wind speed (respecting rounding) plus direction.
                 // The windbarb series is excluded from this.points (enableMouseTracking:false),
@@ -1655,8 +1726,47 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.xAxis.offset = 40;
             }
 
-            var useStockChart = (observation_type !== "windRose") && !windBarbSeries && (xAxis_categories.length === 0 || observation_type === "weatherRange");
+            var zoomRequested = JSON.parse(String(zoom_enabled));
+            var useStockChart = (observation_type !== "windRose") && (xAxis_categories.length === 0 || observation_type === "weatherRange");
+            var zoomControlsEnabled = zoomRequested && useStockChart;
+            if (zoomControlsEnabled) {
+                options.chart.zooming.type = "x";
+                options.chart.zooming.mouseWheel.enabled = true;
+                options.scrollbar.enabled = true;
+                options.navigator.enabled = true;
+                options.rangeSelector.enabled = true;
+                options.rangeSelector.buttons = [{
+                    type: "day",
+                    count: 1,
+                    text: "1d"
+                }, {
+                    type: "week",
+                    count: 1,
+                    text: "1w"
+                }, {
+                    type: "month",
+                    count: 1,
+                    text: "1m"
+                }, {
+                    type: "month",
+                    count: 3,
+                    text: "3m"
+                }, {
+                    type: "ytd",
+                    text: "YTD"
+                }, {
+                    type: "year",
+                    count: 1,
+                    text: "1y"
+                }, {
+                    type: "all",
+                    text: $charts_page_all_button_label_json
+                }];
+            }
             var chart = useStockChart ? Highcharts.stockChart(options) : Highcharts.chart(options);
+            if (zoomControlsEnabled) {
+                belchertown_apply_initial_zoom_range(chart, zoom_range);
+            }
 
             // If using debug, show a copy paste debug for use with jsfiddle
             belchertown_debug(options);

@@ -6516,6 +6516,11 @@ class getData(SearchList):
             "charts_page_all_button_label": label_generic_dict.get(
                 "charts_page_all_button", label_dict["charts_page_all_button"]
             ),
+            "charts_page_all_button_label_json": json.dumps(
+                label_generic_dict.get(
+                    "charts_page_all_button", label_dict["charts_page_all_button"]
+                )
+            ),
             "charts_windrose_frequency_label": label_generic_dict.get(
                 "charts_windrose_frequency", label_dict["charts_windrose_frequency"]
             ),
@@ -7032,6 +7037,20 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     output[chart_group][plotname]["options"]["exporting"] = "true"
                 else:
                     output[chart_group][plotname]["options"]["exporting"] = "false"
+
+                # Setup zoom option
+                zoom = plot_options.get("zoom", None)
+                if zoom is not None and to_bool(zoom):
+                    # Only turn on zoom if it's not none and it's true (1 or True)
+                    output[chart_group][plotname]["options"]["zoom"] = "true"
+                else:
+                    output[chart_group][plotname]["options"]["zoom"] = "false"
+
+                # Setup initial zoom range. This only applies when zoom is true.
+                zoom_range = plot_options.get("zoom_range", "")
+                output[chart_group][plotname]["options"]["zoom_range"] = str(
+                    zoom_range
+                ).strip()
 
                 # Loop through each [[[observation]]] within the chart_group.
                 for line_name in self.chart_dict[chart_group][plotname].sections:
