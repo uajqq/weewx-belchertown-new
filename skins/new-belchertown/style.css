@@ -5002,9 +5002,12 @@ span.highcharts-title {
 .about .wx-stn-info,
 .reports .wx-stn-info {
   margin: 0;
+  max-width: 100%;
   font-size: 14px;
   line-height: 1.3;
   text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .charts .wx-stn-info-social,
@@ -5044,6 +5047,15 @@ span.highcharts-title {
   margin-left: auto;
   margin-right: auto;
   text-align: center;
+}
+
+.charts .wx-stn-info-container > .row > div.col-sm-5[style],
+.records .wx-stn-info-container > .row > div.col-sm-5[style],
+.about .wx-stn-info-container > .row > div.col-sm-5[style],
+.reports .wx-stn-info-container > .row > div.col-sm-5[style] {
+  flex: 0 1 41.66666667%;
+  min-width: 0;
+  margin-right: 0;
 }
 
 .wx-records-description {
@@ -5572,6 +5584,7 @@ span.highcharts-title {
   .reports .wx-stn-info-container > .row > div.col-sm-5[style] {
     align-items: center;
     margin-left: 0;
+    margin-right: 0;
   }
 
   .charts .wx-stn-info,
