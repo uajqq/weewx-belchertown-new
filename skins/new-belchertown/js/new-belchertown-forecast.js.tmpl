@@ -1036,6 +1036,7 @@ function forecast_update_aqi(data) {
             const aqiCategory = forecast_aqi_translate(aqiPeriod["category"]);
             jQuery(".wx-aqi").text(aqiValue);
             jQuery(".wx-aqi-category").text(aqiCategory);
+            get_aqi_color(aqiValue);
             if ("$Extras.aqi_location_enabled" === "1") {
                 const aqiPlace = data["aqi"][0]["response"][0]["place"]["name"] || "";
                 jQuery(".aqi_location_outer").html(aqiPlace ? "<br>" + aqiPlace : "").css('textTransform', 'capitalize');
@@ -1053,6 +1054,7 @@ function forecast_update_aqi(data) {
             const aqiNoDataCategory = forecast_aqi_translate("");
             jQuery(".wx-aqi").text(forecast_label_text("$obs.label.no_data"));
             jQuery(".wx-aqi-category").text(aqiNoDataCategory);
+            clear_aqi_color();
             if ("$Extras.aqi_location_enabled" === "1") jQuery(".aqi_location_outer").html("");
             try {
                 jQuery(".station-observations .aqi").text(forecast_label_text("$obs.label.no_data") + " (" + aqiNoDataCategory + ")");

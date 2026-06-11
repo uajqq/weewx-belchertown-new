@@ -726,6 +726,16 @@ function belchertown_apply_readable_color(selector, color, minimumRatio) {
     });
 }
 
+const AQI_COLORS = {
+    light: ["#00bb00", "#ffbe00", "#ff7e00", "#ff0000", "#8f3f97", "#7e0023"],
+    dark: ["#7bdc65", "#f0cf5a", "#ffb45a", "#ff7a73", "#d69af0", "#f0a3bd"]
+};
+const AQI_MIN_CONTRAST = {
+    light: 2,
+    dark: 4.5
+};
+const AQI_COLOR_SELECTOR = ".wx-aqi, .wx-aqi-category, .aqi_outer, .station-observations .aqi";
+
 jQuery(document).ready(function() {
     belchertown_decode_document_labels(document.documentElement);
 
@@ -910,25 +920,49 @@ function new_gradient_temp(value, min, max) {
     return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
 }
 
+function belchertown_current_theme() {
+    if (jQuery("body").hasClass("dark") || sessionStorage.getItem("currentTheme") === "dark") {
+        return "dark";
+    }
+    return "light";
+}
+
+function belchertown_aqi_color(aqi) {
+    var palette = AQI_COLORS[belchertown_current_theme()];
+    if (aqi <= 50) {
+        return palette[0];
+    } else if (aqi <= 100) {
+        return palette[1];
+    } else if (aqi <= 150) {
+        return palette[2];
+    } else if (aqi <= 200) {
+        return palette[3];
+    } else if (aqi <= 300) {
+        return palette[4];
+    }
+    return palette[5];
+}
+
 // Change the color of the AQI value
 function get_aqi_color(aqi) {
     aqi = parseInt(aqi);
-    if (isNaN(aqi)) return;
-    var color;
-    if (aqi <= 50) {
-        color = "#71bc3c";
-    } else if (aqi <= 100) {
-        color = "rgba(255,174,0,0.9)";
-    } else if (aqi <= 150) {
-        color = "rgba(255,127,0,1)";
-    } else if (aqi <= 200) {
-        color = "rgba(255,69,69,1)";
-    } else if (aqi <= 300) {
-        color = "#b16286";
-    } else {
-        color = "#cc241d";
+    if (isNaN(aqi)) {
+        clear_aqi_color();
+        return;
     }
-    belchertown_apply_readable_color(".wx-aqi, .wx-aqi-category, .aqi_outer", color);
+    var theme = belchertown_current_theme();
+    belchertown_apply_readable_color(AQI_COLOR_SELECTOR, belchertown_aqi_color(aqi), AQI_MIN_CONTRAST[theme]);
+}
+
+function clear_aqi_color() {
+    jQuery(AQI_COLOR_SELECTOR).css("color", "");
+}
+
+function refresh_aqi_color() {
+    var aqiValue = jQuery(".wx-aqi").first().text();
+    if (aqiValue) {
+        get_aqi_color(aqiValue);
+    }
 }
 
 function get_outTemp_color(unit, outTemp, returnColor = false) {
@@ -2104,6 +2138,7 @@ function changeTheme(themeName, toggleOverride = false) {
         // #end if
         sessionStorage.setItem('currentTheme', 'light');
     }
+    refresh_aqi_color();
 }
 
 async function ajaxweewx() {
