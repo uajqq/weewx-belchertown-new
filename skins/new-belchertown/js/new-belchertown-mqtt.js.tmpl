@@ -82,6 +82,45 @@ function mqtt_restart_button_html() {
     return " <button type='button' class='btn btn-primary restart-interval'>" + belchertown_label_html("$obs.label.mqtt_websockets_continue") + "</button>";
 }
 
+// Bootstrap 5 toast notifications for live-data connection changes
+var mqtt_toast_disconnect_shown = false;
+
+function mqtt_show_toast(message, variant) {
+    if (typeof bootstrap === "undefined" || !bootstrap.Toast || !message) {
+        return;
+    }
+    var container = document.getElementById("belchertown-toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.id = "belchertown-toast-container";
+        container.className = "toast-container position-fixed bottom-0 end-0 p-3";
+        document.body.appendChild(container);
+    }
+    var toast = document.createElement("div");
+    toast.className = "toast align-items-center border-0 text-bg-" + (variant || "secondary");
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    toast.setAttribute("aria-atomic", "true");
+    var flex = document.createElement("div");
+    flex.className = "d-flex";
+    var body = document.createElement("div");
+    body.className = "toast-body";
+    body.textContent = message;
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "btn-close btn-close-white me-2 m-auto";
+    closeBtn.setAttribute("data-bs-dismiss", "toast");
+    closeBtn.setAttribute("aria-label", belchertown_label_text("$obs.label.close"));
+    flex.appendChild(body);
+    flex.appendChild(closeBtn);
+    toast.appendChild(flex);
+    container.appendChild(toast);
+    toast.addEventListener("hidden.bs.toast", function() {
+        toast.remove();
+    });
+    new bootstrap.Toast(toast, { delay: 6000 }).show();
+}
+
 function mqtt_status_details_enabled() {
     return typeof pageName === "undefined" || pageName !== "pi";
 }
@@ -704,6 +743,10 @@ function onConnect() {
     if (reconnect_using_inactive_timestamp) {
         updated = tzAdjustedMoment(inactive_timestamp).format(belchertown_label_text("$obs.label.time_last_updated"));
         belchertown_debug("MQTT: Reconnection successful after inactivity");
+        if (mqtt_toast_disconnect_shown) {
+            mqtt_show_toast(belchertown_label_text("$obs.label.mqtt_toast_reconnected"), "success");
+        }
+        mqtt_toast_disconnect_shown = false;
     } else {
         updated = tzAdjustedMoment("$current.dateTime.raw").format(belchertown_label_text("$obs.label.time_last_updated"));
         belchertown_debug("MQTT: Initial connection successful");
@@ -739,6 +782,10 @@ function onFailure(responseObject) {
     reconnect_using_inactive_timestamp = true;
     inactive_timestamp = epoch;
     mqtt_set_disconnected_status("$obs.label.mqtt_websockets_failed", epoch, true);
+    if (!mqtt_toast_disconnect_shown) {
+        mqtt_show_toast(belchertown_label_text("$obs.label.mqtt_toast_lost"), "danger");
+        mqtt_toast_disconnect_shown = true;
+    }
     if (typeof responseObject.errorCode !== "undefined") {
         var errorMsg = "Error Code: " + responseObject.errorCode + " - " + (responseObject.errorMessage || "Unknown error");
         console.error("MQTT: " + timestamp + " - Connection Failed: " + errorMsg);
@@ -770,6 +817,10 @@ function onConnectionLost(responseObject) {
     reconnect_using_inactive_timestamp = true;
     inactive_timestamp = epoch;
     mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true);
+    if (!mqtt_toast_disconnect_shown) {
+        mqtt_show_toast(belchertown_label_text("$obs.label.mqtt_toast_lost"), "danger");
+        mqtt_toast_disconnect_shown = true;
+    }
     if (typeof responseObject.errorCode !== "undefined" && responseObject.errorCode !== 0) {
         var errorMsg = "Error Code: " + responseObject.errorCode + " - " + (responseObject.errorMessage || "Unknown error");
         console.error("MQTT: " + timestamp + " - Connection Lost: " + errorMsg);
