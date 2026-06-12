@@ -4504,55 +4504,86 @@ class getData(SearchList):
 
         rain_round = skin_dict["Units"]["StringFormats"].get(skin_rain_unit, "%.2f")
 
+        windrun_unit = converter.group_unit_dict["group_distance"]
+        skin_windrun_unit = self.generator.converter.group_unit_dict["group_distance"]
+        windrun_round = skin_dict["Units"]["StringFormats"].get(
+            skin_windrun_unit, "%.2f"
+        )
+        windrun_label = skin_dict["Units"]["Labels"].get(skin_windrun_unit, "")
+
         sunshineDur_unit = converter.group_unit_dict["group_deltatime"]
         skin_sunshineDur_unit = self.generator.converter.group_unit_dict["group_deltatime"]
         sunshineDur_round = skin_dict["Units"]["StringFormats"].get(
             skin_sunshineDur_unit, "%.2f"
         )
 
+        def _convert_daily_summary_result(
+            query_row, source_unit, group_name, round_format, value_suffix=""
+        ):
+            if query_row is not None:
+                value_tuple = (query_row[1], source_unit, group_name)
+                converted = round_format % self.generator.converter.convert(value_tuple)[0]
+                value_text = locale.format_string("%g", float(converted))
+                return [query_row[0], f"{value_text}{value_suffix}"]
+
+            fallback = round_format % 0
+            return [
+                calendar.timegm(time.gmtime()),
+                f"{locale.format_string('%g', float(fallback))}{value_suffix}",
+            ]
+
         rainiest_day_sql = """
             SELECT dateTime, sum FROM archive_day_rain
             WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
         """
         rainiest_day_query = wx_manager.getSql(rainiest_day_sql, (year_start_epoch,))
-        if rainiest_day_query is not None:
-            rainiest_day_tuple = (rainiest_day_query[1], rain_unit, "group_rain")
-            rainiest_day_converted = (
-                rain_round % self.generator.converter.convert(rainiest_day_tuple)[0]
+        rainiest_day = _convert_daily_summary_result(
+            rainiest_day_query, rain_unit, "group_rain", rain_round
+        )
+
+        week_rainiest_day_sql = """
+            SELECT dateTime, sum FROM archive_day_rain
+            WHERE dateTime >= ? AND dateTime < ? ORDER BY sum DESC LIMIT 1;
+        """
+        week_rainiest_day_query = wx_manager.getSql(
+            week_rainiest_day_sql, (week_start_epoch, today_start_epoch)
+        )
+        week_rainiest_day = _convert_daily_summary_result(
+            week_rainiest_day_query, rain_unit, "group_rain", rain_round
+        )
+
+        week_windrun_maxsum_sql = """
+            SELECT dateTime, sum FROM archive_day_windrun
+            WHERE dateTime >= ? AND dateTime < ? ORDER BY sum DESC LIMIT 1;
+        """
+        try:
+            week_windrun_maxsum_query = wx_manager.getSql(
+                week_windrun_maxsum_sql, (week_start_epoch, today_start_epoch)
             )
-            rainiest_day = [
-                rainiest_day_query[0],
-                locale.format_string("%g", float(rainiest_day_converted)),
-            ]
-        else:
-            rainiest_day = [
-                calendar.timegm(time.gmtime()),
-                locale.format_string("%.2f", 0),
-            ]
+        except Exception as e:
+            if "archive_day_windrun" in str(e):
+                log.debug(
+                    "Wind run stats not available: archive_day_windrun table not found."
+                )
+            else:
+                log.debug(f"Skipping wind run stats: {e}")
+            week_windrun_maxsum_query = None
+        week_windrun_maxsum = _convert_daily_summary_result(
+            week_windrun_maxsum_query,
+            windrun_unit,
+            "group_distance",
+            windrun_round,
+            windrun_label,
+        )
 
         at_rainiest_day_sql = """
             SELECT dateTime, sum FROM archive_day_rain
             ORDER BY sum DESC LIMIT 1;
         """
         at_rainiest_day_query = wx_manager.getSql(at_rainiest_day_sql)
-        if at_rainiest_day_query is not None:
-            at_rainiest_day_tuple = (
-                at_rainiest_day_query[1],
-                rain_unit,
-                "group_rain",
-            )
-            at_rainiest_day_converted = (
-                rain_round % self.generator.converter.convert(at_rainiest_day_tuple)[0]
-            )
-            at_rainiest_day = [
-                at_rainiest_day_query[0],
-                locale.format_string("%g", float(at_rainiest_day_converted)),
-            ]
-        else:
-            at_rainiest_day = [
-                calendar.timegm(time.gmtime()),
-                locale.format_string("%.2f", 0),
-            ]
+        at_rainiest_day = _convert_daily_summary_result(
+            at_rainiest_day_query, rain_unit, "group_rain", rain_round
+        )
 
         # Find what kind of database we're working with and specify the
         # correctly tailored SQL Query for each type of database
@@ -6456,7 +6487,9 @@ class getData(SearchList):
             "at_outTemp_range_max": at_outTemp_range_max,
             "at_outTemp_range_min": at_outTemp_range_min,
             "rainiest_day": rainiest_day,
+            "week_rainiest_day": week_rainiest_day,
             "at_rainiest_day": at_rainiest_day,
+            "week_windrun_maxsum": week_windrun_maxsum,
             "sunniest_day": sunniest_day,
             "at_sunniest_day": at_sunniest_day,
             "year_rainiest_month": year_rainiest_month,

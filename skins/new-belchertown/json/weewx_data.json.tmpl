@@ -290,12 +290,19 @@
             "vectoravg": "$day.wind.vecavg",
             "rms": "$day.wind.rms"
             #if $day.windrun.has_data
-            ,"windrun_max": "$day.windrun.max",
+            ,"windrun_maxsum": "$day.windrun.sum",
+            "windrun_maxsumtime": "$day.windrun.maxtime",
+            "windrun_maxsumtime_raw": "$day.windrun.maxtime.raw",
+            "windrun_max": "$day.windrun.max",
             "windrun_maxtime": "$day.windrun.maxtime",
             "windrun_min": "$day.windrun.min",
             "windrun_mintime": "$day.windrun.mintime",
             "windrun": "$day.windrun.sum"
             #end if
+        },
+        "windGust": {
+            "max": "$day.windGust.max",
+            "maxtime": "$day.windGust.maxtime"
         },
         #if $day.UV.has_data
         "uv": {
@@ -322,6 +329,8 @@
         #end if
         "rain": {
             "sum": "$day.rain.sum",
+            "maxsum": "$day.rain.sum",
+            "maxsumtime": "$day.dateTime",
             "max": "$day.rainRate.max",
             "maxtime": "$day.rainRate.maxtime"
         }
@@ -389,12 +398,20 @@
             "vectordir": "$span(time_delta=604800).wind.vecdir",
             "vectoravg": "$span(time_delta=604800).wind.vecavg"
             #if $span(time_delta=604800).windrun.has_data
-            ,"windrun_max": "$span(time_delta=604800).windrun.max",
+            ,"windrun_maxsum": "$week_windrun_maxsum[1]",
+            "windrun_maxsumtime": "$week_windrun_maxsum[0]",
+            "windrun_maxsumtime_raw": "$week_windrun_maxsum[0]",
+            "windrun_max": "$span(time_delta=604800).windrun.max",
             "windrun_maxtime": "$span(time_delta=604800).windrun.maxtime",
             "windrun_maxtime_raw": "$span(time_delta=604800).windrun.maxtime.raw",
             "windrun_min": "$span(time_delta=604800).windrun.min",
             "windrun_mintime": "$span(time_delta=604800).windrun.mintime"
             #end if
+        },
+        "windGust": {
+            "max": "$span(time_delta=604800).windGust.max",
+            "maxtime": "$span(time_delta=604800).windGust.maxtime",
+            "maxtime_raw": "$span(time_delta=604800).windGust.maxtime.raw"
         },
         #if $span(time_delta=604800).UV.has_data
         "uv": {
@@ -423,6 +440,9 @@
         #end if
         "rain": {
             "sum": "$span(time_delta=604800).rain.sum",
+            "maxsum": "$week_rainiest_day[1] $unit.label.rain",
+            "maxsumtime": "$week_rainiest_day[0]",
+            "maxsumtime_raw": "$week_rainiest_day[0]",
             "max": "$span(time_delta=604800).rainRate.max",
             "maxtime": "$span(time_delta=604800).rainRate.maxtime",
             "maxtime_raw": "$span(time_delta=604800).rainRate.maxtime.raw"
@@ -492,12 +512,20 @@
             "vectoravg": "$month.wind.vecavg",
             "rms": "$month.wind.rms"
             #if $month.windrun.has_data
-            ,"windrun_max": "$month.windrun.max",
+            ,"windrun_maxsum": "$month.windrun.maxsum",
+            "windrun_maxsumtime": "$month.windrun.maxsumtime",
+            "windrun_maxsumtime_raw": "$month.windrun.maxsumtime.raw",
+            "windrun_max": "$month.windrun.max",
             "windrun_maxtime": "$month.windrun.maxtime",
             "windrun_maxtime_raw": "$month.windrun.maxtime.raw",
             "windrun_min": "$month.windrun.min",
             "windrun_mintime": "$month.windrun.mintime"
             #end if
+        },
+        "windGust": {
+            "max": "$month.windGust.max",
+            "maxtime": "$month.windGust.maxtime",
+            "maxtime_raw": "$month.windGust.maxtime.raw"
         },
         #if $month.UV.has_data
         "uv": {
@@ -526,6 +554,9 @@
         #end if
         "rain": {
             "sum": "$month.rain.sum",
+            "maxsum": "$month.rain.maxsum",
+            "maxsumtime": "$month.rain.maxsumtime",
+            "maxsumtime_raw": "$month.rain.maxsumtime.raw",
             "max": "$month.rainRate.max",
             "maxtime": "$month.rainRate.maxtime",
             "maxtime_raw": "$month.rainRate.maxtime.raw"
@@ -676,10 +707,18 @@
             "maxtime_raw": "$yesterday.wind.maxtime.raw",
             "average": "$yesterday.wind.avg"
             #if $yesterday.windrun.has_data
+            ,"windrun_maxsum": "$yesterday.windrun.sum"
+            ,"windrun_maxsumtime": "$yesterday.windrun.maxtime"
+            ,"windrun_maxsumtime_raw": "$yesterday.windrun.maxtime.raw"
             ,"windrun": "$yesterday.windrun.sum"
             ,"windrun_maxtime": "$yesterday.windrun.maxtime"
             ,"windrun_maxtime_raw": "$yesterday.windrun.maxtime.raw"
             #end if
+        },
+        "windGust": {
+            "max": "$yesterday.windGust.max",
+            "maxtime": "$yesterday.windGust.maxtime",
+            "maxtime_raw": "$yesterday.windGust.maxtime.raw"
         },
         #if $yesterday.UV.has_data
         "uv": {
@@ -704,6 +743,8 @@
         #end if
         "rain": {
             "sum": "$yesterday.rain.sum",
+            "maxsum": "$yesterday.rain.sum",
+            "maxsumtime": "$yesterday.dateTime",
             "max": "$yesterday.rainRate.max",
             "maxtime": "$yesterday.rainRate.maxtime",
             "maxtime_raw": "$yesterday.rainRate.maxtime.raw"

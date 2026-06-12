@@ -171,7 +171,7 @@
             var windRows = [
                 makeRecord(
                     "$obs.label.records_strongest_wind",
-                    metric("wind", "max", "maxtime", "maxtime_raw"),
+                    metric("windGust", "max", "maxtime", "maxtime_raw"),
                     { value: "$year.windGust.max", dateText: "$year.windGust.maxtime", dateRaw: "$year.windGust.maxtime.raw" },
                     { value: "$alltime.windGust.max", dateText: "$alltime.windGust.maxtime", dateRaw: "$alltime.windGust.maxtime.raw" },
                     { hideDatePeriods: ["day"] }
@@ -182,7 +182,7 @@
                 windRows.push(
                     makeRecord(
                         "$obs.label.records_daily_windrun",
-                        metric("wind", "windrun", "windrun_maxtime", "windrun_maxtime_raw"),
+                        metric("wind", "windrun_maxsum", "windrun_maxsumtime", "windrun_maxsumtime_raw"),
                         { value: "$year.windrun.maxsum", dateText: "$year.windrun.maxsumtime", dateRaw: "$year.windrun.maxsumtime.raw" },
                         { value: "$alltime.windrun.maxsum", dateText: "$alltime.windrun.maxsumtime", dateRaw: "$alltime.windrun.maxsumtime.raw" },
                         { omitTime: true, hideDatePeriods: ["day", "yesterday"] }
@@ -210,7 +210,7 @@
                     rows: [
                         makeRecord(
                             "$obs.label.records_highest_daily_rainfall",
-                            metric("rain", "sum", "maxtime", "maxtime_raw"),
+                            metric("rain", "maxsum", "maxsumtime", "maxsumtime_raw"),
                             { value: "$rainiest_day[1] $unit.label.rain", dateText: "$rainiest_day[0]", dateRaw: "$rainiest_day[0]" },
                             { value: "$at_rainiest_day[1] $unit.label.rain", dateText: "$at_rainiest_day[0]", dateRaw: "$at_rainiest_day[0]" },
                             { omitTime: true, hideDatePeriods: ["day", "yesterday"] }
@@ -556,7 +556,7 @@
                 return metricValue;
             }
 
-            if (options && options.noMetricFallback) {
+            if (metricDef || (options && options.noMetricFallback)) {
                 return {
                     value: "--",
                     dateText: "--",
