@@ -6531,7 +6531,7 @@ body.pi::-webkit-scrollbar {
   font-size: 0.7em;
   transition:
     fill 250ms,
-    .dark .ont-size 250ms;
+    font-size 250ms;
 }
 
 .dark .highcharts-credits:hover {
@@ -6579,7 +6579,7 @@ body.pi::-webkit-scrollbar {
 }
 
 .dark .highcharts-state-hover path {
-  transition: stroke-width 50;
+  transition: stroke-width 50ms;
 }
 
 .dark .highcharts-state-normal path {
@@ -6623,7 +6623,7 @@ body.pi::-webkit-scrollbar {
   stroke-width: 0;
 }
 
-.dark .ext.highcharts-data-label,
+.dark text.highcharts-data-label,
 .dark .highcharts-data-label text {
   fill: #b0b0b3 !important;
 }
@@ -6705,16 +6705,16 @@ body.pi::-webkit-scrollbar {
   stroke: #707073;
   transition:
     stroke 250ms,
-    .dark .ill 250ms,
-    .dark .ill-opacity 250ms;
+    fill 250ms,
+    fill-opacity 250ms;
 }
 
 .dark .highcharts-treemap-series .highcharts-point-hover {
   stroke: #666;
   transition:
     stroke 25ms,
-    .dark .ill 25ms,
-    .dark .ill-opacity 25ms;
+    fill 25ms,
+    fill-opacity 25ms;
 }
 
 .dark .highcharts-treemap-series .highcharts-above-level {
@@ -6799,7 +6799,7 @@ body.pi::-webkit-scrollbar {
   overflow: hidden;
   transition:
     opacity 250ms,
-    .dark .eight 250ms step-end;
+    height 250ms step-end;
 }
 
 .dark .highcharts-loading-inner {
@@ -6855,7 +6855,7 @@ body.pi::-webkit-scrollbar {
   stroke: #e0e0e3;
   stroke-dasharray:
     1,
-    .dark .;
+    3;
 }
 
 .dark .highcharts-sankey-series .highcharts-point {
@@ -6865,14 +6865,14 @@ body.pi::-webkit-scrollbar {
 .dark .highcharts-sankey-series .highcharts-link {
   transition:
     fill 250ms,
-    .dark .ill-opacity 250ms;
+    fill-opacity 250ms;
   fill-opacity: 0.5;
 }
 
 .dark .highcharts-sankey-series .highcharts-point-hover.highcharts-link {
   transition:
     fill 50ms,
-    .dark .ill-opacity 50ms;
+    fill-opacity 50ms;
   fill-opacity: 1;
 }
 
@@ -6881,7 +6881,7 @@ body.pi::-webkit-scrollbar {
   stroke: #606063;
   transition:
     stroke 250ms,
-    .dark .ill-opacity 250ms;
+    fill-opacity 250ms;
 }
 
 .dark .highcharts-venn-series .highcharts-point-hover {
@@ -7081,15 +7081,15 @@ body.pi::-webkit-scrollbar {
 .dark .highcharts-map-series .highcharts-point {
   transition:
     fill 0.5s,
-    .dark .ill-opacity 0.5s,
-    .dark .troke-width 250ms;
+    fill-opacity 0.5s,
+    stroke-width 250ms;
   stroke: #606063;
 }
 
 .dark .highcharts-map-series .highcharts-point-hover {
   transition:
     fill 0s,
-    .dark .ill-opacity 0s;
+    fill-opacity 0s;
   fill-opacity: 0.5;
   stroke-width: 2px;
 }
@@ -7154,7 +7154,7 @@ body.pi::-webkit-scrollbar {
   cursor: pointer;
   transition:
     background 250ms,
-    .dark .color 250ms;
+    color 250ms;
 }
 
 .dark .highcharts-menu-item:hover {
