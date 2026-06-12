@@ -56,64 +56,88 @@ var belchertownWindyRadarViewportWidth = null;
 var belchertownWebcamReloadTimers = [];
 
 function belchertown_radar_tab_containers() {
-    return jQuery(".belchertown-radar-tabs").add("#tabs-container").filter(function() {
-        return jQuery(this).find(".tabs-menu a").length && jQuery(this).find(".belchertown-radar-tab-panel").length;
+    var candidates = Array.prototype.slice.call(document.querySelectorAll(".belchertown-radar-tabs"));
+    var tabsContainer = document.getElementById("tabs-container");
+    if (tabsContainer && candidates.indexOf(tabsContainer) === -1) {
+        candidates.push(tabsContainer);
+    }
+    return candidates.filter(function(el) {
+        return el.querySelector(".tabs-menu a") && el.querySelector(".belchertown-radar-tab-panel");
+    });
+}
+
+function belchertown_fade_in(element) {
+    element.style.opacity = "0";
+    element.style.display = "";
+    requestAnimationFrame(function() {
+        element.style.transition = "opacity 200ms";
+        element.style.opacity = "1";
+        setTimeout(function() {
+            element.style.transition = "";
+            element.style.opacity = "";
+        }, 250);
     });
 }
 
 function belchertown_activate_radar_tab(tabLink, animate) {
-    var link = jQuery(tabLink);
-    var container = link.closest(".belchertown-radar-tabs");
-    var activeTab = link.attr("href");
-
-    if (!container.length) {
-        container = link.closest("#tabs-container");
+    var link = tabLink && tabLink.jquery ? tabLink[0] : tabLink;
+    if (!link) {
+        return;
     }
-    if (!container.length || !activeTab || activeTab.charAt(0) !== "#") {
+    var container = link.closest(".belchertown-radar-tabs") || link.closest("#tabs-container");
+    var activeTab = link.getAttribute("href");
+
+    if (!container || !activeTab || activeTab.charAt(0) !== "#") {
         return;
     }
 
-    var activePanel = container.find(activeTab);
-    if (!activePanel.length) {
-        activePanel = jQuery(activeTab);
-    }
-    if (!activePanel.length) {
+    var activePanel = container.querySelector(activeTab) || document.querySelector(activeTab);
+    if (!activePanel) {
         return;
     }
 
-    link.parent().addClass("active");
-    link.parent().siblings().removeClass("active");
-    container.find(".belchertown-radar-tab-panel").not(activePanel).removeClass("is-active").hide();
-    activePanel.addClass("is-active");
+    var linkItem = link.parentElement;
+    linkItem.classList.add("active");
+    Array.prototype.forEach.call(linkItem.parentElement.children, function(sibling) {
+        if (sibling !== linkItem) {
+            sibling.classList.remove("active");
+        }
+    });
+    container.querySelectorAll(".belchertown-radar-tab-panel").forEach(function(panel) {
+        if (panel !== activePanel) {
+            panel.classList.remove("is-active");
+            panel.style.display = "none";
+        }
+    });
+    activePanel.classList.add("is-active");
     if (animate === false) {
-        activePanel.show();
+        activePanel.style.display = "";
     } else {
-        activePanel.fadeIn();
+        belchertown_fade_in(activePanel);
     }
 
     belchertown_schedule_windy_radar_scale(document, true);
 }
 
 function belchertown_initialize_radar_tabs() {
-    belchertown_radar_tab_containers().each(function() {
-        var container = jQuery(this);
-        var activeLink = container.find(".tabs-menu li.active a").first();
-        var activePanel = container.find(".belchertown-radar-tab-panel.is-active").first();
+    belchertown_radar_tab_containers().forEach(function(container) {
+        var activeLink = container.querySelector(".tabs-menu li.active a");
+        var activePanel = container.querySelector(".belchertown-radar-tab-panel.is-active");
 
-        if (!activeLink.length && activePanel.length && activePanel.attr("id")) {
-            activeLink = container.find('.tabs-menu a[href="#' + activePanel.attr("id") + '"]').first();
+        if (!activeLink && activePanel && activePanel.id) {
+            activeLink = container.querySelector('.tabs-menu a[href="#' + activePanel.id + '"]');
         }
-        if (!activeLink.length) {
-            activeLink = container.find(".tabs-menu a").first();
+        if (!activeLink) {
+            activeLink = container.querySelector(".tabs-menu a");
         }
-        if (activeLink.length) {
+        if (activeLink) {
             belchertown_activate_radar_tab(activeLink, false);
         }
     });
 }
 
 function belchertown_webcam_reload_interval(container) {
-    var interval = parseInt(jQuery(container).attr("data-webcam-reload-interval-ms"), 10);
+    var interval = parseInt(container.getAttribute("data-webcam-reload-interval-ms"), 10);
 
     if (isNaN(interval)) {
         return 300000;
@@ -123,17 +147,18 @@ function belchertown_webcam_reload_interval(container) {
 }
 
 function belchertown_reload_webcam_images(container) {
-    var containers = container ? jQuery(container) : belchertown_radar_tab_containers();
+    var containers = container ? [container] : belchertown_radar_tab_containers();
 
-    containers.find("#webcam img").each(function() {
-        var image = jQuery(this);
-        var imageUrl = image.attr("src");
+    containers.forEach(function(containerEl) {
+        containerEl.querySelectorAll("#webcam img").forEach(function(image) {
+            var imageUrl = image.getAttribute("src");
 
-        if (!imageUrl) {
-            return;
-        }
+            if (!imageUrl) {
+                return;
+            }
 
-        image.attr("src", imageUrl.split("?")[0] + "?" + Math.floor(Math.random() * 999999999));
+            image.setAttribute("src", imageUrl.split("?")[0] + "?" + Math.floor(Math.random() * 999999999));
+        });
     });
 }
 
@@ -719,10 +744,28 @@ function belchertown_readable_color(color, background, minimumRatio) {
     return belchertown_rgb_to_hex(target);
 }
 
+function belchertown_set_html(selector, html) {
+    if (typeof html === "undefined") {
+        return; // match jQuery .html(undefined), which left content unchanged
+    }
+    document.querySelectorAll(selector).forEach(function(el) {
+        el.innerHTML = html;
+    });
+}
+
+function belchertown_set_text(selector, text) {
+    if (typeof text === "undefined") {
+        return; // match jQuery .text(undefined), which left content unchanged
+    }
+    document.querySelectorAll(selector).forEach(function(el) {
+        el.textContent = text;
+    });
+}
+
 function belchertown_apply_readable_color(selector, color, minimumRatio) {
-    jQuery(selector).each(function() {
-        var background = belchertown_effective_background_color(this);
-        jQuery(this).css("color", belchertown_readable_color(color, background, minimumRatio));
+    document.querySelectorAll(selector).forEach(function(el) {
+        var background = belchertown_effective_background_color(el);
+        el.style.color = belchertown_readable_color(color, background, minimumRatio);
     });
 }
 
@@ -736,12 +779,22 @@ const AQI_MIN_CONTRAST = {
 };
 const AQI_COLOR_SELECTOR = ".wx-aqi, .wx-aqi-category, .aqi_outer, .station-observations .aqi";
 
-jQuery(document).ready(function() {
+function belchertown_on_ready(fn) {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", fn);
+    } else {
+        fn();
+    }
+}
+
+belchertown_on_ready(function() {
     belchertown_decode_document_labels(document.documentElement);
 
     // Bootstrap hover tooltips
-    if (jQuery.fn.tooltip) {
-        jQuery('[data-bs-toggle="tooltip"]').tooltip()
+    if (typeof bootstrap !== "undefined" && bootstrap.Tooltip) {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+            bootstrap.Tooltip.getOrCreateInstance(el);
+        });
     }
 
     // Fail-open for pages generated with deferred iframe markup.
@@ -750,8 +803,7 @@ jQuery(document).ready(function() {
     var radarTabContainers = belchertown_radar_tab_containers();
     if (radarTabContainers.length) {
         belchertown_initialize_radar_tabs();
-        radarTabContainers.each(function() {
-            var container = this;
+        radarTabContainers.forEach(function(container) {
             var reloadInterval = belchertown_webcam_reload_interval(container);
 
             belchertown_reload_webcam_images(container);
@@ -760,13 +812,20 @@ jQuery(document).ready(function() {
                     belchertown_reload_webcam_images(container);
                 }, reloadInterval));
             }
-        });
-        radarTabContainers.on("click", ".tabs-menu a", function(event) {
-            event.preventDefault();
-            belchertown_activate_radar_tab(this);
+            container.addEventListener("click", function(event) {
+                var tabAnchor = event.target.closest(".tabs-menu a");
+                if (!tabAnchor || !container.contains(tabAnchor)) {
+                    return;
+                }
+                event.preventDefault();
+                belchertown_activate_radar_tab(tabAnchor);
+            });
         });
     }
-    jQuery(window).on("resize orientationchange", function() {
+    window.addEventListener("resize", function() {
+        belchertown_schedule_windy_radar_scale(document);
+    });
+    window.addEventListener("orientationchange", function() {
         belchertown_schedule_windy_radar_scale(document);
     });
 
@@ -806,41 +865,49 @@ jQuery(document).ready(function() {
     // #end if
 
     // After charts are loaded, if an anchor tag is in the URL, let's scroll to it
-    jQuery(window).on('load', function() {
+    window.addEventListener('load', function() {
         var anchor_tag = location.hash.replace('#', '');
         if (anchor_tag != '') {
-            // Scroll the webpage to the chart. The timeout is to let jQuery finish appending the outer div so the height of the page is completed.
+            // Scroll the webpage to the chart. The timeout is to let the chart code finish appending the outer div so the height of the page is completed.
             setTimeout(function() {
-                jQuery('html, body').animate({scrollTop: jQuery('#' + anchor_tag).offset().top}, 500);
+                var anchorEl = document.getElementById(anchor_tag);
+                if (anchorEl) {
+                    window.scrollTo({top: anchorEl.getBoundingClientRect().top + window.pageYOffset, behavior: "smooth"});
+                }
             }, 500);
         }
     });
 
     // #if $Extras.has_key("back_to_top_button_enabled") and $Extras.back_to_top_button_enabled == '1'
     // Back to Top Button is visible after 400px
-    jQuery(window).scroll(function() {
-        if (jQuery(this).scrollTop() > 400) {
-            jQuery('#btn-back-to-top').css('transform', 'scale(1)');
+    var backToTopButton = document.getElementById('btn-back-to-top');
+    window.addEventListener("scroll", function() {
+        if (!backToTopButton) {
+            return;
+        }
+        if (window.pageYOffset > 400) {
+            backToTopButton.style.transform = 'scale(1)';
         } else {
-            jQuery('#btn-back-to-top').css('transform', 'scale(0)');
+            backToTopButton.style.transform = 'scale(0)';
         }
     });
 
-    jQuery('#btn-back-to-top').click(function() {
-        jQuery("html, body").animate({
-            scrollTop: 0
-        }, 1000);
-        return false;
-    });
+    if (backToTopButton) {
+        backToTopButton.addEventListener("click", function(event) {
+            event.preventDefault();
+            window.scrollTo({top: 0, behavior: "smooth"});
+        });
 
-    // #if $Extras.back_to_top_button_position == '1'
-    // Button is visible on left side
-    jQuery('#btn-back-to-top').css('left', '20px').css('right', 'auto');
-    // #end if
+        // #if $Extras.back_to_top_button_position == '1'
+        // Button is visible on left side
+        backToTopButton.style.left = '20px';
+        backToTopButton.style.right = 'auto';
+        // #end if
 
-    // #if $Extras.back_to_top_button_opacity >= '0.1' and $Extras.back_to_top_button_opacity <= '0.9'
-    jQuery('#btn-back-to-top').css('opacity', '$Extras.back_to_top_button_opacity');
-    // #end if
+        // #if $Extras.back_to_top_button_opacity >= '0.1' and $Extras.back_to_top_button_opacity <= '0.9'
+        backToTopButton.style.opacity = '$Extras.back_to_top_button_opacity';
+        // #end if
+    }
     // #end if
 
     initializeAlmanacDiagramFromDOM();
@@ -854,9 +921,12 @@ jQuery(document).ready(function() {
 
     // Style legacy celestial table markup as modern sub-cards in the extras modal.
     enhanceAlmanacExtrasModal();
-    jQuery('#almanac-modal').on('shown.bs.modal', function() {
-        enhanceAlmanacExtrasModal();
-    });
+    var almanacModalEl = document.getElementById('almanac-modal');
+    if (almanacModalEl) {
+        almanacModalEl.addEventListener('shown.bs.modal', function() {
+            enhanceAlmanacExtrasModal();
+        });
+    }
 
 });
 
@@ -923,7 +993,7 @@ function new_gradient_temp(value, min, max) {
 }
 
 function belchertown_current_theme() {
-    if (jQuery("body").hasClass("dark") || sessionStorage.getItem("currentTheme") === "dark") {
+    if (document.body.classList.contains("dark") || sessionStorage.getItem("currentTheme") === "dark") {
         return "dark";
     }
     return "light";
@@ -957,11 +1027,14 @@ function get_aqi_color(aqi) {
 }
 
 function clear_aqi_color() {
-    jQuery(AQI_COLOR_SELECTOR).css("color", "");
+    document.querySelectorAll(AQI_COLOR_SELECTOR).forEach(function(el) {
+        el.style.color = "";
+    });
 }
 
 function refresh_aqi_color() {
-    var aqiValue = jQuery(".wx-aqi").first().text();
+    var aqiEl = document.querySelector(".wx-aqi");
+    var aqiValue = aqiEl ? aqiEl.textContent : "";
     if (aqiValue) {
         get_aqi_color(aqiValue);
     }
@@ -1108,11 +1181,9 @@ function wind_compass_unit_label(obsName) {
     ) {
         return unit_label_array["windSpeed"];
     }
-    if (typeof jQuery === "function") {
-        var label = jQuery(".wind-table td.mph").first().text();
-        if (label) {
-            return label;
-        }
+    var labelCell = document.querySelector(".wind-table td.mph");
+    if (labelCell && labelCell.textContent) {
+        return labelCell.textContent;
     }
     return wind_compass_default_unit_label;
 }
@@ -1144,12 +1215,9 @@ function wind_compass_value_to_knots(value, unitLabel) {
 }
 
 function displayed_wind_compass_knots(obsName) {
-    if (typeof jQuery !== "function") {
-        return null;
-    }
-
     var selector = obsName == "windGust" ? ".curwindgust" : ".curwindspeed";
-    var displayedValue = jQuery(selector).first().text();
+    var displayedEl = document.querySelector(selector);
+    var displayedValue = displayedEl ? displayedEl.textContent : "";
     return wind_compass_value_to_knots(displayedValue, wind_compass_unit_label(obsName));
 }
 
@@ -1272,16 +1340,25 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     var parsedWindSpeedKnots = parse_wind_compass_knots(windSpeedKnots);
     var parsedWindGustKnots = parse_wind_compass_knots(windGustKnots);
     var selectedKnots = wind_compass_source == "windGust" ? parsedWindGustKnots : parsedWindSpeedKnots;
-    var arrow = jQuery(".arrow");
+    var arrows = document.querySelectorAll(".arrow");
+    var windArrows = document.querySelectorAll(".wind-arrow");
 
-    if (arrow.length === 0) {
+    if (arrows.length === 0) {
         return;
     }
 
     // Calm wind: hide both indicator styles (triangle and windbarb).
     if (wind_compass_is_calm(windSpeedKnots, windGustKnots)) {
-        arrow.removeClass("windbarb-marker").addClass("wind-compass-marker--hidden").empty().css("visibility", "hidden");
-        jQuery(".wind-arrow").addClass("wind-compass-marker--hidden").css("visibility", "hidden");
+        arrows.forEach(function(el) {
+            el.classList.remove("windbarb-marker");
+            el.classList.add("wind-compass-marker--hidden");
+            el.innerHTML = "";
+            el.style.visibility = "hidden";
+        });
+        windArrows.forEach(function(el) {
+            el.classList.add("wind-compass-marker--hidden");
+            el.style.visibility = "hidden";
+        });
         return;
     }
 
@@ -1290,22 +1367,34 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     }
 
     // Wind is not calm: ensure indicators are visible.
-    arrow.removeClass("wind-compass-marker--hidden").css("visibility", "visible");
-    jQuery(".wind-arrow").removeClass("wind-compass-marker--hidden").css("visibility", "visible");
+    arrows.forEach(function(el) {
+        el.classList.remove("wind-compass-marker--hidden");
+        el.style.visibility = "visible";
+    });
+    windArrows.forEach(function(el) {
+        el.classList.remove("wind-compass-marker--hidden");
+        el.style.visibility = "visible";
+    });
 
     if (wind_compass_marker == "windbarb") {
-        arrow.addClass("windbarb-marker");
         if (selectedKnots === null) {
             selectedKnots = parsedWindSpeedKnots !== null ? parsedWindSpeedKnots : parsedWindGustKnots;
         }
         var svg = build_windbarb_svg(selectedKnots);
-        if (svg) {
-            arrow.html(svg);
-        } else {
-            arrow.removeClass("windbarb-marker").empty();
-        }
+        arrows.forEach(function(el) {
+            if (svg) {
+                el.classList.add("windbarb-marker");
+                el.innerHTML = svg;
+            } else {
+                el.classList.remove("windbarb-marker");
+                el.innerHTML = "";
+            }
+        });
     } else {
-        arrow.removeClass("windbarb-marker").empty();
+        arrows.forEach(function(el) {
+            el.classList.remove("windbarb-marker");
+            el.innerHTML = "";
+        });
     }
 
     rotateThis(rotation);
@@ -1447,8 +1536,9 @@ function rotateThis(newRotation) {
     if (currentRotation < 180 && (newRotation > (currentRotation + 180))) {finalRotation -= 360;}
     if (currentRotation >= 180 && (newRotation <= (currentRotation - 180))) {finalRotation += 360;}
     finalRotation += (newRotation - currentRotation);
-    jQuery(".wind-arrow").css("transform", "rotate(" + finalRotation + "deg)");
-    jQuery(".arrow").css("transform", "rotate(" + finalRotation + "deg)");
+    document.querySelectorAll(".wind-arrow, .arrow").forEach(function(el) {
+        el.style.transform = "rotate(" + finalRotation + "deg)";
+    });
 }
 
 function almanacTrackXBounds() {
@@ -1478,8 +1568,8 @@ function almanacWrapDiagramX(xValue, xOffset) {
 }
 
 function almanacDiagramCenteringMode() {
-    var diagramEl = jQuery(".almanac-diagram").first();
-    var mode = String(diagramEl.attr("data-centering-mode") || diagramEl.data("centeringMode") || "off").toLowerCase();
+    var diagramEl = document.querySelector(".almanac-diagram");
+    var mode = String((diagramEl && diagramEl.getAttribute("data-centering-mode")) || "off").toLowerCase();
     if (mode === "now" || mode === "transit") {
         return mode;
     }
@@ -1487,27 +1577,19 @@ function almanacDiagramCenteringMode() {
 }
 
 function almanacBodyXOffsetInfo(bodyKey) {
-    var diagramEl = jQuery(".almanac-diagram").first();
+    var diagramEl = document.querySelector(".almanac-diagram");
     var mode = almanacDiagramCenteringMode();
     var attrName = bodyKey === "moon" ? "data-moon-x-offset" : "data-sun-x-offset";
-    var dataKey = bodyKey === "moon" ? "moonXOffset" : "sunXOffset";
     var attrRaw;
-    var dataRaw;
     var parsed;
 
-    if (mode === "off") {
+    if (mode === "off" || !diagramEl) {
         return { value: 0, hasExplicit: false };
     }
 
-    attrRaw = diagramEl.attr(attrName);
+    attrRaw = diagramEl.getAttribute(attrName);
     parsed = parseFloat(attrRaw);
     if (attrRaw !== undefined && attrRaw !== null && String(attrRaw).trim() !== "" && isFinite(parsed)) {
-        return { value: parsed, hasExplicit: true };
-    }
-
-    dataRaw = diagramEl.data(dataKey);
-    parsed = parseFloat(dataRaw);
-    if (dataRaw !== undefined && dataRaw !== null && String(dataRaw).trim() !== "" && isFinite(parsed)) {
         return { value: parsed, hasExplicit: true };
     }
 
@@ -1547,28 +1629,20 @@ function almanacCurrentTimeToDiagramX(currentTs, currentX, fallbackCurrentX) {
 }
 
 function readAlmanacDiagramNumber(diagram, attrName, dataKey) {
-    var attrValue = parseFloat(diagram.attr(attrName));
-    var dataValue;
+    var attrValue = parseFloat(diagram.getAttribute(attrName));
 
-    if (isFinite(attrValue)) {
-        return attrValue;
-    }
-
-    dataValue = parseFloat(diagram.data(dataKey));
-    return isFinite(dataValue) ? dataValue : null;
+    return isFinite(attrValue) ? attrValue : null;
 }
 
 function writeAlmanacDiagramNumber(diagram, attrName, dataKey, value) {
     var parsed = parseFloat(value);
 
     if (!isFinite(parsed)) {
-        diagram.removeAttr(attrName);
-        diagram.removeData(dataKey);
+        diagram.removeAttribute(attrName);
         return;
     }
 
-    diagram.attr(attrName, parsed.toFixed(3));
-    diagram.data(dataKey, parsed);
+    diagram.setAttribute(attrName, parsed.toFixed(3));
 }
 
 function almanacEventBelowHorizon(riseEpoch, setEpoch, nowEpoch) {
@@ -1593,21 +1667,26 @@ function almanacEventBelowHorizon(riseEpoch, setEpoch, nowEpoch) {
 function setAlmanacDiagramBodyBelowHorizon(bodyKey, belowHorizon) {
     var key = bodyKey === "moon" ? "moon" : "sun";
 
-    jQuery(".almanac-diagram-object--" + key).toggleClass("is-below-horizon", belowHorizon);
-    jQuery(".almanac-diagram-track--" + key).toggleClass("is-below-horizon", belowHorizon);
+    var toggleAll = function(selector) {
+        document.querySelectorAll(selector).forEach(function(el) {
+            el.classList.toggle("is-below-horizon", belowHorizon);
+        });
+    };
+    toggleAll(".almanac-diagram-object--" + key);
+    toggleAll(".almanac-diagram-track--" + key);
 
-    if (key === "sun" && !jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
-        jQuery(".almanac-diagram-track").toggleClass("is-below-horizon", belowHorizon);
+    if (key === "sun" && !document.querySelector(".almanac-diagram-track--sun, .almanac-diagram-track--moon")) {
+        toggleAll(".almanac-diagram-track");
     }
 }
 
 function refreshAlmanacDiagramHorizonStateFromSchedule(nowEpoch) {
-    var diagram = jQuery(".almanac-diagram").first();
+    var diagram = document.querySelector(".almanac-diagram");
     var now = parseFloat(nowEpoch);
     var sunBelowHorizon;
     var moonBelowHorizon;
 
-    if (!diagram.length) {
+    if (!diagram) {
         return;
     }
 
@@ -1637,7 +1716,7 @@ function refreshAlmanacDiagramHorizonStateFromSchedule(nowEpoch) {
 var almanacDiagramHorizonTimer = null;
 
 function startAlmanacDiagramHorizonTimer() {
-    if (!jQuery(".almanac-diagram").length) {
+    if (!document.querySelector(".almanac-diagram")) {
         return;
     }
 
@@ -1653,7 +1732,7 @@ function startAlmanacDiagramHorizonTimer() {
 }
 
 function almanacExistingMarkerX(marker) {
-    var transformText = String(marker.attr("transform") || "");
+    var transformText = String(marker.getAttribute("transform") || "");
     var match = transformText.match(/translate\(\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/i);
     var parsed = match ? parseFloat(match[1]) : NaN;
 
@@ -1661,8 +1740,8 @@ function almanacExistingMarkerX(marker) {
 }
 
 function almanacVerticalScale() {
-    var diagramEl = jQuery(".almanac-diagram").first();
-    var scale = parseFloat(diagramEl.attr("data-vertical-scale") || diagramEl.data("verticalScale"));
+    var diagramEl = document.querySelector(".almanac-diagram");
+    var scale = parseFloat(diagramEl ? diagramEl.getAttribute("data-vertical-scale") : null);
 
     if (!isFinite(scale)) {
         return 2.5;
@@ -1694,27 +1773,20 @@ function almanacDiagramViewBox() {
 }
 
 function setAlmanacDiagramTrackBelowHorizon(selector, altitude) {
-    var track = jQuery(selector);
     var alt = parseFloat(altitude);
 
-    if (!track.length) {
-        return;
-    }
-
-    track.toggleClass("is-below-horizon", isFinite(alt) && alt < 0);
+    document.querySelectorAll(selector).forEach(function(track) {
+        track.classList.toggle("is-below-horizon", isFinite(alt) && alt < 0);
+    });
 }
 
 function setAlmanacDiagramHorizonBounds() {
-    var horizon = jQuery(".almanac-diagram-horizon");
     var xBounds = almanacTrackXBounds();
 
-    if (!horizon.length) {
-        return;
-    }
-
-    horizon
-        .attr("x1", xBounds.minX.toFixed(1))
-        .attr("x2", xBounds.maxX.toFixed(1));
+    document.querySelectorAll(".almanac-diagram-horizon").forEach(function(horizon) {
+        horizon.setAttribute("x1", xBounds.minX.toFixed(1));
+        horizon.setAttribute("x2", xBounds.maxX.toFixed(1));
+    });
 }
 
 function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitude, currentTs, currentX) {
@@ -1722,15 +1794,22 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     var bodyKey = selector.indexOf("--moon") !== -1 ? "moon" : "sun";
     var displayLabel = belchertown_decode_html_entities(label);
     var alt = parseFloat(altitude);
-    var marker = jQuery(selector);
+    var marker = document.querySelector(selector);
     var projectedX;
     var projectedY;
     var bodyOffsetInfo = almanacBodyXOffsetInfo(bodyKey);
     var bodyOffset = bodyOffsetInfo.value;
 
-    if (!marker.length) {
+    if (!marker) {
         return;
     }
+
+    var setMarkerTitle = function() {
+        var titleEl = marker.querySelector("title");
+        if (titleEl) {
+            titleEl.textContent = displayLabel;
+        }
+    };
 
     // Python is authoritative for curve geometry. Marker position should be a
     // direct projection of live altitude at current time using the same x-offset.
@@ -1751,45 +1830,49 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
 
     if (!point) {
         if (isFinite(alt)) {
-            marker.show();
-            marker.toggleClass("is-below-horizon", alt < 0);
-            marker.find("title").text(displayLabel);
+            marker.style.display = "";
+            marker.classList.toggle("is-below-horizon", alt < 0);
+            setMarkerTitle();
             return;
         }
-        marker.hide();
+        marker.style.display = "none";
         return;
     }
 
-    marker
-        .show()
-        .attr("transform", "translate(" + point.x.toFixed(1) + " " + point.y.toFixed(1) + ")")
-        .toggleClass("is-below-horizon", point.belowHorizon || (isFinite(alt) && alt < 0));
+    marker.style.display = "";
+    marker.setAttribute("transform", "translate(" + point.x.toFixed(1) + " " + point.y.toFixed(1) + ")");
+    marker.classList.toggle("is-below-horizon", point.belowHorizon || (isFinite(alt) && alt < 0));
 
-    marker.find("title").text(displayLabel);
+    setMarkerTitle();
 }
 
 function fitAlmanacDiagramViewBox(diagramData) {
-    var svg = jQuery(".almanac-diagram-svg");
+    var svgs = document.querySelectorAll(".almanac-diagram-svg");
 
-    if (!svg.length || !diagramData) {
+    if (!svgs.length || !diagramData) {
         return;
     }
 
     // Python is authoritative for content-fit SVG framing and viewport sizing.
     // Keep preserveAspectRatio aligned with server markup (no stretching).
-    svg.attr("preserveAspectRatio", "xMidYMid meet");
+    svgs.forEach(function(svg) {
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    });
 }
 
-jQuery(window).on("load orientationchange", function() {
+window.addEventListener("load", function() {
+    initializeAlmanacDiagramFromDOM();
+});
+window.addEventListener("orientationchange", function() {
     initializeAlmanacDiagramFromDOM();
 });
 
 function renderAlmanacDiagram(diagramData, preserveViewBox) {
-    var diagram = jQuery(".almanac-diagram");
+    var diagram = document.querySelector(".almanac-diagram");
 
     setAlmanacDiagramHorizonBounds();
 
-    if (!diagram.length) {
+    if (!diagram) {
         return;
     }
 
@@ -1807,7 +1890,7 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         diagramData["moon"] = {};
     }
 
-    // Keep DOM data-* and jQuery data cache in sync with the freshest values
+    // Keep DOM data-* attributes in sync with the freshest values
     // so MQTT incremental updates don't fall back to stale template-time values.
     var sunAz = parseFloat(diagramData["sun"]["azimuth"]);
     var sunAlt = parseFloat(diagramData["sun"]["altitude"]);
@@ -1831,57 +1914,47 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
     resolvedCurrentX = almanacCurrentTimeToDiagramX(currentTs, currentX, fallbackCurrentX);
 
     if (isFinite(sunAz)) {
-        diagram.attr("data-sun-az", sunAz.toFixed(3));
-        diagram.data("sunAz", sunAz);
+        diagram.setAttribute("data-sun-az", sunAz.toFixed(3));
     }
     if (isFinite(sunAlt)) {
-        diagram.attr("data-sun-alt", sunAlt.toFixed(3));
-        diagram.data("sunAlt", sunAlt);
+        diagram.setAttribute("data-sun-alt", sunAlt.toFixed(3));
     }
     if (isFinite(moonAz)) {
-        diagram.attr("data-moon-az", moonAz.toFixed(3));
-        diagram.data("moonAz", moonAz);
+        diagram.setAttribute("data-moon-az", moonAz.toFixed(3));
     }
     if (isFinite(moonAlt)) {
-        diagram.attr("data-moon-alt", moonAlt.toFixed(3));
-        diagram.data("moonAlt", moonAlt);
+        diagram.setAttribute("data-moon-alt", moonAlt.toFixed(3));
     }
     writeAlmanacDiagramNumber(diagram, "data-sun-rise-epoch", "sunRiseEpoch", sunRiseEpoch);
     writeAlmanacDiagramNumber(diagram, "data-sun-set-epoch", "sunSetEpoch", sunSetEpoch);
     writeAlmanacDiagramNumber(diagram, "data-moon-rise-epoch", "moonRiseEpoch", moonRiseEpoch);
     writeAlmanacDiagramNumber(diagram, "data-moon-set-epoch", "moonSetEpoch", moonSetEpoch);
     if (isFinite(sunXOffset)) {
-        diagram.attr("data-sun-x-offset", sunXOffset.toFixed(3));
-        diagram.data("sunXOffset", sunXOffset);
+        diagram.setAttribute("data-sun-x-offset", sunXOffset.toFixed(3));
     }
     if (isFinite(moonXOffset)) {
-        diagram.attr("data-moon-x-offset", moonXOffset.toFixed(3));
-        diagram.data("moonXOffset", moonXOffset);
+        diagram.setAttribute("data-moon-x-offset", moonXOffset.toFixed(3));
     }
     if (centeringMode === "now" || centeringMode === "transit") {
-        diagram.attr("data-centering-mode", centeringMode);
-        diagram.data("centeringMode", centeringMode);
+        diagram.setAttribute("data-centering-mode", centeringMode);
     } else {
-        diagram.attr("data-centering-mode", "off");
-        diagram.data("centeringMode", "off");
+        diagram.setAttribute("data-centering-mode", "off");
     }
     if (isFinite(currentTs)) {
-        diagram.attr("data-current-ts", currentTs.toFixed(3));
-        diagram.data("currentTs", currentTs);
+        diagram.setAttribute("data-current-ts", currentTs.toFixed(3));
     }
     if (isFinite(resolvedCurrentX)) {
-        diagram.attr("data-current-x", resolvedCurrentX.toFixed(3));
-        diagram.data("currentX", resolvedCurrentX);
+        diagram.setAttribute("data-current-x", resolvedCurrentX.toFixed(3));
     }
 
-    diagram.removeClass("almanac-diagram--inactive");
+    diagram.classList.remove("almanac-diagram--inactive");
 
     // Python-authored SVG curves are authoritative. JS must never rewrite path d.
     // Keep only dynamic state classes in sync during live updates.
     setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--sun", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
     setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--moon", diagramData && diagramData["moon"] && diagramData["moon"]["altitude"]);
 
-    if (!jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
+    if (!document.querySelector(".almanac-diagram-track--sun, .almanac-diagram-track--moon")) {
         setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
     }
 
@@ -1911,22 +1984,16 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
 }
 
 function initializeAlmanacDiagramFromDOM() {
-    var diagram = jQuery(".almanac-diagram");
+    var diagram = document.querySelector(".almanac-diagram");
 
-    if (!diagram.length) {
+    if (!diagram) {
         return;
     }
 
     var readNumericAttr = function(attrName, dataKey) {
-        var attrRaw = diagram.attr(attrName);
-        var attrParsed = parseFloat(attrRaw);
+        var attrParsed = parseFloat(diagram.getAttribute(attrName));
         if (isFinite(attrParsed)) {
             return attrParsed;
-        }
-
-        var dataParsed = parseFloat(diagram.data(dataKey));
-        if (isFinite(dataParsed)) {
-            return dataParsed;
         }
 
         return null;
@@ -1948,7 +2015,7 @@ function initializeAlmanacDiagramFromDOM() {
             set_epoch: readNumericAttr("data-moon-set-epoch", "moonSetEpoch"),
             x_offset: readNumericAttr("data-moon-x-offset", "moonXOffset")
         },
-        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase(),
+        centering_mode: String(diagram.getAttribute("data-centering-mode") || "off").toLowerCase(),
         current_ts: readNumericAttr("data-current-ts", "currentTs"),
         current_x: readNumericAttr("data-current-x", "currentX")
     });
@@ -2092,38 +2159,51 @@ function changeTheme(themeName, toggleOverride = false) {
         sessionStorage.setItem('theme', 'toggleOverride');
         belchertown_debug("Theme: sessionStorage.getItem('theme') is now: " + sessionStorage.getItem('theme'));
     }
+    var logoImage = document.getElementById("logo_image");
     if (themeName == "dark") {
         // Apply dark theme: Bootstrap's native colour mode plus the skin's body class
         document.documentElement.setAttribute("data-bs-theme", "dark");
         // #if $radar_html_dark != "None"
-        jQuery('.radar_image').html('$radar_html_dark');
+        document.querySelectorAll('.radar_image').forEach(function(el) {
+            el.innerHTML = '$radar_html_dark';
+        });
         belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
         // #end if
-        jQuery('body').addClass("dark");
-        jQuery('body').removeClass("light");
+        document.body.classList.add("dark");
+        document.body.classList.remove("light");
         // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        jQuery(".themeSwitchInput").prop("checked", true);
+        document.querySelectorAll(".themeSwitchInput").forEach(function(el) {
+            el.checked = true;
+        });
         // #end if
         // #if $Extras.has_key('logo_image_dark') and $Extras.logo_image_dark != ""
         belchertown_debug("Theme: logo_image_dark is defined.");
-        jQuery("#logo_image").attr("src", "$Extras.logo_image_dark");
+        if (logoImage) {
+            logoImage.src = "$Extras.logo_image_dark";
+        }
         // #end if
         sessionStorage.setItem('currentTheme', 'dark');
     } else if (themeName == "light") {
         // Apply light theme
         document.documentElement.setAttribute("data-bs-theme", "light");
         // #if $radar_html_dark != "None"
-        jQuery('.radar_image').html('$radar_html');
+        document.querySelectorAll('.radar_image').forEach(function(el) {
+            el.innerHTML = '$radar_html';
+        });
         belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
         // #end if
-        jQuery('body').addClass("light");
-        jQuery('body').removeClass("dark");
+        document.body.classList.add("light");
+        document.body.classList.remove("dark");
         // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        jQuery(".themeSwitchInput").prop("checked", false);
+        document.querySelectorAll(".themeSwitchInput").forEach(function(el) {
+            el.checked = false;
+        });
         // #end if
         // #if $Extras.has_key('logo_image') and $Extras.logo_image != ""
         belchertown_debug("Theme: logo_image is defined.");
-        jQuery("#logo_image").attr("src", "$Extras.logo_image");
+        if (logoImage) {
+            logoImage.src = "$Extras.logo_image";
+        }
         // #end if
         sessionStorage.setItem('currentTheme', 'light');
     }
@@ -2163,7 +2243,7 @@ function formatAlmanacEpochTime(epoch, formatString, unavailableText) {
 }
 
 function enhanceAlmanacExtrasModal(almanacData) {
-    var modalBody = jQuery("#almanac-modal .almanac-extras-modal-body");
+    var modalBody = document.querySelector("#almanac-modal .almanac-extras-modal-body");
     var sourceRaw;
     var sourceLabel;
     var sourceNote;
@@ -2209,24 +2289,28 @@ function enhanceAlmanacExtrasModal(almanacData) {
         almanacTimeFormat = "LT";
     }
 
-    if (!modalBody.length) {
+    if (!modalBody) {
         return;
     }
 
     belchertown_decode_text_nodes(modalBody);
 
-    modalBody.find("table.celestial").each(function() {
-        var table = jQuery(this);
+    var rowCells = function(row, tagName) {
+        return Array.prototype.filter.call(row.children, function(cell) {
+            return cell.tagName === tagName;
+        });
+    };
 
-        table.find("tr").each(function() {
-            var row = jQuery(this);
-            var headerCells = row.children("th");
-            var cells = row.children("td");
+    modalBody.querySelectorAll("table.celestial").forEach(function(table) {
 
-            row.removeClass("celestial-row celestial-row--header celestial-row--item");
+        table.querySelectorAll("tr").forEach(function(row) {
+            var headerCells = rowCells(row, "TH");
+            var cells = rowCells(row, "TD");
+
+            row.classList.remove("celestial-row", "celestial-row--header", "celestial-row--item");
 
             if (headerCells.length) {
-                row.addClass("celestial-row celestial-row--header");
+                row.classList.add("celestial-row", "celestial-row--header");
                 return;
             }
 
@@ -2234,12 +2318,14 @@ function enhanceAlmanacExtrasModal(almanacData) {
                 return;
             }
 
-            cells.removeClass("celestial-cell-label celestial-cell-value");
+            cells.forEach(function(cell) {
+                cell.classList.remove("celestial-cell-label", "celestial-cell-value");
+            });
 
-            var labelCell = jQuery(cells[0]);
-            var valueCell = jQuery(cells[1]);
-            var labelText = labelCell.text().replace(/\u00a0/g, " ").trim();
-            var valueText = valueCell.text().replace(/\u00a0/g, " ").trim();
+            var labelCell = cells[0];
+            var valueCell = cells[1];
+            var labelText = labelCell.textContent.replace(/\u00a0/g, " ").trim();
+            var valueText = valueCell.textContent.replace(/\u00a0/g, " ").trim();
 
             // Remove spacer rows coming from legacy table formatting.
             if (!labelText && !valueText) {
@@ -2247,9 +2333,9 @@ function enhanceAlmanacExtrasModal(almanacData) {
                 return;
             }
 
-            row.addClass("celestial-row celestial-row--item");
-            labelCell.addClass("celestial-cell-label");
-            valueCell.addClass("celestial-cell-value");
+            row.classList.add("celestial-row", "celestial-row--item");
+            labelCell.classList.add("celestial-cell-label");
+            valueCell.classList.add("celestial-cell-value");
 
             // Localize date/time-like values independent of UI language.
             var looksLikeDateTime = /\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}/.test(valueText) && /\d{1,2}:\d{2}/.test(valueText);
@@ -2263,9 +2349,9 @@ function enhanceAlmanacExtrasModal(almanacData) {
                 if (parsed.isValid()) {
                     var formattedDateTime = parsed.locale(moment.locale()).format(almanacDateTimeFormat);
                     formattedDateTime = formattedDateTime.replace(/\s([AP]M)$/i, "\u00a0$1");
-                    valueCell.text(formattedDateTime);
+                    valueCell.textContent = formattedDateTime;
                 } else {
-                    valueCell.text(valueText.replace(/\s([AP]M)$/i, "\u00a0$1"));
+                    valueCell.textContent = valueText.replace(/\s([AP]M)$/i, "\u00a0$1");
                 }
             } else if (looksLikeTimeOnly && valueText && valueText !== "--") {
                 var parsedTime = moment(
@@ -2285,9 +2371,9 @@ function enhanceAlmanacExtrasModal(almanacData) {
                 if (parsedTime.isValid()) {
                     var formattedTime = parsedTime.locale(moment.locale()).format(almanacTimeFormat);
                     formattedTime = formattedTime.replace(/\s([AP]M)$/i, "\u00a0$1");
-                    valueCell.text(formattedTime);
+                    valueCell.textContent = formattedTime;
                 } else {
-                    valueCell.text(valueText.replace(/\s([AP]M)$/i, "\u00a0$1"));
+                    valueCell.textContent = valueText.replace(/\s([AP]M)$/i, "\u00a0$1");
                 }
             }
         });
@@ -2300,34 +2386,40 @@ function enhanceAlmanacExtrasModal(almanacData) {
         moonAgeValue = belchertown_decode_html_entities(weewx_data["almanac"]["moon"]["moon_age"]).replace(/\u00a0/g, " ").trim();
     }
     if (moonAgeValue && moonAgeValue !== "--") {
-        var moonTable = modalBody.find("table.celestial").eq(1);
-        if (moonTable.length) {
-            var moonAgeRow = moonTable.find("tr[data-row='moon-age']").first();
-            if (!moonAgeRow.length) {
-                moonAgeRow = jQuery("<tr class='celestial-row celestial-row--item' data-row='moon-age'><td class='label celestial-cell-label'></td><td class='data celestial-cell-value'></td></tr>");
-                moonAgeRow.find("td").eq(0).text(moonAgeLabel);
+        var moonTable = modalBody.querySelectorAll("table.celestial")[1];
+        if (moonTable) {
+            var moonAgeRow = moonTable.querySelector("tr[data-row='moon-age']");
+            if (!moonAgeRow) {
+                moonAgeRow = document.createElement("tr");
+                moonAgeRow.className = "celestial-row celestial-row--item";
+                moonAgeRow.setAttribute("data-row", "moon-age");
+                moonAgeRow.innerHTML = "<td class='label celestial-cell-label'></td><td class='data celestial-cell-value'></td>";
+                moonAgeRow.children[0].textContent = moonAgeLabel;
 
-                var phaseRow = jQuery();
-                moonTable.find("tr").each(function() {
-                    var row = jQuery(this);
-                    var tds = row.children("td");
+                var phaseRow = null;
+                var moonRows = moonTable.querySelectorAll("tr");
+                for (var ri = 0; ri < moonRows.length; ri++) {
+                    var tds = rowCells(moonRows[ri], "TD");
                     if (tds.length >= 2) {
-                        var lbl = jQuery(tds[0]).text().replace(/\u00a0/g, " ").trim().toLowerCase();
+                        var lbl = tds[0].textContent.replace(/\u00a0/g, " ").trim().toLowerCase();
                         if (lbl === phaseLabel || lbl.indexOf(phaseLabel) !== -1) {
-                            phaseRow = row;
-                            return false;
+                            phaseRow = moonRows[ri];
+                            break;
                         }
                     }
-                });
+                }
 
-                if (phaseRow.length) {
-                    moonAgeRow.insertBefore(phaseRow);
+                if (phaseRow) {
+                    phaseRow.parentNode.insertBefore(moonAgeRow, phaseRow);
                 } else {
-                    moonTable.append(moonAgeRow);
+                    (moonTable.tBodies[0] || moonTable).appendChild(moonAgeRow);
                 }
             }
 
-            moonAgeRow.find("td").eq(1).text(moonAgeValue);
+            var moonAgeCells = moonAgeRow.querySelectorAll("td");
+            if (moonAgeCells.length > 1) {
+                moonAgeCells[1].textContent = moonAgeValue;
+            }
         }
     }
 
@@ -2374,43 +2466,45 @@ function enhanceAlmanacExtrasModal(almanacData) {
         sourceLabel = sourceNoneLabel;
     }
 
-    sourceNote = modalBody.find(".celestial_source_note").first();
-    if (!sourceNote.length) {
-        sourceNote = jQuery('<div class="celestial_source_note"><small></small></div>');
+    sourceNote = modalBody.querySelector(".celestial_source_note");
+    if (!sourceNote) {
+        sourceNote = document.createElement("div");
+        sourceNote.className = "celestial_source_note";
+        sourceNote.appendChild(document.createElement("small"));
     }
 
-    sourceNoteSmall = sourceNote.find("small");
-    if (!sourceNoteSmall.length) {
-        sourceNoteSmall = jQuery("<small></small>");
-        sourceNote.empty().append(sourceNoteSmall);
+    sourceNoteSmall = sourceNote.querySelector("small");
+    if (!sourceNoteSmall) {
+        sourceNoteSmall = document.createElement("small");
+        sourceNote.innerHTML = "";
+        sourceNote.appendChild(sourceNoteSmall);
     }
-    sourceNoteSmall.html(
+    sourceNoteSmall.innerHTML = (
         belchertown_escape_html(dataSourceLabel) +
         ": <strong>" +
         belchertown_escape_html(sourceLabel) +
         "</strong>"
     );
 
-    detailsContainer = modalBody.find("#celestial_details").first();
-    if (detailsContainer.length) {
-        detailsContainer.append(sourceNote);
+    detailsContainer = modalBody.querySelector("#celestial_details");
+    if (detailsContainer) {
+        detailsContainer.appendChild(sourceNote);
     } else {
-        modalBody.append(sourceNote);
+        modalBody.appendChild(sourceNote);
     }
 
     // If total daylight remained '--', compute a local fallback from sunrise/sunset.
     daylightValue = null;
-    modalBody.find("table.celestial tr").each(function() {
-        var row = jQuery(this);
-        var tds = row.children("td");
+    modalBody.querySelectorAll("table.celestial tr").forEach(function(row) {
+        var tds = rowCells(row, "TD");
         if (tds.length >= 2) {
-            var lbl = jQuery(tds[0]).text().replace(/\u00a0/g, " ").trim().toLowerCase();
+            var lbl = tds[0].textContent.replace(/\u00a0/g, " ").trim().toLowerCase();
             if (lbl === totalDaylightLabel || lbl.indexOf(totalDaylightLabel) !== -1) {
-                daylightValue = jQuery(tds[1]);
+                daylightValue = tds[1];
             }
         }
     });
-    if (daylightValue && daylightValue.text().replace(/\u00a0/g, " ").trim() === "--") {
+    if (daylightValue && daylightValue.textContent.replace(/\u00a0/g, " ").trim() === "--") {
         sunriseEpoch = parseFloat(almanacData && almanacData["sunrise_epoch"]);
         sunsetEpoch = parseFloat(almanacData && almanacData["sunset_epoch"]);
         if (isFinite(sunriseEpoch) && isFinite(sunsetEpoch) && sunsetEpoch >= sunriseEpoch) {
@@ -2418,7 +2512,7 @@ function enhanceAlmanacExtrasModal(almanacData) {
             var hours = Math.floor(total / 3600);
             var mins = Math.floor((total % 3600) / 60);
             var secs = total % 60;
-            daylightValue.text(hours + hourShort + " " + mins + minuteShort + " " + secs + secondShort);
+            daylightValue.textContent = hours + hourShort + " " + mins + minuteShort + " " + secs + secondShort;
         }
     }
 }
@@ -2448,47 +2542,47 @@ function formatSnapshotMetricValue(value) {
 function updateDailySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".dailystatshigh").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
-    jQuery(".dailystatslow").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
-    jQuery(".dailystatswindavg").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
-    jQuery(".dailystatswindmax").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
-    jQuery(".dailystatsrain").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
-    jQuery(".dailystatsrainrate").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
-    jQuery(".dailystatsuvavg").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
-    jQuery(".dailystatsuvmax").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
-    jQuery(".dailystatsradiationavg").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
-    jQuery(".dailystatsradiationmax").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
-    jQuery(".dailystatssunshineDur").html(formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
+    belchertown_set_html(".dailystatshigh", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
+    belchertown_set_html(".dailystatslow", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
+    belchertown_set_html(".dailystatswindavg", formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
+    belchertown_set_html(".dailystatswindmax", formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
+    belchertown_set_html(".dailystatsrain", formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
+    belchertown_set_html(".dailystatsrainrate", formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
+    belchertown_set_html(".dailystatsuvavg", formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
+    belchertown_set_html(".dailystatsuvmax", formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
+    belchertown_set_html(".dailystatsradiationavg", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
+    belchertown_set_html(".dailystatsradiationmax", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
+    belchertown_set_html(".dailystatssunshineDur", formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
     if (d["wind"] && d["wind"]["windrun"]) {
-        jQuery(".dailywindrun").html(formatSnapshotMetricValue(d["wind"]["windrun"]));
+        belchertown_set_html(".dailywindrun", formatSnapshotMetricValue(d["wind"]["windrun"]));
     }
 }
 
 function updateMonthlySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".monthstatshigh").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
-    jQuery(".monthstatslow").html(formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
-    jQuery(".monthstatswindavg").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
-    jQuery(".monthstatswindmax").html(formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
-    jQuery(".monthstatsrain").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
-    jQuery(".monthstatsrainrate").html(formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
-    jQuery(".monthstatsuvavg").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
-    jQuery(".monthstatsuvmax").html(formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
-    jQuery(".monthstatsradiationavg").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
-    jQuery(".monthstatsradiationmax").html(formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
-    jQuery(".monthstatssunshineDur").html(formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
+    belchertown_set_html(".monthstatshigh", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
+    belchertown_set_html(".monthstatslow", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
+    belchertown_set_html(".monthstatswindavg", formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
+    belchertown_set_html(".monthstatswindmax", formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
+    belchertown_set_html(".monthstatsrain", formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
+    belchertown_set_html(".monthstatsrainrate", formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
+    belchertown_set_html(".monthstatsuvavg", formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
+    belchertown_set_html(".monthstatsuvmax", formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
+    belchertown_set_html(".monthstatsradiationavg", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
+    belchertown_set_html(".monthstatsradiationmax", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
+    belchertown_set_html(".monthstatssunshineDur", formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
 }
 
-jQuery(document).on("change", "#snapshot-day-select", function() {
-    if (weewx_data) {
-        updateDailySnapshot(weewx_data, jQuery(this).val());
+document.addEventListener("change", function(event) {
+    var daySelect = event.target.closest("#snapshot-day-select");
+    if (daySelect && weewx_data) {
+        updateDailySnapshot(weewx_data, daySelect.value);
+        return;
     }
-});
-
-jQuery(document).on("change", "#snapshot-month-select", function() {
-    if (weewx_data) {
-        updateMonthlySnapshot(weewx_data, jQuery(this).val());
+    var monthSelect = event.target.closest("#snapshot-month-select");
+    if (monthSelect && weewx_data) {
+        updateMonthlySnapshot(weewx_data, monthSelect.value);
     }
 });
 
@@ -2508,8 +2602,8 @@ function update_weewx_data(data) {
     // Daily High Low
     high = data["day"]["outTemp"]["max"];
     low = data["day"]["outTemp"]["min"];
-    jQuery(".high").html(high);
-    jQuery(".low").html(low);
+    belchertown_set_html(".high", high);
+    belchertown_set_html(".low", low);
 
     try {
         // Barometer trending by finding a negative number
@@ -2519,32 +2613,34 @@ function update_weewx_data(data) {
     }
 
     if (count >= 1) {
-        jQuery(".pressure-trend").html('<i class="fa fa-arrow-down barometer-down"></i>');
+        belchertown_set_html(".pressure-trend", '<i class="fa fa-arrow-down barometer-down"></i>');
     } else {
-        jQuery(".pressure-trend").html('<i class="fa fa-arrow-up barometer-up"></i>');
+        belchertown_set_html(".pressure-trend", '<i class="fa fa-arrow-up barometer-up"></i>');
     }
 
     // Daily max gust span
-    jQuery(".dailymaxgust").html(parseFloat(data["day"]["wind"]["max"]).toFixed(1));
+    belchertown_set_html(".dailymaxgust", parseFloat(data["day"]["wind"]["max"]).toFixed(1));
 
     // Daily Snapshot Stats Section — use current dropdown selection (default: "day")
-    var dayKey = jQuery("#snapshot-day-select").val() || "day";
+    var daySelectEl = document.getElementById("snapshot-day-select");
+    var dayKey = (daySelectEl && daySelectEl.value) || "day";
     updateDailySnapshot(data, dayKey);
 
     // Month Snapshot Stats Section — use current dropdown selection (default: "month")
-    var monthKey = jQuery("#snapshot-month-select").val() || "month";
+    var monthSelectEl = document.getElementById("snapshot-month-select");
+    var monthKey = (monthSelectEl && monthSelectEl.value) || "month";
     updateMonthlySnapshot(data, monthKey);
 
     // Sunrise, sunset, moonrise and moonset
-    jQuery(".sunrise-value").text(formatAlmanacEpochTime(data["almanac"]["sunrise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["sunrise"] || "N/A"));
-    jQuery(".sunset-value").text(formatAlmanacEpochTime(data["almanac"]["sunset_epoch"], belchertown_label_text("$obs.label.time_sunset"), data["almanac"]["sunset"] || "N/A"));
-    jQuery(".moonrise-value").text(formatAlmanacEpochTime(data["almanac"]["moon"]["moon_rise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_rise"] || "N/A"));
-    jQuery(".moonset-value").text(formatAlmanacEpochTime(data["almanac"]["moon"]["moon_set_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_set"] || "N/A"));
+    belchertown_set_text(".sunrise-value", formatAlmanacEpochTime(data["almanac"]["sunrise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["sunrise"] || "N/A"));
+    belchertown_set_text(".sunset-value", formatAlmanacEpochTime(data["almanac"]["sunset_epoch"], belchertown_label_text("$obs.label.time_sunset"), data["almanac"]["sunset"] || "N/A"));
+    belchertown_set_text(".moonrise-value", formatAlmanacEpochTime(data["almanac"]["moon"]["moon_rise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_rise"] || "N/A"));
+    belchertown_set_text(".moonset-value", formatAlmanacEpochTime(data["almanac"]["moon"]["moon_set_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_set"] || "N/A"));
 
     // Moon icon, phase and illumination percent
-    jQuery(".moon-container > .moon-icon").html(render_moon_icon_html(data));
-    jQuery(".moon-phase").text(titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
-    jQuery(".moon-visible").html("<strong>" + belchertown_escape_html(data["almanac"]["moon"]["moon_fullness"]) + "%</strong> " + belchertown_label_html("$obs.label.moon_visible"));
+    belchertown_set_html(".moon-container > .moon-icon", render_moon_icon_html(data));
+    belchertown_set_text(".moon-phase", titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
+    belchertown_set_html(".moon-visible", "<strong>" + belchertown_escape_html(data["almanac"]["moon"]["moon_fullness"]) + "%</strong> " + belchertown_label_html("$obs.label.moon_visible"));
 
     // Do not synthesize daylight text in JS. Keep server-rendered daylight
     // string authoritative (includes change-vs-yesterday when available).
@@ -2552,17 +2648,18 @@ function update_weewx_data(data) {
     renderAlmanacDiagram(data["almanac"]["diagram"]);
     // #if $almanac.hasExtras
     // Close current modal if open
-    if (jQuery.fn.modal && jQuery('#almanac-modal').length) {
-        jQuery('#almanac-modal').modal('hide');
+    var almanacModalToHide = document.getElementById('almanac-modal');
+    if (almanacModalToHide && typeof bootstrap !== "undefined" && bootstrap.Modal) {
+        bootstrap.Modal.getOrCreateInstance(almanacModalToHide).hide();
     }
     if (data["almanac"] && typeof data["almanac"]["almanac_extras_modal_html"] === "string" && data["almanac"]["almanac_extras_modal_html"].length > 0) {
-        jQuery(".almanac-extras-modal-body").html(data["almanac"]["almanac_extras_modal_html"]);
-        belchertown_decode_text_nodes(jQuery(".almanac-extras-modal-body"));
+        belchertown_set_html(".almanac-extras-modal-body", data["almanac"]["almanac_extras_modal_html"]);
+        belchertown_decode_text_nodes(document.querySelector(".almanac-extras-modal-body"));
     }
     enhanceAlmanacExtrasModal(data["almanac"]);
     try {
         almanac_updated = belchertown_label_text("$obs.label.header_last_updated") + " " + tzAdjustedMoment(data["current"]["datetime_raw"]).format(belchertown_label_text("$obs.label.time_last_updated"));
-        jQuery(".almanac_last_updated").text(almanac_updated);
+        belchertown_set_text(".almanac_last_updated", almanac_updated);
     } catch (err) {
         // Returned "current" data does not have this value
     }
@@ -2653,7 +2750,7 @@ function render_oriented_moon_svg(illuminationFraction, waxing, orientationDeg) 
     var litPath = moon_illuminated_path(illuminationFraction, waxing, cx, cy, r);
     var litFillRule = illuminationFraction > 0.5 && illuminationFraction < 1 ? "evenodd" : "nonzero";
 
-    var isDarkTheme = jQuery("body").hasClass("dark") || sessionStorage.getItem('currentTheme') === 'dark';
+    var isDarkTheme = document.body.classList.contains("dark") || sessionStorage.getItem('currentTheme') === 'dark';
     var moonDark = isDarkTheme ? "#6b7280" : "#8b95a5";
     var moonLight = isDarkTheme ? "#e5ebf7" : "#f6f8fc";
     var moonEdge = isDarkTheme ? "#cbd5e1" : "#6b7280";
@@ -2772,7 +2869,9 @@ window.addEventListener("resize", forecast_sync_row_height);
 //  function to display selected forecast according to value of interval (1, 3 or 24); 0 hides all forecasts
 function forecast_select(interval) {
     if (interval == 0) {
-        jQuery(".forecastrow").hide();
+        document.querySelectorAll(".forecastrow").forEach(function(el) {
+            el.style.display = "none";
+        });
     } else {
         forecast_sync_row_height();
         oldinterval = sessionStorage.getItem("forecastInterval");
