@@ -490,7 +490,7 @@ function forecast_format_alert_start_time(timestamp) {
 }
 
 function forecast_alert_in_effect_text(alertObj) {
-    var startTimestamp = alertObj['onset'] || alertObj['effective'];
+    var startTimestamp = alertObj['effective'] || alertObj['onset'];
     var endTimestamp = alertObj['ends'];
     var startEpoch = forecast_number(startTimestamp);
     var startIsPast = startEpoch !== null && startEpoch <= (Date.now() / 1000);
