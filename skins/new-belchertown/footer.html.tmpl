@@ -18,7 +18,61 @@
 </footer>
 
 #if $page != "kiosk" and $page != "pi"
-<script defer type='text/javascript' src='$relative_url/js/responsive-menu${asset_suffix}.js?ver=$asset_version'></script>
+## Offcanvas mobile menu. Lives at the end of <body>: Bootstrap positions the
+## panel with position:fixed, which breaks inside the header wrappers.
+<div class="offcanvas offcanvas-end" tabindex="-1" id="site-offcanvas" aria-labelledby="site-offcanvas-label">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="site-offcanvas-label">$obs.label.nav_menu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="$obs.label.close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <ul class="offcanvas-nav-list">
+            <li class="menu-item${" current-menu-item" if $page == "home" else ""}"><a href="$relative_url">$obs.label.nav_home</a></li>
+            #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
+            <li class="menu-item${" current-menu-item" if $page == "charts" else ""}"><a href="$relative_url/charts/">$nav_charts_label</a></li>
+            #end if
+            <li class="menu-item${" current-menu-item" if $page == "records" else ""}"><a href="$relative_url/records/">$obs.label.nav_records</a></li>
+            <li class="menu-item${" current-menu-item" if $page == "reports" else ""}"><a href="$relative_url/reports/">$obs.label.nav_reports</a></li>
+            <li class="menu-item${" current-menu-item" if $page == "about" else ""}"><a href="$relative_url/about/">$obs.label.nav_about</a></li>
+        </ul>
+        #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
+        <div class="offcanvas-theme-row">
+            <span class="offcanvas-theme-label">$obs.label.theme_dark_mode</span>
+            <label class="themeSwitchLabel">
+                <input type="checkbox" class="themeSwitchInput" aria-label="$obs.label.theme_dark_mode" $themeSwitchChecked>
+                <span class="slider round"></span>
+            </label>
+        </div>
+        #end if
+    </div>
+</div>
+<script>
+(function() {
+    // Explicit toggle binding: the data-bs-toggle delegated handler can miss
+    // the click when the browser resolves the event target to the button's
+    // parent (observed in Chromium), so bind directly with a re-entry guard.
+    var btn = document.querySelector(".menu-offcanvas-toggle");
+    var panel = document.getElementById("site-offcanvas");
+    if (!btn || !panel) { return; }
+    var lastToggle = 0;
+    function togglePanel(event) {
+        if (event && typeof event.preventDefault === "function") {
+            event.preventDefault();
+        }
+        var now = Date.now();
+        if (now - lastToggle < 400) { return; }
+        lastToggle = now;
+        if (typeof bootstrap !== "undefined" && bootstrap.Offcanvas) {
+            bootstrap.Offcanvas.getOrCreateInstance(panel).toggle();
+        }
+    }
+    btn.addEventListener("click", togglePanel);
+    btn.addEventListener("mouseup", togglePanel);
+    btn.addEventListener("touchend", togglePanel);
+    panel.addEventListener("show.bs.offcanvas", function() { btn.setAttribute("aria-expanded", "true"); });
+    panel.addEventListener("hidden.bs.offcanvas", function() { btn.setAttribute("aria-expanded", "false"); });
+})();
+</script>
 #end if
 
 <!-- New Belchertown Skin Version: $belchertown_version -->

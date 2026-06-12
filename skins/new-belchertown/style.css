@@ -7313,3 +7313,46 @@ body.dark {
 .dark .earthquake-container .earthquake-distance-outer {
   min-height: 64px;
 }
+
+/* ----- Offcanvas mobile menu ----- */
+.menu-offcanvas-toggle {
+  display: block;
+  background: none;
+  border: 0;
+  font-size: 28px;
+  padding: 8px 14px;
+  margin: 0 auto;
+  color: #000;
+  cursor: pointer;
+}
+.dark .menu-offcanvas-toggle { color: #fff; }
+@media only screen and (max-width: 767.98px) {
+  /* the desktop menu used to be hidden by a JS-added .responsive-menu class;
+     hide it directly now that responsive-menu.js is gone */
+  .nav-header .genesis-nav-menu { display: none; }
+}
+.offcanvas-nav-list { list-style: none; margin: 0; padding: 0; }
+.offcanvas-nav-list .menu-item a {
+  display: block;
+  padding: 14px 8px;
+  font-size: 18px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  text-decoration: none;
+  color: inherit;
+}
+.offcanvas-nav-list .menu-item a:hover { color: #e5554e; }
+.offcanvas-nav-list .menu-item.current-menu-item a {
+  color: #e5554e;
+  font-weight: 600;
+}
+.dark .offcanvas {
+  background-color: #2a2a2b;
+  color: #dedede;
+}
+.offcanvas-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 8px;
+  font-size: 18px;
+}

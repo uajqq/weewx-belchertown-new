@@ -1410,7 +1410,6 @@ files = [
             "skins/new-belchertown/js/new-belchertown-mqtt.js.tmpl",
             "skins/new-belchertown/js/new-belchertown-charts.js.tmpl",
             "skins/new-belchertown/js/index.html",
-            "skins/new-belchertown/js/responsive-menu.js",
         ],
     ),
     (
