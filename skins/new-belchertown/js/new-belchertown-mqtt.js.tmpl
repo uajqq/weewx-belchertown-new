@@ -15,25 +15,23 @@ function ajaximages(section = false, reload_timer_interval_seconds = false) {
             var radar_img = document.querySelectorAll(".radar-map img")[0].src;
             var new_radar_img = radar_img + "&t=" + Math.floor(Math.random() * 999999999);
             document.querySelectorAll(".radar-map img")[0].src = new_radar_img;
-            //var radar_html = jQuery('.radar-map').children('img').attr('src').split('?')[0] // Get the img src and remove everything after "?" so we don't stack ?'s onto the image during updates
-            //jQuery('.radar-map').children('img').attr('src', radar_html + "?" + Math.floor(Math.random() * 999999999));
         }
         // Reload iframe - https://stackoverflow.com/a/4249946/1177153
         if (document.querySelectorAll(".radar-map iframe").length > 0) {
-            jQuery(".radar-map iframe").each(function() {
-                jQuery(this).attr('src', function(i, val) {return val;});
+            document.querySelectorAll(".radar-map iframe").forEach(function(frame) {
+                frame.src = frame.src;
             });
         }
     } else if (!section || section != "radar") {
         belchertown_debug("Updating " + section + " images");
         // Reload images
-        jQuery('.' + section + ' img').each(function() {
-            new_image_url = jQuery(this).attr('src').split('?')[0] + "?" + Math.floor(Math.random() * 999999999);
-            jQuery(this).attr('src', new_image_url);
+        document.querySelectorAll('.' + section + ' img').forEach(function(img) {
+            new_image_url = img.getAttribute('src').split('?')[0] + "?" + Math.floor(Math.random() * 999999999);
+            img.src = new_image_url;
         });
         // Reload iframes
-        jQuery('.' + section + ' iframe').each(function() {
-            jQuery(this).attr('src', function(i, val) {return val;});
+        document.querySelectorAll('.' + section + ' iframe').forEach(function(frame) {
+            frame.src = frame.src;
         });
     }
     // Set the new timer
@@ -91,12 +89,12 @@ function mqtt_ensure_status_info_button() {
         return;
     }
 
-    var updated = jQuery(".updated").first();
-    if (!updated.length || jQuery(".mqtt-status-info").length) {
+    var updated = document.querySelector(".updated");
+    if (!updated || document.querySelector(".mqtt-status-info")) {
         return;
     }
 
-    updated.after(
+    updated.insertAdjacentHTML("afterend",
         " <button type='button' class='mqtt-status-info' aria-label='" + belchertown_label_html("$obs.label.mqtt_live_update_details") + "'>" +
         "<i class='fa fa-info' aria-hidden='true'></i>" +
         "</button>"
@@ -108,7 +106,7 @@ function mqtt_ensure_status_modal() {
         return;
     }
 
-    if (jQuery("#mqtt-status-modal").length) {
+    if (document.getElementById("mqtt-status-modal")) {
         return;
     }
 
@@ -137,7 +135,7 @@ function mqtt_ensure_status_modal() {
     modal += "</div>";
     modal += "</div>";
     modal += "</div>";
-    jQuery("body").append(modal);
+    document.body.insertAdjacentHTML("beforeend", modal);
 }
 
 function mqtt_modal_normalized_text(value) {
@@ -188,16 +186,16 @@ function mqtt_set_latest_packet_data(payload) {
 }
 
 function mqtt_render_live_data_modal(modal) {
-    var container = modal.find(".mqtt-status-live-data");
+    var container = modal.querySelector(".mqtt-status-live-data");
     var rows = mqtt_latest_packet_rows;
     var html = "";
 
-    if (!container.length) {
+    if (!container) {
         return;
     }
 
     if (!rows.length) {
-        container.hide();
+        container.style.display = "none";
         return;
     }
 
@@ -210,19 +208,28 @@ function mqtt_render_live_data_modal(modal) {
     });
     html += "</tbody></table>";
 
-    container.find(".mqtt-status-live-data-rows").html(html);
-    container.show();
+    var rowsContainer = container.querySelector(".mqtt-status-live-data-rows");
+    if (rowsContainer) {
+        rowsContainer.innerHTML = html;
+    }
+    container.style.display = "";
 }
 
 function mqtt_render_status_modal() {
-    var modal = jQuery("#mqtt-status-modal");
-    if (!modal.length) {
+    var modal = document.getElementById("mqtt-status-modal");
+    if (!modal) {
         return;
     }
 
-    modal.find(".mqtt-status-detail-message").text(mqtt_status_detail.message || "");
-    modal.find(".mqtt-status-detail-relative").text(mqtt_status_detail.relative_time || "");
-    modal.find(".mqtt-status-detail-absolute").text(mqtt_status_detail.absolute_time || "");
+    var setText = function(selector, value) {
+        var el = modal.querySelector(selector);
+        if (el) {
+            el.textContent = value;
+        }
+    };
+    setText(".mqtt-status-detail-message", mqtt_status_detail.message || "");
+    setText(".mqtt-status-detail-relative", mqtt_status_detail.relative_time || "");
+    setText(".mqtt-status-detail-absolute", mqtt_status_detail.absolute_time || "");
     mqtt_render_live_data_modal(modal);
 }
 
@@ -237,23 +244,21 @@ function mqtt_set_status_detail(message, epoch) {
 }
 
 function mqtt_show_status_modal() {
-    var modal = jQuery("#mqtt-status-modal");
-    if (!modal.length) {
+    var modal = document.getElementById("mqtt-status-modal");
+    if (!modal || typeof bootstrap === "undefined" || !bootstrap.Modal) {
         return;
     }
 
-    if (jQuery.fn.modal) {
-        modal.modal("show");
-    }
+    bootstrap.Modal.getOrCreateInstance(modal).show();
 }
 
 function mqtt_hide_status_modal() {
-    var modal = jQuery("#mqtt-status-modal");
-    if (!modal.length || !jQuery.fn.modal) {
+    var modal = document.getElementById("mqtt-status-modal");
+    if (!modal || typeof bootstrap === "undefined" || !bootstrap.Modal) {
         return;
     }
 
-    modal.modal("hide");
+    bootstrap.Modal.getOrCreateInstance(modal).hide();
 }
 
 function mqtt_bind_status_info_button() {
@@ -262,14 +267,17 @@ function mqtt_bind_status_info_button() {
     }
 
     mqtt_status_info_handler_bound = true;
-    jQuery(document).on("click.belchertownMqttStatus", ".mqtt-status-info", function(event) {
-        event.preventDefault();
-        mqtt_ensure_status_modal();
-        mqtt_render_status_modal();
-        mqtt_show_status_modal();
-    });
-    jQuery(document).on("click.belchertownMqttStatus", ".mqtt-status-modal-dismiss", function() {
-        mqtt_hide_status_modal();
+    document.addEventListener("click", function(event) {
+        if (event.target.closest(".mqtt-status-info")) {
+            event.preventDefault();
+            mqtt_ensure_status_modal();
+            mqtt_render_status_modal();
+            mqtt_show_status_modal();
+            return;
+        }
+        if (event.target.closest(".mqtt-status-modal-dismiss")) {
+            mqtt_hide_status_modal();
+        }
     });
 }
 
@@ -313,12 +321,14 @@ function mqtt_render_relative_updated_status() {
         mqtt_relative_updated_detail_message || mqtt_relative_updated_message,
         mqtt_relative_updated_epoch
     );
-    var updated = jQuery(".updated")
-        .text(mqtt_sentence_text([mqtt_relative_updated_message, relative_time]))
-        .removeAttr("title");
-    if (mqtt_relative_updated_suffix_html) {
-        updated.append(mqtt_relative_updated_suffix_html);
-    }
+    var updatedText = mqtt_sentence_text([mqtt_relative_updated_message, relative_time]);
+    document.querySelectorAll(".updated").forEach(function(el) {
+        el.textContent = updatedText;
+        el.removeAttribute("title");
+        if (mqtt_relative_updated_suffix_html) {
+            el.insertAdjacentHTML("beforeend", mqtt_relative_updated_suffix_html);
+        }
+    });
 }
 
 function mqtt_start_relative_updated_timer() {
@@ -344,19 +354,25 @@ function mqtt_clear_receiving_indicator() {
         clearTimeout(mqtt_receiving_indicator_timeout);
         mqtt_receiving_indicator_timeout = null;
     }
-    jQuery(".onlineMarker").removeClass("mqtt-receiving");
+    document.querySelectorAll(".onlineMarker").forEach(function(el) {
+        el.classList.remove("mqtt-receiving");
+    });
 }
 
 function mqtt_mark_receiving_data() {
-    var marker = jQuery(".onlineMarker");
+    var markers = document.querySelectorAll(".onlineMarker");
     if (mqtt_receiving_indicator_timeout !== null) {
         clearTimeout(mqtt_receiving_indicator_timeout);
     }
-    marker.removeClass("mqtt-receiving");
-    if (marker.length) {
-        marker[0].offsetWidth;
+    markers.forEach(function(el) {
+        el.classList.remove("mqtt-receiving");
+    });
+    if (markers.length) {
+        markers[0].offsetWidth;
     }
-    marker.addClass("mqtt-receiving");
+    markers.forEach(function(el) {
+        el.classList.add("mqtt-receiving");
+    });
     mqtt_receiving_indicator_timeout = setTimeout(function() {
         mqtt_receiving_indicator_timeout = null;
         mqtt_clear_receiving_indicator();
@@ -366,13 +382,20 @@ function mqtt_mark_receiving_data() {
 function mqtt_set_updated_html(html) {
     mqtt_clear_relative_updated_status();
     mqtt_clear_receiving_indicator();
-    jQuery(".updated").removeAttr("title").html(html);
+    document.querySelectorAll(".updated").forEach(function(el) {
+        el.removeAttribute("title");
+        el.innerHTML = html;
+    });
 }
 
 function mqtt_set_updated_text(text) {
     mqtt_clear_relative_updated_status();
     mqtt_clear_receiving_indicator();
-    jQuery(".updated").removeAttr("title").text(belchertown_label_text(text));
+    var updatedText = belchertown_label_text(text);
+    document.querySelectorAll(".updated").forEach(function(el) {
+        el.removeAttribute("title");
+        el.textContent = updatedText;
+    });
 }
 
 function mqtt_set_relative_updated_status(message, epoch, suffix_html, detail_message) {
@@ -395,7 +418,9 @@ function mqtt_restart_live_updates(event) {
         event.preventDefault();
     }
 
-    jQuery(".restart-interval").prop("disabled", true);
+    document.querySelectorAll(".restart-interval").forEach(function(el) {
+        el.disabled = true;
+    });
     mqtt_clear_reconnect_timeout();
     mqtt_reset_reconnect_backoff();
     mqtt_set_updated_text("$obs.label.mqtt_websockets_connecting");
@@ -404,7 +429,7 @@ function mqtt_restart_live_updates(event) {
     if (typeof ajaxweewx === "function") {
         reloadPromise = ajaxweewx();
     } else {
-        reloadPromise = jQuery.Deferred().resolve(null).promise();
+        reloadPromise = Promise.resolve(null);
     }
 
     reloadPromise.then(function(weewx_data) {
@@ -438,7 +463,11 @@ function mqtt_bind_restart_button() {
     }
 
     mqtt_restart_handler_bound = true;
-    jQuery(document).on("click.belchertownMqttRestart", ".restart-interval", mqtt_restart_live_updates);
+    document.addEventListener("click", function(event) {
+        if (event.target.closest(".restart-interval")) {
+            mqtt_restart_live_updates(event);
+        }
+    });
 }
 
 mqtt_bind_restart_button();
@@ -506,13 +535,37 @@ function mqtt_schedule_reconnect(reason, reset_backoff) {
     }, delay_ms);
 }
 
+function mqtt_set_display(selector, value) {
+    document.querySelectorAll(selector).forEach(function(el) {
+        el.style.display = value;
+    });
+}
+
+function mqtt_set_html(selector, html) {
+    if (typeof html === "undefined") {
+        return; // match jQuery .html(undefined), which left content unchanged
+    }
+    document.querySelectorAll(selector).forEach(function(el) {
+        el.innerHTML = html;
+    });
+}
+
+function mqtt_set_text(selector, text) {
+    if (typeof text === "undefined") {
+        return; // match jQuery .text(undefined), which left content unchanged
+    }
+    document.querySelectorAll(selector).forEach(function(el) {
+        el.textContent = text;
+    });
+}
+
 function mqtt_set_disconnected_status(message, epoch, show_restart) {
     mqttConnected = false;
     mqtt_clear_activity_timeout();
     mqtt_clear_stale_timeout();
-    jQuery(".onlineMarker").hide();
-    jQuery(".offlineMarker").show();
-    jQuery(".loadingMarker").hide();
+    mqtt_set_display(".onlineMarker", "none");
+    mqtt_set_display(".offlineMarker", "");
+    mqtt_set_display(".loadingMarker", "none");
 
     var updated_epoch = epoch || mqtt_last_data_epoch || "$current.dateTime.raw";
     var restart_button = show_restart ? mqtt_restart_button_html() : "";
@@ -624,9 +677,9 @@ function connect() {
     }
     reported = belchertown_label_text("$obs.label.mqtt_websockets_connecting") + " " + belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
     mqtt_set_updated_text(reported);
-    jQuery(".onlineMarker").hide();
-    jQuery(".offlineMarker").hide();
-    jQuery(".loadingMarker").show();
+    mqtt_set_display(".onlineMarker", "none");
+    mqtt_set_display(".offlineMarker", "none");
+    mqtt_set_display(".loadingMarker", "");
     belchertown_debug("MQTT: UI markers updated for connection state");
 
     // #if $Extras.has_key("mqtt_websockets_host_kiosk") and $Extras.mqtt_websockets_host_kiosk != ""
@@ -714,9 +767,9 @@ function onConnect() {
         reported = belchertown_label_text("$obs.label.mqtt_websockets_waiting") + " " + belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
     }
     mqtt_set_updated_text(reported);
-    jQuery(".onlineMarker").hide();
-    jQuery(".offlineMarker").hide();
-    jQuery(".loadingMarker").show();
+    mqtt_set_display(".onlineMarker", "none");
+    mqtt_set_display(".offlineMarker", "none");
+    mqtt_set_display(".loadingMarker", "");
     belchertown_debug("MQTT: Subscribing to topic: $Extras.mqtt_websockets_topic");
     client.subscribe("$Extras.mqtt_websockets_topic");
     belchertown_debug("MQTT: Topic subscription request sent");
@@ -823,9 +876,9 @@ function get_mqtt_status_elements() {
     }
 
     mqttStatusElements = {
-        onlineMarkerEl: jQuery(".onlineMarker"),
-        offlineMarkerEl: jQuery(".offlineMarker"),
-        loadingMarkerEl: jQuery(".loadingMarker")
+        onlineMarkerEl: document.querySelectorAll(".onlineMarker"),
+        offlineMarkerEl: document.querySelectorAll(".offlineMarker"),
+        loadingMarkerEl: document.querySelectorAll(".loadingMarker")
     };
 
     return mqttStatusElements;
@@ -839,8 +892,8 @@ function get_station_observation_cache() {
     stationObservationElementsByKey = {};
     stationObservationUseGroupingByKey = {};
 
-    jQuery('.station-observations').find("span").each(function() {
-        var rawClass = jQuery(this).attr("class");
+    document.querySelectorAll(".station-observations span").forEach(function(span) {
+        var rawClass = span.getAttribute("class");
         if (!rawClass) {
             return;
         }
@@ -855,7 +908,7 @@ function get_station_observation_cache() {
         }
 
         if (!stationObservationElementsByKey.hasOwnProperty(elementClass)) {
-            stationObservationElementsByKey[elementClass] = jQuery("." + elementClass);
+            stationObservationElementsByKey[elementClass] = document.querySelectorAll("." + elementClass);
             stationObservationUseGroupingByKey[elementClass] = !(elementClass === "barometer" || elementClass === "pressure" || elementClass === "altimeter" || elementClass === "cloudbase");
         }
     });
@@ -912,7 +965,7 @@ function onMessageArrived(message) {
     var payload_size = message.payloadString.length;
     belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message received - Size: " + payload_size + " bytes, Topic: " + message.destinationName);
     try {
-        mqtt_payload = jQuery.parseJSON(message.payloadString);
+        mqtt_payload = JSON.parse(message.payloadString);
         mqtt_set_latest_packet_data(mqtt_payload);
         schedule_mqtt_ui_update(mqtt_payload);
         belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message processed successfully");
@@ -965,8 +1018,8 @@ function parse_mqtt_number(payload, key) {
 }
 
 function update_almanac_diagram_from_mqtt(payload) {
-    var diagram = jQuery(".almanac-diagram");
-    if (!diagram.length) {
+    var diagram = document.querySelector(".almanac-diagram");
+    if (!diagram) {
         return;
     }
 
@@ -982,12 +1035,12 @@ function update_almanac_diagram_from_mqtt(payload) {
 
     var getDiagramValue = function(dataKey) {
         var attrName = "data-" + dataKey.replace(/([A-Z])/g, "-$1").toLowerCase();
-        var attrValue = parseFloat(diagram.attr(attrName));
+        var attrValue = parseFloat(diagram.getAttribute(attrName));
         if (isFinite(attrValue)) {
             return attrValue;
         }
 
-        var dataValue = parseFloat(diagram.data(dataKey));
+        var dataValue = parseFloat(diagram.dataset[dataKey]);
         return isFinite(dataValue) ? dataValue : null;
     };
 
@@ -1007,29 +1060,25 @@ function update_almanac_diagram_from_mqtt(payload) {
             set_epoch: getDiagramValue("moonSetEpoch"),
             x_offset: getDiagramValue("moonXOffset")
         },
-        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase(),
+        centering_mode: String(diagram.getAttribute("data-centering-mode") || "off").toLowerCase(),
         current_ts: currentTs === null ? getDiagramValue("currentTs") : currentTs
     };
 
     if (solarAz !== null) {
         diagramData.sun.azimuth = solarAz;
-        diagram.data("sunAz", solarAz);
-        diagram.attr("data-sun-az", solarAz.toFixed(3));
+        diagram.setAttribute("data-sun-az", solarAz.toFixed(3));
     }
     if (solarAlt !== null) {
         diagramData.sun.altitude = solarAlt;
-        diagram.data("sunAlt", solarAlt);
-        diagram.attr("data-sun-alt", solarAlt.toFixed(3));
+        diagram.setAttribute("data-sun-alt", solarAlt.toFixed(3));
     }
     if (lunarAz !== null) {
         diagramData.moon.azimuth = lunarAz;
-        diagram.data("moonAz", lunarAz);
-        diagram.attr("data-moon-az", lunarAz.toFixed(3));
+        diagram.setAttribute("data-moon-az", lunarAz.toFixed(3));
     }
     if (lunarAlt !== null) {
         diagramData.moon.altitude = lunarAlt;
-        diagram.data("moonAlt", lunarAlt);
-        diagram.attr("data-moon-alt", lunarAlt.toFixed(3));
+        diagram.setAttribute("data-moon-alt", lunarAlt.toFixed(3));
     }
 
     belchertown_debug(
@@ -1043,7 +1092,7 @@ function update_almanac_diagram_from_mqtt(payload) {
 // Handle MQTT message
 function update_current_wx(data) {
     if (typeof data === "string") {
-        data = jQuery.parseJSON(data);
+        data = JSON.parse(data);
     }
     data = normalize_mqtt_payload(data);
     mqtt_note_message_activity(data);
@@ -1114,9 +1163,9 @@ function update_current_wx(data) {
         mqtt_set_relative_updated_status(updated_text, epoch);
     }
     // If we're in this function, show the online beacon and hide the others
-    onlineMarkerEl.show(); // Show the online beacon
-    offlineMarkerEl.hide();
-    loadingMarkerEl.hide();
+    onlineMarkerEl.forEach(function(el) { el.style.display = ""; }); // Show the online beacon
+    offlineMarkerEl.forEach(function(el) { el.style.display = "none"; });
+    loadingMarkerEl.forEach(function(el) { el.style.display = "none"; });
 
     // Update the station observation box elements
     station_mqtt_data = Object.keys(data); // Turn data (mqtt message) into an object we can forEach
@@ -1170,7 +1219,9 @@ function update_current_wx(data) {
             useGrouping: stationObservationUseGroupingByKey[observationKey]
         }) + unit_label_array[observationKey];
 
-        stationObservationElementsByKey[observationKey].html(html_output);
+        stationObservationElementsByKey[observationKey].forEach(function(el) {
+            el.innerHTML = html_output;
+        });
     });
     // End dynamic station observation box
 
@@ -1180,79 +1231,79 @@ function update_current_wx(data) {
         // Help from: https://stackoverflow.com/a/40152286/1177153 and https://stackoverflow.com/a/31581206/1177153
         outTemp = parseFloat(parseFloat(data["outTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]});
         get_outTemp_color("degree_F", outTemp);
-        jQuery(".outtemp").html(outTemp);
+        mqtt_set_html(".outtemp", outTemp);
     }
 
     // Temperature C
     if (data.hasOwnProperty("outTemp_C")) {
         outTemp = parseFloat(parseFloat(data["outTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]});
         get_outTemp_color("degree_C", outTemp);
-        jQuery(".outtemp").html(outTemp);
+        mqtt_set_html(".outtemp", outTemp);
     }
 
     // Apparent Temperature US
     if (data.hasOwnProperty("appTemp_F")) {
-        jQuery(".feelslike").text(belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
+        mqtt_set_text(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
     }
 
     // Apparent Temperature Metric
     if (data.hasOwnProperty("appTemp_C")) {
-        jQuery(".feelslike").text(belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
+        mqtt_set_text(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
     }
 
     // Wind
     if (data.hasOwnProperty("windDir")) {
         rotateThis(data["windDir"]);
-        jQuery(".curwinddeg").html(parseFloat(data["windDir"]).toFixed(0) + "&deg;");
-        jQuery(".curwinddir").html(highcharts_tooltip_factory(parseFloat(data["windDir"]).toFixed(0), "windDir"));
+        mqtt_set_html(".curwinddeg", parseFloat(data["windDir"]).toFixed(0) + "&deg;");
+        mqtt_set_html(".curwinddir", highcharts_tooltip_factory(parseFloat(data["windDir"]).toFixed(0), "windDir"));
     }
 
     if (data.hasOwnProperty("windSpeed_mph")) {
-        jQuery(".curwindspeed").html(parseFloat(parseFloat(data["windSpeed_mph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-        jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_mph"]) * 0.8689758)));
+        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_mph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
+        mqtt_set_html(".beaufort", beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_mph"]) * 0.8689758)));
     }
     if (data.hasOwnProperty("windSpeed_kph")) {
-        jQuery(".curwindspeed").html(parseFloat(parseFloat(data["windSpeed_kph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-        jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_kph"]) * 0.5399565)));
+        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_kph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
+        mqtt_set_html(".beaufort", beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_kph"]) * 0.5399565)));
     }
     if (data.hasOwnProperty("windSpeed_mps")) {
-        jQuery(".curwindspeed").html(parseFloat(parseFloat(data["windSpeed_mps"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-        jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_mps"]) * 1.943844)));
+        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_mps"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
+        mqtt_set_html(".beaufort", beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_mps"]) * 1.943844)));
     }
     if (data.hasOwnProperty("windSpeed_beaufort")) {
-        jQuery(".curwindspeed").html(parseFloat(parseFloat(data["windSpeed_beaufort"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-        jQuery(".beaufort").html(beaufort_cat(parseFloat(data["windGust_beaufort"])));
+        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_beaufort"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
+        mqtt_set_html(".beaufort", beaufort_cat(parseFloat(data["windGust_beaufort"])));
     }
     if (data.hasOwnProperty("windSpeed_knot")) {
-        jQuery(".curwindspeed").html(parseFloat(parseFloat(data["windSpeed_knot"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-        jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_knot"]))));
+        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_knot"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
+        mqtt_set_html(".beaufort", beaufort_cat(kts_to_beaufort(parseFloat(data["windGust_knot"]))));
     }
 
     if (data.hasOwnProperty("beaufort")) {
-        jQuery(".beaufort").html(beaufort_cat(parseFloat(data["beaufort"])));
+        mqtt_set_html(".beaufort", beaufort_cat(parseFloat(data["beaufort"])));
     }
 
     if (data.hasOwnProperty("windGust_mph")) {
-        jQuery(".curwindgust").html(parseFloat(parseFloat(data["windGust_mph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
+        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_mph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
     }
     if (data.hasOwnProperty("windGust_kph")) {
-        jQuery(".curwindgust").html(parseFloat(parseFloat(data["windGust_kph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
+        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_kph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
     }
     if (data.hasOwnProperty("windGust_mps")) {
-        jQuery(".curwindgust").html(parseFloat(parseFloat(data["windGust_mps"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
+        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_mps"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
     }
     if (data.hasOwnProperty("windGust_beaufort")) {
-        jQuery(".curwindgust").html(parseFloat(parseFloat(data["windGust_beaufort"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
+        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_beaufort"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
     }
     if (data.hasOwnProperty("windGust_knot")) {
-        jQuery(".curwindgust").html(parseFloat(parseFloat(data["windGust_knot"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
+        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_knot"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
     }
 
     if (data.hasOwnProperty("windchill")) {
-        jQuery(".curwindchill").text(parseFloat(parseFloat(data["windchill"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
+        mqtt_set_text(".curwindchill", parseFloat(parseFloat(data["windchill"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
     }
     if (data.hasOwnProperty("windchill_C")) {
-        jQuery(".curwindchill").text(parseFloat(parseFloat(data["windchill_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
+        mqtt_set_text(".curwindchill", parseFloat(parseFloat(data["windchill_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
     }
     mqtt_render_status_modal();
 };
