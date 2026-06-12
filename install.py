@@ -1381,7 +1381,6 @@ files = [
             "skins/new-belchertown/records-table.inc.example",
             "skins/new-belchertown/robots.txt",
             "skins/new-belchertown/skin.conf",
-            "skins/new-belchertown/new-belchertown-dark.min.css",
             "skins/new-belchertown/style.css",
         ],
     ),

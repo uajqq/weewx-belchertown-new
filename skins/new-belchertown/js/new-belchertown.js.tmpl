@@ -2079,20 +2079,6 @@ function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     return applyAutoThemeChoice(fallbackTheme, "sunrise/sunset fallback");
 }
 
-function ensureDarkThemeStylesheet() {
-    if (document.getElementById("belchertownDarkStyle")) {
-        return;
-    }
-
-    var darkStylesheet = document.createElement("link");
-    darkStylesheet.id = "belchertownDarkStyle";
-    darkStylesheet.rel = "stylesheet";
-    darkStylesheet.type = "text/css";
-    darkStylesheet.media = "all";
-    darkStylesheet.href = get_relative_url() + "/new-belchertown-dark.min.css?ver=$belchertown_version";
-    document.head.appendChild(darkStylesheet);
-}
-
 function changeTheme(themeName, toggleOverride = false) {
     belchertown_debug("Theme: Changing to " + themeName);
     // If the configured theme is auto, but the user toggles light/dark, remove the auto option.
@@ -2105,8 +2091,8 @@ function changeTheme(themeName, toggleOverride = false) {
         belchertown_debug("Theme: sessionStorage.getItem('theme') is now: " + sessionStorage.getItem('theme'));
     }
     if (themeName == "dark") {
-        ensureDarkThemeStylesheet();
-        // Apply dark theme
+        // Apply dark theme: Bootstrap's native colour mode plus the skin's body class
+        document.documentElement.setAttribute("data-bs-theme", "dark");
         // #if $radar_html_dark != "None"
         jQuery('.radar_image').html('$radar_html_dark');
         belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
@@ -2123,6 +2109,7 @@ function changeTheme(themeName, toggleOverride = false) {
         sessionStorage.setItem('currentTheme', 'dark');
     } else if (themeName == "light") {
         // Apply light theme
+        document.documentElement.setAttribute("data-bs-theme", "light");
         // #if $radar_html_dark != "None"
         jQuery('.radar_image').html('$radar_html');
         belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
