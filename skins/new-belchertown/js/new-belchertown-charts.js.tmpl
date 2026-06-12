@@ -1053,6 +1053,24 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.yAxis[this_yAxis].softMin = axisOptionNumber(s, "yAxis_softMin");
                 options.yAxis[this_yAxis].softMax = axisOptionNumber(s, "yAxis_softMax");
 
+                // Optional horizontal threshold line on this series' yAxis
+                // (e.g. a river flood level or a frost line).
+                if (isFiniteNumber(s.yAxis_plotLine_value)) {
+                    options.yAxis[this_yAxis].plotLines = [{
+                        value: parseFloat(s.yAxis_plotLine_value),
+                        color: s.yAxis_plotLine_color || "#dc322f",
+                        dashStyle: "ShortDash",
+                        width: 2,
+                        zIndex: 5,
+                        label: {
+                            text: s.yAxis_plotLine_label || null,
+                            align: "right",
+                            x: -8,
+                            style: { color: s.yAxis_plotLine_color || "#dc322f", fontWeight: "bold" }
+                        }
+                    }];
+                }
+
                 // Set the yAxis tick interval. Mostly used for barometer. 
                 if (isFiniteNumber(s.yAxis_tickInterval) && parseFloat(s.yAxis_tickInterval) > 0) {
                     options.yAxis[this_yAxis].tickInterval = parseFloat(s.yAxis_tickInterval);
