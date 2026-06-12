@@ -33,7 +33,7 @@
     ajaxforecast(); // Initial call to load forecast data like 8 day outlook, weather icon and observation text
     // #end if
 
-    jQuery(document).ready(function() {
+    belchertown_on_ready(function() {
         get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
 
         initialize_wind_compass_marker(
@@ -48,7 +48,7 @@
         // Update the Last Updated timestamp with moment.js,
         updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
         updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
-        jQuery(".updated").text(updated_text);
+        belchertown_set_text(".updated", updated_text);
 
         // #end if
     });

@@ -36,14 +36,17 @@
                     }
                 }
 
-                jQuery(document).ready(function() {
+                belchertown_on_ready(function() {
                     if (chart == "all") {
                         // Build all chart sections first, then lazy-render by visibility.
                         var i = 0;
                         var chartGroupEntries = [];
 
                         // Rename the chart-outer div to remove CSS
-                        jQuery(".chart-outer").attr("class", "chart-outer-all");
+                        var chartOuter = document.querySelector(".chart-outer");
+                        if (chartOuter) {
+                            chartOuter.setAttribute("class", "chart-outer-all");
+                        }
 
                         for (var chartgroup in chartgroups_raw) {
                             var page_content = "";
@@ -52,7 +55,8 @@
                             }
 
                             // Loop through every chart group defined and add a title section
-                            jQuery(".chart-outer-all").append('\
+                            if (chartOuter) {
+                                chartOuter.insertAdjacentHTML("beforeend", '\
                                     <div class="' + chartgroup + '_outer row" style="margin:25px 0px 25px 0px;clear:both;">\
                                         <div class="chartpage-title wx-buttons-description">\
                                             <a href="./?chart='+ chartgroup + '">' + chartgroups_titles[chartgroup] + '</a>\
@@ -61,19 +65,24 @@
                                         <div class="' + chartgroup + '"></div>\
                                     </div>\
                                 ');
+                            }
 
-                            if (i > 0) {
-                                jQuery("." + chartgroup + "_outer").css("border-top", "1px solid #ccc");
+                            var groupOuter = document.querySelector("." + chartgroup + "_outer");
+                            if (i > 0 && groupOuter) {
+                                groupOuter.style.borderTop = "1px solid #ccc";
                             }
 
                             // Within each title section add the chart divs with the chart group prepending to avoid conflicts
+                            var groupDiv = document.querySelector("." + chartgroup);
                             chartgroups_raw[chartgroup].forEach(chartID => {
-                                jQuery("." + chartgroup).append('<div class="col-md-6"><div id="' + chartgroup + "_" + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                                if (groupDiv) {
+                                    groupDiv.insertAdjacentHTML("beforeend", '<div class="col-md-6"><div id="' + chartgroup + "_" + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                                }
                             });
 
                             chartGroupEntries.push({
                                 chartgroup: chartgroup,
-                                element: jQuery("." + chartgroup + "_outer").get(0),
+                                element: groupOuter,
                             });
 
                             i++;
@@ -104,15 +113,18 @@
                     } else {
                         // Loop through the chart group for this page and add the chart divs to the page
                         try {
+                            var singleChartOuter = document.querySelector(".chart-outer");
                             thisPageCharts.forEach(chartID => {
-                                jQuery(".chart-outer").append('<div class="col-md-12"><div id="' + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                                if (singleChartOuter) {
+                                    singleChartOuter.insertAdjacentHTML("beforeend", '<div class="col-md-12"><div id="' + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                                }
                             });
 
                             // Set page title
-                            jQuery(".chartpage-title").html(chartgroups_titles[chart]);
+                            belchertown_set_html(".chartpage-title", chartgroups_titles[chart]);
 
                             // Set page content
-                            jQuery(".chartpage-content").html(chartpage_content[chart]);
+                            belchertown_set_html(".chartpage-content", chartpage_content[chart]);
 
                             // Render when the chart area is near viewport.
                             belchertown_run_when_visible(".chart-outer", function() {
