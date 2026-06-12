@@ -6,54 +6,118 @@
 
 <script>
     (function() {
-    function initReportsPage() {
-        var params = new URLSearchParams(window.location.search);
-        var month = params.get("mo");
-        var year = params.get("yr");
-        var url;
-        if (year !== null && month !== null) {
-            url = '$relative_url/noaa/NOAA-' + year + '-' + month + '.txt';
-        } else if (year !== null) {
-            url = '$relative_url/noaa/NOAA-' + year + '.txt';
-        } else {
-            url = '$relative_url/noaa/$default_noaa_file';
+        var availableNoaaFiles = $available_noaa_files_json;
+        var defaultNoaaFile = $default_noaa_file_json;
+        var noaaRelativeDir = $noaa_relative_dir_json;
+        var availableNoaaFileSet = {};
+        for (var i = 0; i < availableNoaaFiles.length; i++) {
+            availableNoaaFileSet[availableNoaaFiles[i]] = true;
         }
 
-        populatePre(url);
-
-        // Change the direct href link
-        var directLink = document.querySelector(".noaa_direct_link");
-        if (directLink) {
-            directLink.setAttribute("href", url);
+        function buildNoaaUrl(filename) {
+            return '$relative_url/' + encodeURIComponent(noaaRelativeDir) + '/' + encodeURIComponent(filename);
         }
 
-    // Change the div to the right NOAA file
-    // I normally use PHP for this, but JavaScript seems to work well for the skin
-    // Source: https://stackoverflow.com/a/18933218/1177153
-    function populatePre(url) {
-        var xhr = new XMLHttpRequest();
-        xhr.onload = function() {
-            var rawContent = this.responseText;
-            var updatedContent = rawContent
+        function resolveNoaaFile(year, month) {
+            var candidate = "";
+            if (/^\d{4}$/.test(year || "")) {
+                if (/^\d{2}$/.test(month || "")) {
+                    candidate = "NOAA-" + year + "-" + month + ".txt";
+                } else if (month === null) {
+                    candidate = "NOAA-" + year + ".txt";
+                }
+            }
+
+            if (candidate && availableNoaaFileSet[candidate]) {
+                return candidate;
+            }
+            if (defaultNoaaFile && availableNoaaFileSet[defaultNoaaFile]) {
+                return defaultNoaaFile;
+            }
+            return "";
+        }
+
+        function setReportText(message) {
+            var noaaContents = document.getElementById("noaa_contents");
+            if (noaaContents) {
+                noaaContents.textContent = message;
+            }
+        }
+
+        function setDirectLink(url) {
+            var directLink = document.querySelector(".noaa_direct_link");
+            if (!directLink) {
+                return;
+            }
+            if (url) {
+                directLink.setAttribute("href", url);
+                directLink.removeAttribute("aria-disabled");
+            } else {
+                directLink.removeAttribute("href");
+                directLink.setAttribute("aria-disabled", "true");
+            }
+        }
+
+        function decodeNoaaContent(rawContent) {
+            return rawContent
                 .replace(/<sup>/g, '')
                 .replace(/<\/sup>/g, '')
                 .replace(/&deg;/g, '\u00b0')
                 .replace(/&amp;/g, '&')
                 .replace(/&lt;/g, '<')
                 .replace(/&gt;/g, '>');
-            document.getElementById('noaa_contents').textContent = updatedContent;
-        };
-        xhr.open('GET', url);
-        xhr.send();
-    }
+        }
 
-    }
+        // Change the div to the right NOAA file.
+        function populatePre(url, filename) {
+            var xhr = new XMLHttpRequest();
+            xhr.onload = function() {
+                var rawContent = this.responseText || "";
+                var successfulStatus = (this.status >= 200 && this.status < 300) ||
+                    (this.status === 0 && rawContent !== "");
 
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initReportsPage);
-    } else {
-        initReportsPage();
-    }
+                if (!successfulStatus) {
+                    setDirectLink("");
+                    setReportText("NOAA report " + filename + " is unavailable (HTTP " + this.status + ").");
+                    return;
+                }
+                if (/^\s*(?:<!doctype\s+html|<html[\s>])/i.test(rawContent)) {
+                    setDirectLink("");
+                    setReportText("NOAA report " + filename + " returned an HTML error page instead of report text.");
+                    return;
+                }
+
+                setReportText(decodeNoaaContent(rawContent));
+            };
+            xhr.onerror = function() {
+                setDirectLink("");
+                setReportText("NOAA report " + filename + " could not be loaded.");
+            };
+            xhr.open('GET', url);
+            xhr.send();
+        }
+
+        function initReportsPage() {
+            var params = new URLSearchParams(window.location.search);
+            var filename = resolveNoaaFile(params.get("yr"), params.get("mo"));
+            var url = filename ? buildNoaaUrl(filename) : "";
+
+            // Change the direct href link.
+            setDirectLink(url);
+
+            if (!filename) {
+                setReportText("No NOAA reports are available.");
+                return;
+            }
+
+            populatePre(url, filename);
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initReportsPage);
+        } else {
+            initReportsPage();
+        }
     })();
 </script>
 

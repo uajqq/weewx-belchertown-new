@@ -4975,21 +4975,34 @@ class getData(SearchList):
         years = set()
         noaa_header_html = ""
         default_noaa_file = ""
-        noaa_dir = html_root + "/noaa/"
+        noaa_file_list = []
+        noaa_relative_dir = "noaa"
+        noaa_dir = os.path.join(html_root, noaa_relative_dir)
 
         try:
-            # Only process NOAA report files; ignore any other files (csv, etc.) in the directory
+            for html_root_entry in os.listdir(html_root):
+                html_root_entry_path = os.path.join(html_root, html_root_entry)
+                if (
+                    html_root_entry.lower() == "noaa"
+                    and os.path.isdir(html_root_entry_path)
+                ):
+                    noaa_relative_dir = html_root_entry
+                    noaa_dir = html_root_entry_path
+                    break
+
+            # Only process NOAA report files; ignore any other files (csv, etc.) in the directory.
+            noaa_file_pattern = re.compile(r"^NOAA-(\d{4})(?:-(\d{2}))?\.txt$")
             noaa_file_list = [
                 f for f in os.listdir(noaa_dir)
-                if f.startswith("NOAA-") and f.endswith(".txt")
+                if noaa_file_pattern.match(f)
             ]
             noaa_file_set = set(noaa_file_list)  # O(1) membership tests
 
             # Generate a list of years based on file name
             for f in noaa_file_list:
-                filename = f.split(".")[0]  # Drop the .txt
-                year = filename.split("-")[1]
-                years.add(year)
+                noaa_file_match = noaa_file_pattern.match(f)
+                if noaa_file_match:
+                    years.add(noaa_file_match.group(1))
 
             years = sorted(years, reverse=True)
 
@@ -5037,8 +5050,10 @@ class getData(SearchList):
             current_month = str(format(now.month, "02"))
             if f"NOAA-{current_year}-{current_month}.txt" in noaa_file_set:
                 default_noaa_file = f"NOAA-{current_year}-{current_month}.txt"
-            else:
+            elif f"NOAA-{current_year}.txt" in noaa_file_set:
                 default_noaa_file = f"NOAA-{current_year}.txt"
+            elif noaa_file_list:
+                default_noaa_file = sorted(noaa_file_list, reverse=True)[0]
         except Exception:
             # There's an error - I've seen this on first run and the NOAA
             # folder is not created yet. Skip this section.
@@ -6511,6 +6526,9 @@ class getData(SearchList):
             "windSpeedUnitLabel": windSpeed_unit_label,
             "noaa_header_html": noaa_header_html,
             "default_noaa_file": default_noaa_file,
+            "default_noaa_file_json": json.dumps(default_noaa_file),
+            "available_noaa_files_json": json.dumps(sorted(noaa_file_list)),
+            "noaa_relative_dir_json": json.dumps(noaa_relative_dir),
             "current_obs_icon": current_obs_icon,
             "current_obs_summary": current_obs_summary,
             "visibility": visibility,
