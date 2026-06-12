@@ -1331,11 +1331,11 @@ p.entry-meta {
     display: none;
   }
 
-  .wx-stn-info-container .col-sm-5 {
+  .wx-stn-info-container .col-md-5 {
     width: 75%;
   }
 
-  .wx-stn-info-container .col-sm-1 {
+  .wx-stn-info-container .col-md-1 {
     width: 10%;
   }
 
@@ -1387,7 +1387,7 @@ p.entry-meta {
     clear: both;
   }
 
-  .eq-stats-row .col-sm-9 {
+  .eq-stats-row .col-md-9 {
     width: 100%;
   }
 
@@ -4871,17 +4871,17 @@ span.highcharts-title {
 }
 
 .charts .chart-outer > [class*="col-"] > div[id],
-.charts .chart-outer-all > .row .col-sm-6 {
+.charts .chart-outer-all > .row .col-md-6 {
   margin-top: 0 !important;
 }
 
-.charts .chart-outer-all > .row .col-sm-6 {
+.charts .chart-outer-all > .row .col-md-6 {
   width: 100%;
   float: none;
   padding: 0;
 }
 
-.charts .chart-outer-all > .row .col-sm-6 + .col-sm-6 {
+.charts .chart-outer-all > .row .col-md-6 + .col-md-6 {
   margin-top: 20px;
 }
 
@@ -4929,10 +4929,10 @@ span.highcharts-title {
   padding: 0;
 }
 
-.charts .wx-stn-info-container > .row > div.col-sm-5:not([style]),
-.records .wx-stn-info-container > .row > div.col-sm-5:not([style]),
-.about .wx-stn-info-container > .row > div.col-sm-5:not([style]),
-.reports .wx-stn-info-container > .row > div.col-sm-5:not([style]) {
+.charts .wx-stn-info-container > .row > div.col-md-5:not([style]),
+.records .wx-stn-info-container > .row > div.col-md-5:not([style]),
+.about .wx-stn-info-container > .row > div.col-md-5:not([style]),
+.reports .wx-stn-info-container > .row > div.col-md-5:not([style]) {
   order: 2;
   flex: 1 1 auto;
   min-width: 0;
@@ -4987,10 +4987,10 @@ span.highcharts-title {
   line-height: 1.15;
 }
 
-.charts .wx-stn-info-container > .row > div.col-sm-5[style],
-.records .wx-stn-info-container > .row > div.col-sm-5[style],
-.about .wx-stn-info-container > .row > div.col-sm-5[style],
-.reports .wx-stn-info-container > .row > div.col-sm-5[style] {
+.charts .wx-stn-info-container > .row > div.col-md-5[style],
+.records .wx-stn-info-container > .row > div.col-md-5[style],
+.about .wx-stn-info-container > .row > div.col-md-5[style],
+.reports .wx-stn-info-container > .row > div.col-md-5[style] {
   order: 3;
   margin-left: auto;
   display: flex;
@@ -5038,10 +5038,10 @@ span.highcharts-title {
   margin-right: 0;
 }
 
-.charts .wx-stn-info-container>.row>div.col-sm-5[style],
-.records .wx-stn-info-container>.row>div.col-sm-5[style],
-.about .wx-stn-info-container>.row>div.col-sm-5[style],
-.reports .wx-stn-info-container>.row>div.col-sm-5[style],
+.charts .wx-stn-info-container>.row>div.col-md-5[style],
+.records .wx-stn-info-container>.row>div.col-md-5[style],
+.about .wx-stn-info-container>.row>div.col-md-5[style],
+.reports .wx-stn-info-container>.row>div.col-md-5[style],
 .charts .wx-stn-info-social[style],
 .records .wx-stn-info-social[style],
 .about .wx-stn-info-social[style],
@@ -5052,10 +5052,10 @@ span.highcharts-title {
   text-align: center;
 }
 
-.charts .wx-stn-info-container > .row > div.col-sm-5[style],
-.records .wx-stn-info-container > .row > div.col-sm-5[style],
-.about .wx-stn-info-container > .row > div.col-sm-5[style],
-.reports .wx-stn-info-container > .row > div.col-sm-5[style] {
+.charts .wx-stn-info-container > .row > div.col-md-5[style],
+.records .wx-stn-info-container > .row > div.col-md-5[style],
+.about .wx-stn-info-container > .row > div.col-md-5[style],
+.reports .wx-stn-info-container > .row > div.col-md-5[style] {
   flex: 0 1 41.66666667%;
   min-width: 0;
   margin-right: 0;
@@ -5581,10 +5581,10 @@ span.highcharts-title {
     gap: 16px;
   }
 
-  .charts .wx-stn-info-container > .row > div.col-sm-5[style],
-  .records .wx-stn-info-container > .row > div.col-sm-5[style],
-  .about .wx-stn-info-container > .row > div.col-sm-5[style],
-  .reports .wx-stn-info-container > .row > div.col-sm-5[style] {
+  .charts .wx-stn-info-container > .row > div.col-md-5[style],
+  .records .wx-stn-info-container > .row > div.col-md-5[style],
+  .about .wx-stn-info-container > .row > div.col-md-5[style],
+  .reports .wx-stn-info-container > .row > div.col-md-5[style] {
     align-items: center;
     margin-left: 0;
     margin-right: 0;
@@ -5714,7 +5714,7 @@ span.highcharts-title {
   word-wrap: normal;
 }
 
-/* .col-sm-1-5 { */
+/* .col-md-1-5 { */
 .forecast-day {
   position: relative;
   min-height: 225px;
@@ -6086,7 +6086,7 @@ body.pi::-webkit-scrollbar {
   margin-bottom: 0px;
 }
 
-.pi .col-xs-6 {
+.pi .col-6 {
   padding-left: 10px !important;
   padding-right: 10px !important;
 }
@@ -6257,7 +6257,7 @@ body.pi::-webkit-scrollbar {
   text-align: center;
 }
 
-.pi .forecastrow .col-lg-12 {
+.pi .forecastrow .col-xl-12 {
   padding: 0;
 }
 
@@ -6335,3 +6335,16 @@ body.pi::-webkit-scrollbar {
     animation: none;
   }
 }
+
+/* ----- Bootstrap 5 compatibility shims for the dark stylesheet ----- */
+/* Bootstrap 5 .btn-close ships as a black X; invert it on dark modal headers */
+.dark .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+/* The dark stylesheet's embedded Bootstrap 3 clone keys visibility on BS3's
+   .in class; Bootstrap 5 toggles .show instead, leaving modals/backdrops stuck
+   at opacity 0 in dark mode. Restore the .show states at higher specificity. */
+.dark .fade.show { opacity: 1; }
+.dark .modal.fade.show .modal-dialog { transform: none; }
+.dark .modal-backdrop.fade.show { opacity: 0.7; }
+.dark .tooltip.fade.show { opacity: 0.9; }

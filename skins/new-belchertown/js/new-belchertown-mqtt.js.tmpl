@@ -117,8 +117,8 @@ function mqtt_ensure_status_modal() {
     modal += "<div class='modal-dialog mqtt-status-modal-dialog' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
-    modal += "<button type='button' class='close mqtt-status-modal-dismiss' data-dismiss='modal' aria-label='" + belchertown_label_html("$obs.label.close") + "'><span aria-hidden='true'>&times;</span></button>";
     modal += "<h4 class='modal-title' id='mqtt-status-modal-title'>" + belchertown_label_html("$obs.label.mqtt_live_update_details") + "</h4>";
+    modal += "<button type='button' class='btn-close mqtt-status-modal-dismiss' data-bs-dismiss='modal' aria-label='" + belchertown_label_html("$obs.label.close") + "'></button>";
     modal += "</div>";
     modal += "<div class='modal-body'>";
     modal += "<dl class='mqtt-status-detail-list'>";
@@ -132,7 +132,7 @@ function mqtt_ensure_status_modal() {
     modal += "</div>";
     modal += "</div>";
     modal += "<div class='modal-footer'>";
-    modal += "<button type='button' class='btn btn-primary mqtt-status-modal-dismiss' data-dismiss='modal'>" + belchertown_label_html("$obs.label.close") + "</button>";
+    modal += "<button type='button' class='btn btn-primary mqtt-status-modal-dismiss' data-bs-dismiss='modal'>" + belchertown_label_html("$obs.label.close") + "</button>";
     modal += "</div>";
     modal += "</div>";
     modal += "</div>";
