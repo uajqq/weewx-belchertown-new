@@ -319,9 +319,10 @@ function belchertown_detect_highcharts_modules(chartData) {
         return modules;
     }
 
-    jQuery.each(chartData, function(plotname, plotData) {
+    Object.keys(chartData).forEach(function(plotname) {
+        var plotData = chartData[plotname];
         if (!plotData || typeof plotData !== "object" || !plotData.options) {
-            return true;
+            return;
         }
 
         if (plotData.options.type === "gauge") {
@@ -335,15 +336,13 @@ function belchertown_detect_highcharts_modules(chartData) {
         }
 
         if (plotData.series && typeof plotData.series === "object") {
-            jQuery.each(plotData.series, function(seriesName, seriesData) {
+            Object.keys(plotData.series).forEach(function(seriesName) {
+                var seriesData = plotData.series[seriesName];
                 if (seriesData && seriesData.obsType === "windBarb") {
                     modules.add("windbarb");
                 }
-                return true;
             });
         }
-
-        return true;
     });
 
     return modules;
@@ -563,16 +562,18 @@ function showChart(json_file, prepend_renderTo = false) {
     });
 
     // Relative URL by finding what page we're on currently.
-    jQuery.ajax({
-        url: get_relative_url() + '/json/' + json_file + '.json',
-        dataType: 'json',
-        headers: {'Cache-Control': 'no-cache'},
-    }).done(function(data) {
+    fetch(get_relative_url() + '/json/' + json_file + '.json', {cache: "no-cache"}).then(function(resp) {
+        if (!resp.ok) {
+            throw new Error("HTTP error! Unable to load " + json_file + ".json");
+        }
+        return resp.json();
+    }).then(function(data) {
 
         var renderCharts = function() {
 
         // Loop through each chart name (e.g. chart1, chart2, chart3)
-        jQuery.each(data, function(plotname, obsname) {
+        Object.keys(data).forEach(function(plotname) {
+            var obsname = data[plotname];
             var observation_type = undefined;
             xAxis_categories = [];
             plot_tooltip_date_format = undefined;
@@ -583,51 +584,52 @@ function showChart(json_file, prepend_renderTo = false) {
 
             // Ignore the New Belchertown Version since this "plot" has no other options
             if (plotname == "belchertown_version") {
-                return true;
+                return;
             }
 
             // Ignore the generated timestamp since this "plot" has no other options
             if (plotname == "generated_timestamp") {
-                return true;
+                return;
             }
 
             // Ignore the chartgroup_title since this "plot" has no other options
             if (plotname == "chartgroup_title") {
-                return true;
+                return;
             }
 
             // Set the chart's tooltip date time format, then return since this "plot" has no other options
             if (plotname == "tooltip_date_format") {
                 tooltip_date_format = obsname;
-                return true;
+                return;
             }
 
             // Set the chart colors, then return right away since this "plot" has no other options
             if (plotname == "colors") {
                 colors = obsname.split(",");
-                return true;
+                return;
             }
 
             // Set the chart credits, then return right away since this "plot" has no other options
             if (plotname == "credits") {
                 credits = obsname.split(",")[0];
-                return true;
+                return;
             }
 
             // Set the chart credits url, then return right away since this "plot" has no other options
             if (plotname == "credits_url") {
                 credits_url = obsname.split(",")[0];
-                return true;
+                return;
             }
 
             // Set the chart credits position, then return right away since this "plot" has no other options
             if (plotname == "credits_position") {
                 credits_position = obsname;
-                return true;
+                return;
             }
 
             // Loop through each chart options
-            jQuery.each(data[plotname]["options"], function(optionName, optionVal) {
+            Object.keys(data[plotname]["options"]).forEach(function(optionName) {
+                var optionVal = data[plotname]["options"][optionName];
                 switch (optionName) {
                     case "type":
                         type = optionVal;
@@ -736,7 +738,10 @@ function showChart(json_file, prepend_renderTo = false) {
 
                                         this.subtitle.update({style: {color: darktheme_textcolor}});
 
-                                        this.chartBackground.attr({fill: jQuery(".highcharts-background").css("fill")});
+                                        var hcBackground = document.querySelector(".highcharts-background");
+                                        if (hcBackground) {
+                                            this.chartBackground.attr({fill: getComputedStyle(hcBackground).fill});
+                                        }
                                     } else {
                                         var lighttheme_textcolor = '#666666';
                                         for (var i = this.yAxis.length - 1; i >= 0; i--) {
@@ -932,7 +937,14 @@ function showChart(json_file, prepend_renderTo = false) {
             belchertown_debug(options.chart.renderTo + ": building a " + type + " chart");
 
             if (css_class) {
-                jQuery("#" + options.chart.renderTo).addClass(css_class);
+                var chartDiv = document.getElementById(options.chart.renderTo);
+                if (chartDiv) {
+                    css_class.split(/\s+/).forEach(function(cls) {
+                        if (cls) {
+                            chartDiv.classList.add(cls);
+                        }
+                    });
+                }
                 belchertown_debug(options.chart.renderTo + ": div id is " + options.chart.renderTo + " and adding CSS class: " + css_class);
             }
 
@@ -981,7 +993,7 @@ function showChart(json_file, prepend_renderTo = false) {
 
             // Build the series
             var i = 0;
-            jQuery.each(data[plotname]["series"], function(seriesName, seriesVal) {
+            Object.keys(data[plotname]["series"]).forEach(function(seriesName) {
                 observation_type = data[plotname]["series"][seriesName]["obsType"];
                 options.series[i] = data[plotname]["series"][seriesName];
                 i++;
@@ -1619,15 +1631,15 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             // Apply any width, height CSS overrides to the parent div of the chart
-            if (css_height != "") {
-                jQuery("#" + options.chart.renderTo).parent().css({
-                    'height': css_height,
-                    'padding': '0px 15px',
-                    'margin-bottom': '20px'
-                });
+            var chartParent = document.getElementById(options.chart.renderTo);
+            chartParent = chartParent ? chartParent.parentElement : null;
+            if (css_height != "" && chartParent) {
+                chartParent.style.height = css_height;
+                chartParent.style.padding = '0px 15px';
+                chartParent.style.marginBottom = '20px';
             }
-            if (css_width != "") {
-                jQuery("#" + options.chart.renderTo).parent().css('width', css_width);
+            if (css_width != "" && chartParent) {
+                chartParent.style.width = css_width;
             }
 
             if (credits != "highcharts_default") {
@@ -1800,10 +1812,10 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Add a visible placeholder for the skipped chart so users
                 // know why this chart is empty.
                 if (typeof options !== "undefined" && options.chart && options.chart.renderTo) {
-                    var failedChart = jQuery("#" + options.chart.renderTo);
-                    if (failedChart.length) {
+                    var failedChart = document.getElementById(options.chart.renderTo);
+                    if (failedChart) {
                         var unavailableObs = observation_type || plotname || belchertown_label_text("$obs.label.unknown_observation");
-                        failedChart.html(
+                        failedChart.innerHTML = (
                             '<div class="chart-unavailable" style="padding:14px 10px;text-align:center;color:#888;">' +
                             '<div>' + belchertown_label_html("$obs.label.chart_unavailable") + ' (' + belchertown_label_html("$obs.label.chart_unavailable_detail") + ')</div>' +
                             '<div style="margin-top:6px;font-weight:500;">' + belchertown_label_html("$obs.label.observation") + ': ' + belchertown_escape_html(unavailableObs) + '</div>' +
@@ -1812,7 +1824,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     }
                 }
 
-                return true;
+                return;
             }
 
         });
@@ -1839,6 +1851,8 @@ function showChart(json_file, prepend_renderTo = false) {
             renderCharts();
         });
 
+    }).catch(function(err) {
+        belchertown_debug("Chart data load error: " + err.message + ". Skipping chart render.");
     });
 
 };
