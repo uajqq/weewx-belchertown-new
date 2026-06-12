@@ -1652,6 +1652,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.series.push({
                     type: "line",
                     id: "windbarb-windspeed",
+                    gapSize: 0,
                     name: windBarbSeries.name,
                     data: windSpeedLineData,
                     color: windBarbSeries.color,
