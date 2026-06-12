@@ -307,12 +307,12 @@ function forecast_ensure_observation_modal() {
     modal += "<div class='modal-dialog modal-sm' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
-    modal += "<button type='button' class='close' data-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'><span aria-hidden='true'>&times;</span></button>";
     modal += "<h4 class='modal-title' id='observation-source-modal-title'>" + forecast_escape_html(forecast_label_text("$obs.label.observation_source")) + "</h4>";
+    modal += "<button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'></button>";
     modal += "</div>";
     modal += "<div class='modal-body observation-source-modal-body'></div>";
     modal += "<div class='modal-footer'>";
-    modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
+    modal += "<button type='button' class='btn btn-primary' data-bs-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
     modal += "</div>";
     modal += "</div>";
     modal += "</div>";
@@ -531,14 +531,14 @@ function forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, alertD
     modal += "<div class='modal-dialog' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
-    modal += "<button type='button' class='close' data-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'><span aria-hidden='true'>&times;</span></button>";
     modal += "<h4 class='modal-title' id='" + forecastAlertTitleId + "'>" + forecast_escape_html(alertData["title"]) + "</h4>";
+    modal += "<button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'></button>";
     modal += "</div>";
     modal += "<div class='modal-body'>";
     modal += alertData["body"];
     modal += "</div>";
     modal += "<div class='modal-footer'>";
-    modal += "<button type='button' class='btn btn-primary' data-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
+    modal += "<button type='button' class='btn btn-primary' data-bs-dismiss='modal'>" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "</button>";
     modal += "</div>";
     modal += "</div>";
     modal += "</div>";
@@ -628,7 +628,7 @@ function show_forcast_alert(data) {
             }
 
             currentAlertIds[forecastAlertId] = true;
-            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-toggle='modal' data-target='#" + forecastAlertId + "'>" + forecast_escape_html(alertLinkText) + "</a><br>";
+            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-bs-toggle='modal' data-bs-target='#" + forecastAlertId + "'>" + forecast_escape_html(alertLinkText) + "</a><br>";
             alertContainer.append(alert_link);
 
             var forecast_alert_modal = forecast_alert_modal_by_id(forecastAlertId);

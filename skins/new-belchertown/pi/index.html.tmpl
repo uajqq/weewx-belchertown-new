@@ -94,7 +94,7 @@
                     <div class="row">
                         <!-- Temperature -->
 
-                        <div class="col-xs-6 temp-observation">
+                        <div class="col-6 temp-observation">
                             <div class="obs-group">
                                 <img id="wxicon" src="$relative_url/images/$current_obs_icon" alt="$obs.label.current_conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high"><!-- AJAX -->
                                 <div class="outtemp_outer"><span class="outtemp">$current.outTemp.formatted</span><sup
@@ -169,7 +169,7 @@
 
                         </div>
 
-                        <div class="col-xs-6 wind_col">
+                        <div class="col-6 wind_col">
                             <div class="wind_data">
                                 <div class="compass">
                                     <div class="direction">
@@ -225,12 +225,12 @@
                                     <tr>
                                         <td colspan="2">
                                             <div class="row small-almanac">
-                                                <div class="col-sm-5 sun">
+                                                <div class="col-md-5 sun">
                                                     <span class="sunrise-value">$almanac.sunrise.format("%-I:%M%p")</span><span class="sunrise-set-image sunrise-set-image--rise"><img src="../images/sunrise.png" alt="" width="20" height="10" loading="lazy" decoding="async"></span><!-- AJAX -->
                                                     &nbsp;
                                                     <span class="sunrise-set-image"><img src="../images/sunset.png" alt="" width="20" height="10" loading="lazy" decoding="async"></span><span class="sunset-value">$almanac.sunset.format("%-I:%M%p")</span><!-- AJAX -->
                                                 </div>
-                                                <div class="col-sm-7 moon">
+                                                <div class="col-md-7 moon">
                                                     <div class="moon-container">
                                                         <span class="moon-icon">
                                                             #if $almanac.moon_index == 0

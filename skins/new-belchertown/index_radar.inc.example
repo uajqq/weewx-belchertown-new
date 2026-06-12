@@ -25,6 +25,23 @@ See other example at https://github.com/poblabs/weewx-belchertown/issues/703 -->
 </div>
 
 <style>
+/* Bootstrap 5 only styles .nav-link inside .nav-tabs; the radar tabs use a
+   custom JS switcher with bare links, so restore the BS3-style tab look */
+.tabs-menu > li { margin-bottom: -1px; }
+.tabs-menu > li > a {
+    display: block;
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    border-radius: 8px 8px 0 0;
+    text-decoration: none;
+}
+.tabs-menu > li > a:hover { background-color: rgba(128, 128, 128, 0.12); }
+.tabs-menu > li.active > a {
+    border-color: #ddd #ddd transparent;
+    cursor: default;
+}
+.dark .tabs-menu > li.active > a { border-color: #555 #555 transparent; }
+
 .dark .tabs-menu > li > a {
     padding: 0px 5px;
 }

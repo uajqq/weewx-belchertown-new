@@ -57,7 +57,7 @@
                                         <div class="chartpage-title wx-buttons-description">\
                                             <a href="./?chart='+ chartgroup + '">' + chartgroups_titles[chartgroup] + '</a>\
                                         </div>\
-                                        <div class="chartpage-content col-sm-12">'+ page_content + '</div>\
+                                        <div class="chartpage-content col-md-12">'+ page_content + '</div>\
                                         <div class="' + chartgroup + '"></div>\
                                     </div>\
                                 ');
@@ -68,7 +68,7 @@
 
                             // Within each title section add the chart divs with the chart group prepending to avoid conflicts
                             chartgroups_raw[chartgroup].forEach(chartID => {
-                                jQuery("." + chartgroup).append('<div class="col-sm-6"><div id="' + chartgroup + "_" + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                                jQuery("." + chartgroup).append('<div class="col-md-6"><div id="' + chartgroup + "_" + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
                             });
 
                             chartGroupEntries.push({
@@ -105,7 +105,7 @@
                         // Loop through the chart group for this page and add the chart divs to the page
                         try {
                             thisPageCharts.forEach(chartID => {
-                                jQuery(".chart-outer").append('<div class="col-sm-12"><div id="' + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                                jQuery(".chart-outer").append('<div class="col-md-12"><div id="' + chartID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
                             });
 
                             // Set page title
@@ -141,20 +141,20 @@
 
             <!-- Begin row -->
             <div class="row">
-                <div class="col-sm-12 wx-buttons">
+                <div class="col-md-12 wx-buttons">
                     #if $Extras.has_key("chart_page_show_all_button") and $Extras.chart_page_show_all_button == '1'
                     <a href="./?chart=all"><button type="button"
                             class="btn btn-primary wx-btn-year">$charts_page_all_button_label</button></a>
                     #end if
                     $chart_page_buttons
                 </div>
-                <div class="col-sm-12 wx-buttons-description">
+                <div class="col-md-12 wx-buttons-description">
                     <span class='chartpage-title'></span>
                 </div>
             </div>
             <!-- End row -->
 
-            <div class="chartpage-content col-sm-12"></div><!-- JS populated -->
+            <div class="chartpage-content col-md-12"></div><!-- JS populated -->
 
             <div class="chart-outer"></div><!-- JS populated -->
 
