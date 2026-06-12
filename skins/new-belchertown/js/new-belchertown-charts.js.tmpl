@@ -1056,9 +1056,11 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Optional horizontal threshold line on this series' yAxis
                 // (e.g. a river flood level or a frost line).
                 if (isFiniteNumber(s.yAxis_plotLine_value)) {
-                    options.yAxis[this_yAxis].plotLines = [{
+                    var plotLineColor = s.yAxis_plotLine_color || "#dc322f";
+                    options.yAxis[this_yAxis].plotLines = options.yAxis[this_yAxis].plotLines || [];
+                    options.yAxis[this_yAxis].plotLines.push({
                         value: parseFloat(s.yAxis_plotLine_value),
-                        color: s.yAxis_plotLine_color || "#dc322f",
+                        color: plotLineColor,
                         dashStyle: "ShortDash",
                         width: 2,
                         zIndex: 5,
@@ -1066,9 +1068,9 @@ function showChart(json_file, prepend_renderTo = false) {
                             text: s.yAxis_plotLine_label || null,
                             align: "right",
                             x: -8,
-                            style: { color: s.yAxis_plotLine_color || "#dc322f", fontWeight: "bold" }
+                            style: { color: plotLineColor, fontWeight: "bold" }
                         }
-                    }];
+                    });
                 }
 
                 // Set the yAxis tick interval. Mostly used for barometer. 
