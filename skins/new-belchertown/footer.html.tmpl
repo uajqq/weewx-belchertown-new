@@ -28,12 +28,15 @@
     <div class="offcanvas-body">
         <ul class="offcanvas-nav-list"></ul>
         #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        <div class="offcanvas-theme-row">
-            <span class="offcanvas-theme-label">$obs.label.theme_dark_mode</span>
-            <label class="themeSwitchLabel">
-                <input type="checkbox" class="themeSwitchInput" aria-label="$obs.label.theme_dark_mode" $themeSwitchChecked>
-                <span class="slider round"></span>
-            </label>
+        <div class="offcanvas-settings">
+            <h6 class="offcanvas-settings-heading">$obs.label.settings_heading</h6>
+            <div class="offcanvas-theme-row">
+                <span class="offcanvas-theme-label"><i class="fa fa-moon-o settings-toggle-icon" aria-hidden="true"></i>$obs.label.theme_dark_mode</span>
+                <label class="themeSwitchLabel">
+                    <input type="checkbox" class="themeSwitchInput" aria-label="$obs.label.theme_dark_mode" $themeSwitchChecked>
+                    <span class="slider round"></span>
+                </label>
+            </div>
         </div>
         #end if
     </div>
@@ -107,6 +110,11 @@
         targetMenu.innerHTML = "";
         Array.prototype.slice.call(sourceMenu.children).forEach(function(child) {
             if (!child.classList || !child.classList.contains("menu-item")) {
+                return;
+            }
+            // The Settings gear has its own dedicated panel further down the
+            // offcanvas, so don't mirror it into the mobile nav list.
+            if (child.classList.contains("menu-settings")) {
                 return;
             }
             var clone = child.cloneNode(true);

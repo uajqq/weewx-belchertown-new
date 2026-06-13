@@ -490,10 +490,24 @@
                                         <li class="menu-item menu-item-4${" current-menu-item" if $page == "about" else ""}"><a href="$relative_url/about/" itemprop="url"><span itemprop="name">$obs.label.nav_about</span></a></li>
                                         #end if
                                         #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-                                        <label class="themeSwitchLabel">
-                                            <input type="checkbox" id="themeSwitch" class="themeSwitchInput" $themeSwitchChecked>
-                                            <span class="slider round"></span>
-                                        </label>
+                                        ## Settings gear dropdown: a labelled home for display
+                                        ## options. data-bs-auto-close="outside" keeps it open while
+                                        ## flipping switches.
+                                        <li class="menu-item menu-settings dropdown">
+                                            <button class="menu-settings-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="$obs.label.settings_heading" title="$obs.label.settings_heading">
+                                                <i class="fa fa-cog" aria-hidden="true"></i>
+                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end settings-dropdown">
+                                                <h6 class="dropdown-header settings-dropdown-header">$obs.label.settings_heading</h6>
+                                                <div class="settings-toggle-row">
+                                                    <span class="settings-toggle-label"><i class="fa fa-moon-o settings-toggle-icon" aria-hidden="true"></i>$obs.label.theme_dark_mode</span>
+                                                    <label class="themeSwitchLabel">
+                                                        <input type="checkbox" id="themeSwitch" class="themeSwitchInput" $themeSwitchChecked>
+                                                        <span class="slider round"></span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </li>
                                         #end if
                                     </ul>
                                 </nav>

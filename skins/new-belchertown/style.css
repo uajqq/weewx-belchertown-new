@@ -7420,3 +7420,60 @@ body.dark {
   padding: 16px 8px;
   font-size: 18px;
 }
+
+/* ===== Settings menu (gear dropdown on desktop, panel in the offcanvas) ===== */
+/* A labelled home for display options such as the dark-mode toggle. */
+.menu-settings-btn {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 1.15em;
+  line-height: 1;
+}
+.settings-dropdown { min-width: 220px; padding: 8px; }
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+.settings-toggle-label { font-size: 0.95em; display: inline-flex; align-items: center; }
+/* Section header reads as a quiet uppercase label so the panel looks grouped. */
+.settings-dropdown-header,
+.offcanvas-settings-heading {
+  font-weight: 700;
+  font-size: 0.72em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.settings-dropdown-header { padding: 4px 8px 8px; margin: 0; }
+/* Leading icon on a toggle row: fixed column, muted, so labels align. */
+.settings-toggle-icon {
+  width: 1.25em;
+  margin-right: 10px;
+  text-align: center;
+  opacity: 0.55;
+  flex: 0 0 auto;
+}
+/* Genesis sets .menu-item:hover{position:static}; keep the Settings dropdown li
+   relative so its BS5 menu anchors consistently and doesn't jump on hover. */
+.genesis-nav-menu .menu-settings,
+.genesis-nav-menu .menu-settings:hover { position: relative; }
+
+/* Settings group in the mobile offcanvas: a distinct rounded panel so it reads
+   as an intentional block rather than a toggle dropped after the nav links. */
+.offcanvas-settings {
+  margin-top: 22px;
+  padding: 6px 14px 10px;
+  background: rgba(128, 128, 128, 0.06);
+  border-radius: 16px;
+}
+.dark .offcanvas-settings { background: rgba(255, 255, 255, 0.045); }
+.offcanvas-settings-heading { margin: 0; padding: 12px 2px 2px; }
+.offcanvas-settings .offcanvas-theme-row { padding: 9px 2px; font-size: 16px; }
+.offcanvas-theme-label { display: inline-flex; align-items: center; }
