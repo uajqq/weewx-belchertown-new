@@ -7316,22 +7316,54 @@ body.dark {
 
 /* ----- Offcanvas mobile menu ----- */
 .menu-offcanvas-toggle {
-  display: block;
+  display: none;
+  align-items: center;
   background: none;
   border: 0;
-  font-size: 28px;
-  padding: 8px 14px;
-  margin: 0 auto;
   color: #000;
   cursor: pointer;
+  height: 44px;
+  justify-content: center;
+  margin: 0 auto;
+  padding: 0;
+  width: 44px;
+}
+.menu-offcanvas-toggle-icon,
+.menu-offcanvas-toggle-icon::before,
+.menu-offcanvas-toggle-icon::after {
+  background: currentColor;
+  border-radius: 1px;
+  display: block;
+  height: 2px;
+  width: 24px;
+}
+.menu-offcanvas-toggle-icon {
+  position: relative;
+}
+.menu-offcanvas-toggle-icon::before,
+.menu-offcanvas-toggle-icon::after {
+  content: "";
+  left: 0;
+  position: absolute;
+}
+.menu-offcanvas-toggle-icon::before {
+  top: -7px;
+}
+.menu-offcanvas-toggle-icon::after {
+  top: 7px;
 }
 .dark .menu-offcanvas-toggle { color: #fff; }
-@media only screen and (max-width: 767.98px) {
+@media only screen and (max-width: 800px) {
+  .menu-offcanvas-toggle { display: inline-flex; }
   /* the desktop menu used to be hidden by a JS-added .responsive-menu class;
      hide it directly now that responsive-menu.js is gone */
   .nav-header .genesis-nav-menu { display: none; }
 }
 .offcanvas-nav-list { list-style: none; margin: 0; padding: 0; }
+.offcanvas-nav-list .menu-item {
+  display: block;
+  text-align: left;
+}
 .offcanvas-nav-list .menu-item a {
   display: block;
   padding: 14px 8px;
@@ -7341,7 +7373,39 @@ body.dark {
   color: inherit;
 }
 .offcanvas-nav-list .menu-item a:hover { color: #e5554e; }
-.offcanvas-nav-list .menu-item.current-menu-item a {
+.offcanvas-nav-list .menu-item-has-children > a {
+  padding-right: 40px;
+  position: relative;
+}
+.offcanvas-nav-list .menu-item-has-children > a::after {
+  border-color: currentColor;
+  border-style: solid;
+  border-width: 0 2px 2px 0;
+  content: "";
+  height: 9px;
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-65%) rotate(45deg);
+  width: 9px;
+}
+.offcanvas-nav-list .menu-item-has-children.menu-open > a::after {
+  transform: translateY(-35%) rotate(225deg);
+}
+.offcanvas-nav-list .sub-menu {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 16px;
+}
+.offcanvas-nav-list .menu-open > .sub-menu {
+  display: block;
+}
+.offcanvas-nav-list .sub-menu a {
+  font-size: 16px;
+  padding-left: 12px;
+}
+.offcanvas-nav-list .menu-item.current-menu-item > a {
   color: #e5554e;
   font-weight: 600;
 }

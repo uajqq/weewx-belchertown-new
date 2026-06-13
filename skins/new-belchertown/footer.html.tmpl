@@ -26,15 +26,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="$obs.label.close"></button>
     </div>
     <div class="offcanvas-body">
-        <ul class="offcanvas-nav-list">
-            <li class="menu-item${" current-menu-item" if $page == "home" else ""}"><a href="$relative_url">$obs.label.nav_home</a></li>
-            #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
-            <li class="menu-item${" current-menu-item" if $page == "charts" else ""}"><a href="$relative_url/charts/">$nav_charts_label</a></li>
-            #end if
-            <li class="menu-item${" current-menu-item" if $page == "records" else ""}"><a href="$relative_url/records/">$obs.label.nav_records</a></li>
-            <li class="menu-item${" current-menu-item" if $page == "reports" else ""}"><a href="$relative_url/reports/">$obs.label.nav_reports</a></li>
-            <li class="menu-item${" current-menu-item" if $page == "about" else ""}"><a href="$relative_url/about/">$obs.label.nav_about</a></li>
-        </ul>
+        <ul class="offcanvas-nav-list"></ul>
         #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
         <div class="offcanvas-theme-row">
             <span class="offcanvas-theme-label">$obs.label.theme_dark_mode</span>
@@ -48,29 +40,119 @@
 </div>
 <script>
 (function() {
-    // Explicit toggle binding: the data-bs-toggle delegated handler can miss
-    // the click when the browser resolves the event target to the button's
-    // parent (observed in Chromium), so bind directly with a re-entry guard.
+    // Bind to the final click activation only, and only ever request show().
+    // That keeps repeated activation from closing the drawer during its opening
+    // sequence, which can look like a flicker on touch devices.
     var btn = document.querySelector(".menu-offcanvas-toggle");
     var panel = document.getElementById("site-offcanvas");
+    var desktopMenu = document.getElementById("menu-menu");
+    var offcanvasMenu = panel ? panel.querySelector(".offcanvas-nav-list") : null;
     if (!btn || !panel) { return; }
-    var lastToggle = 0;
-    function togglePanel(event) {
+
+    function directSubMenu(item) {
+        for (var i = 0; i < item.children.length; i++) {
+            if (item.children[i].classList && item.children[i].classList.contains("sub-menu")) {
+                return item.children[i];
+            }
+        }
+        return null;
+    }
+
+    function normalizeSubMenus(menu, trackExpandedState) {
+        if (!menu) { return; }
+        var containers = [menu].concat(Array.prototype.slice.call(menu.querySelectorAll(".sub-menu")));
+
+        containers.forEach(function(container) {
+            Array.prototype.slice.call(container.children).forEach(function(child) {
+                if (!child.classList || !child.classList.contains("sub-menu")) {
+                    return;
+                }
+
+                var previousItem = child.previousElementSibling;
+                if (!previousItem || !previousItem.classList || !previousItem.classList.contains("menu-item")) {
+                    return;
+                }
+
+                previousItem.appendChild(child);
+                previousItem.classList.add("menu-item-has-children");
+            });
+        });
+
+        menu.querySelectorAll(".menu-item > .sub-menu").forEach(function(submenu) {
+            submenu.parentElement.classList.add("menu-item-has-children");
+            if (trackExpandedState) {
+                submenu.parentElement.setAttribute("aria-expanded", "false");
+            }
+        });
+    }
+
+    function closeSubMenu(item) {
+        item.classList.remove("menu-open");
+        item.setAttribute("aria-expanded", "false");
+    }
+
+    function removeDuplicateIds(element) {
+        if (element.removeAttribute) {
+            element.removeAttribute("id");
+        }
+        if (element.querySelectorAll) {
+            element.querySelectorAll("[id]").forEach(function(child) {
+                child.removeAttribute("id");
+            });
+        }
+    }
+
+    function populateOffcanvasMenu(sourceMenu, targetMenu) {
+        if (!sourceMenu || !targetMenu) { return; }
+        targetMenu.innerHTML = "";
+        Array.prototype.slice.call(sourceMenu.children).forEach(function(child) {
+            if (!child.classList || !child.classList.contains("menu-item")) {
+                return;
+            }
+            var clone = child.cloneNode(true);
+            removeDuplicateIds(clone);
+            targetMenu.appendChild(clone);
+        });
+    }
+
+    function setupOffcanvasSubMenus(menu) {
+        if (!menu) { return; }
+        menu.addEventListener("click", function(event) {
+            var target = event.target;
+            if (!target || typeof target.closest !== "function") { return; }
+            var item = target.closest(".menu-item-has-children");
+            if (!item || !menu.contains(item)) { return; }
+
+            var submenu = directSubMenu(item);
+            if (!submenu || submenu.contains(target)) { return; }
+
+            event.preventDefault();
+            var isOpen = item.classList.toggle("menu-open");
+            item.setAttribute("aria-expanded", String(isOpen));
+        });
+    }
+
+    function showPanel(event) {
         if (event && typeof event.preventDefault === "function") {
             event.preventDefault();
         }
-        var now = Date.now();
-        if (now - lastToggle < 400) { return; }
-        lastToggle = now;
         if (typeof bootstrap !== "undefined" && bootstrap.Offcanvas) {
-            bootstrap.Offcanvas.getOrCreateInstance(panel).toggle();
+            bootstrap.Offcanvas.getOrCreateInstance(panel).show();
         }
     }
-    btn.addEventListener("click", togglePanel);
-    btn.addEventListener("mouseup", togglePanel);
-    btn.addEventListener("touchend", togglePanel);
+
+    normalizeSubMenus(desktopMenu, false);
+    populateOffcanvasMenu(desktopMenu, offcanvasMenu);
+    normalizeSubMenus(offcanvasMenu, true);
+    setupOffcanvasSubMenus(offcanvasMenu);
+    btn.addEventListener("click", showPanel);
     panel.addEventListener("show.bs.offcanvas", function() { btn.setAttribute("aria-expanded", "true"); });
-    panel.addEventListener("hidden.bs.offcanvas", function() { btn.setAttribute("aria-expanded", "false"); });
+    panel.addEventListener("hidden.bs.offcanvas", function() {
+        btn.setAttribute("aria-expanded", "false");
+        if (offcanvasMenu) {
+            offcanvasMenu.querySelectorAll(".menu-item-has-children").forEach(closeSubMenu);
+        }
+    });
 })();
 </script>
 #end if

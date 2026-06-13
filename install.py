@@ -1368,6 +1368,7 @@ files = [
             "skins/new-belchertown/footer.html.tmpl",
             "skins/new-belchertown/header.html.tmpl",
             "skins/new-belchertown/index.html.tmpl",
+            "skins/new-belchertown/nav-menu-custom.inc.example",
             "skins/new-belchertown/about.inc.example",
             "skins/new-belchertown/kiosk.html.tmpl",
             "skins/new-belchertown/kiosk.css",
