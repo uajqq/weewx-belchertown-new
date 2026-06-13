@@ -170,9 +170,17 @@
         <link rel="apple-touch-icon" sizes="192x192" href="$relative_url/images/station192.png">
         
         #if $load_core_js
-        <script defer type='text/javascript' src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment-with-locales.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/utc.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localizedFormat.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/customParseFormat.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/relativeTime.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localeData.min.js"></script>
         #if $moment_js_tz and str($moment_js_tz).strip() != ""
-        <script defer type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.33/moment-timezone-with-data.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/timezone.min.js"></script>
+        #end if
+        #if $dayjs_locale_js and $dayjs_locale_js not in ("en", "en-us")
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/$dayjs_locale_js.js"></script>
         #end if
         #end if
         #if $load_mqtt_js

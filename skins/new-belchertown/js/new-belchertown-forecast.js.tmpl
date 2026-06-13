@@ -11,9 +11,8 @@ var forecast_resume_events_bound = false;
 var forecast_external_observations = {};
 var forecast_observation_info_bound = false;
 var forecast_station_observation_sources = $station_obs_source_json;
-if (typeof moment !== "undefined" && typeof moment.relativeTimeThreshold === "function") {
-    moment.relativeTimeThreshold("m", 60);
-}
+// Relative-time thresholds (minutes shown up to 59) are configured once in the
+// Day.js setup block in new-belchertown-utils.js.
 // #if $Extras.has_key("forecast_stale")
 forecast_refresh_interval_seconds = "$Extras.forecast_stale";
 // #end if
@@ -145,8 +144,8 @@ function forecast_relative_time_locale_name() {
     let localeName;
     if (typeof window !== "undefined" && window.moment_locale) {
         localeName = window.moment_locale;
-    } else if (typeof moment !== "undefined" && typeof moment.locale === "function") {
-        localeName = moment.locale();
+    } else if (typeof dayjs !== "undefined" && typeof dayjs.locale === "function") {
+        localeName = dayjs.locale();
     }
     return localeName ? String(localeName).replace(/_/g, "-") : undefined;
 }
@@ -170,18 +169,33 @@ function forecast_join_relative_time_parts(parts) {
     return parts.join(" ");
 }
 
+// Day.js locales store relativeTime as a template map ("%d minutes") or, for
+// some languages, per-key functions — handle both, mirroring what moment's
+// localeData.relativeTime()/pastFuture() did.
+function forecast_dayjs_locale_object() {
+    return dayjs.Ls[dayjs.locale()] || dayjs.Ls.en;
+}
+
 function forecast_relative_time_unit(localeData, value, singularKey, pluralKey, isFuture) {
     const key = value === 1 ? singularKey : pluralKey;
-    return localeData.relativeTime(value, true, key, isFuture);
+    const template = localeData.relativeTime[key];
+    if (typeof template === "function") {
+        return template(value, true, key, isFuture);
+    }
+    return String(template).replace("%d", value);
+}
+
+function forecast_relative_time_past_future(localeData, diffMs, output) {
+    const template = localeData.relativeTime[diffMs > 0 ? "future" : "past"];
+    if (typeof template === "function") {
+        return template(output);
+    }
+    return String(template).replace("%s", output);
 }
 
 function forecast_relative_time_hour_threshold() {
-    if (typeof moment !== "undefined" && typeof moment.relativeTimeThreshold === "function") {
-        const threshold = moment.relativeTimeThreshold("h");
-        if (isFinite(threshold) && threshold > 0) {
-            return threshold;
-        }
-    }
+    // Matches the "hh" row of the Day.js relativeTime thresholds configured in
+    // new-belchertown-utils.js (hours shown up to 21, i.e. moment's h:22).
     return 22;
 }
 
@@ -197,12 +211,8 @@ function forecast_compound_relative_time(targetMoment, nowMoment) {
         return targetMoment.from(nowMoment);
     }
 
-    const localeData = targetMoment.localeData();
-    if (
-        !localeData ||
-        typeof localeData.relativeTime !== "function" ||
-        typeof localeData.pastFuture !== "function"
-    ) {
+    const localeData = forecast_dayjs_locale_object();
+    if (!localeData || !localeData.relativeTime) {
         return targetMoment.from(nowMoment);
     }
 
@@ -211,7 +221,7 @@ function forecast_compound_relative_time(targetMoment, nowMoment) {
         forecast_relative_time_unit(localeData, hours, "h", "hh", isFuture),
         forecast_relative_time_unit(localeData, minutes, "m", "mm", isFuture),
     ];
-    return localeData.pastFuture(diffMs, forecast_join_relative_time_parts(parts));
+    return forecast_relative_time_past_future(localeData, diffMs, forecast_join_relative_time_parts(parts));
 }
 
 function forecast_relative_time(epoch) {

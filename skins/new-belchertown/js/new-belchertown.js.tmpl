@@ -43,7 +43,7 @@ if (getURLvar("debug") && (getURLvar("debug") == "true" || getURLvar("debug") ==
 }
 
 var moment_locale = "$moment_locale_js";
-moment.locale(moment_locale);
+belchertown_set_datetime_locale(moment_locale);
 
 var chartgroups_raw = $charts;
 var chartgroups_titles = $chartpage_titles;
@@ -2341,20 +2341,19 @@ function enhanceAlmanacExtrasModal(almanacData) {
             var looksLikeDateTime = /\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}/.test(valueText) && /\d{1,2}:\d{2}/.test(valueText);
             var looksLikeTimeOnly = !looksLikeDateTime && /\b\d{1,2}:\d{2}(:\d{2})?\b/.test(valueText);
             if (looksLikeDateTime && valueText && valueText !== "--") {
-                var parsed = moment(
+                var parsed = belchertown_parse_date_time(
                     valueText,
-                    belchertown_date_time_parse_formats(),
-                    true
+                    belchertown_date_time_parse_formats()
                 );
                 if (parsed.isValid()) {
-                    var formattedDateTime = parsed.locale(moment.locale()).format(almanacDateTimeFormat);
+                    var formattedDateTime = parsed.locale(dayjs.locale()).format(almanacDateTimeFormat);
                     formattedDateTime = formattedDateTime.replace(/\s([AP]M)$/i, "\u00a0$1");
                     valueCell.textContent = formattedDateTime;
                 } else {
                     valueCell.textContent = valueText.replace(/\s([AP]M)$/i, "\u00a0$1");
                 }
             } else if (looksLikeTimeOnly && valueText && valueText !== "--") {
-                var parsedTime = moment(
+                var parsedTime = dayjs(
                     valueText,
                     [
                         "HH:mm:ss",
@@ -2369,7 +2368,7 @@ function enhanceAlmanacExtrasModal(almanacData) {
                     true
                 );
                 if (parsedTime.isValid()) {
-                    var formattedTime = parsedTime.locale(moment.locale()).format(almanacTimeFormat);
+                    var formattedTime = parsedTime.locale(dayjs.locale()).format(almanacTimeFormat);
                     formattedTime = formattedTime.replace(/\s([AP]M)$/i, "\u00a0$1");
                     valueCell.textContent = formattedTime;
                 } else {

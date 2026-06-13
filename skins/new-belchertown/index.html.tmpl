@@ -30,7 +30,7 @@
     defaultForecastInterval = 24;
     // #end if
     window.moment_locale = "$moment_locale_js";
-    moment.locale(window.moment_locale);
+    belchertown_set_datetime_locale(window.moment_locale);
 
     window.homepage_chartgroup = "$Extras.highcharts_homepage_chartgroup";
     window.homepageChartsInitialized = false;
@@ -95,7 +95,7 @@
             belchertown_set_text(".updated", updated_text);
 
             // #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'            
-            if (moment.unix("$earthquake_time").isValid()) {
+            if (dayjs.unix("$earthquake_time").isValid()) {
                 // Check that the time is the time (number) and not the "no earthquake available" wording
                 belchertown_set_text(".earthquake-time", tzAdjustedMoment("$earthquake_time").format(belchertown_label_text("$obs.label.time_earthquake")));
             } else {
