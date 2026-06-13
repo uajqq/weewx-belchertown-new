@@ -41,6 +41,30 @@
             return decodeHtmlEntities(String(value || ""));
         }
 
+        function belchertown_trim(value) {
+            return value == null ? "" : String(value).trim();
+        }
+
+        function buildElementFromHtml(html) {
+            var wrapper = document.createElement("div");
+            wrapper.innerHTML = html;
+            return wrapper.firstElementChild;
+        }
+
+        function setElementText(root, selector, text) {
+            var el = root.querySelector(selector);
+            if (el) {
+                el.textContent = text;
+            }
+        }
+
+        function setElementHtml(root, selector, html) {
+            var el = root.querySelector(selector);
+            if (el) {
+                el.innerHTML = html;
+            }
+        }
+
         function escapeHtml(value) {
             return displayText(value)
                 .replace(/&/g, "&amp;")
@@ -379,16 +403,16 @@
         }
 
         function updateSectionPeriodHeader(section, labels) {
-            if (!section || !section.length) {
+            if (!section) {
                 return;
             }
 
-            section.find(".records-section-card__period-header-cell--day").text(displayText("$obs.label.snapshot_period_day"));
-            section.find(".records-section-card__period-header-cell--yesterday").text(displayText("$obs.label.snapshot_period_yesterday"));
-            section.find(".records-section-card__period-header-cell--week").text(displayText("$obs.label.snapshot_period_7days"));
-            section.find(".records-section-card__period-header-cell--month").text(displayText("$obs.label.snapshot_period_month"));
-            section.find(".records-section-card__period-header-cell--year").text(displayText(labels.year || ""));
-            section.find(".records-section-card__period-header-cell--alltime").text(displayText(labels.alltime || "$obs.label.records_all_time"));
+            setElementText(section, ".records-section-card__period-header-cell--day", displayText("$obs.label.snapshot_period_day"));
+            setElementText(section, ".records-section-card__period-header-cell--yesterday", displayText("$obs.label.snapshot_period_yesterday"));
+            setElementText(section, ".records-section-card__period-header-cell--week", displayText("$obs.label.snapshot_period_7days"));
+            setElementText(section, ".records-section-card__period-header-cell--month", displayText("$obs.label.snapshot_period_month"));
+            setElementText(section, ".records-section-card__period-header-cell--year", displayText(labels.year || ""));
+            setElementText(section, ".records-section-card__period-header-cell--alltime", displayText(labels.alltime || "$obs.label.records_all_time"));
         }
 
         function snapshotMetric(periodData, metricDef) {
@@ -407,16 +431,16 @@
             }
 
             return {
-                value: jQuery.trim(displayText(value)),
-                dateText: jQuery.trim(displayText(groupData[metricDef.timeKey] || "--")) || "--",
+                value: belchertown_trim(displayText(value)),
+                dateText: belchertown_trim(displayText(groupData[metricDef.timeKey] || "--")) || "--",
                 dateRaw: metricDef.rawKey ? groupData[metricDef.rawKey] : null,
                 valueDetail: null
             };
         }
 
         function formatValueHtml(valueText, valueDetailText) {
-            var mainValue = jQuery.trim(String(valueText || "--")) || "--";
-            var detailValue = jQuery.trim(String(valueDetailText || ""));
+            var mainValue = belchertown_trim(String(valueText || "--")) || "--";
+            var detailValue = belchertown_trim(String(valueDetailText || ""));
             var html = '<span class="records-record-period__value-main">' + escapeHtml(mainValue) + '</span>';
 
             if (detailValue) {
@@ -427,7 +451,7 @@
         }
 
         function parseSnapshotMoment(dateRaw, dateText) {
-            var rawText = jQuery.trim(String(dateRaw || ""));
+            var rawText = belchertown_trim(String(dateRaw || ""));
             if (rawText && /^\d+(\.\d+)?$/.test(rawText)) {
                 var raw = parseFloat(rawText);
                 if (isFinite(raw) && raw > 0) {
@@ -435,7 +459,7 @@
                 }
             }
 
-            var text = jQuery.trim(displayText(dateText || ""));
+            var text = belchertown_trim(displayText(dateText || ""));
             if (!text || text === "--") {
                 return null;
             }
@@ -461,7 +485,7 @@
         }
 
         function splitDateNote(text) {
-            var rawText = jQuery.trim(displayText(text || ""));
+            var rawText = belchertown_trim(displayText(text || ""));
             if (!rawText) {
                 return { primary: "", secondary: "" };
             }
@@ -469,8 +493,8 @@
             var noteStart = rawText.indexOf("(");
             if (noteStart > 0) {
                 return {
-                    primary: jQuery.trim(rawText.substring(0, noteStart)),
-                    secondary: jQuery.trim(rawText.substring(noteStart).replace(/^\(|\)$/g, ""))
+                    primary: belchertown_trim(rawText.substring(0, noteStart)),
+                    secondary: belchertown_trim(rawText.substring(noteStart).replace(/^\(|\)$/g, ""))
                 };
             }
 
@@ -487,7 +511,7 @@
             var parsed = parseSnapshotMoment(dateRaw, dateText);
 
             if (rowOptions.omitTime) {
-                var sourceText = jQuery.trim(displayText(dateText || ""));
+                var sourceText = belchertown_trim(displayText(dateText || ""));
                 var dateLine = "";
 
                 if (/^\d{4}$/.test(sourceText)) {
@@ -536,7 +560,7 @@
                        '<span class="records-record-period__time-line">' + escapeHtml(timeLine) + '</span>';
             }
 
-            var text = jQuery.trim(displayText(dateText || ""));
+            var text = belchertown_trim(displayText(dateText || ""));
             if (!text || text === "--") {
                 return '<span class="records-record-period__date-line">--</span>';
             }
@@ -576,18 +600,15 @@
         function applyPeriod(recordCard, periodClass, labelText, periodKey, periodData, metricDef, fallback, rowOptions) {
             var options = rowOptions || {};
             var blankPeriods = options.blankPeriods || [];
-            if (blankPeriods.indexOf(periodKey) !== -1) {
-                recordCard.find(periodClass + " .records-record-period__label").text(displayText(labelText));
-                recordCard.find(periodClass + " .records-record-period__value").html(formatValueHtml("--", ""));
-                recordCard.find(periodClass + " .records-record-period__date").removeClass("records-record-period__date--prefixed").html('<span class="records-record-period__date-line">--</span>');
-                return;
-            }
-
             var dashPeriods = options.dashPeriods || [];
-            if (dashPeriods.indexOf(periodKey) !== -1) {
-                recordCard.find(periodClass + " .records-record-period__label").text(displayText(labelText));
-                recordCard.find(periodClass + " .records-record-period__value").html(formatValueHtml("--", ""));
-                recordCard.find(periodClass + " .records-record-period__date").removeClass("records-record-period__date--prefixed").html('<span class="records-record-period__date-line">--</span>');
+            if (blankPeriods.indexOf(periodKey) !== -1 || dashPeriods.indexOf(periodKey) !== -1) {
+                setElementText(recordCard, periodClass + " .records-record-period__label", displayText(labelText));
+                setElementHtml(recordCard, periodClass + " .records-record-period__value", formatValueHtml("--", ""));
+                var blankDateElement = recordCard.querySelector(periodClass + " .records-record-period__date");
+                if (blankDateElement) {
+                    blankDateElement.classList.remove("records-record-period__date--prefixed");
+                    blankDateElement.innerHTML = '<span class="records-record-period__date-line">--</span>';
+                }
                 return;
             }
 
@@ -604,29 +625,27 @@
             var dateRaw = resolved.dateRaw;
             var formattedDateHtml = formatSnapshotDateHtml(dateRaw, dateText, periodKey, rowOptions);
             var formattedValueHtml = formatValueHtml(valueText, valueDetailText);
-            var dateElement = recordCard.find(periodClass + " .records-record-period__date");
+            var dateElement = recordCard.querySelector(periodClass + " .records-record-period__date");
 
-            recordCard.find(periodClass + " .records-record-period__label").text(displayText(labelText));
-            recordCard.find(periodClass + " .records-record-period__value").html(formattedValueHtml);
-            if (rowOptions && rowOptions.datePrefix) {
-                dateElement.addClass("records-record-period__date--prefixed");
-            } else {
-                dateElement.removeClass("records-record-period__date--prefixed");
+            setElementText(recordCard, periodClass + " .records-record-period__label", displayText(labelText));
+            setElementHtml(recordCard, periodClass + " .records-record-period__value", formattedValueHtml);
+            if (dateElement) {
+                dateElement.classList.toggle("records-record-period__date--prefixed", !!(rowOptions && rowOptions.datePrefix));
+                dateElement.innerHTML = formattedDateHtml;
             }
-            dateElement.html(formattedDateHtml);
         }
 
-        var sectionsContainer = jQuery("#records-sections");
-        if (!sectionsContainer.length) {
+        var sectionsContainer = document.getElementById("records-sections");
+        if (!sectionsContainer) {
             return;
         }
 
-        sectionsContainer.empty();
+        sectionsContainer.innerHTML = "";
 
         var sections = getRecordsSectionsConfig();
 
         sections.forEach(function(sectionConfig) {
-            var section = jQuery(
+            var section = buildElementFromHtml(
                     '<section class="records-section-card">' +
                         '<div class="records-section-card__header">' +
                             '<h2 class="records-section-card__title"></h2>' +
@@ -645,18 +664,18 @@
                         '</div>' +
                     '</section>'
                 );
-            section.find(".records-section-card__title").text(displayText(sectionConfig.title));
+            setElementText(section, ".records-section-card__title", displayText(sectionConfig.title));
             updateSectionPeriodHeader(section, {
                 year: sectionConfig.yearLabel,
                 alltime: sectionConfig.alltimeLabel
             });
 
-            var sectionBody = section.find(".records-section-card__body");
+            var sectionBody = section.querySelector(".records-section-card__body");
 
             sectionConfig.rows.forEach(function(rowConfig) {
                 var recordTitle = displayText(rowConfig.label);
 
-                var recordCard = jQuery(
+                var recordCard = buildElementFromHtml(
                 '<article class="records-record-card">' +
                     '<h3 class="records-record-card__title"></h3>' +
                     '<section class="records-record-period records-record-period--day">' +
@@ -692,19 +711,19 @@
                 '</article>'
             );
 
-                recordCard.find(".records-record-card__title").text(recordTitle);
+                setElementText(recordCard, ".records-record-card__title", recordTitle);
 
-                var yearValueText = jQuery.trim(displayText(rowConfig.year.value || "--")) || "--";
-                var yearValueDetailText = jQuery.trim(displayText(rowConfig.year.valueDetail || ""));
-                var yearDateText = jQuery.trim(displayText(rowConfig.year.dateText || "--")) || "--";
+                var yearValueText = belchertown_trim(displayText(rowConfig.year.value || "--")) || "--";
+                var yearValueDetailText = belchertown_trim(displayText(rowConfig.year.valueDetail || ""));
+                var yearDateText = belchertown_trim(displayText(rowConfig.year.dateText || "--")) || "--";
                 var yearDateRaw = rowConfig.year.dateRaw;
                 var rowOptions = rowConfig.options || {};
                 var yearDateHtml = formatSnapshotDateHtml(yearDateRaw, yearDateText, "year", rowOptions);
                 var yearValueHtml = formatValueHtml(yearValueText, yearValueDetailText);
 
-                recordCard.find(".records-record-period--year .records-record-period__label").text(displayText(sectionConfig.yearLabel));
-                recordCard.find(".records-record-period--year .records-record-period__value").html(yearValueHtml);
-                recordCard.find(".records-record-period--year .records-record-period__date").html(yearDateHtml);
+                setElementText(recordCard, ".records-record-period--year .records-record-period__label", displayText(sectionConfig.yearLabel));
+                setElementHtml(recordCard, ".records-record-period--year .records-record-period__value", yearValueHtml);
+                setElementHtml(recordCard, ".records-record-period--year .records-record-period__date", yearDateHtml);
 
                 var fallback = {
                     value: yearValueText,
@@ -754,36 +773,35 @@
                     rowOptions
                 );
 
-                var alltimeValueText = jQuery.trim(displayText(rowConfig.alltime.value || "--")) || "--";
-                var alltimeValueDetailText = jQuery.trim(displayText(rowConfig.alltime.valueDetail || ""));
-                var alltimeDateText = jQuery.trim(displayText(rowConfig.alltime.dateText || "--")) || "--";
+                var alltimeValueText = belchertown_trim(displayText(rowConfig.alltime.value || "--")) || "--";
+                var alltimeValueDetailText = belchertown_trim(displayText(rowConfig.alltime.valueDetail || ""));
+                var alltimeDateText = belchertown_trim(displayText(rowConfig.alltime.dateText || "--")) || "--";
                 var alltimeDateRaw = rowConfig.alltime.dateRaw;
                 var alltimeDateHtml = formatSnapshotDateHtml(alltimeDateRaw, alltimeDateText, "alltime", rowOptions);
                 var alltimeValueHtml = formatValueHtml(alltimeValueText, alltimeValueDetailText);
                 var alltimeLabelText = rowOptions.hideAlltimeLabel ? "" : sectionConfig.alltimeLabel;
-                recordCard.find(".records-record-period--alltime .records-record-period__label").text(displayText(alltimeLabelText));
-                recordCard.find(".records-record-period--alltime .records-record-period__value").html(alltimeValueHtml);
-                recordCard.find(".records-record-period--alltime .records-record-period__date").html(alltimeDateHtml);
+                setElementText(recordCard, ".records-record-period--alltime .records-record-period__label", displayText(alltimeLabelText));
+                setElementHtml(recordCard, ".records-record-period--alltime .records-record-period__value", alltimeValueHtml);
+                setElementHtml(recordCard, ".records-record-period--alltime .records-record-period__date", alltimeDateHtml);
 
-                sectionBody.append(recordCard);
+                if (sectionBody) {
+                    sectionBody.appendChild(recordCard);
+                }
             });
 
-            sectionsContainer.append(section);
+            sectionsContainer.appendChild(section);
         });
     }
 
-    jQuery(document).ready(function() {
-        if (typeof ajaxweewx === "function") {
-            ajaxweewx().then(function(weewxData) {
-                enhanceRecordsPage(weewxData);
-            }).catch(function() {
-                enhanceRecordsPage(null);
-            });
-        } else {
+    if (typeof ajaxweewx === "function") {
+        ajaxweewx().then(function(weewxData) {
+            enhanceRecordsPage(weewxData);
+        }).catch(function() {
             enhanceRecordsPage(null);
-        }
-
-    });
+        });
+    } else {
+        enhanceRecordsPage(null);
+    }
 
     }
 

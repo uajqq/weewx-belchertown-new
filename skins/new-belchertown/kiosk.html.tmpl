@@ -50,15 +50,15 @@
         setTimeout(autoRefreshPage, $Extras.webpage_autorefresh);
         // #end if
 
-        jQuery(document).ready(function() {
+        belchertown_on_ready(function() {
             // #if $Extras.has_key("aqi_enabled_kiosk") and $Extras.aqi_enabled_kiosk == '1'
             get_aqi_color("$aqi");
             // #end if
 
             // #if $Extras.has_key("beaufort_category") and $Extras.beaufort_category == '1' and $Extras.beaufort_category_gusts != '1'
-            jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort("$current.windSpeed.knot.toString(addLabel=False, NONE_string='')")));
+            belchertown_set_html(".beaufort", beaufort_cat(kts_to_beaufort("$current.windSpeed.knot.toString(addLabel=False, NONE_string='')")));
             // #else
-            jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort("$current.windGust.knot.toString(addLabel=False, NONE_string='')")));
+            belchertown_set_html(".beaufort", beaufort_cat(kts_to_beaufort("$current.windGust.knot.toString(addLabel=False, NONE_string='')")));
             // #end if
 
             get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
@@ -72,14 +72,14 @@
             // Update the Last Updated timestamp with moment.js,
             updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
             updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
-            jQuery(".updated").text(updated_text);
+            belchertown_set_text(".updated", updated_text);
 
             // #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'
             if (moment.unix("$earthquake_time").isValid()) {
                 // Check that the time is the time (number) and not the "no earthquake available" wording
-                jQuery(".earthquake-time").text(tzAdjustedMoment("$earthquake_time").format(belchertown_label_text("$obs.label.time_earthquake")));
+                belchertown_set_text(".earthquake-time", tzAdjustedMoment("$earthquake_time").format(belchertown_label_text("$obs.label.time_earthquake")));
             } else {
-                jQuery(".earthquake-time").text(belchertown_label_text("$earthquake_time"));
+                belchertown_set_text(".earthquake-time", belchertown_label_text("$earthquake_time"));
             }
             // #end if
 
@@ -129,15 +129,15 @@
             if ((Math.floor(new Date().getTime() / 1000.0) - $Extras.last_updated_alert_threshold) > $current.dateTime.raw) {
                 belchertown_debug("Last Updated Alert: The WeeWX report timestamp is " + $current.dateTime.raw + ". The current timestamp is " + Math.floor(new Date().getTime() / 1000.0) + ". The threshold is " + $Extras.last_updated_alert_threshold + ". Report timestamp is greater than threshold of current time, showing no update alert.");
                 last_updated_alert_text = "<i class='fa fa-exclamation-triangle' style='color:red;'></i> " + belchertown_label_html("$obs.label.header_last_updated_alert");
-                jQuery(".last-updated-alert").html(last_updated_alert_text);
-                jQuery(".last-updated-alert").show();
+                belchertown_set_html(".last-updated-alert", last_updated_alert_text);
+                document.querySelectorAll(".last-updated-alert").forEach(function(el) { el.style.display = ""; });
             }
             // #end if
 
             // Update the Last Updated timestamp with moment.js,
             updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
             updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
-            jQuery(".updated").text(updated_text);
+            belchertown_set_text(".updated", updated_text);
 
             // #end if
 
