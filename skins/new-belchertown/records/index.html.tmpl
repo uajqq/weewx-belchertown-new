@@ -11,7 +11,7 @@
     (function() {
     function initRecordsPage() {
     var moment_locale = "$moment_locale_js";
-    moment.locale(moment_locale);
+    belchertown_set_datetime_locale(moment_locale);
 
     function enhanceRecordsPage(snapshotData) {
         function decodeHtmlEntities(value) {
@@ -471,10 +471,10 @@
                 }
             }
 
-            var m = moment(text, belchertown_date_time_parse_formats(), true);
+            var m = belchertown_parse_date_time(text, belchertown_date_time_parse_formats());
 
             if (!m.isValid()) {
-                m = moment(text);
+                m = dayjs(text);
             }
 
             if (m.isValid()) {

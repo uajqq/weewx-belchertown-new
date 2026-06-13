@@ -8,6 +8,67 @@ generator even if within a comment.
 #encoding "UTF-8"
 */
 
+// Day.js setup: plugins plus moment-compatible relative-time thresholds.
+// The skin previously set moment.relativeTimeThreshold("m", 60); the "mm" row
+// reproduces that (minutes shown up to 59, then "an hour").
+(function() {
+    if (typeof dayjs === "undefined") {
+        return;
+    }
+    var thresholds = [
+        { l: "s",  r: 44, d: "second" },
+        { l: "m",  r: 89, d: "second" },
+        { l: "mm", r: 59, d: "minute" },
+        { l: "h",  r: 89, d: "minute" },
+        { l: "hh", r: 21, d: "hour" },
+        { l: "d",  r: 35, d: "hour" },
+        { l: "dd", r: 25, d: "day" },
+        { l: "M",  r: 45, d: "day" },
+        { l: "MM", r: 10, d: "month" },
+        { l: "y",  r: 17, d: "month" },
+        { l: "yy", d: "year" }
+    ];
+    dayjs.extend(window.dayjs_plugin_utc);
+    if (window.dayjs_plugin_timezone) {
+        dayjs.extend(window.dayjs_plugin_timezone);
+    }
+    dayjs.extend(window.dayjs_plugin_localizedFormat);
+    dayjs.extend(window.dayjs_plugin_customParseFormat);
+    dayjs.extend(window.dayjs_plugin_relativeTime, { thresholds: thresholds });
+    dayjs.extend(window.dayjs_plugin_localeData);
+})();
+
+// Apply a moment-style locale name ("en-US", "de_DE", ...) to Day.js.
+// Day.js ships locales as separate files; load the needed one from the CDN
+// if it is not already registered. English needs no extra file.
+function belchertown_set_datetime_locale(name) {
+    if (!name || typeof dayjs === "undefined") {
+        return;
+    }
+    var norm = String(name).toLowerCase().replace(/_/g, "-");
+    var base = norm.split("-")[0];
+    if (norm === "en" || norm === "en-us") {
+        dayjs.locale("en");
+        return;
+    }
+    if (dayjs.Ls[norm]) {
+        dayjs.locale(norm);
+        return;
+    }
+    var loadLocale = function(localeName, onFail) {
+        var script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/" + localeName + ".js";
+        script.onload = function() {
+            dayjs.locale(localeName);
+        };
+        if (onFail) {
+            script.onerror = onFail;
+        }
+        document.head.appendChild(script);
+    };
+    loadLocale(norm, base !== norm ? function() { loadLocale(base); } : null);
+}
+
 var pages = ["charts", "records", "reports", "about", "pi"];
 var pageName = "";
 
@@ -166,11 +227,21 @@ function belchertown_date_time_parse_formats() {
         ? monthFirstFormats.concat(dayFirstFormats)
         : dayFirstFormats.concat(monthFirstFormats);
 
-    if (typeof moment !== "undefined" && moment.ISO_8601) {
-        formats.unshift(moment.ISO_8601);
-    }
-
     return formats.concat(commonFormats);
+}
+
+// Parse a date/time string against the skin's known formats (strict).
+// ISO 8601 strings are handled natively by Day.js, so try that first —
+// moment did the same via the moment.ISO_8601 entry in the format list.
+function belchertown_parse_date_time(value, formats) {
+    var text = String(value || "");
+    if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+        var isoParsed = dayjs(text);
+        if (isoParsed.isValid()) {
+            return isoParsed;
+        }
+    }
+    return dayjs(text, formats, true);
 }
 
 function belchertown_decode_text_node_filter(textNode) {
@@ -264,8 +335,8 @@ function belchertown_decode_document_labels(root) {
 function tzAdjustedMoment(input) {
     let tz = "$moment_js_tz";
     if (!tz) {
-        return moment.unix(input).utcOffset($moment_js_utc_offset);
+        return dayjs.unix(input).utcOffset($moment_js_utc_offset);
     } else {
-        return moment.unix(input).tz(tz);
+        return dayjs.unix(input).tz(tz);
     }
 }
