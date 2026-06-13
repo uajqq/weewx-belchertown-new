@@ -42,7 +42,7 @@ function ajaxforecast() {
     forecast_start_refresh_timer();
 
     if (forecast_refresh_in_progress) {
-        return jQuery.Deferred().resolve().promise();
+        return Promise.resolve();
     }
 
     forecast_refresh_in_progress = true;
@@ -50,39 +50,39 @@ function ajaxforecast() {
     forecast_data = {};
     current_conditions_data = {};
 
-    const pCurrent = jQuery
-        .ajax({
-            url: forecast_json_url("current_conditions.json"),
-            dataType: "json",
-            cache: false,
-            headers: {"Cache-Control": "no-cache, no-store"},
+    const pCurrent = fetch(forecast_json_url("current_conditions.json"), {cache: "no-store"})
+        .then(function(resp) {
+            if (!resp.ok) {
+                throw new Error("HTTP error! Unable to load current_conditions.json");
+            }
+            return resp.json();
         })
-        .done(function(current_conditions) {
+        .then(function(current_conditions) {
             current_conditions_data = current_conditions;
         });
 
-    const pForecast = jQuery
-        .ajax({
-            url: forecast_json_url("forecast.json"),
-            dataType: "json",
-            cache: false,
-            headers: {"Cache-Control": "no-cache, no-store"},
+    const pForecast = fetch(forecast_json_url("forecast.json"), {cache: "no-store"})
+        .then(function(resp) {
+            if (!resp.ok) {
+                throw new Error("HTTP error! Unable to load forecast.json");
+            }
+            return resp.json();
         })
-        .done(function(forecast) {
+        .then(function(forecast) {
             forecast_data = forecast;
         });
 
     const promises = [pCurrent, pForecast];
 
-    return jQuery.when.apply(jQuery, promises)
+    return Promise.all(promises)
         .then(function() {
             update_current_conditions(current_conditions_data, forecast_data);
             update_forecast_data(forecast_data);
         })
-        .fail(function(err) {
+        .catch(function(err) {
             console.error("Forecast fetch failed:", err);
         })
-        .always(function() {
+        .finally(function() {
             forecast_refresh_in_progress = false;
         });
 }
@@ -272,9 +272,12 @@ function forecast_payload_source(data, fallbackProvider) {
 
 function forecast_render_source(data) {
     const source = forecast_payload_source(data, "");
-    jQuery(".forecast-source")
-        .text(forecast_sentence_text([forecast_label_text("$obs.label.source") + ": " + source]))
-        .attr("title", forecast_label_text("$obs.label.forecast_source") + ": " + source);
+    const sourceText = forecast_sentence_text([forecast_label_text("$obs.label.source") + ": " + source]);
+    const sourceTitle = forecast_label_text("$obs.label.forecast_source") + ": " + source;
+    document.querySelectorAll(".forecast-source").forEach(function(el) {
+        el.textContent = sourceText;
+        el.setAttribute("title", sourceTitle);
+    });
 }
 
 function forecast_current_observation_epoch(data) {
@@ -283,9 +286,15 @@ function forecast_current_observation_epoch(data) {
 }
 
 function forecast_observation_label(row, fallback) {
-    const labelCell = row.find(".station-observations-label").first().clone();
-    labelCell.find(".observation-source-info").remove();
-    return jQuery.trim(labelCell.text()) || fallback;
+    const labelCell = row.querySelector(".station-observations-label");
+    if (!labelCell) {
+        return fallback;
+    }
+    const clone = labelCell.cloneNode(true);
+    clone.querySelectorAll(".observation-source-info").forEach(function(el) {
+        el.remove();
+    });
+    return clone.textContent.trim() || fallback;
 }
 
 function forecast_observation_age_sentence(epoch) {
@@ -298,7 +307,7 @@ function forecast_observation_age_sentence(epoch) {
 }
 
 function forecast_ensure_observation_modal() {
-    if (jQuery("#observation-source-modal").length) {
+    if (document.getElementById("observation-source-modal")) {
         return;
     }
 
@@ -317,7 +326,7 @@ function forecast_ensure_observation_modal() {
     modal += "</div>";
     modal += "</div>";
     modal += "</div>";
-    jQuery("body").append(modal);
+    document.body.insertAdjacentHTML("beforeend", modal);
 }
 
 function forecast_render_observation_modal(observationKey) {
@@ -335,10 +344,14 @@ function forecast_render_observation_modal(observationKey) {
         body += "<p class='observation-source-modal-time'>" + forecast_escape_html(observedAt) + "</p>";
     }
 
-    jQuery("#observation-source-modal")
-        .data("observation", observationKey)
-        .find(".observation-source-modal-body")
-        .html(body);
+    const modal = document.getElementById("observation-source-modal");
+    if (modal) {
+        modal.dataset.observation = observationKey;
+        const modalBody = modal.querySelector(".observation-source-modal-body");
+        if (modalBody) {
+            modalBody.innerHTML = body;
+        }
+    }
 }
 
 function forecast_bind_observation_info() {
@@ -347,23 +360,29 @@ function forecast_bind_observation_info() {
     }
 
     forecast_observation_info_bound = true;
-    jQuery(document).on("click", ".observation-source-info", function(event) {
+    document.addEventListener("click", function(event) {
+        const trigger = event.target.closest(".observation-source-info");
+        if (!trigger) {
+            return;
+        }
         event.preventDefault();
         forecast_ensure_observation_modal();
-        forecast_render_observation_modal(jQuery(this).data("observation"));
-        jQuery("#observation-source-modal").modal("show");
+        forecast_render_observation_modal(trigger.dataset.observation);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("observation-source-modal")).show();
     });
 }
 
 function forecast_register_external_observation(observationKey, data, options) {
     options = options || {};
-    let row = jQuery(".station-observations tr").filter(function() {
-        return jQuery(this).data("observation") === observationKey;
-    }).first();
-    if (!row.length) {
-        row = jQuery(".station-observations ." + observationKey).closest("tr");
+    let row = Array.prototype.find.call(
+        document.querySelectorAll(".station-observations tr"),
+        function(tr) { return tr.dataset.observation === observationKey; }
+    ) || null;
+    if (!row) {
+        const obsCell = document.querySelector(".station-observations ." + observationKey);
+        row = obsCell ? obsCell.closest("tr") : null;
     }
-    if (!row.length) {
+    if (!row) {
         return;
     }
 
@@ -382,26 +401,31 @@ function forecast_register_external_observation(observationKey, data, options) {
         epoch: observationEpoch
     };
 
-    row.addClass("station-observation-row station-observation-row--external");
+    row.classList.add("station-observation-row", "station-observation-row--external");
 
-    let button = row.find(".observation-source-info").first();
-    if (!button.length) {
-        button = jQuery("<button type='button' class='observation-source-info'><i class='fa fa-info' aria-hidden='true'></i></button>");
-        row.find(".station-observations-label").first().append(button);
+    let button = row.querySelector(".observation-source-info");
+    if (!button) {
+        button = document.createElement("button");
+        button.type = "button";
+        button.className = "observation-source-info";
+        button.innerHTML = "<i class='fa fa-info' aria-hidden='true'></i>";
+        const labelCell = row.querySelector(".station-observations-label");
+        if (labelCell) {
+            labelCell.appendChild(button);
+        }
     }
 
-    button
-        .data("observation", observationKey)
-        .attr("aria-label", forecast_template_text("$obs.label.observation_source_information", [label]))
-        .attr("title", forecast_template_text("$obs.label.observation_source_information", [label]));
+    button.dataset.observation = observationKey;
+    button.setAttribute("aria-label", forecast_template_text("$obs.label.observation_source_information", [label]));
+    button.setAttribute("title", forecast_template_text("$obs.label.observation_source_information", [label]));
 
     forecast_bind_observation_info();
 }
 
 function forecast_register_external_observations(sourceKey, data, options) {
     const observationSources = forecast_station_observation_sources || {};
-    jQuery.each(observationSources, function(observationKey, metadata) {
-        metadata = metadata || {};
+    Object.keys(observationSources).forEach(function(observationKey) {
+        let metadata = observationSources[observationKey] || {};
         if (metadata["source_key"] !== sourceKey) {
             return;
         }
@@ -416,12 +440,16 @@ function forecast_register_external_observations(sourceKey, data, options) {
 function forecast_render_relative_timestamps() {
     if (forecast_last_updated_epoch !== null) {
         const forecastLabel = forecast_timestamp_label("$obs.label.forecast_last_updated");
-        jQuery(".forecast-subtitle")
-            .text(forecast_sentence_text([forecastLabel, forecast_relative_time(forecast_last_updated_epoch)]))
-            .attr("title", forecast_absolute_time(forecast_last_updated_epoch, '$obs.label.time_forecast_last_updated'));
+        const subtitleText = forecast_sentence_text([forecastLabel, forecast_relative_time(forecast_last_updated_epoch)]);
+        const subtitleTitle = forecast_absolute_time(forecast_last_updated_epoch, '$obs.label.time_forecast_last_updated');
+        document.querySelectorAll(".forecast-subtitle").forEach(function(el) {
+            el.textContent = subtitleText;
+            el.setAttribute("title", subtitleTitle);
+        });
     }
 
-    const activeObservation = jQuery("#observation-source-modal").data("observation");
+    const observationModal = document.getElementById("observation-source-modal");
+    const activeObservation = observationModal ? observationModal.dataset.observation : undefined;
     if (activeObservation) {
         forecast_render_observation_modal(activeObservation);
     }
@@ -517,11 +545,11 @@ function forecast_alert_in_effect_text(alertObj) {
 }
 
 function forecast_active_alert_modal() {
-    return jQuery(".modal.in[id^='forecast-alert-'], .modal.show[id^='forecast-alert-']").first();
+    return document.querySelector(".modal.in[id^='forecast-alert-'], .modal.show[id^='forecast-alert-']");
 }
 
 function forecast_alert_modal_by_id(id) {
-    return id ? jQuery(document.getElementById(id)) : jQuery();
+    return id ? document.getElementById(id) : null;
 }
 
 function forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, alertData) {
@@ -547,28 +575,31 @@ function forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, alertD
 }
 
 function forecast_update_alert_modal(modal, forecastAlertTitleId, alertData) {
-    modal
-        .addClass("forecast-alert-modal")
-        .attr("aria-labelledby", forecastAlertTitleId);
-    modal.find(".modal-title")
-        .attr("id", forecastAlertTitleId)
-        .html(forecast_escape_html(alertData["title"]));
-    modal.find(".modal-body").html(alertData["body"]);
+    modal.classList.add("forecast-alert-modal");
+    modal.setAttribute("aria-labelledby", forecastAlertTitleId);
+    var modalTitle = modal.querySelector(".modal-title");
+    if (modalTitle) {
+        modalTitle.id = forecastAlertTitleId;
+        modalTitle.innerHTML = forecast_escape_html(alertData["title"]);
+    }
+    var modalBody = modal.querySelector(".modal-body");
+    if (modalBody) {
+        modalBody.innerHTML = alertData["body"];
+    }
 }
 
 function forecast_remove_stale_alert_modals(currentAlertIds, activeAlertId) {
-    jQuery(".forecast-alert-modal, .modal[id^='forecast-alert-']").each(function() {
-        var modal = jQuery(this);
-        var modalId = modal.attr("id");
+    document.querySelectorAll(".forecast-alert-modal, .modal[id^='forecast-alert-']").forEach(function(modal) {
+        var modalId = modal.id;
 
         if (currentAlertIds[modalId]) {
             return;
         }
 
         if (modalId === activeAlertId) {
-            modal.one("hidden.bs.modal", function() {
-                jQuery(this).remove();
-            });
+            modal.addEventListener("hidden.bs.modal", function() {
+                modal.remove();
+            }, {once: true});
             return;
         }
 
@@ -581,17 +612,19 @@ function show_forcast_alert(data) {
     var i, forecast_alerts, forecast_alert_title, forecast_alert_body;
     var forecast_alert_link, forecast_alert_expires, forecast_alert_in_effect, alert_link;
     var activeAlertModal = forecast_active_alert_modal();
-    var activeAlertId = activeAlertModal.attr("id") || "";
+    var activeAlertId = (activeAlertModal && activeAlertModal.id) || "";
     var currentAlertIds = {};
-    var alertContainer = jQuery(".wx-stn-alert-text");
+    var alertContainer = document.querySelector(".wx-stn-alert-text");
     forecast_alerts = [];
 
-    if (activeAlertModal.length && activeAlertModal.closest(".wx-stn-alert-text").length) {
-        activeAlertModal.detach().appendTo("body");
+    if (activeAlertModal && activeAlertModal.closest(".wx-stn-alert-text")) {
+        document.body.appendChild(activeAlertModal);
     }
 
     // Empty the alert links from the previous run without removing any active modal node.
-    alertContainer.empty();
+    if (alertContainer) {
+        alertContainer.innerHTML = "";
+    }
 
     if (Array.isArray(data['alerts'])) {
         for (i = 0; i < data['alerts'].length; i++) {
@@ -629,19 +662,25 @@ function show_forcast_alert(data) {
 
             currentAlertIds[forecastAlertId] = true;
             alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-bs-toggle='modal' data-bs-target='#" + forecastAlertId + "'>" + forecast_escape_html(alertLinkText) + "</a><br>";
-            alertContainer.append(alert_link);
+            if (alertContainer) {
+                alertContainer.insertAdjacentHTML("beforeend", alert_link);
+            }
 
             var forecast_alert_modal = forecast_alert_modal_by_id(forecastAlertId);
-            if (forecast_alert_modal.length) {
+            if (forecast_alert_modal) {
                 forecast_update_alert_modal(forecast_alert_modal, forecastAlertTitleId, forecast_alerts[i]);
             } else {
-                jQuery("body").append(forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, forecast_alerts[i]));
+                document.body.insertAdjacentHTML("beforeend", forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, forecast_alerts[i]));
             }
         }
-        jQuery(".wx-stn-alert").show();
+        document.querySelectorAll(".wx-stn-alert").forEach(function(el) {
+            el.style.display = "block";
+        });
     } else {
         belchertown_debug("Forecast: There are no forecast alerts");
-        jQuery(".wx-stn-alert").hide();
+        document.querySelectorAll(".wx-stn-alert").forEach(function(el) {
+            el.style.display = "none";
+        });
     }
 
     forecast_remove_stale_alert_modals(currentAlertIds, activeAlertId);
@@ -698,14 +737,21 @@ function update_current_conditions(data, forecastData) {
             w34icon = resolveIconForProvider(fallbackPeriod["summary"], sourceProvider);
         }
         const wxicon = get_relative_url() + "/images/" + w34icon + ".png";
-        jQuery("#wxicon").attr("src", wxicon);
+        const wxiconEl = document.getElementById("wxicon");
+        if (wxiconEl) {
+            wxiconEl.src = wxicon;
+        }
 
         try {
-            jQuery(".current-obs-text").html(cc["summary"] || fallbackPeriod["summary"] || "");
+            document.querySelectorAll(".current-obs-text").forEach(function(el) {
+                el.innerHTML = cc["summary"] || fallbackPeriod["summary"] || "";
+            });
         } catch (err) { /* silent */}
 
         try {
-            jQuery(".station-observations .visibility").html(forecast_visibility_text(cc["visibility"], cc["visibilityQualifier"]));
+            document.querySelectorAll(".station-observations .visibility").forEach(function(el) {
+                el.innerHTML = forecast_visibility_text(cc["visibility"], cc["visibilityQualifier"]);
+            });
         } catch (err) { /* silent */}
 
         forecast_register_external_observations("current_conditions", data);
@@ -1002,8 +1048,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
 function forecast_fit_daily_condition_text() {
     const minFontSize = 11;
 
-    jQuery(".day_forecasts .forecast-day.forecast-tile").each(function() {
-        const tile = this;
+    document.querySelectorAll(".day_forecasts .forecast-day.forecast-tile").forEach(function(tile) {
         const conditions = tile.querySelector(".forecast-conditions");
         const text = tile.querySelector(".forecast-condition-text");
         if (!conditions || !text || conditions.offsetParent === null) {
@@ -1034,15 +1079,24 @@ function forecast_update_aqi(data) {
             const aqiPeriod = data["aqi"][0]["response"][0]["periods"][0];
             const aqiValue = aqiPeriod["aqi"];
             const aqiCategory = forecast_aqi_translate(aqiPeriod["category"]);
-            jQuery(".wx-aqi").text(aqiValue);
-            jQuery(".wx-aqi-category").text(aqiCategory);
+            document.querySelectorAll(".wx-aqi").forEach(function(el) {
+                el.textContent = aqiValue;
+            });
+            document.querySelectorAll(".wx-aqi-category").forEach(function(el) {
+                el.textContent = aqiCategory;
+            });
             get_aqi_color(aqiValue);
             if ("$Extras.aqi_location_enabled" === "1") {
                 const aqiPlace = data["aqi"][0]["response"][0]["place"]["name"] || "";
-                jQuery(".aqi_location_outer").html(aqiPlace ? "<br>" + aqiPlace : "").css('textTransform', 'capitalize');
+                document.querySelectorAll(".aqi_location_outer").forEach(function(el) {
+                    el.innerHTML = aqiPlace ? "<br>" + aqiPlace : "";
+                    el.style.textTransform = "capitalize";
+                });
             }
             try {
-                jQuery(".station-observations .aqi").text(aqiValue + " (" + aqiCategory + ")");
+                document.querySelectorAll(".station-observations .aqi").forEach(function(el) {
+                    el.textContent = aqiValue + " (" + aqiCategory + ")";
+                });
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
@@ -1052,12 +1106,22 @@ function forecast_update_aqi(data) {
             });
         } else if (data["aqi"] && data["aqi"][0] && data["aqi"][0]["success"] && data["aqi"][0]["error"] && data["aqi"][0]["error"]["code"] === "warn_no_data") {
             const aqiNoDataCategory = forecast_aqi_translate("");
-            jQuery(".wx-aqi").text(forecast_label_text("$obs.label.no_data"));
-            jQuery(".wx-aqi-category").text(aqiNoDataCategory);
+            document.querySelectorAll(".wx-aqi").forEach(function(el) {
+                el.textContent = forecast_label_text("$obs.label.no_data");
+            });
+            document.querySelectorAll(".wx-aqi-category").forEach(function(el) {
+                el.textContent = aqiNoDataCategory;
+            });
             clear_aqi_color();
-            if ("$Extras.aqi_location_enabled" === "1") jQuery(".aqi_location_outer").html("");
+            if ("$Extras.aqi_location_enabled" === "1") {
+                document.querySelectorAll(".aqi_location_outer").forEach(function(el) {
+                    el.innerHTML = "";
+                });
+            }
             try {
-                jQuery(".station-observations .aqi").text(forecast_label_text("$obs.label.no_data") + " (" + aqiNoDataCategory + ")");
+                document.querySelectorAll(".station-observations .aqi").forEach(function(el) {
+                    el.textContent = forecast_label_text("$obs.label.no_data") + " (" + aqiNoDataCategory + ")";
+                });
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
@@ -1086,9 +1150,18 @@ function forecast_render_common(data) {
 
     forecast_render_source(data);
     forecast_register_external_observations("forecast", data, {epoch: lastUpdated});
-    jQuery(".onehr_forecasts").html(forecast_render_hourly_tiles(hourly, 16, "forecast-1hour"));
-    jQuery(".threehr_forecasts").html(forecast_render_hourly_tiles(threeHourly, 8, "forecast-3hour"));
-    jQuery(".day_forecasts").html(forecast_render_daily_tiles(daily, 7));
+    const onehrHtml = forecast_render_hourly_tiles(hourly, 16, "forecast-1hour");
+    const threehrHtml = forecast_render_hourly_tiles(threeHourly, 8, "forecast-3hour");
+    const dailyHtml = forecast_render_daily_tiles(daily, 7);
+    document.querySelectorAll(".onehr_forecasts").forEach(function(el) {
+        el.innerHTML = onehrHtml;
+    });
+    document.querySelectorAll(".threehr_forecasts").forEach(function(el) {
+        el.innerHTML = threehrHtml;
+    });
+    document.querySelectorAll(".day_forecasts").forEach(function(el) {
+        el.innerHTML = dailyHtml;
+    });
     forecast_render_relative_timestamps();
     forecast_start_relative_timer();
     if (typeof forecast_sync_row_height === "function") {
@@ -1104,7 +1177,9 @@ function update_forecast_data(data) {
     belchertown_debug(data);
 
     if (forecast_provider == "N/A") {
-        jQuery(".forecastrow").hide();
+        document.querySelectorAll(".forecastrow").forEach(function(el) {
+            el.style.display = "none";
+        });
         belchertown_debug("Forecast: No provider, hiding forecastrow");
         return;
     } else if (forecast_has_common_schema(data)) {
