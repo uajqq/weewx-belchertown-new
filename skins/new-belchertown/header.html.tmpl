@@ -2,14 +2,23 @@
 ## Determine initial skin theme CSS class from config
 ## Auto theme uses this sunrise/sunset value as the no-JS and legacy-browser fallback.
 #set $bodyTheme = ""
-#set global $themeSwitchChecked = ""
+#set global $themeModeLightActive = ""
+#set global $themeModeDarkActive = ""
+#set global $themeModeAutoActive = ""
+#set global $themeModeLightPressed = "false"
+#set global $themeModeDarkPressed = "false"
+#set global $themeModeAutoPressed = "false"
 #if $Extras.theme == "dark" or $Extras.pi_theme == "dark"
     #set $bodyTheme = "dark"
-    #set global $themeSwitchChecked = "checked"
+    #set global $themeModeDarkActive = "is-active"
+    #set global $themeModeDarkPressed = "true"
 #elif $Extras.theme == "light" or $Extras.pi_theme == "light"
     #set $bodyTheme = "light"
-    #set global $themeSwitchChecked = ""
+    #set global $themeModeLightActive = "is-active"
+    #set global $themeModeLightPressed = "true"
 #elif $Extras.theme == "auto" or $Extras.pi_theme == "auto"
+    #set global $themeModeAutoActive = "is-active"
+    #set global $themeModeAutoPressed = "true"
     #import datetime
     #set $now = datetime.datetime.now()
     #set $nowHour = $now.hour
@@ -18,16 +27,18 @@
         ##if $sunrise_hour <= $nowHour < $sunset_hour ## This works but to keep it inline with JavaScript the below works too
         #if int($sunrise_hour) <= int($nowHour) and int($nowHour) < int($sunset_hour)
             #set $bodyTheme = "light"
-            #set global $themeSwitchChecked = ""
         #else
             ## Night time, use dark mode
             #set $bodyTheme = "dark"
-            #set global $themeSwitchChecked = "checked"
         #end if
 #end if
 ## Fall back to light so data-bs-theme always carries a valid mode
 #if $bodyTheme != "dark" and $bodyTheme != "light"
     #set $bodyTheme = "light"
+#end if
+#if $themeModeLightActive == "" and $themeModeDarkActive == "" and $themeModeAutoActive == ""
+    #set global $themeModeLightActive = "is-active"
+    #set global $themeModeLightPressed = "true"
 #end if
 
 ## Setup the header labels, setting a default if not defined
@@ -170,9 +181,17 @@
         <link rel="apple-touch-icon" sizes="192x192" href="$relative_url/images/station192.png">
         
         #if $load_core_js
-        <script defer type='text/javascript' src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment-with-locales.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/utc.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localizedFormat.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/customParseFormat.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/relativeTime.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localeData.min.js"></script>
         #if $moment_js_tz and str($moment_js_tz).strip() != ""
-        <script defer type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.33/moment-timezone-with-data.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/timezone.min.js"></script>
+        #end if
+        #if $dayjs_locale_js and $dayjs_locale_js not in ("en", "en-us")
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/$dayjs_locale_js.js"></script>
         #end if
         #end if
         #if $load_mqtt_js
@@ -278,10 +297,10 @@
         #else
         <script>
             // Set the session variables for the theme
-            if ( sessionStorage.getItem('theme') !== 'toggleOverride' ) {
+            if ( sessionStorage.getItem('theme') !== 'toggleOverride' && sessionStorage.getItem('theme') !== 'auto' ) {
                 sessionStorage.setItem('theme', '$Extras.theme');
             }
-            if ( sessionStorage.getItem('currentTheme') === null || sessionStorage.getItem('theme') !== 'toggleOverride' ) {
+            if ( sessionStorage.getItem('currentTheme') === null || (sessionStorage.getItem('theme') !== 'toggleOverride' && sessionStorage.getItem('theme') !== 'auto') ) {
                 sessionStorage.setItem('currentTheme', '$bodyTheme');
             }
         </script>
@@ -289,7 +308,19 @@
         #if not $load_core_js
         <script>
             (function() {
-                function setSimpleTheme(themeName, toggleOverride) {
+                function setSimpleThemeControls(themeMode) {
+                    if (themeMode !== "auto" && themeMode !== "dark" && themeMode !== "light") {
+                        themeMode = sessionStorage.getItem("theme") === "auto" ? "auto" : (sessionStorage.getItem("currentTheme") || "$bodyTheme");
+                    }
+
+                    document.querySelectorAll(".themeModeButton").forEach(function(el) {
+                        var isActive = el.getAttribute("data-theme-mode") === themeMode;
+                        el.classList.toggle("is-active", isActive);
+                        el.setAttribute("aria-pressed", String(isActive));
+                    });
+                }
+
+                function setSimpleTheme(themeName, toggleOverride, themeMode) {
                     if (toggleOverride) {
                         sessionStorage.setItem("theme", "toggleOverride");
                     }
@@ -318,9 +349,7 @@
                         #end if
                     }
 
-                    document.querySelectorAll(".themeSwitchInput").forEach(function(el) {
-                        el.checked = themeName === "dark";
-                    });
+                    setSimpleThemeControls(themeMode || (sessionStorage.getItem("theme") === "auto" ? "auto" : themeName));
                 }
 
                 function getSimplePreferredColorSchemeTheme() {
@@ -383,7 +412,8 @@
                 }
 
                 function applySimpleAutoTheme() {
-                    setSimpleTheme(getSimpleAutoTheme(), false);
+                    sessionStorage.setItem("theme", "auto");
+                    setSimpleTheme(getSimpleAutoTheme(), false, "auto");
                     watchSimpleAutoTheme();
                 }
 
@@ -396,19 +426,25 @@
                     }
 
                     if (requestedTheme === "dark" || requestedTheme === "light") {
-                        setSimpleTheme(requestedTheme, true);
+                        setSimpleTheme(requestedTheme, true, requestedTheme);
                     } else if (requestedTheme === "auto") {
-                        sessionStorage.setItem("theme", "auto");
                         applySimpleAutoTheme();
                     } else if (sessionStorage.getItem("theme") === "toggleOverride") {
-                        setSimpleTheme(sessionStorage.getItem("currentTheme") || "$bodyTheme", false);
+                        setSimpleTheme(sessionStorage.getItem("currentTheme") || "$bodyTheme", false, sessionStorage.getItem("currentTheme") || "$bodyTheme");
                     } else if (sessionStorage.getItem("theme") === "auto") {
                         applySimpleAutoTheme();
+                    } else {
+                        setSimpleThemeControls(sessionStorage.getItem("currentTheme") || "$bodyTheme");
                     }
 
-                    document.querySelectorAll(".themeSwitchInput").forEach(function(el) {
-                        el.addEventListener("change", function(event) {
-                            setSimpleTheme(event.target.checked ? "dark" : "light", true);
+                    document.querySelectorAll(".themeModeButton").forEach(function(el) {
+                        el.addEventListener("click", function(event) {
+                            var selectedTheme = event.currentTarget.getAttribute("data-theme-mode");
+                            if (selectedTheme === "auto") {
+                                applySimpleAutoTheme();
+                            } else if (selectedTheme === "dark" || selectedTheme === "light") {
+                                setSimpleTheme(selectedTheme, true, selectedTheme);
+                            }
                         });
                     });
                 }
@@ -489,30 +525,28 @@
                                         <li class="menu-item menu-item-3${" current-menu-item" if $page == "reports" else ""}"><a href="$relative_url/reports/" itemprop="url"><span itemprop="name">$obs.label.nav_reports</span></a></li>
                                         <li class="menu-item menu-item-4${" current-menu-item" if $page == "about" else ""}"><a href="$relative_url/about/" itemprop="url"><span itemprop="name">$obs.label.nav_about</span></a></li>
                                         #end if
-                                        #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-                                        ## Settings gear dropdown: a labelled home for display
+                                        ## Appearance dropdown: a labelled home for display
                                         ## options. data-bs-auto-close="outside" keeps it open while
-                                        ## flipping switches.
+                                        ## choosing display settings.
                                         <li class="menu-item menu-settings dropdown">
-                                            <button class="menu-settings-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="$obs.label.settings_heading" title="$obs.label.settings_heading">
-                                                <i class="fa fa-cog" aria-hidden="true"></i>
+                                            <button class="menu-settings-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="$obs.label.appearance_heading" title="$obs.label.appearance_heading">
+                                                <i class="fa fa-bars" aria-hidden="true"></i>
                                             </button>
                                             <div class="dropdown-menu dropdown-menu-end settings-dropdown">
-                                                <h6 class="dropdown-header settings-dropdown-header">$obs.label.settings_heading</h6>
+                                                <h6 class="dropdown-header settings-dropdown-header">$obs.label.appearance_heading</h6>
                                                 <div class="settings-toggle-row">
-                                                    <span class="settings-toggle-label"><i class="fa fa-moon-o settings-toggle-icon" aria-hidden="true"></i>$obs.label.theme_dark_mode</span>
-                                                    <label class="themeSwitchLabel">
-                                                        <input type="checkbox" id="themeSwitch" class="themeSwitchInput" $themeSwitchChecked>
-                                                        <span class="slider round"></span>
-                                                    </label>
+                                                    <div class="themeModeButtons" role="group" aria-label="$obs.label.appearance_heading">
+                                                        <button type="button" class="themeModeButton $themeModeLightActive" data-theme-mode="light" aria-pressed="$themeModeLightPressed">$obs.label.theme_light</button>
+                                                        <button type="button" class="themeModeButton $themeModeDarkActive" data-theme-mode="dark" aria-pressed="$themeModeDarkPressed">$obs.label.theme_dark</button>
+                                                        <button type="button" class="themeModeButton $themeModeAutoActive" data-theme-mode="auto" aria-pressed="$themeModeAutoPressed">$obs.label.theme_auto</button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </li>
-                                        #end if
                                     </ul>
                                 </nav>
                                 <button class="menu-offcanvas-toggle" type="button" aria-controls="site-offcanvas" aria-expanded="false" aria-label="$obs.label.nav_menu">
-                                    <span class="menu-offcanvas-toggle-icon" aria-hidden="true"></span>
+                                    <i class="fa fa-bars" aria-hidden="true"></i>
                                 </button>
                                 ## the offcanvas panel itself lives at the end of <body> in
                                 ## footer.html.tmpl - position:fixed breaks inside the header wrappers
