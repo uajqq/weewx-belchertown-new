@@ -18,7 +18,143 @@
 </footer>
 
 #if $page != "kiosk" and $page != "pi"
-<script defer type='text/javascript' src='$relative_url/js/responsive-menu${asset_suffix}.js?ver=$asset_version'></script>
+## Offcanvas mobile menu. Lives at the end of <body>: Bootstrap positions the
+## panel with position:fixed, which breaks inside the header wrappers.
+<div class="offcanvas offcanvas-end" tabindex="-1" id="site-offcanvas" aria-labelledby="site-offcanvas-label">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="site-offcanvas-label">$obs.label.nav_menu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="$obs.label.close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <ul class="offcanvas-nav-list"></ul>
+        #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
+        <div class="offcanvas-theme-row">
+            <span class="offcanvas-theme-label">$obs.label.theme_dark_mode</span>
+            <label class="themeSwitchLabel">
+                <input type="checkbox" class="themeSwitchInput" aria-label="$obs.label.theme_dark_mode" $themeSwitchChecked>
+                <span class="slider round"></span>
+            </label>
+        </div>
+        #end if
+    </div>
+</div>
+<script>
+(function() {
+    // Bind to the final click activation only, and only ever request show().
+    // That keeps repeated activation from closing the drawer during its opening
+    // sequence, which can look like a flicker on touch devices.
+    var btn = document.querySelector(".menu-offcanvas-toggle");
+    var panel = document.getElementById("site-offcanvas");
+    var desktopMenu = document.getElementById("menu-menu");
+    var offcanvasMenu = panel ? panel.querySelector(".offcanvas-nav-list") : null;
+    if (!btn || !panel) { return; }
+
+    function directSubMenu(item) {
+        for (var i = 0; i < item.children.length; i++) {
+            if (item.children[i].classList && item.children[i].classList.contains("sub-menu")) {
+                return item.children[i];
+            }
+        }
+        return null;
+    }
+
+    function normalizeSubMenus(menu, trackExpandedState) {
+        if (!menu) { return; }
+        var containers = [menu].concat(Array.prototype.slice.call(menu.querySelectorAll(".sub-menu")));
+
+        containers.forEach(function(container) {
+            Array.prototype.slice.call(container.children).forEach(function(child) {
+                if (!child.classList || !child.classList.contains("sub-menu")) {
+                    return;
+                }
+
+                var previousItem = child.previousElementSibling;
+                if (!previousItem || !previousItem.classList || !previousItem.classList.contains("menu-item")) {
+                    return;
+                }
+
+                previousItem.appendChild(child);
+                previousItem.classList.add("menu-item-has-children");
+            });
+        });
+
+        menu.querySelectorAll(".menu-item > .sub-menu").forEach(function(submenu) {
+            submenu.parentElement.classList.add("menu-item-has-children");
+            if (trackExpandedState) {
+                submenu.parentElement.setAttribute("aria-expanded", "false");
+            }
+        });
+    }
+
+    function closeSubMenu(item) {
+        item.classList.remove("menu-open");
+        item.setAttribute("aria-expanded", "false");
+    }
+
+    function removeDuplicateIds(element) {
+        if (element.removeAttribute) {
+            element.removeAttribute("id");
+        }
+        if (element.querySelectorAll) {
+            element.querySelectorAll("[id]").forEach(function(child) {
+                child.removeAttribute("id");
+            });
+        }
+    }
+
+    function populateOffcanvasMenu(sourceMenu, targetMenu) {
+        if (!sourceMenu || !targetMenu) { return; }
+        targetMenu.innerHTML = "";
+        Array.prototype.slice.call(sourceMenu.children).forEach(function(child) {
+            if (!child.classList || !child.classList.contains("menu-item")) {
+                return;
+            }
+            var clone = child.cloneNode(true);
+            removeDuplicateIds(clone);
+            targetMenu.appendChild(clone);
+        });
+    }
+
+    function setupOffcanvasSubMenus(menu) {
+        if (!menu) { return; }
+        menu.addEventListener("click", function(event) {
+            var target = event.target;
+            if (!target || typeof target.closest !== "function") { return; }
+            var item = target.closest(".menu-item-has-children");
+            if (!item || !menu.contains(item)) { return; }
+
+            var submenu = directSubMenu(item);
+            if (!submenu || submenu.contains(target)) { return; }
+
+            event.preventDefault();
+            var isOpen = item.classList.toggle("menu-open");
+            item.setAttribute("aria-expanded", String(isOpen));
+        });
+    }
+
+    function showPanel(event) {
+        if (event && typeof event.preventDefault === "function") {
+            event.preventDefault();
+        }
+        if (typeof bootstrap !== "undefined" && bootstrap.Offcanvas) {
+            bootstrap.Offcanvas.getOrCreateInstance(panel).show();
+        }
+    }
+
+    normalizeSubMenus(desktopMenu, false);
+    populateOffcanvasMenu(desktopMenu, offcanvasMenu);
+    normalizeSubMenus(offcanvasMenu, true);
+    setupOffcanvasSubMenus(offcanvasMenu);
+    btn.addEventListener("click", showPanel);
+    panel.addEventListener("show.bs.offcanvas", function() { btn.setAttribute("aria-expanded", "true"); });
+    panel.addEventListener("hidden.bs.offcanvas", function() {
+        btn.setAttribute("aria-expanded", "false");
+        if (offcanvasMenu) {
+            offcanvasMenu.querySelectorAll(".menu-item-has-children").forEach(closeSubMenu);
+        }
+    });
+})();
+</script>
 #end if
 
 <!-- New Belchertown Skin Version: $belchertown_version -->

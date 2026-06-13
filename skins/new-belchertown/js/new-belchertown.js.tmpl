@@ -794,9 +794,11 @@ jQuery(document).ready(function() {
     // Dark mode checkbox toggle switcher
     // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
     try {
-        document.getElementById('themeSwitch').addEventListener('change', function(event) {
-            belchertown_debug("Theme: Toggle button changed");
-            (event.target.checked) ? changeTheme("dark", true) : changeTheme("light", true);
+        document.querySelectorAll('.themeSwitchInput').forEach(function(themeSwitchInput) {
+            themeSwitchInput.addEventListener('change', function(event) {
+                belchertown_debug("Theme: Toggle button changed");
+                (event.target.checked) ? changeTheme("dark", true) : changeTheme("light", true);
+            });
         });
     } catch (err) {
         // Silently exit
@@ -2100,7 +2102,7 @@ function changeTheme(themeName, toggleOverride = false) {
         jQuery('body').addClass("dark");
         jQuery('body').removeClass("light");
         // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        jQuery("#themeSwitch").prop("checked", true);
+        jQuery(".themeSwitchInput").prop("checked", true);
         // #end if
         // #if $Extras.has_key('logo_image_dark') and $Extras.logo_image_dark != ""
         belchertown_debug("Theme: logo_image_dark is defined.");
@@ -2117,7 +2119,7 @@ function changeTheme(themeName, toggleOverride = false) {
         jQuery('body').addClass("light");
         jQuery('body').removeClass("dark");
         // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        jQuery("#themeSwitch").prop("checked", false);
+        jQuery(".themeSwitchInput").prop("checked", false);
         // #end if
         // #if $Extras.has_key('logo_image') and $Extras.logo_image != ""
         belchertown_debug("Theme: logo_image is defined.");
