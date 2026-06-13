@@ -140,10 +140,17 @@
         });
     }
 
+    var lastShow = 0;
     function showPanel(event) {
         if (event && typeof event.preventDefault === "function") {
             event.preventDefault();
         }
+        // A plain "click" listener can be missed on touch devices, so we also
+        // bind touchend/mouseup; this guard stops those extra events from
+        // re-triggering during the panel's opening sequence.
+        var now = Date.now();
+        if (now - lastShow < 400) { return; }
+        lastShow = now;
         if (typeof bootstrap !== "undefined" && bootstrap.Offcanvas) {
             bootstrap.Offcanvas.getOrCreateInstance(panel).show();
         }
@@ -154,6 +161,8 @@
     normalizeSubMenus(offcanvasMenu, true);
     setupOffcanvasSubMenus(offcanvasMenu);
     btn.addEventListener("click", showPanel);
+    btn.addEventListener("mouseup", showPanel);
+    btn.addEventListener("touchend", showPanel);
     panel.addEventListener("show.bs.offcanvas", function() { btn.setAttribute("aria-expanded", "true"); });
     panel.addEventListener("hidden.bs.offcanvas", function() {
         btn.setAttribute("aria-expanded", "false");

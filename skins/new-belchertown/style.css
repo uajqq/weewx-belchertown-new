@@ -7354,7 +7354,10 @@ body.dark {
 }
 .dark .menu-offcanvas-toggle { color: #fff; }
 @media only screen and (max-width: 800px) {
-  .menu-offcanvas-toggle { display: inline-flex; }
+  /* Block-level flex (not inline-flex) so the base rule's margin:0 auto can
+     centre the 44px button; inline-level boxes ignore auto margins and the
+     header's text-align:right would otherwise push it to the corner. */
+  .menu-offcanvas-toggle { display: flex; }
   /* the desktop menu used to be hidden by a JS-added .responsive-menu class;
      hide it directly now that responsive-menu.js is gone */
   .nav-header .genesis-nav-menu { display: none; }
