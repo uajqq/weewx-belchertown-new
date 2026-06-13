@@ -179,6 +179,9 @@
         #if $moment_js_tz and str($moment_js_tz).strip() != ""
         <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/timezone.min.js"></script>
         #end if
+        #if $dayjs_locale_js and $dayjs_locale_js not in ("en", "en-us")
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/$dayjs_locale_js.js"></script>
+        #end if
         #end if
         #if $load_mqtt_js
         <script defer type='text/javascript' src="//cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>

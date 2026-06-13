@@ -68,6 +68,42 @@ MOMENT_LOCALE_ALIASES = {
     "no": "nb",
 }
 
+# Day.js does not publish every language-region filename that Python locales
+# commonly emit. Load the base language unless Day.js has a regional file.
+DAYJS_REGIONAL_LOCALES = {
+    "ar-dz",
+    "ar-iq",
+    "ar-kw",
+    "ar-ly",
+    "ar-ma",
+    "ar-sa",
+    "ar-tn",
+    "de-at",
+    "de-ch",
+    "en-au",
+    "en-ca",
+    "en-gb",
+    "en-ie",
+    "en-il",
+    "en-in",
+    "en-nz",
+    "en-sg",
+    "en-tt",
+    "es-do",
+    "es-mx",
+    "es-pr",
+    "es-us",
+    "fr-ca",
+    "fr-ch",
+    "it-ch",
+    "ms-my",
+    "nl-be",
+    "pt-br",
+    "zh-cn",
+    "zh-hk",
+    "zh-tw",
+}
+
 # HTTP Headers for different services
 HTTP_HEADERS = {
     "PIRATE_WEATHER": {
@@ -415,6 +451,20 @@ def _moment_locale_to_js(locale_value):
 
     language = locale_js.split("-", 1)[0]
     return MOMENT_LOCALE_ALIASES.get(language, locale_js)
+
+
+def _dayjs_locale_to_js(locale_value):
+    """Normalize a locale string to a Day.js locale filename."""
+    locale_js = _moment_locale_to_js(locale_value)
+    if not locale_js:
+        return ""
+
+    locale_js = locale_js.lower()
+    if locale_js == "en-us":
+        return "en"
+    if "-" in locale_js and locale_js not in DAYJS_REGIONAL_LOCALES:
+        return locale_js.split("-", 1)[0]
+    return locale_js
 
 
 def _get_minifier_dependency_status():
@@ -4279,6 +4329,7 @@ class getData(SearchList):
                 moment_locale_js = moment_language_locale_js
         else:
             moment_locale_js = moment_date_locale_js or "en"
+        dayjs_locale_js = _dayjs_locale_to_js(moment_locale_js) or "en"
 
         # Cache locale conversion for highcharts settings
         locale_conv = locale.localeconv()
@@ -6475,6 +6526,7 @@ class getData(SearchList):
             "system_locale": system_locale,
             "system_locale_js": system_locale_js,
             "moment_locale_js": moment_locale_js,
+            "dayjs_locale_js": dayjs_locale_js,
             "locale_encoding": locale_encoding,
             "highcharts_decimal": highcharts_decimal,
             "highcharts_thousands": highcharts_thousands,

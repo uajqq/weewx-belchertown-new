@@ -38,35 +38,70 @@ generator even if within a comment.
     dayjs.extend(window.dayjs_plugin_localeData);
 })();
 
+var belchertown_dayjs_locale_promises = {};
+
+function belchertown_dayjs_locale_name(name) {
+    var norm = String(name || "").toLowerCase().replace(/_/g, "-").split(".", 1)[0];
+    var regionalLocales = {
+        "ar-dz": true, "ar-iq": true, "ar-kw": true, "ar-ly": true, "ar-ma": true,
+        "ar-sa": true, "ar-tn": true, "de-at": true, "de-ch": true,
+        "en-au": true, "en-ca": true, "en-gb": true, "en-ie": true, "en-il": true,
+        "en-in": true, "en-nz": true, "en-sg": true, "en-tt": true, "es-do": true,
+        "es-mx": true, "es-pr": true, "es-us": true, "fr-ca": true, "fr-ch": true,
+        "it-ch": true, "ms-my": true, "nl-be": true, "pt-br": true, "zh-cn": true,
+        "zh-hk": true, "zh-tw": true
+    };
+    var base = norm.split("-")[0];
+
+    if (!norm || norm === "c" || norm === "posix") {
+        return "en";
+    }
+    if (norm === "no" || base === "no") {
+        return "nb";
+    }
+    if (norm === "en-us") {
+        return "en";
+    }
+    if (dayjs.Ls[norm] || regionalLocales[norm]) {
+        return norm;
+    }
+    return base || "en";
+}
+
 // Apply a moment-style locale name ("en-US", "de_DE", ...) to Day.js.
-// Day.js ships locales as separate files; load the needed one from the CDN
-// if it is not already registered. English needs no extra file.
+// header.html.tmpl preloads the canonical locale for first render; this remains
+// as a cached fallback for dynamic or custom calls.
 function belchertown_set_datetime_locale(name) {
     if (!name || typeof dayjs === "undefined") {
-        return;
+        return Promise.resolve();
     }
-    var norm = String(name).toLowerCase().replace(/_/g, "-");
-    var base = norm.split("-")[0];
-    if (norm === "en" || norm === "en-us") {
+    var localeName = belchertown_dayjs_locale_name(name);
+    if (localeName === "en") {
         dayjs.locale("en");
-        return;
+        return Promise.resolve("en");
     }
-    if (dayjs.Ls[norm]) {
-        dayjs.locale(norm);
-        return;
+    if (dayjs.Ls[localeName]) {
+        dayjs.locale(localeName);
+        return Promise.resolve(localeName);
     }
-    var loadLocale = function(localeName, onFail) {
+    if (belchertown_dayjs_locale_promises[localeName]) {
+        return belchertown_dayjs_locale_promises[localeName];
+    }
+
+    belchertown_dayjs_locale_promises[localeName] = new Promise(function(resolve) {
         var script = document.createElement("script");
         script.src = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/" + localeName + ".js";
         script.onload = function() {
             dayjs.locale(localeName);
+            resolve(localeName);
         };
-        if (onFail) {
-            script.onerror = onFail;
-        }
+        script.onerror = function() {
+            resolve(dayjs.locale());
+        };
         document.head.appendChild(script);
-    };
-    loadLocale(norm, base !== norm ? function() { loadLocale(base); } : null);
+    });
+
+    return belchertown_dayjs_locale_promises[localeName];
 }
 
 var pages = ["charts", "records", "reports", "about", "pi"];
