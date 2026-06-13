@@ -5807,69 +5807,70 @@ span.highcharts-title {
   width: 165px;
 }
 
-/* Dark Mode Switch */
+/* Theme selector */
 
-.themeSwitchLabel {
-  position: relative;
-  display: inline-block;
-  width: 35px;
-  height: 19px;
+.themeModeButtons {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
-.themeSwitchLabel input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
+.themeModeButton {
+  appearance: none;
+  border: 0;
+  border-left: 1px solid rgba(128, 128, 128, 0.35);
+  background: transparent;
+  color: inherit;
   cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  -webkit-transition: 0.4s;
-  transition: 0.4s;
+  font-size: 0.84em;
+  line-height: 1.35;
+  min-width: 52px;
+  padding: 5px 10px;
+  text-transform: none;
 }
 
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 11px;
-  width: 11px;
-  left: 4px;
-  bottom: 4px;
-  background-color: white;
-  -webkit-transition: 0.4s;
-  transition: 0.4s;
+.themeModeButton:first-child {
+  border-left: 0;
 }
 
-input:checked+.slider {
-  background-color: #375a7f;
+.themeModeButton:hover,
+.themeModeButton:focus-visible {
+  background: rgba(128, 128, 128, 0.12);
 }
 
-input:focus+.slider {
-  box-shadow: 0 0 1px #375a7f;
+.themeModeButton:focus-visible {
+  outline: 2px solid #375a7f;
+  outline-offset: -2px;
 }
 
-input:checked+.slider:before {
-  -webkit-transform: translateX(16px);
-  -ms-transform: translateX(16px);
-  transform: translateX(16px);
+.themeModeButton.is-active {
+  background: #375a7f;
+  color: #fff;
 }
 
-/* Rounded sliders */
-.slider.round {
-  border-radius: 34px;
+.dark .themeModeButtons {
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
-.slider.round:before {
-  border-radius: 50%;
+.dark .themeModeButton {
+  border-left-color: rgba(255, 255, 255, 0.18);
 }
 
-/* End Dark Mode Switch */
+.dark .themeModeButton:hover,
+.dark .themeModeButton:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark .themeModeButton.is-active {
+  background: #4c78a8;
+  color: #fff;
+}
+
+/* End Theme selector */
 
 /* Dark mode: windbarb series — restore stroke-width zeroed out by .dark .highcharts-point rule */
 .dark .highcharts-windbarb-series .highcharts-point {
@@ -5897,10 +5898,6 @@ input:checked+.slider:before {
 
   .stats-title {
     font-size: 14px;
-  }
-
-  .themeSwitchLabel {
-    margin-top: 10px;
   }
 
   .header-image .site-title>a {
@@ -7328,29 +7325,9 @@ body.dark {
   padding: 0;
   width: 44px;
 }
-.menu-offcanvas-toggle-icon,
-.menu-offcanvas-toggle-icon::before,
-.menu-offcanvas-toggle-icon::after {
-  background: currentColor;
-  border-radius: 1px;
-  display: block;
-  height: 2px;
-  width: 24px;
-}
-.menu-offcanvas-toggle-icon {
-  position: relative;
-}
-.menu-offcanvas-toggle-icon::before,
-.menu-offcanvas-toggle-icon::after {
-  content: "";
-  left: 0;
-  position: absolute;
-}
-.menu-offcanvas-toggle-icon::before {
-  top: -7px;
-}
-.menu-offcanvas-toggle-icon::after {
-  top: 7px;
+.menu-offcanvas-toggle .fa {
+  font-size: 22px;
+  line-height: 1;
 }
 .dark .menu-offcanvas-toggle { color: #fff; }
 @media only screen and (max-width: 800px) {
@@ -7413,6 +7390,9 @@ body.dark {
   background-color: #2a2a2b;
   color: #dedede;
 }
+#site-offcanvas .offcanvas-header {
+  justify-content: flex-end;
+}
 .offcanvas-theme-row {
   display: flex;
   align-items: center;
@@ -7420,3 +7400,54 @@ body.dark {
   padding: 16px 8px;
   font-size: 18px;
 }
+
+/* ===== Settings menu (gear dropdown on desktop, panel in the offcanvas) ===== */
+/* A labelled home for display options such as the theme selector. */
+.menu-settings-btn {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 1.15em;
+  line-height: 1;
+}
+.settings-dropdown { min-width: 210px; padding: 8px; }
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px 8px;
+  white-space: nowrap;
+}
+/* Section header reads as a quiet sentence-case label so the panel looks grouped. */
+.settings-dropdown-header,
+.offcanvas-settings-heading {
+  font-weight: 700;
+  font-size: 0.72em;
+  letter-spacing: 0;
+  opacity: 0.55;
+  text-transform: none;
+}
+.settings-dropdown-header { padding: 4px 8px 8px; margin: 0; }
+/* Genesis sets .menu-item:hover{position:static}; keep the Settings dropdown li
+   relative so its BS5 menu anchors consistently and doesn't jump on hover. */
+.genesis-nav-menu .menu-settings,
+.genesis-nav-menu .menu-settings:hover { position: relative; }
+
+/* Settings group in the mobile offcanvas: a distinct rounded panel so it reads
+   as an intentional block rather than a toggle dropped after the nav links. */
+.offcanvas-settings {
+  margin-top: 22px;
+  padding: 6px 14px 10px;
+  background: rgba(128, 128, 128, 0.06);
+  border-radius: 16px;
+}
+.dark .offcanvas-settings { background: rgba(255, 255, 255, 0.045); }
+.offcanvas-settings-heading { margin: 0; padding: 12px 2px 2px; }
+.offcanvas-settings .offcanvas-theme-row {
+  padding: 9px 2px;
+  font-size: 16px;
+}
+.offcanvas-settings .themeModeButtons { width: 100%; }
+.offcanvas-settings .themeModeButton { flex: 1 1 0; }

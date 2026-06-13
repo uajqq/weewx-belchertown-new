@@ -833,6 +833,10 @@ belchertown_on_ready(function() {
     if (sessionStorage.getItem('theme') == "toggleOverride") {
         belchertown_debug("Theme: sessionStorage override in place.");
         changeTheme(sessionStorage.getItem('currentTheme'));
+    } else if (sessionStorage.getItem('theme') == "auto") {
+        belchertown_debug("Theme: sessionStorage auto mode in place.");
+        setThemeModeControls("auto");
+        autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
     }
 
     // Change theme if a URL variable is set
@@ -846,23 +850,29 @@ belchertown_on_ready(function() {
         } else if (window.location.search.indexOf('?theme=auto') === 0) {
             belchertown_debug("Theme: Setting auto theme because of URL override");
             sessionStorage.setItem('theme', 'auto');
+            setThemeModeControls("auto");
             autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
         }
     }
 
-    // Dark mode checkbox toggle switcher
-    // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
+    // Theme selector
     try {
-        document.querySelectorAll('.themeSwitchInput').forEach(function(themeSwitchInput) {
-            themeSwitchInput.addEventListener('change', function(event) {
-                belchertown_debug("Theme: Toggle button changed");
-                (event.target.checked) ? changeTheme("dark", true) : changeTheme("light", true);
+        document.querySelectorAll('.themeModeButton').forEach(function(themeModeButton) {
+            themeModeButton.addEventListener('click', function(event) {
+                var selectedTheme = event.currentTarget.getAttribute("data-theme-mode");
+                belchertown_debug("Theme: Selector changed to " + selectedTheme);
+                if (selectedTheme === "auto") {
+                    sessionStorage.setItem('theme', 'auto');
+                    setThemeModeControls("auto");
+                    autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
+                } else if (selectedTheme === "dark" || selectedTheme === "light") {
+                    changeTheme(selectedTheme, true, selectedTheme);
+                }
             });
         });
     } catch (err) {
         // Silently exit
     }
-    // #end if
 
     // After charts are loaded, if an anchor tag is in the URL, let's scroll to it
     window.addEventListener('load', function() {
@@ -2115,7 +2125,7 @@ function applyAutoThemeChoice(themeName, reason) {
 
     if (sessionStorage.getItem('theme') == "auto") {
         belchertown_debug("Auto theme: setting " + themeName + " theme from " + reason);
-        changeTheme(themeName);
+        changeTheme(themeName, false, "auto");
         return true;
     }
 
@@ -2148,7 +2158,19 @@ function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     return applyAutoThemeChoice(fallbackTheme, "sunrise/sunset fallback");
 }
 
-function changeTheme(themeName, toggleOverride = false) {
+function setThemeModeControls(themeMode) {
+    if (themeMode !== "auto" && themeMode !== "dark" && themeMode !== "light") {
+        themeMode = sessionStorage.getItem('theme') === 'auto' ? 'auto' : (sessionStorage.getItem('currentTheme') || 'light');
+    }
+
+    document.querySelectorAll(".themeModeButton").forEach(function(el) {
+        var isActive = el.getAttribute("data-theme-mode") === themeMode;
+        el.classList.toggle("is-active", isActive);
+        el.setAttribute("aria-pressed", String(isActive));
+    });
+}
+
+function changeTheme(themeName, toggleOverride = false, themeMode = null) {
     belchertown_debug("Theme: Changing to " + themeName);
     // If the configured theme is auto, but the user toggles light/dark, remove the auto option.
     if (toggleOverride) {
@@ -2171,11 +2193,7 @@ function changeTheme(themeName, toggleOverride = false) {
         // #end if
         document.body.classList.add("dark");
         document.body.classList.remove("light");
-        // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        document.querySelectorAll(".themeSwitchInput").forEach(function(el) {
-            el.checked = true;
-        });
-        // #end if
+        setThemeModeControls(themeMode || (sessionStorage.getItem('theme') === 'auto' ? 'auto' : 'dark'));
         // #if $Extras.has_key('logo_image_dark') and $Extras.logo_image_dark != ""
         belchertown_debug("Theme: logo_image_dark is defined.");
         if (logoImage) {
@@ -2194,11 +2212,7 @@ function changeTheme(themeName, toggleOverride = false) {
         // #end if
         document.body.classList.add("light");
         document.body.classList.remove("dark");
-        // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        document.querySelectorAll(".themeSwitchInput").forEach(function(el) {
-            el.checked = false;
-        });
-        // #end if
+        setThemeModeControls(themeMode || (sessionStorage.getItem('theme') === 'auto' ? 'auto' : 'light'));
         // #if $Extras.has_key('logo_image') and $Extras.logo_image != ""
         belchertown_debug("Theme: logo_image is defined.");
         if (logoImage) {
