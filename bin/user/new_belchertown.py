@@ -4452,6 +4452,8 @@ class getData(SearchList):
             datetime.datetime(now.year, now.month, now.day, 0, 0).timestamp()
         )
         week_start_epoch = today_start_epoch - (7 * 86400)
+        week_daily_start_epoch = today_start_epoch - (6 * 86400)
+        tomorrow_start_epoch = today_start_epoch + 86400
         yesterday_start_epoch = today_start_epoch - 86400
 
         # Setup the converter
@@ -4609,7 +4611,8 @@ class getData(SearchList):
         """
         try:
             week_windrun_maxsum_query = wx_manager.getSql(
-                week_windrun_maxsum_sql, (week_start_epoch, today_start_epoch)
+                week_windrun_maxsum_sql,
+                (week_daily_start_epoch, tomorrow_start_epoch),
             )
         except Exception as e:
             if "archive_day_windrun" in str(e):
