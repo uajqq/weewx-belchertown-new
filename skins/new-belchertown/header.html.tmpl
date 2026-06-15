@@ -1,6 +1,7 @@
 #encoding UTF-8
 ## Determine initial skin theme CSS class from config
 ## Auto theme uses this sunrise/sunset value as the no-JS and legacy-browser fallback.
+## Sun theme uses the same visible Auto control, but always follows sunrise/sunset.
 #set $bodyTheme = ""
 #set global $themeModeLightActive = ""
 #set global $themeModeDarkActive = ""
@@ -16,7 +17,7 @@
     #set $bodyTheme = "light"
     #set global $themeModeLightActive = "is-active"
     #set global $themeModeLightPressed = "true"
-#elif $Extras.theme == "auto" or $Extras.pi_theme == "auto"
+#elif $Extras.theme == "auto" or $Extras.pi_theme == "auto" or $Extras.theme == "sun" or $Extras.pi_theme == "sun"
     #set global $themeModeAutoActive = "is-active"
     #set global $themeModeAutoPressed = "true"
     #import datetime
@@ -297,10 +298,14 @@
         #else
         <script>
             // Set the session variables for the theme
-            if ( sessionStorage.getItem('theme') !== 'toggleOverride' && sessionStorage.getItem('theme') !== 'auto' ) {
+            if ( sessionStorage.getItem('theme') !== 'toggleOverride' && sessionStorage.getItem('theme') !== 'auto' && sessionStorage.getItem('theme') !== 'sun' ) {
+                #if $Extras.theme == "sun"
+                sessionStorage.setItem('theme', 'auto');
+                #else
                 sessionStorage.setItem('theme', '$Extras.theme');
+                #end if
             }
-            if ( sessionStorage.getItem('currentTheme') === null || (sessionStorage.getItem('theme') !== 'toggleOverride' && sessionStorage.getItem('theme') !== 'auto') ) {
+            if ( sessionStorage.getItem('currentTheme') === null || (sessionStorage.getItem('theme') !== 'toggleOverride' && sessionStorage.getItem('theme') !== 'auto' && sessionStorage.getItem('theme') !== 'sun') ) {
                 sessionStorage.setItem('currentTheme', '$bodyTheme');
             }
         </script>
@@ -309,8 +314,12 @@
         <script>
             (function() {
                 function setSimpleThemeControls(themeMode) {
+                    if (themeMode === "sun") {
+                        themeMode = "auto";
+                    }
                     if (themeMode !== "auto" && themeMode !== "dark" && themeMode !== "light") {
-                        themeMode = sessionStorage.getItem("theme") === "auto" ? "auto" : (sessionStorage.getItem("currentTheme") || "$bodyTheme");
+                        var storedThemeMode = sessionStorage.getItem("theme");
+                        themeMode = (storedThemeMode === "auto" || storedThemeMode === "sun") ? "auto" : (sessionStorage.getItem("currentTheme") || "$bodyTheme");
                     }
 
                     document.querySelectorAll(".themeModeButton").forEach(function(el) {
@@ -349,7 +358,8 @@
                         #end if
                     }
 
-                    setSimpleThemeControls(themeMode || (sessionStorage.getItem("theme") === "auto" ? "auto" : themeName));
+                    var storedThemeMode = sessionStorage.getItem("theme");
+                    setSimpleThemeControls(themeMode || ((storedThemeMode === "auto" || storedThemeMode === "sun") ? "auto" : themeName));
                 }
 
                 function getSimplePreferredColorSchemeTheme() {
@@ -378,6 +388,16 @@
                     if (preferredTheme === "dark" || preferredTheme === "light") {
                         return preferredTheme;
                     }
+
+                    if (fallbackTheme !== "dark" && fallbackTheme !== "light") {
+                        fallbackTheme = "light";
+                    }
+
+                    return fallbackTheme;
+                }
+
+                function getSimpleSunTheme() {
+                    var fallbackTheme = "$bodyTheme";
 
                     if (fallbackTheme !== "dark" && fallbackTheme !== "light") {
                         fallbackTheme = "light";
@@ -417,6 +437,20 @@
                     watchSimpleAutoTheme();
                 }
 
+                function applySimpleSunTheme() {
+                    sessionStorage.setItem("theme", "sun");
+                    setSimpleTheme(getSimpleSunTheme(), false, "auto");
+                }
+
+                function applySimpleConfiguredAutoTheme() {
+                    if ("$Extras.theme" === "sun") {
+                        sessionStorage.setItem("theme", "auto");
+                        setSimpleTheme(getSimpleSunTheme(), false, "auto");
+                    } else {
+                        applySimpleAutoTheme();
+                    }
+                }
+
                 function initSimpleTheme() {
                     var requestedTheme = "";
                     try {
@@ -428,11 +462,17 @@
                     if (requestedTheme === "dark" || requestedTheme === "light") {
                         setSimpleTheme(requestedTheme, true, requestedTheme);
                     } else if (requestedTheme === "auto") {
-                        applySimpleAutoTheme();
+                        applySimpleConfiguredAutoTheme();
+                    } else if (requestedTheme === "sun") {
+                        applySimpleSunTheme();
                     } else if (sessionStorage.getItem("theme") === "toggleOverride") {
                         setSimpleTheme(sessionStorage.getItem("currentTheme") || "$bodyTheme", false, sessionStorage.getItem("currentTheme") || "$bodyTheme");
-                    } else if (sessionStorage.getItem("theme") === "auto") {
-                        applySimpleAutoTheme();
+                    } else if (sessionStorage.getItem("theme") === "auto" || sessionStorage.getItem("theme") === "sun") {
+                        if (sessionStorage.getItem("theme") === "sun") {
+                            applySimpleSunTheme();
+                        } else {
+                            applySimpleConfiguredAutoTheme();
+                        }
                     } else {
                         setSimpleThemeControls(sessionStorage.getItem("currentTheme") || "$bodyTheme");
                     }
@@ -441,7 +481,7 @@
                         el.addEventListener("click", function(event) {
                             var selectedTheme = event.currentTarget.getAttribute("data-theme-mode");
                             if (selectedTheme === "auto") {
-                                applySimpleAutoTheme();
+                                applySimpleConfiguredAutoTheme();
                             } else if (selectedTheme === "dark" || selectedTheme === "light") {
                                 setSimpleTheme(selectedTheme, true, selectedTheme);
                             }
@@ -536,9 +576,9 @@
                                                 <h6 class="dropdown-header settings-dropdown-header">$obs.label.appearance_heading</h6>
                                                 <div class="settings-toggle-row">
                                                     <div class="themeModeButtons" role="group" aria-label="$obs.label.appearance_heading">
+                                                        <button type="button" class="themeModeButton $themeModeAutoActive" data-theme-mode="auto" aria-pressed="$themeModeAutoPressed">$obs.label.theme_auto</button>
                                                         <button type="button" class="themeModeButton $themeModeLightActive" data-theme-mode="light" aria-pressed="$themeModeLightPressed">$obs.label.theme_light</button>
                                                         <button type="button" class="themeModeButton $themeModeDarkActive" data-theme-mode="dark" aria-pressed="$themeModeDarkPressed">$obs.label.theme_dark</button>
-                                                        <button type="button" class="themeModeButton $themeModeAutoActive" data-theme-mode="auto" aria-pressed="$themeModeAutoPressed">$obs.label.theme_auto</button>
                                                     </div>
                                                 </div>
                                             </div>
