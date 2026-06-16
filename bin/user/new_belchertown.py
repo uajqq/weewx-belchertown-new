@@ -4452,8 +4452,10 @@ class getData(SearchList):
             datetime.datetime(now.year, now.month, now.day, 0, 0).timestamp()
         )
         week_start_epoch = today_start_epoch - (7 * 86400)
-        week_daily_start_epoch = today_start_epoch - (6 * 86400)
-        tomorrow_start_epoch = today_start_epoch + 86400
+        week_daily_start_epoch = week_start_epoch + (
+            (now.hour * 3600) + (now.minute * 60) + now.second
+        )
+        week_daily_stop_epoch = int(now.timestamp())
         yesterday_start_epoch = today_start_epoch - 86400
 
         # Setup the converter
@@ -4599,7 +4601,7 @@ class getData(SearchList):
             WHERE dateTime >= ? AND dateTime < ? ORDER BY sum DESC LIMIT 1;
         """
         week_rainiest_day_query = wx_manager.getSql(
-            week_rainiest_day_sql, (week_start_epoch, today_start_epoch)
+            week_rainiest_day_sql, (week_daily_start_epoch, week_daily_stop_epoch)
         )
         week_rainiest_day = _convert_daily_summary_result(
             week_rainiest_day_query, rain_unit, "group_rain", rain_round
@@ -4612,7 +4614,7 @@ class getData(SearchList):
         try:
             week_windrun_maxsum_query = wx_manager.getSql(
                 week_windrun_maxsum_sql,
-                (week_daily_start_epoch, tomorrow_start_epoch),
+                (week_daily_start_epoch, week_daily_stop_epoch),
             )
         except Exception as e:
             if "archive_day_windrun" in str(e):
