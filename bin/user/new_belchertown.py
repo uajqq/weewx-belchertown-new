@@ -7414,7 +7414,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         and weatherRange_obs_lookup is not None
                     ):
                         obs_label = weatherRange_obs_lookup
-                    elif observation_type == "windBarb":
+                    elif observation_type in ("windBarb", "windRose"):
                         wind_obs = line_options.get("wind_obs", "windSpeed")
                         if wind_obs not in ("windSpeed", "windGust"):
                             wind_obs = "windSpeed"
@@ -7548,7 +7548,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             rounding_obs_lookup = weatherRange_obs_lookup
                         elif observation_type == "haysChart":
                             rounding_obs_lookup = "windSpeed"
-                        elif observation_type == "windBarb":
+                        elif observation_type in ("windBarb", "windRose"):
                             rounding_obs_lookup = wind_obs
                         else:
                             rounding_obs_lookup = observation_type
@@ -7620,7 +7620,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                         wind_rose_color,
                         special_target_unit,
                         obs_round,
-                        wind_obs=wind_obs if observation_type == "windBarb" else "windSpeed",
+                        wind_obs=wind_obs if observation_type in ("windBarb", "windRose") else "windSpeed",
                     )
 
                     # Build the final series data JSON
@@ -7952,7 +7952,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if aggregate_interval:
                 aggregate_interval = None
 
-            # Get windDir and windSpeed observations
+            # Get windDir and the selected wind speed observation.
             timespan = TimeSpan(start_ts, end_ts)
 
             (time_start_vt, time_stop_vt, windDir_vt) = weewx.xtypes.get_series(
@@ -7965,7 +7965,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             windDir_vals = list(windDir_vt[0])
 
             (time_start_vt, time_stop_vt, windSpeed_vt) = weewx.xtypes.get_series(
-                "windSpeed",
+                wind_obs,
                 timespan,
                 archive,
                 aggregate_type,
