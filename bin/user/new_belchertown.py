@@ -284,6 +284,19 @@ AQI_OBS_MAP = {
     "so2": {"pollutant": "so2", "value_key": "valuePPB"},
 }
 
+LOCAL_AQI_PROVIDER = "local-sensor"
+
+# EPA/AirNow PM2.5 AQI breakpoints, updated for the 2024 PM NAAQS revision.
+# Concentrations are PM2.5 micrograms per cubic meter, truncated to 0.1 first.
+PM25_AQI_BREAKPOINTS = (
+    (0.0, 9.0, 0, 50),
+    (9.1, 35.4, 51, 100),
+    (35.5, 55.4, 101, 150),
+    (55.5, 125.4, 151, 200),
+    (125.5, 225.4, 201, 300),
+    (225.5, 325.4, 301, 500),
+)
+
 DEFAULT_DIRECTION_LABELS = [
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
     "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
@@ -1803,6 +1816,189 @@ def _aqi_category_from_us_aqi(aqi_value):
     return "hazardous"
 
 
+def _truncate_pm25_for_aqi(pm25_value):
+    """Return PM2.5 concentration truncated to 0.1 ug/m3 for AQI math."""
+    pm25_float = _safe_float(pm25_value)
+    if pm25_float is None or pm25_float < 0:
+        return None
+    return math.floor(pm25_float * 10.0) / 10.0
+
+
+def _us_aqi_from_pm25(pm25_value):
+    """Calculate US AQI from PM2.5 concentration using EPA breakpoints."""
+    pm25 = _truncate_pm25_for_aqi(pm25_value)
+    if pm25 is None:
+        return None
+
+    for c_lo, c_hi, i_lo, i_hi in PM25_AQI_BREAKPOINTS:
+        if c_lo <= pm25 <= c_hi:
+            return int(round(((i_hi - i_lo) / (c_hi - c_lo)) * (pm25 - c_lo) + i_lo))
+
+    if pm25 > PM25_AQI_BREAKPOINTS[-1][1]:
+        c_lo, c_hi, i_lo, i_hi = PM25_AQI_BREAKPOINTS[-1]
+        return int(round(((i_hi - i_lo) / (c_hi - c_lo)) * (pm25 - c_lo) + i_lo))
+
+    return None
+
+
+def _local_aqi_payload(aqi_value, timestamp, method, pm25_value=None):
+    """Return a normalized AQI payload for locally measured air quality."""
+    aqi_float = _safe_float(aqi_value)
+    if aqi_float is None or aqi_float < 0:
+        return None
+
+    aqi_int = int(round(aqi_float))
+    timestamp_int = _safe_epoch(timestamp) or int(time.time())
+    pollutants = []
+    pm25_float = _safe_float(pm25_value)
+    if pm25_float is not None and pm25_float >= 0:
+        pollutants.append(
+            {
+                "type": "pm2.5",
+                "valueUGM3": pm25_float,
+            }
+        )
+
+    return {
+        "success": True,
+        "error": None,
+        "response": [
+            {
+                "place": {"name": "Local Sensor"},
+                "periods": [
+                    {
+                        "timestamp": timestamp_int,
+                        "aqi": aqi_int,
+                        "category": _aqi_category_from_us_aqi(aqi_int),
+                        "pollutants": pollutants,
+                    }
+                ],
+            }
+        ],
+        "provider": LOCAL_AQI_PROVIDER,
+        "method": method,
+    }
+
+
+def _archive_latest_numeric(archive_manager, column_name):
+    """Return the latest (timestamp, float value) for a hard-coded archive column."""
+    try:
+        row = archive_manager.getSql(
+            f"SELECT dateTime, {column_name} FROM archive "
+            f"WHERE {column_name} IS NOT NULL "
+            "ORDER BY dateTime DESC LIMIT 1"
+        )
+        if not row:
+            return None
+        value = _safe_float(row[1])
+        timestamp = _safe_epoch(row[0])
+        if value is None or timestamp is None:
+            return None
+        return timestamp, value
+    except Exception:
+        return None
+
+
+def _pm25_nowcast_from_hourly(hourly_offsets):
+    """Return PM NowCast concentration from (hours_ago, value) pairs."""
+    if len(hourly_offsets) < 2:
+        return None
+
+    values = [value for _, value in hourly_offsets]
+    max_value = max(values)
+    min_value = min(values)
+    if max_value <= 0:
+        return 0.0
+
+    weight = 1.0 - ((max_value - min_value) / max_value)
+    weight = min(1.0, max(0.5, weight))
+    numerator = sum(value * (weight ** hours_ago) for hours_ago, value in hourly_offsets)
+    denominator = sum(weight ** hours_ago for hours_ago, _ in hourly_offsets)
+    if denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def _archive_pm25_nowcast_payload(archive_manager):
+    """Build local AQI from archive PM2.5 using NowCast when possible."""
+    latest = _archive_latest_numeric(archive_manager, "pm2_5")
+    if latest is None:
+        return None
+
+    latest_ts, latest_pm25 = latest
+    start_ts = latest_ts - (12 * 3600)
+    try:
+        rows = list(
+            archive_manager.genSql(
+                "SELECT dateTime, pm2_5 FROM archive "
+                "WHERE dateTime >= ? AND dateTime <= ? AND pm2_5 IS NOT NULL "
+                "ORDER BY dateTime DESC",
+                (start_ts, latest_ts),
+            )
+        )
+    except Exception:
+        rows = []
+
+    current_hour = int(latest_ts) // 3600
+    hourly_buckets = {}
+    for row in rows:
+        try:
+            row_ts = int(row[0])
+        except (TypeError, ValueError):
+            continue
+        pm25 = _safe_float(row[1])
+        if pm25 is None or pm25 < 0:
+            continue
+        hours_ago = current_hour - (row_ts // 3600)
+        if 0 <= hours_ago < 12:
+            hourly_buckets.setdefault(hours_ago, []).append(pm25)
+
+    hourly_offsets = []
+    recent_valid_count = 0
+    for hours_ago in range(12):
+        values = hourly_buckets.get(hours_ago)
+        if not values:
+            continue
+        if hours_ago < 3:
+            recent_valid_count += 1
+        hourly_offsets.append((hours_ago, sum(values) / len(values)))
+
+    nowcast_pm25 = None
+    if recent_valid_count >= 2:
+        nowcast_pm25 = _pm25_nowcast_from_hourly(hourly_offsets)
+
+    if nowcast_pm25 is not None:
+        aqi_value = _us_aqi_from_pm25(nowcast_pm25)
+        method = "pm2_5_nowcast"
+        pm25_value = nowcast_pm25
+    else:
+        aqi_value = _us_aqi_from_pm25(latest_pm25)
+        method = "pm2_5_estimate"
+        pm25_value = latest_pm25
+
+    if aqi_value is None:
+        return None
+    return _local_aqi_payload(aqi_value, latest_ts, method, pm25_value=pm25_value)
+
+
+def _archive_local_aqi_payload(archive_manager):
+    """Return archive pm2_5_aqi first, then PM2.5 NowCast/estimate."""
+    latest_aqi = _archive_latest_numeric(archive_manager, "pm2_5_aqi")
+    if latest_aqi is not None:
+        timestamp, aqi_value = latest_aqi
+        latest_pm25 = _archive_latest_numeric(archive_manager, "pm2_5")
+        payload = _local_aqi_payload(
+            aqi_value,
+            timestamp,
+            "pm2_5_aqi",
+            pm25_value=latest_pm25[1] if latest_pm25 is not None else None,
+        )
+        if payload is not None:
+            return payload
+
+    return _archive_pm25_nowcast_payload(archive_manager)
+
+
 def _openmeteo_air_quality_to_aeris_payload(payload):
     """Normalize Open-Meteo Air Quality data to the existing AQI fallback shape."""
     current = (payload or {}).get("current") or {}
@@ -1864,6 +2060,18 @@ def _fetch_openmeteo_aqi_payload(latitude, longitude):
     return _openmeteo_air_quality_to_aeris_payload(aqi_raw)
 
 
+def _fetch_xweather_aqi_payload(forecast_place, forecast_api_id, forecast_api_secret):
+    """Fetch Xweather/Aeris Air Quality as the common AQI fallback payload."""
+    aqi_url = (
+        f"https://data.api.xweather.com/airquality/{forecast_place}"
+        f"?format=json&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
+    )
+    aqi_payload = _http_get_json(aqi_url, headers=HTTP_HEADERS["AERIS_WEATHER"])
+    if isinstance(aqi_payload, dict):
+        aqi_payload.setdefault("provider", "aeris")
+    return aqi_payload
+
+
 def _merge_aqi_payload_into_forecast_file(forecast_file, aqi_payload):
     """Attach an AQI payload to forecast.json without disturbing forecast data."""
     if not aqi_payload or not os.path.isfile(forecast_file):
@@ -1886,6 +2094,15 @@ def _load_aqi_payload_from_forecast_file(forecast_file, require_success=False):
             forecast_data = json.load(fh)
         aqi_array = forecast_data.get("aqi") or []
         aqi_payload = aqi_array[0] if aqi_array else None
+        if (
+            isinstance(aqi_payload, dict)
+            and not aqi_payload.get("provider")
+            and forecast_data.get("provider")
+        ):
+            aqi_payload = dict(aqi_payload)
+            aqi_payload["provider"] = _canonical_forecast_provider(
+                forecast_data.get("provider")
+            )
         if require_success and not (aqi_payload and aqi_payload.get("success")):
             return None
         return aqi_payload
@@ -5141,6 +5358,14 @@ class getData(SearchList):
         aqi_category = ""
         aqi_location = ""
         aqi_time = ""
+        local_aqi_payload = _archive_local_aqi_payload(manager) if aqi_enabled else None
+        if local_aqi_payload is not None:
+            (
+                aqi,
+                aqi_category,
+                aqi_location,
+                aqi_time,
+            ) = _extract_aqi_globals_from_payload(local_aqi_payload, label_dict)
 
         # ----------------------------
         # Pirate Weather
@@ -5197,14 +5422,24 @@ class getData(SearchList):
                 if belchertown_debug > 0:
                     log.info(f"forecast_place set to {forecast_place}")
 
+                def _cached_aqi_for_provider(provider_key):
+                    cached_aqi = _load_aqi_payload_from_forecast_file(
+                        forecast_file, require_success=True
+                    )
+                    if cached_aqi is None:
+                        return None
+                    if _canonical_forecast_provider(
+                        cached_aqi.get("provider")
+                    ) == _canonical_forecast_provider(provider_key):
+                        return cached_aqi
+                    return None
+
                 def _refresh_openmeteo_aqi_fallback(force=False):
                     if not aqi_enabled:
                         return None
 
                     if not force:
-                        cached_aqi = _load_aqi_payload_from_forecast_file(
-                            forecast_file, require_success=True
-                        )
+                        cached_aqi = _cached_aqi_for_provider("open-meteo")
                         if cached_aqi is not None:
                             return cached_aqi
 
@@ -5228,12 +5463,71 @@ class getData(SearchList):
                             "Open-Meteo AQI fallback update failed. "
                             f"Reason: {e}"
                         )
-                        return _load_aqi_payload_from_forecast_file(forecast_file)
+                        return _cached_aqi_for_provider("open-meteo")
 
-                def _apply_aqi_globals_from_forecast():
+                def _refresh_xweather_aqi_fallback(force=False):
+                    if not aqi_enabled:
+                        return None
+
+                    if not force:
+                        cached_aqi = _cached_aqi_for_provider("aeris")
+                        if cached_aqi is not None:
+                            return cached_aqi
+
+                    try:
+                        aqi_payload = _fetch_xweather_aqi_payload(
+                            forecast_place,
+                            forecast_api_id,
+                            forecast_api_secret,
+                        )
+                        if _merge_aqi_payload_into_forecast_file(
+                            forecast_file, aqi_payload
+                        ):
+                            log.info(
+                                "Xweather AQI fallback cached to forecast.json"
+                            )
+                        return aqi_payload
+                    except Exception as e:
+                        log.warning(
+                            "Xweather AQI fallback update failed. "
+                            f"Reason: {e}"
+                        )
+                        return _cached_aqi_for_provider("aeris")
+
+                def _refresh_local_aqi_payload():
+                    nonlocal local_aqi_payload
+                    local_aqi_payload = (
+                        _archive_local_aqi_payload(manager) if aqi_enabled else None
+                    )
+                    return local_aqi_payload
+
+                def _refresh_aqi_payload(force=False):
+                    if not aqi_enabled:
+                        return None
+
+                    aqi_payload = _refresh_local_aqi_payload()
+                    if aqi_payload is not None:
+                        try:
+                            if _merge_aqi_payload_into_forecast_file(
+                                forecast_file, aqi_payload
+                            ):
+                                log.debug("Local AQI cached to forecast.json")
+                        except Exception as e:
+                            log.warning(
+                                f"Local AQI cache update failed. Reason: {e}"
+                            )
+                        return aqi_payload
+
+                    provider_key = _canonical_forecast_provider(forecast_provider)
+                    if provider_key == "open-meteo":
+                        return _refresh_openmeteo_aqi_fallback(force=force)
+                    if provider_key == "aeris":
+                        return _refresh_xweather_aqi_fallback(force=force)
+                    return None
+
+                def _apply_aqi_globals_from_payload(aqi_payload):
                     global aqi, aqi_category
                     nonlocal aqi_location, aqi_time
-                    aqi_payload = _load_aqi_payload_from_forecast_file(forecast_file)
                     if aqi_payload is None:
                         return
                     (
@@ -5242,6 +5536,11 @@ class getData(SearchList):
                         aqi_location,
                         aqi_time,
                     ) = _extract_aqi_globals_from_payload(aqi_payload, label_dict)
+
+                def _refresh_and_apply_aqi(force=False):
+                    aqi_payload = _refresh_aqi_payload(force=force)
+                    if aqi_payload is not None:
+                        _apply_aqi_globals_from_payload(aqi_payload)
 
                 forecast_stale_timer = int(extras_dict["forecast_stale"])
                 current_conditions_stale_timer = int(
@@ -5355,8 +5654,7 @@ class getData(SearchList):
                         ) = _default_current_conditions_values()
                         log.error(f"Pirate Weather parse error: {e}")
 
-                    _refresh_openmeteo_aqi_fallback(force=forecast_is_stale)
-                    _apply_aqi_globals_from_forecast()
+                    _refresh_and_apply_aqi(force=forecast_is_stale)
                 elif forecast_provider == "nws":
                     # NWS does not require API id/secret, but does expect a descriptive User-Agent.
                     nws_forecast_failed = False
@@ -5498,8 +5796,7 @@ class getData(SearchList):
                         )
                         forecast_provider = "open-meteo"
                     else:
-                        _refresh_openmeteo_aqi_fallback(force=forecast_is_stale)
-                        _apply_aqi_globals_from_forecast()
+                        _refresh_and_apply_aqi(force=forecast_is_stale)
                 if forecast_provider == "open-meteo":
                     openmeteo_forecast_failed = False
 
@@ -5616,8 +5913,7 @@ class getData(SearchList):
                             cloud_cover,
                         ) = _default_current_conditions_values()
                     else:
-                        _refresh_openmeteo_aqi_fallback(force=forecast_is_stale)
-                        _apply_aqi_globals_from_forecast()
+                        _refresh_and_apply_aqi(force=forecast_is_stale)
                 elif forecast_provider not in ("pirateweather", "nws"):
                     aeris_icon_map = _load_aeris_icon_map(config_dict, skin_dict)
 
@@ -5652,8 +5948,6 @@ class getData(SearchList):
                     forecast_24hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=day&limit=7&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                     forecast_3hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=3hr&limit=8&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
                     forecast_1hr_url = f"https://data.api.xweather.com/forecasts/{forecast_place}?format=json&filter=1hr&limit=16&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
-                    aqi_url = f"https://data.api.xweather.com/airquality/{forecast_place}?format=json&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
-
                     if extras_dict["forecast_alert_limit"]:
                         forecast_alert_limit = extras_dict["forecast_alert_limit"]
                     else:  # Default to 1 alerts to show if the option is missing. Can go up to 10
@@ -5731,16 +6025,6 @@ class getData(SearchList):
                                     forecast_1hr_page = response.read()
                                 if belchertown_debug > 1:
                                     log.info(f"Forecast 1hr URL: {forecast_1hr_url}")
-                                # AQI
-                                req = Request(
-                                    aqi_url, None, HTTP_HEADERS["AERIS_WEATHER"]
-                                )
-                                with urlopen(
-                                    req, timeout=DEFAULT_HTTP_TIMEOUT
-                                ) as response:
-                                    aqi_page = response.read()
-                                if belchertown_debug > 1:
-                                    log.info(f"AQI URL: {aqi_url}")
                                 if extras_dict["forecast_alert_enabled"] == "1":
                                     # Alerts
                                     req = Request(
@@ -5768,7 +6052,7 @@ class getData(SearchList):
                                     "forecast_1hr": [
                                         _parse_aeris_json(forecast_1hr_page)
                                     ],
-                                    "aqi": [_parse_aeris_json(aqi_page)],
+                                    "aqi": [],
                                 }
                                 if extras_dict.get("forecast_alert_enabled") == "1":
                                     data["alerts"] = [_parse_aeris_json(alerts_page)]
@@ -5981,33 +6265,7 @@ class getData(SearchList):
                         ) = _default_current_conditions_values()
                         log.error(f"Aeris/Xweather current-conditions parse error: {e}")
 
-                    # Process the normalized forecast file.
-                    with open(forecast_file, "r", encoding="utf-8") as read_file:
-                        data = json.load(read_file)
-
-                    try:
-                        aqi_payload = data["aqi"][0]
-                        if aqi_payload["response"]:
-                            if aqi_payload["error"]:
-                                log.error(
-                                    f"Error getting AQI from Xweather weather. The error was: {data['aqi']}"
-                                )
-                            else:
-                                (
-                                    aqi,
-                                    aqi_category,
-                                    aqi_location,
-                                    aqi_time,
-                                ) = _extract_aqi_globals_from_payload(
-                                    aqi_payload, label_dict
-                                )
-                    except KeyError:
-                        pass  # aqi key missing from forecast data (e.g. aqi disabled or older file)
-                    except Exception as e:
-                        log.error(
-                            f"Error getting AQI from Xweather weather. The error was: {e}. Data: {data['aqi']}"
-                        )
-                        pass
+                    _refresh_and_apply_aqi(force=forecast_is_stale)
             else:
                 current_obs_icon = ""
                 current_obs_summary = ""
