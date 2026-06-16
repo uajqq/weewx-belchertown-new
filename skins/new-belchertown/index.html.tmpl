@@ -611,7 +611,7 @@
                             <span class="earthquake-time"></span><!-- moment.js -->
                         </div>
                         <div class="earthquake-subcard earthquake-subcard--stats">
-                            <a class="earthquake-info-link" href="$earthquake_url" target="_blank">
+                            <a class="earthquake-info-link" href="$earthquake_url" target="_blank" rel="noopener noreferrer">
                                 <div class="row earthquake-info">
                                     <div class="col-md-6 earthquake-stat earthquake-stat--magnitude">
                                         <i class="wi wi-earthquake" aria-hidden="true"></i><span class="earthquake-stat-label">$obs.label.earthquake_magnitude</span> <span class="magnitude">$earthquake_magnitude</span>
@@ -627,7 +627,7 @@
                         #if $earthquake_map
                         <div class="earthquake-subcard earthquake-subcard--map">
                             <div class="earthquake-map-wrap">
-                                <a class="earthquake-map-link" href="$earthquake_url" target="_blank" aria-label="$obs.label.earthquake_title">
+                                <a class="earthquake-map-link" href="$earthquake_url" target="_blank" rel="noopener noreferrer" aria-label="$obs.label.earthquake_title">
                                     <div class="earthquake-map" role="img" aria-label="$obs.label.earthquake_title">
                                         <div class="earthquake-map-grid" style="--earthquake-map-grid-left: calc(50% - ${earthquake_map.offset_x}px); --earthquake-map-grid-top: calc(50% - ${earthquake_map.offset_y}px);">
                                             #for $earthquake_tile in $earthquake_map.tiles

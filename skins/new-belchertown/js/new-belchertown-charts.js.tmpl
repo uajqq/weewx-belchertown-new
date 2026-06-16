@@ -298,6 +298,7 @@ function belchertown_load_script_once(moduleKey, moduleUrl) {
         var script = document.createElement("script");
         script.src = moduleUrl;
         script.async = false;
+        script.crossOrigin = "anonymous";
         script.setAttribute("data-belchertown-module", moduleKey);
         script.onload = function() {
             script.setAttribute("data-loaded", "1");
@@ -358,7 +359,7 @@ function belchertown_ensure_highcharts_modules(moduleSet) {
         return Promise.resolve();
     }
 
-    var moduleBase = "//code.highcharts.com/12.6/modules/";
+    var moduleBase = "https://code.highcharts.com/12.6/modules/";
     var loaderPromises = modules.map(function(moduleKey) {
         return belchertown_load_script_once(moduleKey, moduleBase + moduleKey + ".js");
     });

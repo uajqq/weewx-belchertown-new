@@ -846,7 +846,7 @@ function forecast_daily_link(timestamp) {
         .replace("YYYY", linkMoment.format("YYYY"))
         .replace("MM", linkMoment.format("MM"))
         .replace("DD", linkMoment.format("DD"));
-    return '<a href="' + link + '" target="_blank">' + forecast_escape_html(forecast_label_text("$obs.label.daily_forecast")) + '</a>';
+    return '<a href="' + link + '" target="_blank" rel="noopener noreferrer">' + forecast_escape_html(forecast_label_text("$obs.label.daily_forecast")) + '</a>';
 }
 
 function forecast_metric_rows(row) {
