@@ -8212,11 +8212,14 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             if aggregate_interval:
                 aggregate_interval = None
 
-            # Get windDir and the selected wind speed observation.
+            # Pair gust speeds with gust direction, otherwise use wind direction.
+            wind_dir_obs = "windGustDir" if wind_obs == "windGust" else "windDir"
+
+            # Get the selected direction and speed observations.
             timespan = TimeSpan(start_ts, end_ts)
 
             (time_start_vt, time_stop_vt, windDir_vt) = weewx.xtypes.get_series(
-                "windDir",
+                wind_dir_obs,
                 timespan,
                 archive,
                 aggregate_type,
