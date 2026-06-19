@@ -4,146 +4,566 @@
 
 #include "header.html.tmpl"
 
-<script>
-    (function() {
-        var availableNoaaFiles = $available_noaa_files_json;
-        var defaultNoaaFile = $default_noaa_file_json;
-        var noaaRelativeDir = $noaa_relative_dir_json;
-        var availableNoaaFileSet = {};
-        for (var i = 0; i < availableNoaaFiles.length; i++) {
-            availableNoaaFileSet[availableNoaaFiles[i]] = true;
-        }
-
-        function buildNoaaUrl(filename) {
-            return '$relative_url/' + encodeURIComponent(noaaRelativeDir) + '/' + encodeURIComponent(filename);
-        }
-
-        function resolveNoaaFile(year, month) {
-            var candidate = "";
-            if (/^\d{4}$/.test(year || "")) {
-                if (/^\d{2}$/.test(month || "")) {
-                    candidate = "NOAA-" + year + "-" + month + ".txt";
-                } else if (month === null) {
-                    candidate = "NOAA-" + year + ".txt";
-                }
-            }
-
-            if (candidate && availableNoaaFileSet[candidate]) {
-                return candidate;
-            }
-            if (defaultNoaaFile && availableNoaaFileSet[defaultNoaaFile]) {
-                return defaultNoaaFile;
-            }
-            return "";
-        }
-
-        function setReportText(message) {
-            var noaaContents = document.getElementById("noaa_contents");
-            if (noaaContents) {
-                noaaContents.textContent = message;
-            }
-        }
-
-        function setDirectLink(url) {
-            var directLink = document.querySelector(".noaa_direct_link");
-            if (!directLink) {
-                return;
-            }
-            if (url) {
-                directLink.setAttribute("href", url);
-                directLink.removeAttribute("aria-disabled");
-            } else {
-                directLink.removeAttribute("href");
-                directLink.setAttribute("aria-disabled", "true");
-            }
-        }
-
-        function decodeNoaaContent(rawContent) {
-            return rawContent
-                .replace(/<sup>/g, '')
-                .replace(/<\/sup>/g, '')
-                .replace(/&deg;/g, '\u00b0')
-                .replace(/&amp;/g, '&')
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>');
-        }
-
-        // Change the div to the right NOAA file.
-        function populatePre(url, filename) {
-            var xhr = new XMLHttpRequest();
-            xhr.onload = function() {
-                var rawContent = this.responseText || "";
-                var successfulStatus = (this.status >= 200 && this.status < 300) ||
-                    (this.status === 0 && rawContent !== "");
-
-                if (!successfulStatus) {
-                    setDirectLink("");
-                    setReportText("NOAA report " + filename + " is unavailable (HTTP " + this.status + ").");
-                    return;
-                }
-                if (/^\s*(?:<!doctype\s+html|<html[\s>])/i.test(rawContent)) {
-                    setDirectLink("");
-                    setReportText("NOAA report " + filename + " returned an HTML error page instead of report text.");
-                    return;
-                }
-
-                setReportText(decodeNoaaContent(rawContent));
-            };
-            xhr.onerror = function() {
-                setDirectLink("");
-                setReportText("NOAA report " + filename + " could not be loaded.");
-            };
-            xhr.open('GET', url);
-            xhr.send();
-        }
-
-        function initReportsPage() {
-            var params = new URLSearchParams(window.location.search);
-            var filename = resolveNoaaFile(params.get("yr"), params.get("mo"));
-            var url = filename ? buildNoaaUrl(filename) : "";
-
-            // Change the direct href link.
-            setDirectLink(url);
-
-            if (!filename) {
-                setReportText("No NOAA reports are available.");
-                return;
-            }
-
-            populatePre(url, filename);
-        }
-
-        if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", initReportsPage);
-        } else {
-            initReportsPage();
-        }
-    })();
-</script>
+<style>
+:root {
+    --nr:#1a3a5c; --mid:#2e6da4; --bg:var(--bs-body-bg,#f4f7fb);
+    --bdr:#b0c4de; --mono:'Courier New',Courier,monospace;
+    --tp:rgba(252,228,214,.45); --rn:rgba(226,240,217,.45);
+    --wn:rgba(218,232,252,.45); --wd:rgba(237,232,245,.45);
+    --hd:rgba(230,240,255,.45); --sm:rgba(255,249,230,.55);
+}
+[data-bs-theme="dark"] {
+    --nr:#5b8ec4; --mid:#7eb8e8; --bdr:#3a4a5a;
+    --tp:rgba(100,50,30,.25); --rn:rgba(30,70,30,.25);
+    --wn:rgba(30,60,100,.25); --wd:rgba(60,40,90,.25);
+    --hd:rgba(30,50,100,.25); --sm:rgba(80,70,20,.25);
+}
+.nr-wrap{padding:14px 4px}
+.nr-tabs{display:flex;gap:2px;margin-bottom:-1px}
+.nr-tab{padding:5px 16px;border:1px solid var(--bdr);border-bottom:none;
+  background:var(--bs-tertiary-bg,#dce8f4);color:var(--nr);
+  font-family:var(--mono);font-size:12px;cursor:pointer;
+  border-radius:4px 4px 0 0;transition:background .15s}
+.nr-tab.active{background:var(--bs-body-bg,#fff);font-weight:bold;border-color:var(--nr)}
+.nr-panel{display:none;border:1px solid var(--bdr);border-radius:0 4px 4px 4px;
+  padding:10px;overflow-x:auto}
+.nr-panel.active{display:block}
+.nr-title{font-family:var(--mono);font-size:13px;font-weight:bold;
+  text-align:center;letter-spacing:.5px;margin:6px 0 2px;color:var(--nr)}
+.nr-sub{font-family:var(--mono);font-size:10px;text-align:center;
+  color:var(--bs-secondary-color,#555);margin-bottom:8px}
+.nr-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-bottom:10px;font-size:12px}
+.nr-controls label{font-weight:bold;color:var(--nr)}
+.nr-controls select{font-family:var(--mono);font-size:12px;padding:4px 8px;
+  border:1px solid var(--bdr);border-radius:3px;
+  background:var(--bs-body-bg,#fff);color:var(--bs-body-color,#222);cursor:pointer}
+table.nr{border-collapse:collapse;font-family:var(--mono);font-size:11.5px;width:100%}
+table.nr th{background:var(--nr);color:#fff;border:1px solid var(--bdr);
+  padding:3px 6px;text-align:center;white-space:nowrap}
+table.nr th.sub{font-size:10px;background:var(--mid)}
+table.nr th.t-tp{background:#7a3020!important}
+table.nr th.t-hd{background:#2a4070!important}
+table.nr th.t-rn{background:#2a5c2a!important}
+table.nr th.t-wn{background:#1e4c6e!important}
+table.nr td{border:1px solid #c8d8ea;padding:2px 6px;text-align:right;white-space:nowrap}
+table.nr td.dc{text-align:center;font-weight:bold;color:var(--nr);
+  background:var(--bs-tertiary-bg,#f0f5fb)}
+table.nr td.tp{background:var(--tp)}
+table.nr td.rn{background:var(--rn)}
+table.nr td.wn{background:var(--wn)}
+table.nr td.hd{background:var(--hd)}
+table.nr tr.sr td{background:var(--sm)!important;font-weight:bold;
+  border-top:2px solid var(--nr)}
+table.nr tr.cl{cursor:pointer}
+table.nr tr.cl:hover td{background:rgba(100,160,255,.15)!important}
+table.nr tr.hi td{background:rgba(212,237,218,.35)!important;font-weight:bold}
+.nr-msg{text-align:center;padding:20px;font-family:var(--mono);
+  color:var(--bs-secondary-color,#666)}
+</style>
 
 <div class="site-inner">
-    <main class="content">
-        <article class="weewx reports" itemscope itemtype="https://schema.org/CreativeWork">
+  <main class="content">
+    <article class="weewx reports" itemscope itemtype="https://schema.org/CreativeWork">
 
-            #include "page-header.inc"
+      #include "page-header.inc"
 
-            <div class="noaa_reports">
-                <H1>$obs.label.reports_title</H1>
-                <div class="row">
-                    <div class="col-md-12 wx-year-row">
-                        $noaa_header_html
-                    </div>
-                </div>
-                <a href="#" class="noaa_direct_link">$obs.label.reports_click_here_link</a> $obs.label.reports_view_more
-                <br><br>
-                <div class="noaa_report_container">
-                    <pre id="noaa_contents"></pre>
-                </div> <!-- END noaa_report_container -->
-            </div> <!-- END noaa_reports -->
+      <div class="noaa_reports">
+        <!--h1>$obs.label.reports_title</h1-->
 
-        </article>
-    </main>
+        <div class="nr-wrap" id="nr-root">
+          <div class="nr-tabs">
+            <button class="nr-tab active" data-tab="tab-mo" onclick="NR.switchTab(this)">Monthly</button>
+            <button class="nr-tab"        data-tab="tab-yr" onclick="NR.switchTab(this)">Yearly</button>
+          </div>
+          <div id="tab-mo" class="nr-panel active">
+            <div class="nr-controls">
+              <label>Month:</label>
+              <select id="nr-mo-sel" onchange="NR.navigate()"></select>
+              <label>Year:</label>
+              <select id="nr-yr-mo-sel" onchange="NR.navigate()"></select>
+            </div>
+            <div id="nr-mo-out"><div class="nr-msg">Loading…</div></div>
+          </div>
+          <div id="tab-yr" class="nr-panel">
+            <div class="nr-controls">
+              <label>Year:</label>
+              <select id="nr-yr-sel" onchange="NR.navigateYr()"></select>
+            </div>
+            <div id="nr-yr-out"><div class="nr-msg">Loading…</div></div>
+          </div>
+        </div>
+
+      </div>
+
+    </article>
+  </main>
 </div>
 
+<script>
+(function() {
+
+// ── Unit conversion (reads localStorage just like the rest of the skin) ───
+var SYSTEMS = {
+    us:          { temp:function(c){return c*9/5+32;},   tl:'\u00b0F', speed:function(ms){return ms*2.23694;}, sl:'mph',  rain:function(mm){return mm*0.03937;}, rl:'in',  rrFmt:2 },
+    uk:          { temp:function(c){return c;},           tl:'\u00b0C', speed:function(ms){return ms*2.23694;}, sl:'mph',  rain:function(mm){return mm;},         rl:'mm',  rrFmt:1 },
+    metric:      { temp:function(c){return c;},           tl:'\u00b0C', speed:function(ms){return ms*3.6;},     sl:'km/h', rain:function(mm){return mm;},         rl:'mm',  rrFmt:1 },
+    scandinavia: { temp:function(c){return c;},           tl:'\u00b0C', speed:function(ms){return ms;},         sl:'m/s',  rain:function(mm){return mm;},         rl:'mm',  rrFmt:1 },
+    canada:      { temp:function(c){return c;},           tl:'\u00b0C', speed:function(ms){return ms*3.6;},     sl:'km/h', rain:function(mm){return mm;},         rl:'mm',  rrFmt:1 },
+    aviation:    { temp:function(c){return c;},           tl:'\u00b0C', speed:function(ms){return ms*1.94384;}, sl:'kt',   rain:function(mm){return mm;},         rl:'mm',  rrFmt:1 },
+};
+
+// Site base units (from weewx.conf / unit_label in weewx_data.json)
+// temp = °C, wind = mph, rain = mm  → wind needs /2.23694 to reach m/s
+var BASE = {
+    tempToC:  function(v) { return v; },          // data already °C
+    speedToMs: function(v) { return v / 2.23694; },// data is mph → m/s
+    rainToMm: function(v) { return v; },           // data already mm
+};
+
+function getSys() {
+    var k = 'metric';
+    try { k = localStorage.getItem('belchertown_unit_system') || 'metric'; } catch(e) {}
+    return SYSTEMS[k] || SYSTEMS.metric;
+}
+
+function fmtT(c, s) {
+    if (c === null || c === undefined || isNaN(c)) return '&mdash;';
+    return s.temp(BASE.tempToC(c)).toFixed(1);
+}
+function fmtW(mph, s) {
+    if (mph === null || mph === undefined || isNaN(mph)) return '&mdash;';
+    return s.speed(BASE.speedToMs(mph)).toFixed(1);
+}
+function fmtR(mm, s) {
+    if (mm === null || mm === undefined || isNaN(mm)) return '&mdash;';
+    return s.rain(BASE.rainToMm(mm)).toFixed(s.rrFmt);
+}
+function fmtN(v, dec) {
+    if (v === null || v === undefined || isNaN(v)) return '&mdash;';
+    return parseFloat(v).toFixed(dec !== undefined ? dec : 1);
+}
+
+var DIR_LABELS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function compass(deg) {
+    if (deg === null || isNaN(deg)) return '&mdash;';
+    return DIR_LABELS[Math.round(deg / 22.5) % 16];
+}
+
+// ── Data cache ─────────────────────────────────────────────────────────
+var _cache = {};
+
+function fetchJson(url) {
+    if (_cache[url]) return Promise.resolve(_cache[url]);
+    return fetch(url + '?_=' + Math.floor(Date.now()/60000), {cache:'no-cache'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) { _cache[url] = d; return d; });
+}
+
+// ── Parse a flat top-level [ts, value] series from noaa_alltime.json ──────
+function parseFlatSeries(data, key) {
+    var out = {};
+    var pts = data[key] || [];
+    for (var i = 0; i < pts.length; i++) {
+        var p = pts[i];
+        if (p && p.length >= 2 && p[1] !== null) {
+            out[Math.round(p[0])] = p[1];
+        }
+    }
+    return out;
+}
+
+// Get all available year-months from the weewx_data.json
+var RELATIVE_URL = '$relative_url';
+var ALLTIME_URL = RELATIVE_URL + '/json/noaa_alltime.json';
+
+// ── Navigation helpers ─────────────────────────────────────────────────
+var MONTH_NAMES = ['January','February','March','April','May','June',
+                   'July','August','September','October','November','December'];
+var MONTH_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN',
+                   'JUL','AUG','SEP','OCT','NOV','DEC'];
+
+function getUrlParams() {
+    var p = new URLSearchParams(window.location.search);
+    return {
+        yr: p.get('nr_yr') ? parseInt(p.get('nr_yr')) : null,
+        mo: p.get('nr_mo') ? parseInt(p.get('nr_mo')) : null,
+        tab: p.get('nr_tab') || 'mo'
+    };
+}
+
+function setUrlParams(yr, mo, tab) {
+    var url = new URL(window.location.href);
+    url.searchParams.set('nr_yr', yr);
+    if (mo !== null) url.searchParams.set('nr_mo', mo);
+    else url.searchParams.delete('nr_mo');
+    url.searchParams.set('nr_tab', tab || 'mo');
+    history.pushState({}, '', url.toString());
+}
+
+var NOW = new Date();
+var THIS_YEAR = NOW.getFullYear();
+var THIS_MONTH = NOW.getMonth() + 1;
+
+// Falls back to current year only until noaa_alltime.json has loaded and
+// told us the real first year (the archive may start mid-year).
+var FIRST_YEAR = THIS_YEAR;
+var AVAILABLE_YEARS = [THIS_YEAR];
+
+// ── Populate selectors ─────────────────────────────────────────────────
+function populateSelectors(selYear, selMonth) {
+    var moSel = document.getElementById('nr-mo-sel');
+    var yrMoSel = document.getElementById('nr-yr-mo-sel');
+    var yrSel = document.getElementById('nr-yr-sel');
+
+    moSel.innerHTML = '';
+    MONTH_NAMES.forEach(function(mn, i) {
+        var opt = document.createElement('option');
+        opt.value = i + 1;
+        opt.textContent = mn;
+        if (i + 1 === selMonth) opt.selected = true;
+        moSel.appendChild(opt);
+    });
+
+    [yrMoSel, yrSel].forEach(function(sel) {
+        sel.innerHTML = '';
+        AVAILABLE_YEARS.forEach(function(yr) {
+            var opt = document.createElement('option');
+            opt.value = yr;
+            opt.textContent = yr;
+            if (yr === selYear) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+function rebuildAvailableYears(firstYear) {
+    FIRST_YEAR = firstYear;
+    AVAILABLE_YEARS = [];
+    for (var _ay = THIS_YEAR; _ay >= FIRST_YEAR; _ay--) {
+        AVAILABLE_YEARS.push(_ay);
+    }
+}
+
+// ── Monthly table ──────────────────────────────────────────────────────
+function buildMonthlyTable(series, selYear, selMonth, s) {
+    var tavg = series.tavg, tmax = series.tmax, tmin = series.tmin,
+        rain = series.rain, wspeed = series.wspeed, wgust = series.wgust, wdir = series.wdir;
+
+    var daysInMonth = new Date(selYear, selMonth, 0).getDate();
+    var sMn = 0, nMn = 0, hiH = null, loL = null;
+    var sRn = 0, sWa = 0, nWa = 0, hiW = null;
+
+    function tsToDate(ts) {
+        var d = new Date(ts);
+        return { y: d.getFullYear(), m: d.getMonth()+1, d: d.getDate() };
+    }
+
+    // Each series here is already daily resolution, so each ts maps to
+    // exactly one day — no need to fold multiple points per day together.
+    var dayAvg = {}, dayMax = {}, dayMin = {}, dayRain = {}, dayWgust = {}, dayWspeed = {}, dayWdir = {};
+    function bucket(srcMap, dstMap) {
+        Object.keys(srcMap).map(Number).forEach(function(ts) {
+            var dt = tsToDate(ts);
+            if (dt.y !== selYear || dt.m !== selMonth) return;
+            dstMap[dt.d] = srcMap[ts];
+        });
+    }
+    bucket(tavg, dayAvg);
+    bucket(tmax, dayMax);
+    bucket(tmin, dayMin);
+    bucket(rain, dayRain);
+    bucket(wgust, dayWgust);
+    bucket(wspeed, dayWspeed);
+    bucket(wdir, dayWdir);
+
+    var tbody = '';
+    for (var dn = 1; dn <= daysInMonth; dn++) {
+        var hi = dayMax[dn] !== undefined ? dayMax[dn] : null;
+        var lo = dayMin[dn] !== undefined ? dayMin[dn] : null;
+        // True daily average where available; fall back to (hi+lo)/2 only
+        // if a day is somehow missing the avg series (e.g. data gap).
+        var mean = dayAvg[dn] !== undefined ? dayAvg[dn] :
+                   ((hi !== null && lo !== null) ? (hi + lo) / 2 : (hi !== null ? hi : lo));
+        var rn = dayRain[dn] !== undefined ? dayRain[dn] : null;
+        var wg = dayWgust[dn] !== undefined ? dayWgust[dn] : null;
+        var wa = dayWspeed[dn] !== undefined ? dayWspeed[dn] : null;
+        var wd = dayWdir[dn] !== undefined ? dayWdir[dn] : null;
+        var hdd = mean !== null ? Math.max(0, 15.5 - mean) : null;
+        var cdd = mean !== null ? Math.max(0, mean - 15.5) : null;
+
+        var hasDat = hi !== null || rn !== null;
+        if (mean !== null) { sMn += mean; nMn++; }
+        if (hi !== null && (hiH === null || hi > hiH)) hiH = hi;
+        if (lo !== null && (loL === null || lo < loL)) loL = lo;
+        if (rn !== null) sRn += rn;
+        if (wa !== null) { sWa += wa; nWa++; }
+        if (wg !== null && (hiW === null || wg > hiW)) hiW = wg;
+
+        tbody += '<tr>';
+        tbody += '<td class="dc">' + String(dn).padStart(2,'0') + '</td>';
+        if (hasDat) {
+            tbody += '<td class="tp">' + fmtT(mean,s) + '</td>';
+            tbody += '<td class="tp">' + fmtT(hi,s) + '</td>';
+            tbody += '<td class="tp">' + fmtT(lo,s) + '</td>';
+            tbody += '<td class="hd">' + fmtN(hdd) + '</td>';
+            tbody += '<td class="hd">' + fmtN(cdd) + '</td>';
+            tbody += '<td class="rn">' + fmtR(rn,s) + '</td>';
+            tbody += '<td class="wn">' + fmtW(wa,s) + '</td>';
+            tbody += '<td class="wn">' + fmtW(wg,s) + '</td>';
+            tbody += '<td>' + fmtN(wd,0) + '</td>';
+            tbody += '<td>' + compass(wd) + '</td>';
+        } else {
+            tbody += '<td colspan="10" style="text-align:center;color:var(--bs-secondary-color,#aaa)">—</td>';
+        }
+        tbody += '</tr>\n';
+    }
+
+    // Summary row
+    var avgMn = nMn > 0 ? sMn/nMn : null;
+    tbody += '<tr class="sr">';
+    tbody += '<td class="dc">AVG/&sum;</td>';
+    tbody += '<td class="tp">' + fmtT(avgMn,s) + '</td>';
+    tbody += '<td class="tp">' + fmtT(hiH,s) + '</td>';
+    tbody += '<td class="tp">' + fmtT(loL,s) + '</td>';
+    tbody += '<td class="hd">&mdash;</td><td class="hd">&mdash;</td>';
+    tbody += '<td class="rn">' + fmtR(sRn,s) + '</td>';
+    tbody += '<td class="wn">' + fmtW(nWa>0?sWa/nWa:null,s) + '</td>';
+    tbody += '<td class="wn">' + fmtW(hiW,s) + '</td>';
+    tbody += '<td colspan="2">&mdash;</td>';
+    tbody += '</tr>';
+
+    return '<div class="nr-title">MONTHLY CLIMATOLOGICAL SUMMARY &mdash; ' +
+            MONTH_NAMES[selMonth-1].toUpperCase() + ' ' + selYear + '</div>' +
+            '<div class="nr-sub">TEMPERATURE (' + s.tl + ') &nbsp;|&nbsp; RAIN (' + s.rl +
+            ') &nbsp;|&nbsp; WIND SPEED (' + s.sl + ') &nbsp;|&nbsp; DEGREE DAYS BASE 15.5\u00b0C</div>' +
+            '<table class="nr"><thead>' +
+            '<tr><th rowspan="2">DAY</th>' +
+            '<th colspan="3" class="t-tp">TEMPERATURE (' + s.tl + ')</th>' +
+            '<th colspan="2" class="t-hd">DEG DAYS</th>' +
+            '<th rowspan="2" class="t-rn">RAIN<br>' + s.rl + '</th>' +
+            '<th colspan="2" class="t-wn">WIND (' + s.sl + ')</th>' +
+            '<th colspan="2">WIND DIR</th></tr>' +
+            '<tr>' +
+            '<th class="sub t-tp">MEAN</th><th class="sub t-tp">HIGH</th><th class="sub t-tp">LOW</th>' +
+            '<th class="sub t-hd">HDD</th><th class="sub t-hd">CDD</th>' +
+            '<th class="sub t-wn">AVG</th><th class="sub t-wn">MAX</th>' +
+            '<th class="sub">DEG</th><th class="sub">DIR</th>' +
+            '</tr></thead><tbody>' + tbody + '</tbody></table>';
+}
+
+// ── Yearly table ───────────────────────────────────────────────────────
+function buildYearlyTable(series, selYear, selMonth, s) {
+    var tavg = series.tavg, tmax = series.tmax, tmin = series.tmin,
+        rain = series.rain, wspeed = series.wspeed, wgust = series.wgust;
+
+    var monthly = {};
+    for (var m = 1; m <= 12; m++) {
+        monthly[m] = { avgs:[], highs:[], lows:[], rain:0, wgusts:[], wspeeds:[], n:0 };
+    }
+
+    function tsMonth(ts) { var d = new Date(ts); return { y:d.getFullYear(), m:d.getMonth()+1 }; }
+
+    Object.keys(tmax).map(Number).forEach(function(ts) {
+        var dt = tsMonth(ts); if (dt.y !== selYear) return;
+        monthly[dt.m].highs.push(tmax[ts]); monthly[dt.m].n++;
+    });
+    Object.keys(tmin).map(Number).forEach(function(ts) {
+        var dt = tsMonth(ts); if (dt.y !== selYear) return;
+        monthly[dt.m].lows.push(tmin[ts]);
+    });
+    Object.keys(tavg).map(Number).forEach(function(ts) {
+        var dt = tsMonth(ts); if (dt.y !== selYear) return;
+        monthly[dt.m].avgs.push(tavg[ts]);
+    });
+    Object.keys(rain).map(Number).forEach(function(ts) {
+        var dt = tsMonth(ts); if (dt.y !== selYear) return;
+        monthly[dt.m].rain += parseFloat(rain[ts]);
+    });
+    Object.keys(wgust).map(Number).forEach(function(ts) {
+        var dt = tsMonth(ts); if (dt.y !== selYear) return;
+        monthly[dt.m].wgusts.push(wgust[ts]);
+    });
+    Object.keys(wspeed).map(Number).forEach(function(ts) {
+        var dt = tsMonth(ts); if (dt.y !== selYear) return;
+        monthly[dt.m].wspeeds.push(wspeed[ts]);
+    });
+
+    var tbody = '';
+    var yHiH=null,yLoL=null,yRn=0,yWghi=null,yWsa=0,yWsn=0,yMns=0,yMnn=0;
+
+    for (var mo = 1; mo <= 12; mo++) {
+        var mr = monthly[mo];
+        var hiH = mr.highs.length ? Math.max.apply(null, mr.highs) : null;
+        var loL = mr.lows.length ? Math.min.apply(null, mr.lows) : null;
+        // True mean of daily averages; fall back to the old high/low blend
+        // only if the avg series wasn't available for this month.
+        var meanT = mr.avgs.length ? mr.avgs.reduce(function(a,b){return a+b;},0)/mr.avgs.length :
+            ((mr.highs.length && mr.lows.length) ?
+            (mr.highs.reduce(function(a,b){return a+b;},0)/mr.highs.length +
+             mr.lows.reduce(function(a,b){return a+b;},0)/mr.lows.length) / 2 : null);
+        var rn = mr.rain;
+        var wghi = mr.wgusts.length ? Math.max.apply(null, mr.wgusts) : null;
+        var wsa = mr.wspeeds.length ? mr.wspeeds.reduce(function(a,b){return a+b;},0)/mr.wspeeds.length : null;
+        var isActive = (mo === selMonth && selYear === _state.yr);
+        var hasDat = mr.n > 0;
+
+        if (meanT !== null) { yMns += meanT; yMnn++; }
+        if (hiH !== null && (yHiH === null || hiH > yHiH)) yHiH = hiH;
+        if (loL !== null && (yLoL === null || loL < yLoL)) yLoL = loL;
+        yRn += rn;
+        if (wghi !== null && (yWghi === null || wghi > yWghi)) yWghi = wghi;
+        if (wsa !== null) { yWsa += wsa; yWsn++; }
+
+        tbody += '<tr class="cl' + (isActive ? ' hi' : '') + '"' +
+                 ' onclick="NR.goMonth(' + selYear + ',' + mo + ')">';
+        tbody += '<td class="dc">' + MONTH_SHORT[mo-1] + '</td>';
+        if (hasDat) {
+            tbody += '<td class="tp">' + fmtT(meanT,s) + '</td>';
+            tbody += '<td class="tp">' + fmtT(hiH,s) + '</td>';
+            tbody += '<td class="tp">' + fmtT(loL,s) + '</td>';
+            tbody += '<td class="rn">' + fmtR(rn,s) + '</td>';
+            tbody += '<td class="wn">' + fmtW(wsa,s) + '</td>';
+            tbody += '<td class="wn">' + fmtW(wghi,s) + '</td>';
+            tbody += '<td class="dc" style="font-size:10px;font-weight:normal">' + mr.n + 'd</td>';
+        } else {
+            tbody += '<td colspan="7" style="text-align:center;color:var(--bs-secondary-color,#aaa)">—</td>';
+        }
+        tbody += '</tr>\n';
+    }
+    tbody += '<tr class="sr"><td class="dc">ANNUAL</td>';
+    tbody += '<td class="tp">' + fmtT(yMnn>0?yMns/yMnn:null,s) + '</td>';
+    tbody += '<td class="tp">' + fmtT(yHiH,s) + '</td>';
+    tbody += '<td class="tp">' + fmtT(yLoL,s) + '</td>';
+    tbody += '<td class="rn">' + fmtR(yRn,s) + '</td>';
+    tbody += '<td class="wn">' + fmtW(yWsn>0?yWsa/yWsn:null,s) + '</td>';
+    tbody += '<td class="wn">' + fmtW(yWghi,s) + '</td>';
+    tbody += '<td class="dc">&mdash;</td>';
+    tbody += '</tr>';
+
+    return '<div class="nr-title">YEARLY CLIMATOLOGICAL SUMMARY &mdash; ' + selYear + '</div>' +
+            '<div class="nr-sub">Click a month row to view daily detail &nbsp;|&nbsp; ' +
+            'Highlighted = current month selection</div>' +
+            '<table class="nr"><thead>' +
+            '<tr><th>MONTH</th>' +
+            '<th colspan="3" class="t-tp">TEMPERATURE (' + s.tl + ')</th>' +
+            '<th class="t-rn">RAIN (' + s.rl + ')</th>' +
+            '<th colspan="2" class="t-wn">WIND (' + s.sl + ')</th>' +
+            '<th>DATA</th></tr>' +
+            '<tr><th class="sub"></th>' +
+            '<th class="sub t-tp">MEAN</th><th class="sub t-tp">HIGH</th><th class="sub t-tp">LOW</th>' +
+            '<th class="sub t-rn">TOTAL</th>' +
+            '<th class="sub t-wn">AVG</th><th class="sub t-wn">MAX</th>' +
+            '<th class="sub">DAYS</th></tr>' +
+            '</thead><tbody>' + tbody + '</tbody></table>';
+}
+
+// ── Render ─────────────────────────────────────────────────────────────
+var _state = { yr: THIS_YEAR, mo: THIS_MONTH, tab: 'mo' };
+var _yearsBuilt = false;
+
+function render() {
+    var s = getSys();
+
+    document.getElementById('nr-mo-out').innerHTML = '<div class="nr-msg">Loading…</div>';
+    document.getElementById('nr-yr-out').innerHTML = '<div class="nr-msg">Loading…</div>';
+
+    fetchJson(ALLTIME_URL).then(function(data) {
+        var series = {
+            tavg:   parseFlatSeries(data, 'outTempAvg'),
+            tmax:   parseFlatSeries(data, 'outTempMax'),
+            tmin:   parseFlatSeries(data, 'outTempMin'),
+            rain:   parseFlatSeries(data, 'rainDaily'),
+            wspeed: parseFlatSeries(data, 'windSpeedAvg'),
+            wgust:  parseFlatSeries(data, 'windGustMax'),
+            wdir:   parseFlatSeries(data, 'windDirAvg')
+        };
+
+        if (!_yearsBuilt) {
+            var allTs = Object.keys(series.tmax).map(Number);
+            if (allTs.length) {
+                var minTs = Math.min.apply(null, allTs);
+                rebuildAvailableYears(new Date(minTs).getFullYear());
+            }
+            _yearsBuilt = true;
+        }
+
+        document.getElementById('nr-mo-out').innerHTML = buildMonthlyTable(series, _state.yr, _state.mo, s);
+        document.getElementById('nr-yr-out').innerHTML = buildYearlyTable(series, _state.yr, _state.mo, s);
+        populateSelectors(_state.yr, _state.mo);
+    }).catch(function(e) {
+        var msg = '<div class="nr-msg">Could not load climate data: ' + e.message + '</div>';
+        document.getElementById('nr-mo-out').innerHTML = msg;
+        document.getElementById('nr-yr-out').innerHTML = msg;
+    });
+
+    populateSelectors(_state.yr, _state.mo);
+}
+
+// ── Public API ─────────────────────────────────────────────────────────
+window.NR = {
+    switchTab: function(btn) {
+        document.querySelectorAll('.nr-tab').forEach(function(b){b.classList.remove('active');});
+        document.querySelectorAll('.nr-panel').forEach(function(p){p.classList.remove('active');});
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+        _state.tab = btn.dataset.tab === 'tab-yr' ? 'yr' : 'mo';
+        setUrlParams(_state.yr, _state.mo, _state.tab);
+    },
+    navigate: function() {
+        var mo = parseInt(document.getElementById('nr-mo-sel').value);
+        var yr = parseInt(document.getElementById('nr-yr-mo-sel').value);
+        _state.mo = mo; _state.yr = yr;
+        setUrlParams(yr, mo, 'mo');
+        render();
+    },
+    navigateYr: function() {
+        var yr = parseInt(document.getElementById('nr-yr-sel').value);
+        _state.yr = yr;
+        setUrlParams(yr, _state.mo, 'yr');
+        render();
+    },
+    goMonth: function(yr, mo) {
+        _state.yr = yr; _state.mo = mo; _state.tab = 'mo';
+        document.querySelectorAll('.nr-tab').forEach(function(b){b.classList.remove('active');});
+        document.querySelectorAll('.nr-panel').forEach(function(p){p.classList.remove('active');});
+        document.querySelector('[data-tab="tab-mo"]').classList.add('active');
+        document.getElementById('tab-mo').classList.add('active');
+        setUrlParams(yr, mo, 'mo');
+        render();
+    },
+    // Called by header unit switcher on unit change
+    reapply: function() {
+        // Units are applied at render time from localStorage; no need to
+        // refetch the underlying data, just redraw the tables.
+        render();
+    }
+};
+window.BU_reapplyNoaa = function() { NR.reapply(); };
+
+// ── Init ───────────────────────────────────────────────────────────────
+var params = getUrlParams();
+_state.yr = params.yr || THIS_YEAR;
+_state.mo = params.mo || THIS_MONTH;
+_state.tab = params.tab || 'mo';
+
+if (_state.tab === 'yr') {
+    document.querySelector('[data-tab="tab-mo"]').classList.remove('active');
+    document.getElementById('tab-mo').classList.remove('active');
+    document.querySelector('[data-tab="tab-yr"]').classList.add('active');
+    document.getElementById('tab-yr').classList.add('active');
+}
+
+// Listen for unit changes from the header switcher
+window.addEventListener('belchertownUnitsChanged', function() { NR.reapply(); });
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render);
+} else {
+    render();
+}
+
+})();
+</script>
 
 #include "footer.html.tmpl"

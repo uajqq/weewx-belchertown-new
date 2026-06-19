@@ -298,7 +298,6 @@ function belchertown_load_script_once(moduleKey, moduleUrl) {
         var script = document.createElement("script");
         script.src = moduleUrl;
         script.async = false;
-        script.crossOrigin = "anonymous";
         script.setAttribute("data-belchertown-module", moduleKey);
         script.onload = function() {
             script.setAttribute("data-loaded", "1");
@@ -359,7 +358,7 @@ function belchertown_ensure_highcharts_modules(moduleSet) {
         return Promise.resolve();
     }
 
-    var moduleBase = "https://code.highcharts.com/12.6/modules/";
+    var moduleBase = "//code.highcharts.com/12.6/modules/";
     var loaderPromises = modules.map(function(moduleKey) {
         return belchertown_load_script_once(moduleKey, moduleBase + moduleKey + ".js");
     });
@@ -555,6 +554,113 @@ function belchertown_apply_flat_axis_ranges(options, seriesAnalysis) {
     });
 }
 
+// ── Unit Switcher: convert one chart series object in place from its
+// server-baked unit to the user's chosen display system. Idempotent - a
+// __BU_converted marker prevents double-conversion on re-render.
+//
+// Series shapes seen in homepage.json / charts.conf-driven JSON:
+//   normal line/spline/area: { yAxis_label: "Temperature (°C)", data: [[ts, value], ...] }
+//   range/weatherRange:      { range_unit: "degree_C", data: [[ts, min, max, avg], ...] }
+//   windBarb:                { obs_unit: "mile_per_hour", data: [[ts, speed_ms, dir], ...],
+//                               windspeedData: [[ts, display_speed], ...] }
+//     NOTE: windBarb's main `data` speed component is ALWAYS m/s regardless
+//     of display unit (confirmed in new_belchertown.py - windSpeed_ms is a
+//     separate always-metric variable from windSpeed_display). Only
+//     windspeedData (the display-unit line) needs base-unit conversion.
+//   gauge: single-point line series, same shape as normal but data.length<=1
+function BU_convertSeriesUnits(s) {
+    if (!s || s.__BU_converted) {
+        console.log("[UnitSwitcher] BU_convertSeriesUnits: skipped (already converted or no series)", s && s.obsType);
+        return;
+    }
+    console.log("[UnitSwitcher] BU_convertSeriesUnits: processing series", s.obsType, " yAxis_label=", s.yAxis_label, " range_unit=", s.range_unit, " windBarb=", s.windBarb);
+
+    // windDir is a compass bearing in degrees, never unit-converted.
+    if (s.obsType === "windDir") { s.__BU_converted = true; return; }
+
+    // ── Range / weatherRange series: [ts, min, max, avg] quadruples ──────
+    if (s.range_unit && Array.isArray(s.data)) {
+        var rangeToken = String(s.range_unit).toLowerCase();
+        var rangeKind = BU_chartUnitKind(rangeToken);
+        if (rangeKind) {
+            s.data = s.data.map(function(point) {
+                if (!Array.isArray(point)) { return point; }
+                var converted = [point[0]];
+                for (var idx = 1; idx < point.length; idx++) {
+                    converted.push(BU_convertChartValue(point[idx], rangeToken));
+                }
+                return converted;
+            });
+            if (s.range_unit_label !== undefined) {
+                s.range_unit_label = BU_chartUnitLabelFor(rangeKind);
+            }
+        }
+        s.__BU_converted = true;
+        return;
+    }
+
+    // ── windBarb series: data stays m/s-based (left alone); only the
+    // separate windspeedData display line needs conversion. ────────────
+    if (s.windBarb && Array.isArray(s.windspeedData)) {
+        var obsToken = s.obs_unit ? String(s.obs_unit).toLowerCase() : null;
+        var obsKind = obsToken ? BU_chartUnitKind(obsToken) : "speed";
+        if (obsKind) {
+            s.windspeedData = s.windspeedData.map(function(point) {
+                if (!Array.isArray(point)) { return point; }
+                return [point[0], BU_convertChartValue(point[1], obsToken || "m/s")];
+            });
+            if (s.obs_unit_label !== undefined) {
+                s.obs_unit_label = BU_chartUnitLabelFor(obsKind);
+            }
+        }
+        // data (the [ts, speed_ms, dir] triples) stays in m/s on purpose -
+        // the windbarb renderer expects raw m/s for barb-length calculation.
+        s.__BU_converted = true;
+        return;
+    }
+
+    // ── Normal line/spline/area/gauge series ─────────────────────────────
+    var unitToken = BU_extractUnitToken(s.yAxis_label);
+    var kind = unitToken ? BU_chartUnitKind(unitToken) : null;
+    console.log("[UnitSwitcher] normal series: unitToken=", JSON.stringify(unitToken), " kind=", kind, " sample point before=", s.data && s.data[0]);
+    if (kind && Array.isArray(s.data)) {
+        s.data = s.data.map(function(point) {
+            if (Array.isArray(point)) {
+                if (point.length >= 2) {
+                    var converted = point.slice();
+                    converted[1] = BU_convertChartValue(point[1], unitToken);
+                    return converted;
+                }
+                if (point.length === 1) {
+                    return [BU_convertChartValue(point[0], unitToken)];
+                }
+                return point;
+            }
+            if (point && typeof point === "object") {
+                var out = Object.assign({}, point);
+                if (Object.prototype.hasOwnProperty.call(out, "y")) {
+                    out.y = BU_convertChartValue(out.y, unitToken);
+                } else if (Object.prototype.hasOwnProperty.call(out, "value")) {
+                    out.value = BU_convertChartValue(out.value, unitToken);
+                }
+                return out;
+            }
+            return BU_convertChartValue(point, unitToken);
+        });
+
+        // Update the human-readable label to reflect the new unit, e.g.
+        // "Temperature (°C)" -> "Temperature (°F)". Preserve everything
+        // before the trailing "(...)" segment.
+        if (s.yAxis_label) {
+            var newUnitLabel = BU_chartUnitLabelFor(kind);
+            s.yAxis_label = String(s.yAxis_label).replace(/\([^)]+\)\s*$/, "(" + newUnitLabel.trim() + ")");
+        }
+        console.log("[UnitSwitcher] normal series converted: sample point after=", s.data[0], " new yAxis_label=", s.yAxis_label);
+    }
+
+    s.__BU_converted = true;
+}
+
 function showChart(json_file, prepend_renderTo = false) {
     var highchartsCorePromise = belchertown_ensure_highcharts_core().then(function() {
         return null;
@@ -569,6 +675,20 @@ function showChart(json_file, prepend_renderTo = false) {
         }
         return resp.json();
     }).then(function(data) {
+
+        // ── Unit Switcher: keep a pristine, unconverted copy per json_file so
+        // switching units later can re-derive from the original fetched
+        // values rather than re-converting already-converted numbers.
+        try {
+            window.BU_lastChartsRaw = window.BU_lastChartsRaw || {};
+            window.BU_lastChartsRaw[json_file] = {
+                data: JSON.parse(JSON.stringify(data)),
+                prepend_renderTo: prepend_renderTo
+            };
+            console.log("[UnitSwitcher] cached raw chart data for json_file=", json_file, " groups now cached:", Object.keys(window.BU_lastChartsRaw));
+        } catch (_BU_e) {
+            console.error("[UnitSwitcher] failed to cache raw chart data:", _BU_e.message);
+        }
 
         var renderCharts = function() {
 
@@ -999,6 +1119,15 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.series[i] = data[plotname]["series"][seriesName];
                 i++;
             });
+
+            // ── Unit Switcher: convert each series' data points from the
+            // server-baked site-wide display unit (read from yAxis_label or
+            // range_unit/obs_unit) into the user's chosen system, in place,
+            // before any of the yAxis/min-max/formatting logic below runs.
+            console.log("[UnitSwitcher] " + plotname + ": about to convert " + options.series.length + " series, BU_convertSeriesUnits is", typeof BU_convertSeriesUnits, " current system=", (typeof BU_getSystem === "function" ? BU_getSystem() : "BU_getSystem undefined"));
+            if (typeof BU_convertSeriesUnits === "function") {
+                options.series.forEach(function(s) { BU_convertSeriesUnits(s); });
+            }
 
             var isFiniteNumber = belchertown_is_finite_number;
             var axisOptionNumber = belchertown_axis_option_number;
@@ -1856,4 +1985,22 @@ function showChart(json_file, prepend_renderTo = false) {
         belchertown_debug("Chart data load error: " + err.message + ". Skipping chart render.");
     });
 
+};
+
+// ── Unit Switcher: re-render all previously-shown charts in the newly
+// chosen system, using each chart group's pristine unconverted snapshot.
+// Called from BU_reapplyAll() in new-belchertown.js.tmpl.
+window.BU_reapplyCharts = function() {
+    console.log("[UnitSwitcher] BU_reapplyCharts() called. window.BU_lastChartsRaw =", window.BU_lastChartsRaw ? Object.keys(window.BU_lastChartsRaw) : "undefined/null");
+    if (!window.BU_lastChartsRaw) {
+        console.warn("[UnitSwitcher] no charts fetched yet, nothing to re-render.");
+        return;
+    }
+    Object.keys(window.BU_lastChartsRaw).forEach(function(json_file) {
+        var entry = window.BU_lastChartsRaw[json_file];
+        console.log("[UnitSwitcher] re-rendering chart group:", json_file);
+        if (entry && entry.data) {
+            showChart(json_file, entry.prepend_renderTo);
+        }
+    });
 };

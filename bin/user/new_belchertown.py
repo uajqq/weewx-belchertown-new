@@ -4361,6 +4361,18 @@ class getData(SearchList):
         converted = self.generator.converter.convert(conversion_tuple)[0]
         return formatter % converted
 
+    def _convert_temperature_metricwx(self, value, from_unit):
+        """Convert a temperature value to forced METRICWX (degree_C),
+        returned as a raw float (or None) - independent of whatever
+        unit_system skin.conf is configured for. Lets the front-end
+        unit switcher re-convert this to whatever system the visitor
+        has chosen, the same way standard ValueHelper .degree_C.raw
+        accessors already do elsewhere on the site."""
+        if value is None:
+            return None
+        conversion_tuple = (value, from_unit, "group_temperature")
+        return weewx.units.convert(conversion_tuple, "degree_C")[0]
+
     def get_extension_list(self, timespan, db_lookup):
         """
         Build the data needed for the New Belchertown skin
@@ -4770,6 +4782,29 @@ class getData(SearchList):
         at_outTemp_range_max = _convert_temp_range_result(at_outTemp_max_range_query)
         at_outTemp_range_min = _convert_temp_range_result(at_outTemp_min_range_query)
 
+        # Raw METRICWX (degree_C) companions - [date, total_C, min_C, max_C] -
+        # used by the front-end unit switcher instead of the skin-default-
+        # formatted lists above, which are baked into whatever unit_system
+        # skin.conf is configured for and don't react to the browser toggle.
+        def _convert_temp_range_result_raw(query_row):
+            if query_row is None:
+                return [calendar.timegm(time.gmtime()), 0.0, 0.0, 0.0]
+            max_c = self._convert_temperature_metricwx(query_row[3], outTemp_unit)
+            min_c = self._convert_temperature_metricwx(query_row[2], outTemp_unit)
+            total_c = (max_c - min_c) if (max_c is not None and min_c is not None) else None
+            return [query_row[0], total_c, min_c, max_c]
+
+        year_outTemp_range_max_raw = _convert_temp_range_result_raw(year_outTemp_max_range_query)
+        year_outTemp_range_min_raw = _convert_temp_range_result_raw(year_outTemp_min_range_query)
+        month_outTemp_range_max_raw = _convert_temp_range_result_raw(month_outTemp_max_range_query)
+        month_outTemp_range_min_raw = _convert_temp_range_result_raw(month_outTemp_min_range_query)
+        week_outTemp_range_max_raw = _convert_temp_range_result_raw(week_outTemp_max_range_query)
+        week_outTemp_range_min_raw = _convert_temp_range_result_raw(week_outTemp_min_range_query)
+        yesterday_outTemp_range_max_raw = _convert_temp_range_result_raw(yesterday_outTemp_max_range_query)
+        yesterday_outTemp_range_min_raw = _convert_temp_range_result_raw(yesterday_outTemp_min_range_query)
+        at_outTemp_range_max_raw = _convert_temp_range_result_raw(at_outTemp_max_range_query)
+        at_outTemp_range_min_raw = _convert_temp_range_result_raw(at_outTemp_min_range_query)
+
         rain_unit = converter.group_unit_dict["group_rain"]
 
         skin_rain_unit = self.generator.converter.group_unit_dict["group_rain"]
@@ -4804,6 +4839,17 @@ class getData(SearchList):
                 f"{locale.format_string('%g', float(fallback))}{value_suffix}",
             ]
 
+        def _convert_daily_summary_result_raw(query_row, source_unit, group_name, target_unit):
+            """Raw METRICWX sibling of _convert_daily_summary_result above -
+            forces the value to target_unit (e.g. "mm", "km") regardless of
+            skin.conf's configured unit_system, for the front-end unit
+            switcher to re-convert from."""
+            if query_row is not None:
+                value_tuple = (query_row[1], source_unit, group_name)
+                raw_val = weewx.units.convert(value_tuple, target_unit)[0]
+                return [query_row[0], raw_val]
+            return [calendar.timegm(time.gmtime()), 0.0]
+
         rainiest_day_sql = """
             SELECT dateTime, sum FROM archive_day_rain
             WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
@@ -4811,6 +4857,9 @@ class getData(SearchList):
         rainiest_day_query = wx_manager.getSql(rainiest_day_sql, (year_start_epoch,))
         rainiest_day = _convert_daily_summary_result(
             rainiest_day_query, rain_unit, "group_rain", rain_round
+        )
+        rainiest_day_raw = _convert_daily_summary_result_raw(
+            rainiest_day_query, rain_unit, "group_rain", "mm"
         )
 
         week_rainiest_day_sql = """
@@ -4822,6 +4871,9 @@ class getData(SearchList):
         )
         week_rainiest_day = _convert_daily_summary_result(
             week_rainiest_day_query, rain_unit, "group_rain", rain_round
+        )
+        week_rainiest_day_raw = _convert_daily_summary_result_raw(
+            week_rainiest_day_query, rain_unit, "group_rain", "mm"
         )
 
         week_windrun_maxsum_sql = """
@@ -4848,6 +4900,9 @@ class getData(SearchList):
             windrun_round,
             windrun_label,
         )
+        week_windrun_maxsum_raw = _convert_daily_summary_result_raw(
+            week_windrun_maxsum_query, windrun_unit, "group_distance", "km"
+        )
 
         at_rainiest_day_sql = """
             SELECT dateTime, sum FROM archive_day_rain
@@ -4856,6 +4911,9 @@ class getData(SearchList):
         at_rainiest_day_query = wx_manager.getSql(at_rainiest_day_sql)
         at_rainiest_day = _convert_daily_summary_result(
             at_rainiest_day_query, rain_unit, "group_rain", rain_round
+        )
+        at_rainiest_day_raw = _convert_daily_summary_result_raw(
+            at_rainiest_day_query, rain_unit, "group_rain", "mm"
         )
 
         # Find what kind of database we're working with and specify the
@@ -4933,6 +4991,11 @@ class getData(SearchList):
         else:
             year_rainiest_month = ["N/A", 0.0]
 
+        year_rainiest_month_raw = [
+            year_rainiest_month_name if year_rainiest_month_query is not None else "N/A",
+            weewx.units.convert((year_rainiest_month_query[1], rain_unit, "group_rain"), "mm")[0] if year_rainiest_month_query is not None else 0.0,
+        ]
+
         # All time rainiest month
         at_rainiest_month_query = wx_manager.getSql(at_rainiest_month_sql)
         if at_rainiest_month_query is not None and len(at_rainiest_month_query) >= 3:
@@ -4947,6 +5010,11 @@ class getData(SearchList):
             ]
         else:
             at_rainiest_month = ["N/A", 0.0]
+
+        at_rainiest_month_raw = [
+            f"{at_rainiest_month_name}, {at_rainiest_month_query[1]}" if (at_rainiest_month_query is not None and len(at_rainiest_month_query) >= 3) else "N/A",
+            weewx.units.convert((at_rainiest_month_query[2], rain_unit, "group_rain"), "mm")[0] if (at_rainiest_month_query is not None and len(at_rainiest_month_query) >= 3) else 0.0,
+        ]
 
         # All time rainiest year
         at_rain_highest_year_query = wx_manager.getSql(at_rain_highest_year_sql)
@@ -4965,6 +5033,11 @@ class getData(SearchList):
             ]
         else:
             at_rain_highest_year = ["N/A", 0.0]
+
+        at_rain_highest_year_raw = [
+            at_rain_highest_year_query[0] if (at_rain_highest_year_query is not None and len(at_rain_highest_year_query) >= 2) else "N/A",
+            weewx.units.convert((at_rain_highest_year_query[1], rain_unit, "group_rain"), "mm")[0] if (at_rain_highest_year_query is not None and len(at_rain_highest_year_query) >= 2) else 0.0,
+        ]
 
         try:
             sunniest_day_sql = """
@@ -6816,17 +6889,34 @@ class getData(SearchList):
             "year_outTemp_range_min": year_outTemp_range_min,
             "at_outTemp_range_max": at_outTemp_range_max,
             "at_outTemp_range_min": at_outTemp_range_min,
+            "yesterday_outTemp_range_max_raw": yesterday_outTemp_range_max_raw,
+            "yesterday_outTemp_range_min_raw": yesterday_outTemp_range_min_raw,
+            "week_outTemp_range_max_raw": week_outTemp_range_max_raw,
+            "week_outTemp_range_min_raw": week_outTemp_range_min_raw,
+            "month_outTemp_range_max_raw": month_outTemp_range_max_raw,
+            "month_outTemp_range_min_raw": month_outTemp_range_min_raw,
+            "year_outTemp_range_max_raw": year_outTemp_range_max_raw,
+            "year_outTemp_range_min_raw": year_outTemp_range_min_raw,
+            "at_outTemp_range_max_raw": at_outTemp_range_max_raw,
+            "at_outTemp_range_min_raw": at_outTemp_range_min_raw,
             "rainiest_day": rainiest_day,
             "week_rainiest_day": week_rainiest_day,
             "at_rainiest_day": at_rainiest_day,
+            "rainiest_day_raw": rainiest_day_raw,
+            "week_rainiest_day_raw": week_rainiest_day_raw,
+            "at_rainiest_day_raw": at_rainiest_day_raw,
             "week_windrun_maxsum": week_windrun_maxsum,
+            "week_windrun_maxsum_raw": week_windrun_maxsum_raw,
             "sunniest_day": sunniest_day,
             "at_sunniest_day": at_sunniest_day,
             "year_rainiest_month": year_rainiest_month,
             "at_rainiest_month": at_rainiest_month,
+            "year_rainiest_month_raw": year_rainiest_month_raw,
+            "at_rainiest_month_raw": at_rainiest_month_raw,
             "year_sunniest_month": year_sunniest_month,
             "at_sunniest_month": at_sunniest_month,
             "at_rain_highest_year": at_rain_highest_year,
+            "at_rain_highest_year_raw": at_rain_highest_year_raw,
             "at_sunshineDur_highest_year": at_sunshineDur_highest_year,
             "yesterday_days_with_rain": yesterday_days_with_rain,
             "yesterday_days_without_rain": yesterday_days_without_rain,
