@@ -191,14 +191,14 @@
         "datetime_raw": "$current.dateTime.raw",
         "epoch": "#echo int( time.time() )#",
         "outTemp": "$current.outTemp",
-        "outTemp_formatted": "$current.outTemp.formatted",
+        "outTemp_formatted": "$current.outTemp.toString(addLabel=False, localize=False)",
         "outHumidity": "$current.outHumidity",
         ## TODO: Move inside data to it's own json file, and update ajax functions to correctly pull and parse data.
         #if $Extras.has_key("aqi_enabled_kiosk") and $Extras.aqi_enabled_kiosk == '0'
         "inTemp": "$current.inTemp",
-        "inTemp_formatted": "$current.inTemp.formatted",
+        "inTemp_formatted": "$current.inTemp.toString(addLabel=False, localize=False)",
         "inHumidity": "$current.inHumidity",
-        "inHumidity_formatted": "$current.inHumidity.formatted",
+        "inHumidity_formatted": "$current.inHumidity.toString(addLabel=False, localize=False)",
         #end if
         #if $records_has_app_temp
         "appTemp": "$current.appTemp",
@@ -207,14 +207,14 @@
         "heatindex": "$current.heatindex",
         "dewpoint": "$current.dewpoint",
         "barometer": "$current.barometer",
-        "barometer_formatted": "$current.barometer.formatted",
+        "barometer_formatted": "$current.barometer.toString(addLabel=False, localize=False)",
         "barometer_trend": "$trend.barometer",
-        "barometer_trend_formatted": "$trend.barometer.formatted",
+        "barometer_trend_formatted": "$trend.barometer.toString(addLabel=False, localize=False)",
         "windspeed": "$current.windSpeed",
         "winddir": "$current.windDir",
-        "winddir_formatted": "$current.windDir.formatted",
+        "winddir_formatted": "$current.windDir.toString(addLabel=False, localize=False)",
         "windGust": "$current.windGust",
-        "windGust_formatted": "$current.windGust.formatted",
+        "windGust_formatted": "$current.windGust.toString(addLabel=False, localize=False)",
         "windGustDir": "$current.windGustDir",
         "windcompass": "$current.windDir.ordinal_compass",
         #if $records_has_windrun
@@ -238,11 +238,11 @@
     "day": {
         "outTemp": {
             "max": "$day.outTemp.max",
-            "max_formatted": "$day.outTemp.max.formatted",
+            "max_formatted": "$day.outTemp.max.toString(addLabel=False, localize=False)",
             "maxtime": "$day.outTemp.maxtime",
             "average": "$day.outTemp.avg",
             "min": "$day.outTemp.min",
-            "min_formatted": "$day.outTemp.min.formatted",
+            "min_formatted": "$day.outTemp.min.toString(addLabel=False, localize=False)",
             "mintime": "$day.outTemp.mintime"
         },
         #if $records_has_app_temp
@@ -281,7 +281,7 @@
         },
         "wind": {
             "max": "$day.wind.max",
-            "max_formatted": "$day.wind.max.formatted",
+            "max_formatted": "$day.wind.max.toString(addLabel=False, localize=False)",
             "maxtime": "$day.wind.maxtime",
             "gustdir": "$day.wind.gustdir",
             "average": "$day.wind.avg",
