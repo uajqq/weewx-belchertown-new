@@ -53,9 +53,11 @@ var mqtt_reconnect_initial_delay_ms = 2000;
 var mqtt_reconnect_max_delay_ms = 60000;
 var mqtt_last_message_received_ms = 0;
 var mqtt_last_data_epoch = "";
+var mqtt_last_data_display_epoch = "";
 var mqtt_inactive_disconnect_requested = false;
 var mqtt_stale_timeout_seconds = parseFloat("$Extras.last_updated_alert_threshold");
 var mqtt_relative_updated_epoch = null;
+var mqtt_relative_updated_display_epoch = null;
 var mqtt_relative_updated_message = "";
 var mqtt_relative_updated_detail_message = "";
 var mqtt_relative_updated_suffix_html = "";
@@ -233,10 +235,11 @@ function mqtt_render_status_modal() {
     mqtt_render_live_data_modal(modal);
 }
 
-function mqtt_set_status_detail(message, epoch) {
+function mqtt_set_status_detail(message, epoch, relative_epoch) {
+    var relative_timestamp = typeof relative_epoch === "undefined" ? epoch : relative_epoch;
     mqtt_status_detail = {
         message: belchertown_decode_html_entities(message).trim(),
-        relative_time: mqtt_relative_time(epoch),
+        relative_time: mqtt_relative_time(relative_timestamp),
         absolute_time: mqtt_absolute_time(epoch)
     };
     mqtt_ensure_status_info_button();
@@ -287,15 +290,23 @@ function mqtt_relative_time(epoch) {
         return "";
     }
 
-    // Simulator and slightly skewed clocks can report a packet timestamp a few
-    // seconds ahead of the browser. Last-updated text should not read as future.
-    timestamp = Math.min(timestamp, Date.now() / 1000);
     return tzAdjustedMoment(timestamp).fromNow();
 }
 
 function mqtt_absolute_time(epoch) {
     var timestamp = parseFloat(epoch);
     return isFinite(timestamp) ? tzAdjustedMoment(timestamp).format(belchertown_label_text("$obs.label.time_last_updated")) : "";
+}
+
+function mqtt_relative_display_epoch(epoch) {
+    var timestamp = parseFloat(epoch);
+    if (!isFinite(timestamp)) {
+        return null;
+    }
+
+    // Simulator and slightly skewed clocks can report a packet timestamp ahead
+    // of the browser. Anchor relative text at receipt time so it ages normally.
+    return Math.min(timestamp, Date.now() / 1000);
 }
 
 function mqtt_sentence_text(parts) {
@@ -312,14 +323,15 @@ function mqtt_sentence_text(parts) {
 }
 
 function mqtt_render_relative_updated_status() {
-    if (mqtt_relative_updated_epoch === null || !mqtt_relative_updated_message) {
+    if (mqtt_relative_updated_epoch === null || mqtt_relative_updated_display_epoch === null || !mqtt_relative_updated_message) {
         return;
     }
 
-    var relative_time = mqtt_relative_time(mqtt_relative_updated_epoch);
+    var relative_time = mqtt_relative_time(mqtt_relative_updated_display_epoch);
     mqtt_set_status_detail(
         mqtt_relative_updated_detail_message || mqtt_relative_updated_message,
-        mqtt_relative_updated_epoch
+        mqtt_relative_updated_epoch,
+        mqtt_relative_updated_display_epoch
     );
     var updatedText = mqtt_sentence_text([mqtt_relative_updated_message, relative_time]);
     document.querySelectorAll(".updated").forEach(function(el) {
@@ -340,6 +352,7 @@ function mqtt_start_relative_updated_timer() {
 
 function mqtt_clear_relative_updated_status() {
     mqtt_relative_updated_epoch = null;
+    mqtt_relative_updated_display_epoch = null;
     mqtt_relative_updated_message = "";
     mqtt_relative_updated_detail_message = "";
     mqtt_relative_updated_suffix_html = "";
@@ -398,17 +411,19 @@ function mqtt_set_updated_text(text) {
     });
 }
 
-function mqtt_set_relative_updated_status(message, epoch, suffix_html, detail_message) {
+function mqtt_set_relative_updated_status(message, epoch, suffix_html, detail_message, display_epoch) {
     var timestamp = parseFloat(epoch);
     if (!isFinite(timestamp)) {
         mqtt_set_updated_html(belchertown_label_html(message) + (suffix_html || ""));
         return;
     }
+    var display_timestamp = parseFloat(display_epoch);
 
     mqtt_relative_updated_message = message;
     mqtt_relative_updated_detail_message = detail_message || message;
     mqtt_relative_updated_suffix_html = suffix_html || "";
     mqtt_relative_updated_epoch = timestamp;
+    mqtt_relative_updated_display_epoch = isFinite(display_timestamp) ? display_timestamp : mqtt_relative_display_epoch(timestamp);
     mqtt_render_relative_updated_status();
     mqtt_start_relative_updated_timer();
 }
@@ -559,7 +574,7 @@ function mqtt_set_text(selector, text) {
     });
 }
 
-function mqtt_set_disconnected_status(message, epoch, show_restart) {
+function mqtt_set_disconnected_status(message, epoch, show_restart, relative_epoch) {
     mqttConnected = false;
     mqtt_clear_activity_timeout();
     mqtt_clear_stale_timeout();
@@ -568,12 +583,17 @@ function mqtt_set_disconnected_status(message, epoch, show_restart) {
     mqtt_set_display(".loadingMarker", "none");
 
     var updated_epoch = epoch || mqtt_last_data_epoch || "$current.dateTime.raw";
+    var updated_display_epoch = relative_epoch;
+    if (typeof updated_display_epoch === "undefined" && mqtt_last_data_display_epoch !== "" && String(updated_epoch) === String(mqtt_last_data_epoch)) {
+        updated_display_epoch = mqtt_last_data_display_epoch;
+    }
     var restart_button = show_restart ? mqtt_restart_button_html() : "";
     mqtt_set_relative_updated_status(
         belchertown_label_text(message) + " " + belchertown_label_text("$obs.label.header_last_updated"),
         updated_epoch,
         restart_button,
-        message
+        message,
+        updated_display_epoch
     );
 }
 
@@ -613,6 +633,7 @@ function mqtt_schedule_stale_timeout() {
         }
 
         var epoch = mqtt_last_data_epoch || parseFloat(Date.now() / 1000).toFixed(0);
+        var relative_epoch = mqtt_last_data_display_epoch || mqtt_relative_display_epoch(epoch);
         belchertown_debug("MQTT: No messages received for " + mqtt_stale_timeout_seconds + " seconds. Marking connection stale.");
         reconnect_using_inactive_timestamp = true;
         inactive_timestamp = epoch;
@@ -624,7 +645,7 @@ function mqtt_schedule_stale_timeout() {
         } catch (e) {
             belchertown_debug("MQTT: Disconnect after stale timeout failed: " + e.message);
         }
-        mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true);
+        mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true, relative_epoch);
         mqtt_schedule_reconnect("stale data timeout", true);
     }, mqtt_stale_timeout_ms + 1000);
 }
@@ -637,6 +658,7 @@ function mqtt_note_message_activity(data) {
         var data_epoch = parseFloat(data["dateTime"]);
         if (isFinite(data_epoch)) {
             mqtt_last_data_epoch = data_epoch.toFixed(0);
+            mqtt_last_data_display_epoch = mqtt_relative_display_epoch(mqtt_last_data_epoch);
         }
     }
     mqtt_schedule_stale_timeout();
@@ -783,15 +805,17 @@ function onFailure(responseObject) {
     mqttConnected = false;
     var d = new Date();
     epoch = parseFloat((d / 1000)).toFixed(0); // Convert millis to seconds
+    var relative_epoch = epoch;
     var timestamp = d.toISOString();
     belchertown_debug("MQTT: [" + timestamp + "] Connection FAILED");
     belchertown_debug("MQTT: Client state is now DISCONNECTED (failure)");
     if (!mqtt_safe_client_connected()) {
         epoch = mqtt_last_data_epoch || "$current.dateTime.raw";
+        relative_epoch = mqtt_last_data_display_epoch || mqtt_relative_display_epoch(epoch);
     }
     reconnect_using_inactive_timestamp = true;
     inactive_timestamp = epoch;
-    mqtt_set_disconnected_status("$obs.label.mqtt_websockets_failed", epoch, true);
+    mqtt_set_disconnected_status("$obs.label.mqtt_websockets_failed", epoch, true, relative_epoch);
     if (typeof responseObject.errorCode !== "undefined") {
         var errorMsg = "Error Code: " + responseObject.errorCode + " - " + (responseObject.errorMessage || "Unknown error");
         console.error("MQTT: " + timestamp + " - Connection Failed: " + errorMsg);
@@ -814,15 +838,17 @@ function onConnectionLost(responseObject) {
     mqttConnected = false;
     var d = new Date();
     epoch = parseFloat((d / 1000)).toFixed(0);  // Convert millis to seconds
+    var relative_epoch = epoch;
     var timestamp = d.toISOString();
     belchertown_debug("MQTT: [" + timestamp + "] Connection LOST");
     belchertown_debug("MQTT: Client state is now DISCONNECTED (lost)");
     if (!mqtt_safe_client_connected()) {
         epoch = mqtt_last_data_epoch || "$current.dateTime.raw";
+        relative_epoch = mqtt_last_data_display_epoch || mqtt_relative_display_epoch(epoch);
     }
     reconnect_using_inactive_timestamp = true;
     inactive_timestamp = epoch;
-    mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true);
+    mqtt_set_disconnected_status("$obs.label.mqtt_websockets_lost", epoch, true, relative_epoch);
     if (typeof responseObject.errorCode !== "undefined" && responseObject.errorCode !== 0) {
         var errorMsg = "Error Code: " + responseObject.errorCode + " - " + (responseObject.errorMessage || "Unknown error");
         console.error("MQTT: " + timestamp + " - Connection Lost: " + errorMsg);
@@ -1160,7 +1186,7 @@ function update_current_wx(data) {
         } else {
             updated_text = belchertown_label_text("$obs.label.mqtt_websockets_connected");
         }
-        mqtt_set_relative_updated_status(updated_text, epoch);
+        mqtt_set_relative_updated_status(updated_text, epoch, null, null, mqtt_last_data_display_epoch);
     }
     // If we're in this function, show the online beacon and hide the others
     onlineMarkerEl.forEach(function(el) { el.style.display = ""; }); // Show the online beacon
