@@ -4139,8 +4139,21 @@ def build_almanac_template_context(almanac_obj, current_ts, has_extras=None, ima
 class getData(SearchList):
     """Collect all custom data and calculations, then return search list extension."""
 
+    RECORDS_OPTIONAL_OBSERVATIONS = ("appTemp", "windrun", "UV", "radiation", "sunshineDur")
+
     def __init__(self, generator):
         SearchList.__init__(self, generator)
+
+    @staticmethod
+    def _records_obs_available(db_manager, obs_type):
+        daykeys = getattr(db_manager, "daykeys", None)
+        if daykeys is not None:
+            return obs_type in daykeys
+
+        try:
+            return db_manager.exists(obs_type)
+        except Exception:
+            return obs_type in getattr(db_manager, "obskeys", ())
 
     def get_gps_distance(self, pointA, pointB, distance_unit):
         """
@@ -4657,6 +4670,10 @@ class getData(SearchList):
         # ==============================================================================
 
         wx_manager = db_lookup()
+        records_obs_available = {
+            obs: self._records_obs_available(wx_manager, obs)
+            for obs in self.RECORDS_OPTIONAL_OBSERVATIONS
+        }
 
         # Find the beginning of the current year
         now = datetime.datetime.now()
@@ -4824,22 +4841,25 @@ class getData(SearchList):
             week_rainiest_day_query, rain_unit, "group_rain", rain_round
         )
 
-        week_windrun_maxsum_sql = """
-            SELECT dateTime, sum FROM archive_day_windrun
-            WHERE dateTime >= ? AND dateTime < ? ORDER BY sum DESC LIMIT 1;
-        """
-        try:
-            week_windrun_maxsum_query = wx_manager.getSql(
-                week_windrun_maxsum_sql,
-                (week_daily_start_epoch, week_daily_stop_epoch),
-            )
-        except Exception as e:
-            if "archive_day_windrun" in str(e):
-                log.debug(
-                    "Wind run stats not available: archive_day_windrun table not found."
+        if records_obs_available["windrun"]:
+            week_windrun_maxsum_sql = """
+                SELECT dateTime, sum FROM archive_day_windrun
+                WHERE dateTime >= ? AND dateTime < ? ORDER BY sum DESC LIMIT 1;
+            """
+            try:
+                week_windrun_maxsum_query = wx_manager.getSql(
+                    week_windrun_maxsum_sql,
+                    (week_daily_start_epoch, week_daily_stop_epoch),
                 )
-            else:
-                log.debug(f"Skipping wind run stats: {e}")
+            except Exception as e:
+                if "archive_day_windrun" in str(e):
+                    log.debug(
+                        "Wind run stats not available: archive_day_windrun table not found."
+                    )
+                else:
+                    log.debug(f"Skipping wind run stats: {e}")
+                week_windrun_maxsum_query = None
+        else:
             week_windrun_maxsum_query = None
         week_windrun_maxsum = _convert_daily_summary_result(
             week_windrun_maxsum_query,
@@ -4966,7 +4986,7 @@ class getData(SearchList):
         else:
             at_rain_highest_year = ["N/A", 0.0]
 
-        try:
+        if records_obs_available["sunshineDur"]:
             sunniest_day_sql = """
                 SELECT dateTime, sum FROM archive_day_sunshineDur
                 WHERE dateTime >= ? ORDER BY sum DESC LIMIT 1;
@@ -5119,15 +5139,7 @@ class getData(SearchList):
                 ]
             else:
                 at_sunshineDur_highest_year = ["N/A", 0.0]
-        except Exception as e:
-            # Missing sunshine extension table is expected on systems without
-            # sunshineDur schema support.
-            if "archive_day_sunshineDur" in str(e):
-                log.debug(
-                    "Sunshine duration stats not available: archive_day_sunshineDur table not found."
-                )
-            else:
-                log.debug(f"Skipping sunshine duration stats: {e}")
+        else:
             sunniest_day = [
                 calendar.timegm(time.gmtime()),
                 locale.format_string("%.2f", 0),
@@ -6828,6 +6840,11 @@ class getData(SearchList):
             "at_sunniest_month": at_sunniest_month,
             "at_rain_highest_year": at_rain_highest_year,
             "at_sunshineDur_highest_year": at_sunshineDur_highest_year,
+            "records_has_app_temp": records_obs_available["appTemp"],
+            "records_has_windrun": records_obs_available["windrun"],
+            "records_has_uv": records_obs_available["UV"],
+            "records_has_radiation": records_obs_available["radiation"],
+            "records_has_sunshine_dur": records_obs_available["sunshineDur"],
             "yesterday_days_with_rain": yesterday_days_with_rain,
             "yesterday_days_without_rain": yesterday_days_without_rain,
             "week_days_with_rain": week_days_with_rain,

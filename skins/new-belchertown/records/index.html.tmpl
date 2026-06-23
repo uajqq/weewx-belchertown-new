@@ -94,11 +94,11 @@
         }
 
         function getRecordsSectionsConfig() {
-            var hasAppTemp = "$year.appTemp.has_data" === "True" && "$alltime.appTemp.has_data" === "True";
-            var hasWindRun = "$year.windrun.has_data" === "True" && "$alltime.windrun.has_data" === "True";
-            var hasRadiation = "$year.radiation.has_data" === "True";
-            var hasUv = "$year.UV.has_data" === "True";
-            var hasSunshineDur = "$year.sunshineDur.has_data" === "True";
+            var hasAppTemp = #if $records_has_app_temp#true#else#false#end if#;
+            var hasWindRun = #if $records_has_windrun#true#else#false#end if#;
+            var hasRadiation = #if $records_has_radiation#true#else#false#end if#;
+            var hasUv = #if $records_has_uv#true#else#false#end if#;
+            var hasSunshineDur = #if $records_has_sunshine_dur#true#else#false#end if#;
 
             var temperatureRows = [
                 makeRecord(
@@ -124,6 +124,7 @@
                 )
             ];
 
+#if $records_has_app_temp
             if (hasAppTemp) {
                 temperatureRows.push(
                     makeRecord(
@@ -142,6 +143,7 @@
                     )
                 );
             }
+#end if
 
             temperatureRows.push(
                 makeRecord(
@@ -202,6 +204,7 @@
                 )
             ];
 
+#if $records_has_windrun
             if (hasWindRun) {
                 windRows.push(
                     makeRecord(
@@ -213,6 +216,7 @@
                     )
                 );
             }
+#end if
 
             var sections = [
                 {
@@ -355,6 +359,7 @@
             if (hasRadiation || hasUv || hasSunshineDur) {
                 var sunRows = [];
 
+#if $records_has_uv
                 if (hasUv) {
                     sunRows.push(
                         makeRecord(
@@ -366,7 +371,9 @@
                         )
                     );
                 }
+#end if
 
+#if $records_has_radiation
                 if (hasRadiation) {
                     sunRows.push(
                         makeRecord(
@@ -378,7 +385,9 @@
                         )
                     );
                 }
+#end if
 
+#if $records_has_sunshine_dur
                 if (hasSunshineDur) {
                     sunRows.push(
                         makeRecord(
@@ -390,6 +399,7 @@
                         )
                     );
                 }
+#end if
 
                 sections.push({
                     title: "$obs.label.records_sun_records",

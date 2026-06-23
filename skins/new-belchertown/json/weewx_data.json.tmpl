@@ -200,7 +200,7 @@
         "inHumidity": "$current.inHumidity",
         "inHumidity_formatted": "$current.inHumidity.formatted",
         #end if
-        #if $day.appTemp.has_data
+        #if $records_has_app_temp
         "appTemp": "$current.appTemp",
         #end if
         "windchill": "$current.windchill",
@@ -217,16 +217,16 @@
         "windGust_formatted": "$current.windGust.formatted",
         "windGustDir": "$current.windGustDir",
         "windcompass": "$current.windDir.ordinal_compass",
-        #if $day.windrun.has_data
+        #if $records_has_windrun
         "windrun": "$current.windrun",
         #end if
         #if $day.extraTemp1.has_data
         "extraTemp1": "$current.extraTemp1",
         #end if
-        #if $day.UV.has_data
+        #if $records_has_uv
         "uv": "$current.UV",
         #end if
-        #if $day.radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": "$current.radiation",
         #end if
         #if $day.ET.has_data and $day.ET.sum.raw > 0.0
@@ -245,7 +245,7 @@
             "min_formatted": "$day.outTemp.min.formatted",
             "mintime": "$day.outTemp.mintime"
         },
-        #if $day.appTemp.has_data        
+        #if $records_has_app_temp
         "appTemp": {
             "max": "$day.appTemp.max",
             "maxtime": "$day.appTemp.maxtime",
@@ -288,7 +288,7 @@
             "vectordir": "$day.wind.vecdir",
             "vectoravg": "$day.wind.vecavg",
             "rms": "$day.wind.rms"
-            #if $day.windrun.has_data
+            #if $records_has_windrun
             ,"windrun_maxsum": "$day.windrun.sum",
             "windrun_maxsumtime": "$day.windrun.maxtime",
             "windrun_maxsumtime_raw": "$day.windrun.maxtime.raw",
@@ -303,7 +303,7 @@
             "max": "$day.windGust.max",
             "maxtime": "$day.windGust.maxtime"
         },
-        #if $day.UV.has_data
+        #if $records_has_uv
         "uv": {
             "max": "$day.UV.max",
             "maxtime": "$day.UV.maxtime",
@@ -312,7 +312,7 @@
             "mintime": "$day.UV.mintime"
         },
         #end if
-        #if $day.radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": {
             "max": "$day.radiation.max",
             "maxtime": "$day.radiation.maxtime",
@@ -321,7 +321,7 @@
             "mintime": "$day.radiation.mintime"
         },
         #end if
-        #if $day.sunshineDur.has_data
+        #if $records_has_sunshine_dur
         "sunshineDur": {
             "sum": "$day.sunshineDur.sum"
         },
@@ -344,7 +344,7 @@
             "mintime": "$span(time_delta=604800).outTemp.mintime",
             "mintime_raw": "$span(time_delta=604800).outTemp.mintime.raw"
         },
-        #if $span(time_delta=604800).appTemp.has_data
+        #if $records_has_app_temp
         "appTemp": {
             "max": "$span(time_delta=604800).appTemp.max",
             "maxtime": "$span(time_delta=604800).appTemp.maxtime",
@@ -396,7 +396,7 @@
             "average": "$span(time_delta=604800).wind.avg",
             "vectordir": "$span(time_delta=604800).wind.vecdir",
             "vectoravg": "$span(time_delta=604800).wind.vecavg"
-            #if $span(time_delta=604800).windrun.has_data
+            #if $records_has_windrun
             ,"windrun_maxsum": "$week_windrun_maxsum[1]",
             "windrun_maxsumtime": "$week_windrun_maxsum[0]",
             "windrun_maxsumtime_raw": "$week_windrun_maxsum[0]",
@@ -412,7 +412,7 @@
             "maxtime": "$span(time_delta=604800).windGust.maxtime",
             "maxtime_raw": "$span(time_delta=604800).windGust.maxtime.raw"
         },
-        #if $span(time_delta=604800).UV.has_data
+        #if $records_has_uv
         "uv": {
             "max": "$span(time_delta=604800).UV.max",
             "maxtime": "$span(time_delta=604800).UV.maxtime",
@@ -422,7 +422,7 @@
             "mintime": "$span(time_delta=604800).UV.mintime"
         },
         #end if
-        #if $span(time_delta=604800).radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": {
             "max": "$span(time_delta=604800).radiation.max",
             "maxtime": "$span(time_delta=604800).radiation.maxtime",
@@ -432,7 +432,7 @@
             "mintime": "$span(time_delta=604800).radiation.mintime"
         },
         #end if
-        #if $span(time_delta=604800).sunshineDur.has_data
+        #if $records_has_sunshine_dur
         "sunshineDur": {
             "sum": "$span(time_delta=604800).sunshineDur.sum"
         },
@@ -457,7 +457,7 @@
             "mintime": "$month.outTemp.mintime",
             "mintime_raw": "$month.outTemp.mintime.raw"
         },
-        #if $month.appTemp.has_data
+        #if $records_has_app_temp
         "appTemp": {
             "max": "$month.appTemp.max",
             "maxtime": "$month.appTemp.maxtime",
@@ -510,7 +510,7 @@
             "vectordir": "$month.wind.vecdir",
             "vectoravg": "$month.wind.vecavg",
             "rms": "$month.wind.rms"
-            #if $month.windrun.has_data
+            #if $records_has_windrun
             ,"windrun_maxsum": "$month.windrun.maxsum",
             "windrun_maxsumtime": "$month.windrun.maxsumtime",
             "windrun_maxsumtime_raw": "$month.windrun.maxsumtime.raw",
@@ -526,7 +526,7 @@
             "maxtime": "$month.windGust.maxtime",
             "maxtime_raw": "$month.windGust.maxtime.raw"
         },
-        #if $month.UV.has_data
+        #if $records_has_uv
         "uv": {
             "max": "$month.UV.max",
             "maxtime": "$month.UV.maxtime",
@@ -536,12 +536,12 @@
             "mintime": "$month.UV.mintime"
         },
         #end if
-        #if $month.sunshineDur.has_data
+        #if $records_has_sunshine_dur
         "sunshineDur": {
             "sum": "$month.sunshineDur.sum"
         },
         #end if
-        #if $month.radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": {
             "max": "$month.radiation.max",
             "maxtime": "$month.radiation.maxtime",
@@ -568,7 +568,7 @@
             "min": "$year.outTemp.min",
             "mintime": "$year.outTemp.mintime"
         },
-        #if $year.appTemp.has_data
+        #if $records_has_app_temp
         "appTemp": {
             "max": "$year.appTemp.max",
             "maxtime": "$year.appTemp.maxtime",
@@ -610,14 +610,14 @@
             "vectordir": "$year.wind.vecdir",
             "vectoravg": "$year.wind.vecavg",
             "rms": "$year.wind.rms"
-            #if $year.windrun.has_data
+            #if $records_has_windrun
             ,"windrun_max": "$year.windrun.max",
             "windrun_maxtime": "$year.windrun.maxtime",
             "windrun_min": "$year.windrun.min",
             "windrun_mintime": "$year.windrun.mintime"
             #end if
         },
-        #if $year.UV.has_data
+        #if $records_has_uv
         "uv": {
             "max": "$year.UV.max",
             "maxtime": "$year.UV.maxtime",
@@ -626,12 +626,12 @@
             "mintime": "$year.UV.mintime"
         },
         #end if
-        #if $year.sunshineDur.has_data
+        #if $records_has_sunshine_dur
         "sunshineDur": {
             "sum": "$year.sunshineDur.sum"
         },
         #end if
-        #if $year.radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": {
             "max": "$year.radiation.max",
             "maxtime": "$year.radiation.maxtime",
@@ -656,7 +656,7 @@
             "mintime": "$yesterday.outTemp.mintime",
             "mintime_raw": "$yesterday.outTemp.mintime.raw"
         },
-        #if $yesterday.appTemp.has_data
+        #if $records_has_app_temp
         "appTemp": {
             "max": "$yesterday.appTemp.max",
             "maxtime": "$yesterday.appTemp.maxtime",
@@ -705,7 +705,7 @@
             "maxtime": "$yesterday.wind.maxtime",
             "maxtime_raw": "$yesterday.wind.maxtime.raw",
             "average": "$yesterday.wind.avg"
-            #if $yesterday.windrun.has_data
+            #if $records_has_windrun
             ,"windrun_maxsum": "$yesterday.windrun.sum"
             ,"windrun_maxsumtime": "$yesterday.windrun.maxtime"
             ,"windrun_maxsumtime_raw": "$yesterday.windrun.maxtime.raw"
@@ -719,7 +719,7 @@
             "maxtime": "$yesterday.windGust.maxtime",
             "maxtime_raw": "$yesterday.windGust.maxtime.raw"
         },
-        #if $yesterday.UV.has_data
+        #if $records_has_uv
         "uv": {
             "max": "$yesterday.UV.max",
             "maxtime": "$yesterday.UV.maxtime",
@@ -727,7 +727,7 @@
             "average": "$yesterday.UV.avg"
         },
         #end if
-        #if $yesterday.radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": {
             "max": "$yesterday.radiation.max",
             "maxtime": "$yesterday.radiation.maxtime",
@@ -735,7 +735,7 @@
             "average": "$yesterday.radiation.avg"
         },
         #end if
-        #if $yesterday.sunshineDur.has_data
+        #if $records_has_sunshine_dur
         "sunshineDur": {
             "sum": "$yesterday.sunshineDur.sum"
         },
@@ -759,19 +759,19 @@
             "max": "$span(time_delta=31536000).wind.max",
             "average": "$span(time_delta=31536000).wind.avg"
         },
-        #if $year.UV.has_data
+        #if $records_has_uv
         "uv": {
             "max": "$span(time_delta=31536000).UV.max",
             "average": "$span(time_delta=31536000).UV.avg"
         },
         #end if
-        #if $year.radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": {
             "max": "$span(time_delta=31536000).radiation.max",
             "average": "$span(time_delta=31536000).radiation.avg"
         },
         #end if
-        #if $year.sunshineDur.has_data
+        #if $records_has_sunshine_dur
         "sunshineDur": {
             "sum": "$span(time_delta=31536000).sunshineDur.sum"
         },
@@ -789,17 +789,17 @@
         "wind": {
             "max": "$alltime.wind.max",
             "average": "$alltime.wind.avg"
-            #if $alltime.windrun.has_data
+            #if $records_has_windrun
             ,"windrun": "$alltime.windrun.sum"
             #end if
         },
-        #if $year.UV.has_data
+        #if $records_has_uv
         "uv": {
             "max": "$alltime.UV.max",
             "average": "$alltime.UV.avg"
         },
         #end if
-        #if $year.radiation.has_data
+        #if $records_has_radiation
         "solar_radiation": {
             "max": "$alltime.radiation.max",
             "average": "$alltime.radiation.avg"
