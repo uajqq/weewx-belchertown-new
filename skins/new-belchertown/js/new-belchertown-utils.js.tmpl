@@ -91,7 +91,6 @@ function belchertown_set_datetime_locale(name) {
     belchertown_dayjs_locale_promises[localeName] = new Promise(function(resolve) {
         var script = document.createElement("script");
         script.src = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/" + localeName + ".js";
-        script.crossOrigin = "anonymous";
         script.onload = function() {
             dayjs.locale(localeName);
             resolve(localeName);
