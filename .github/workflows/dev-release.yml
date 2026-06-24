@@ -23,11 +23,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="Automated dev release for commit ${GITHUB_SHA} on ${GITHUB_REF_NAME}"
+          NOTES="Automated release for commit ${GITHUB_SHA} on ${GITHUB_REF_NAME} branch"
 
           if gh release view dev >/dev/null 2>&1; then
             gh release edit dev \
-              --title "dev" \
+              --title "Latest development version" \
               --notes "$NOTES" \
               --prerelease
           else
