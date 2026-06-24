@@ -7,7 +7,7 @@
                 <img id="wxicon" src="${relative_url}/images/${current_obs_icon}" alt="$obs.label.current_conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high">
                 #end if
             </span>
-            <span class="obs-header-outtemp">$current.outTemp</span>
+            <span class="obs-header-outtemp outtemp">$current.outTemp.formatted</span><sup class="outtempunitlabelsuper">$unit.label.outTemp</sup>
         </div>
         <div class="col-md-5">
             <div class="wx-stn-name">

@@ -1,0 +1,13 @@
+Mandatory additional settings for weewx.conf. These settings must not be changed as they allow unit switching to function
+
+[StdReport]
+    ...
+    [[new-belchertown]]
+        ...
+        [[[Extras]]]
+            ...
+            # ----- Unit switching - VERY IMPORTANT DO NOT CHANGE THESE SETTINGS -----
+            unit_switcher_enabled = 1
+            mqtt_unit_system = metricwx
+            archive_unit_system = metricwx
+

@@ -11,7 +11,7 @@
                 <strong>$obs.label.footer_disclaimer_text</strong>
             </div>
             <div class="col-md-4 footerRight">
-                $obs.label.footer_theme_by <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank" rel="noopener noreferrer">Pat O'Brien and uajqq</a>
+                $obs.label.footer_theme_by <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank">Pat O'Brien and uajqq</a>
             </div>
         </div>
     </div>
@@ -35,6 +35,19 @@
                     <button type="button" class="themeModeButton $themeModeDarkActive" data-theme-mode="dark" aria-pressed="$themeModeDarkPressed">$obs.label.theme_dark</button>
                 </div>
             </div>
+            #if not $Extras.has_key('unit_switcher_enabled') or $Extras.unit_switcher_enabled != '0'
+            <h6 class="offcanvas-settings-heading">Units</h6>
+            <div class="offcanvas-theme-row">
+                <div class="unitSwitcherButtons" role="group" aria-label="Units">
+                    <button type="button" class="unitSwitcherButton" data-unit="us">US Customary</button>
+                    <button type="button" class="unitSwitcherButton" data-unit="uk">UK</button>
+                    <button type="button" class="unitSwitcherButton" data-unit="metric">Metric</button>
+                    <button type="button" class="unitSwitcherButton" data-unit="scandinavia">Scandinavia</button>
+                    <button type="button" class="unitSwitcherButton" data-unit="canada">Canada</button>
+                    <button type="button" class="unitSwitcherButton" data-unit="aviation">Aviation</button>
+                </div>
+            </div>
+            #end if
         </div>
     </div>
 </div>

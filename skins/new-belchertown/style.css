@@ -17,9 +17,9 @@ html {
 
 @font-face {
   font-family: "FontAwesome";
-  src: url("https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/fonts/fontawesome-webfont.woff2?v=4.7.0") format("woff2"),
-    url("https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/fonts/fontawesome-webfont.woff?v=4.7.0") format("woff"),
-    url("https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/fonts/fontawesome-webfont.ttf?v=4.7.0") format("truetype");
+  src: url("//stackpath.bootstrapcdn.com/font-awesome/4.7.0/fonts/fontawesome-webfont.woff2?v=4.7.0") format("woff2"),
+    url("//stackpath.bootstrapcdn.com/font-awesome/4.7.0/fonts/fontawesome-webfont.woff?v=4.7.0") format("woff"),
+    url("//stackpath.bootstrapcdn.com/font-awesome/4.7.0/fonts/fontawesome-webfont.ttf?v=4.7.0") format("truetype");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -27,9 +27,9 @@ html {
 
 @font-face {
   font-family: "weathericons";
-  src: url("https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/font/weathericons-regular-webfont.woff2") format("woff2"),
-    url("https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/font/weathericons-regular-webfont.woff") format("woff"),
-    url("https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/font/weathericons-regular-webfont.ttf") format("truetype");
+  src: url("//cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/font/weathericons-regular-webfont.woff2") format("woff2"),
+    url("//cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/font/weathericons-regular-webfont.woff") format("woff"),
+    url("//cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/font/weathericons-regular-webfont.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -4963,9 +4963,27 @@ span.highcharts-title {
 .records .obs-header-outtemp,
 .about .obs-header-outtemp,
 .reports .obs-header-outtemp {
+  display: inline-block;
   font-size: 24px;
   font-weight: 500;
   line-height: 1.1;
+}
+
+/* The base .outtempunitlabelsuper rule (line ~1071) has no positioning
+   context to apply its `top` offset against here, since .obs-header-outtemp
+   was `display: block` and pushed the sup onto a new line entirely. Making
+   the temp span inline-block (above) keeps the sup on the same line; this
+   gives the sup its own relative positioning context so `top` actually
+   does something, without touching page-header.inc's markup at all. */
+.charts .outtempunitlabelsuper,
+.records .outtempunitlabelsuper,
+.about .outtempunitlabelsuper,
+.reports .outtempunitlabelsuper {
+  position: relative;
+  top: -0.6em;
+  margin-left: 0.15em;
+  font-size: 50%;
+  line-height: 1;
 }
 
 .charts .wx-stn-name,
@@ -7451,3 +7469,5 @@ body.dark {
 }
 .offcanvas-settings .themeModeButtons { width: 100%; }
 .offcanvas-settings .themeModeButton { flex: 1 1 0; }
+.offcanvas-settings .unitSwitcherButtons { width: 100%; }
+.offcanvas-settings .unitSwitcherButton { flex: 1 1 30%; }
