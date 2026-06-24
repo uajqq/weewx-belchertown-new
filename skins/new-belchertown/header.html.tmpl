@@ -85,6 +85,42 @@
 #set global $asset_version = "1"
 #end if
 
+## Default unit-switcher system should match the generated site units until a
+## visitor explicitly chooses another system in localStorage.
+#set global $unitSwitcherDefault = "metric"
+#try
+#set $unitSwitcherTempLabel = str($unit.label.outTemp).lower()
+#except
+#set $unitSwitcherTempLabel = ""
+#end try
+#try
+#set $unitSwitcherWindLabel = str($unit.label.windSpeed).lower()
+#except
+#set $unitSwitcherWindLabel = ""
+#end try
+#try
+#set $unitSwitcherPressureLabel = str($unit.label.barometer).lower()
+#except
+#set $unitSwitcherPressureLabel = ""
+#end try
+#if "f" in $unitSwitcherTempLabel
+#set global $unitSwitcherDefault = "us"
+#elif "kt" in $unitSwitcherWindLabel or "knot" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "aviation"
+#elif "mph" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "uk"
+#elif "m/s" in $unitSwitcherWindLabel or "meter_per_second" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "scandinavia"
+#elif "kpa" in $unitSwitcherPressureLabel
+#set global $unitSwitcherDefault = "canada"
+#elif "km" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "metric"
+#end if
+#set global $unitSwitcherEnabled = False
+#if $Extras.has_key('unit_switching') and str($Extras.unit_switching).strip() == "1"
+#set global $unitSwitcherEnabled = True
+#end if
+
 ## Page-level JavaScript loading. Keep heavy runtime files off simple pages.
 #set $load_core_js = False
 #if $page == "home" or $page == "kiosk" or $page == "pi" or $page == "records" or $page == "charts"
@@ -519,10 +555,13 @@
         #include "header.inc"
         #end if
 
-        <!-- Unit Switcher: engine lives in new-belchertown.js (loaded via $load_core_js below), no separate script needed here -->
-        #if $page == "reports"
-        <script defer type='text/javascript' src='$relative_url/js/new-belchertown-noaa${asset_suffix}.js?ver=$asset_version'></script>
+        #if $unitSwitcherEnabled
+        <script>
+            window.BU_DEFAULT_UNIT_SYSTEM = "$unitSwitcherDefault";
+            window.BU_UNIT_SWITCHER_ENABLED = true;
+        </script>
         #end if
+        #if $unitSwitcherEnabled
         <style>
             .unitSwitcherButtons { display: flex; flex-wrap: wrap; gap: 6px; }
             .unitSwitcherButton {
@@ -545,6 +584,7 @@
             [data-bs-theme="dark"] .unitSwitcherButton { color: var(--bs-body-color, #e9ecef); }
             [data-bs-theme="dark"] .unitSwitcherButton:hover { background: rgba(255,255,255,0.08); }
         </style>
+        #end if
 
     </head>
     
@@ -608,7 +648,7 @@
                                                         <button type="button" class="themeModeButton $themeModeDarkActive" data-theme-mode="dark" aria-pressed="$themeModeDarkPressed">$obs.label.theme_dark</button>
                                                     </div>
                                                 </div>
-                                                #if not $Extras.has_key('unit_switcher_enabled') or $Extras.unit_switcher_enabled != '0'
+                                                #if $unitSwitcherEnabled
                                                 <h6 class="dropdown-header settings-dropdown-header">Units</h6>
                                                 <div class="settings-toggle-row">
                                                     <div class="unitSwitcherButtons" role="group" aria-label="Units">
@@ -635,6 +675,7 @@
                     </div>
                 </div>
             </header>
+            #if $unitSwitcherEnabled
             <script>
             (function() {
                 function initUnitSwitcher() {
@@ -647,6 +688,7 @@
                     if (!containers.length) { return; }
 
                     var STORAGE_KEY = "belchertown_unit_system";
+                    var DEFAULT_UNIT = window.BU_DEFAULT_UNIT_SYSTEM || "metric";
 
                     function setActive(key) {
                         containers.forEach(function(container) {
@@ -658,34 +700,24 @@
 
                     var stored = null;
                     try { stored = localStorage.getItem(STORAGE_KEY); } catch(ex) {}
-                    setActive(stored || "metric");
+                    setActive(stored || DEFAULT_UNIT);
 
                     containers.forEach(function(container) {
                         container.querySelectorAll(".unitSwitcherButton").forEach(function(btn) {
                             btn.addEventListener("click", function(e) {
                                 e.preventDefault();
                                 var key = this.getAttribute("data-unit");
-                                console.log("[UnitSwitcher] button clicked:", key);
                                 try { localStorage.setItem(STORAGE_KEY, key); } catch(ex) {}
                                 setActive(key);
-
-                                if (typeof window.BU_reapplyAll === "function") {
-                                    console.log("[UnitSwitcher] calling BU_reapplyAll() directly");
-                                    window.BU_reapplyAll();
-                                } else {
-                                    console.warn("[UnitSwitcher] window.BU_reapplyAll is not defined yet - new-belchertown.js may not have loaded. Dispatching event as fallback.");
-                                }
-                                if (typeof window.BU_reapplyNoaa === "function") {
-                                    window.BU_reapplyNoaa();
-                                }
 
                                 try {
                                     window.dispatchEvent(new CustomEvent("belchertownUnitsChanged", {
                                         detail: { system: key }
                                     }));
-                                    console.log("[UnitSwitcher] belchertownUnitsChanged event dispatched");
                                 } catch(ex) {
-                                    console.error("[UnitSwitcher] failed to dispatch event:", ex);
+                                    if (typeof window.Event === "function") {
+                                        window.dispatchEvent(new Event("belchertownUnitsChanged"));
+                                    }
                                 }
                             });
                         });
@@ -699,4 +731,5 @@
             })();
             </script>
             #end if
+        #end if
     #end if

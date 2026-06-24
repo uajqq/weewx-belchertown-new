@@ -570,10 +570,8 @@ function belchertown_apply_flat_axis_ranges(options, seriesAnalysis) {
 //   gauge: single-point line series, same shape as normal but data.length<=1
 function BU_convertSeriesUnits(s) {
     if (!s || s.__BU_converted) {
-        console.log("[UnitSwitcher] BU_convertSeriesUnits: skipped (already converted or no series)", s && s.obsType);
         return;
     }
-    console.log("[UnitSwitcher] BU_convertSeriesUnits: processing series", s.obsType, " yAxis_label=", s.yAxis_label, " range_unit=", s.range_unit, " windBarb=", s.windBarb);
 
     // windDir is a compass bearing in degrees, never unit-converted.
     if (s.obsType === "windDir") { s.__BU_converted = true; return; }
@@ -622,7 +620,6 @@ function BU_convertSeriesUnits(s) {
     // ── Normal line/spline/area/gauge series ─────────────────────────────
     var unitToken = BU_extractUnitToken(s.yAxis_label);
     var kind = unitToken ? BU_chartUnitKind(unitToken) : null;
-    console.log("[UnitSwitcher] normal series: unitToken=", JSON.stringify(unitToken), " kind=", kind, " sample point before=", s.data && s.data[0]);
     if (kind && Array.isArray(s.data)) {
         s.data = s.data.map(function(point) {
             if (Array.isArray(point)) {
@@ -655,7 +652,6 @@ function BU_convertSeriesUnits(s) {
             var newUnitLabel = BU_chartUnitLabelFor(kind);
             s.yAxis_label = String(s.yAxis_label).replace(/\([^)]+\)\s*$/, "(" + newUnitLabel.trim() + ")");
         }
-        console.log("[UnitSwitcher] normal series converted: sample point after=", s.data[0], " new yAxis_label=", s.yAxis_label);
     }
 
     s.__BU_converted = true;
@@ -685,10 +681,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 data: JSON.parse(JSON.stringify(data)),
                 prepend_renderTo: prepend_renderTo
             };
-            console.log("[UnitSwitcher] cached raw chart data for json_file=", json_file, " groups now cached:", Object.keys(window.BU_lastChartsRaw));
-        } catch (_BU_e) {
-            console.error("[UnitSwitcher] failed to cache raw chart data:", _BU_e.message);
-        }
+        } catch (_BU_e) {}
 
         var renderCharts = function() {
 
@@ -1124,7 +1117,6 @@ function showChart(json_file, prepend_renderTo = false) {
             // server-baked site-wide display unit (read from yAxis_label or
             // range_unit/obs_unit) into the user's chosen system, in place,
             // before any of the yAxis/min-max/formatting logic below runs.
-            console.log("[UnitSwitcher] " + plotname + ": about to convert " + options.series.length + " series, BU_convertSeriesUnits is", typeof BU_convertSeriesUnits, " current system=", (typeof BU_getSystem === "function" ? BU_getSystem() : "BU_getSystem undefined"));
             if (typeof BU_convertSeriesUnits === "function") {
                 options.series.forEach(function(s) { BU_convertSeriesUnits(s); });
             }
@@ -1615,9 +1607,6 @@ function showChart(json_file, prepend_renderTo = false) {
                     var color = options.series[0].color;
                     if (!color) {
                         // Set color of the column based on the average temperature, or return default if not temperature
-                        if (seriesData[3] == null) {
-                            console.log("Requesting " + seriesData[0] + ". Value is " + seriesData[3])
-                        }
                         color = get_outTemp_color(range_unit, seriesData[3], true);
                     }
                     newSeriesData.push({
@@ -1991,14 +1980,11 @@ function showChart(json_file, prepend_renderTo = false) {
 // chosen system, using each chart group's pristine unconverted snapshot.
 // Called from BU_reapplyAll() in new-belchertown.js.tmpl.
 window.BU_reapplyCharts = function() {
-    console.log("[UnitSwitcher] BU_reapplyCharts() called. window.BU_lastChartsRaw =", window.BU_lastChartsRaw ? Object.keys(window.BU_lastChartsRaw) : "undefined/null");
     if (!window.BU_lastChartsRaw) {
-        console.warn("[UnitSwitcher] no charts fetched yet, nothing to re-render.");
         return;
     }
     Object.keys(window.BU_lastChartsRaw).forEach(function(json_file) {
         var entry = window.BU_lastChartsRaw[json_file];
-        console.log("[UnitSwitcher] re-rendering chart group:", json_file);
         if (entry && entry.data) {
             showChart(json_file, entry.prepend_renderTo);
         }

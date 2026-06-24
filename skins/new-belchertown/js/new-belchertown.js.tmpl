@@ -2646,7 +2646,9 @@ function updateDailySnapshot(data, key) {
     if (d["wind"] && d["wind"]["windrun"]) {
         belchertown_set_html(".dailywindrun", formatSnapshotMetricValue(d["wind"]["windrun"]));
     }
-    BU_applyDailySnapshot(data, key); // Unit Switcher: overwrite with chosen-unit values
+    if (typeof BU_applyDailySnapshot === "function") {
+        BU_applyDailySnapshot(data, key); // Unit Switcher: overwrite with chosen-unit values
+    }
 }
 
 function updateMonthlySnapshot(data, key) {
@@ -2663,7 +2665,9 @@ function updateMonthlySnapshot(data, key) {
     belchertown_set_html(".monthstatsradiationavg", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
     belchertown_set_html(".monthstatsradiationmax", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
     belchertown_set_html(".monthstatssunshineDur", formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
-    BU_applyMonthlySnapshot(data, key); // Unit Switcher: overwrite with chosen-unit values
+    if (typeof BU_applyMonthlySnapshot === "function") {
+        BU_applyMonthlySnapshot(data, key); // Unit Switcher: overwrite with chosen-unit values
+    }
 }
 
 document.addEventListener("change", function(event) {
@@ -2687,18 +2691,12 @@ document.addEventListener("change", function(event) {
 // DOM elements that update_weewx_data() / updateDailySnapshot() /
 // updateMonthlySnapshot() / MQTT handlers already populate.
 // ============================================================================
+#set $unitSwitcherJsEnabled = False
+#if $Extras.has_key('unit_switching') and str($Extras.unit_switching).strip() == "1"
+#set $unitSwitcherJsEnabled = True
+#end if
+#if $unitSwitcherJsEnabled
 
-// ── Forecast data is fetched server-side already converted into ONE fixed
-// system (us / si / ca / uk2), mirroring new_belchertown.py's
-// _normalize_forecast_units(). It is never re-fetched client-side, so we
-// detect which of the four it is and convert FROM that fixed system TO
-// whichever display system the user has chosen.
-//
-//   forecast_units | temp        | wind speed       | precip | visibility | pressure
-//   us             | fahrenheit  | mile_per_hour    | inch   | miles      | hPa (always)
-//   si             | celsius     | meter_per_second | mm     | km         | hPa (always)
-//   ca             | celsius     | km_per_hour      | mm     | km         | hPa (always)
-//   uk2            | celsius     | mile_per_hour    | mm     | miles      | hPa (always)
 // ── Forecast data is fetched server-side already converted into ONE fixed
 // system (us / si / ca / uk2), mirroring new_belchertown.py's
 // _normalize_forecast_units(). It is never re-fetched client-side, so we
@@ -2806,8 +2804,10 @@ var BU_CHART_TO_METRICWX = {
     "inhg": function(inhg) { return inhg / 0.02953; },
     // rain / rain rate
     "mm/hr": function(mm) { return mm; },
+    "mm_per_hour": function(mm) { return mm; },
     "mm": function(mm) { return mm; },
     "in/hr": function(inch) { return inch / 0.03937; },
+    "inch_per_hour": function(inch) { return inch / 0.03937; },
     "in": function(inch) { return inch / 0.03937; },
     "inch": function(inch) { return inch / 0.03937; },
     // distance (e.g. windrun)
@@ -2828,9 +2828,9 @@ function BU_chartUnitKind(unitToken) {
     if (t.indexOf("hpa") !== -1 || t.indexOf("mbar") !== -1) { return "press"; }
     if (t.indexOf("kpa") !== -1) { return "press"; }
     if (t.indexOf("inhg") !== -1) { return "press"; }
-    if (t.indexOf("mm/hr") !== -1) { return "rainrate"; }
+    if (t.indexOf("mm/hr") !== -1 || t === "mm_per_hour") { return "rainrate"; }
     if (t === "mm" || t.indexOf("millimeter") !== -1) { return "rain"; }
-    if (t.indexOf("in/hr") !== -1) { return "rainrate"; }
+    if (t.indexOf("in/hr") !== -1 || t === "inch_per_hour") { return "rainrate"; }
     if (t === "in" || t === "inch") { return "rain"; }
     if (t === "km" || t.indexOf("kilometer") !== -1) { return "distance"; }
     if (t === "mi" || t === "mile" || t.indexOf("mile") !== -1) { return "distance"; }
@@ -2893,9 +2893,10 @@ function BU_convertChartValue(value, unitToken) {
 }
 
 function BU_getSystem() {
-    var key = "metric";
-    try { key = localStorage.getItem("belchertown_unit_system") || "metric"; } catch(e) {}
-    return BU_SYS[key] ? key : "metric";
+    var defaultKey = window.BU_DEFAULT_UNIT_SYSTEM || "metric";
+    var key = defaultKey;
+    try { key = localStorage.getItem("belchertown_unit_system") || defaultKey; } catch(e) {}
+    return BU_SYS[key] ? key : (BU_SYS[defaultKey] ? defaultKey : "metric");
 }
 
 function BU_fmt(v, dp) {
@@ -3028,7 +3029,6 @@ function BU_applyMQTT(data) {
 
 // ── Re-apply everything we know about when the user switches systems ───────
 function BU_reapplyAll() {
-    console.log("[UnitSwitcher] BU_reapplyAll() running. weewx_data type:", typeof weewx_data, " active system:", BU_getSystem());
     if (typeof weewx_data === "object" && weewx_data) {
         BU_applyCurrent(weewx_data);
         var daySelectEl = document.getElementById("snapshot-day-select");
@@ -3037,8 +3037,6 @@ function BU_reapplyAll() {
         var monthSelectEl = document.getElementById("snapshot-month-select");
         var monthKey = (monthSelectEl && monthSelectEl.value) || "month";
         BU_applyMonthlySnapshot(weewx_data, monthKey);
-    } else {
-        console.warn("[UnitSwitcher] weewx_data not yet loaded - current/snapshot values will update once ajaxweewx() resolves.");
     }
     if (window.BU_lastMQTT) { BU_applyMQTT(window.BU_lastMQTT); }
     if (typeof window.BU_reapplyForecast === "function") { window.BU_reapplyForecast(); }
@@ -3058,7 +3056,6 @@ function BU_reapplyAll() {
 }
 
 window.addEventListener("belchertownUnitsChanged", BU_reapplyAll);
-console.log("[UnitSwitcher] new-belchertown.js loaded, BU_reapplyAll registered.");
 
 // ── Sitewide header-temperature init ────────────────────────────────────
 // update_weewx_data() (which populates the global `weewx_data` BU_reapplyAll
@@ -3078,14 +3075,13 @@ if (typeof ajaxweewx === "function") {
             weewx_data = data;
         }
         BU_applyCurrent(data);
-    }).catch(function(e) {
-        console.warn("[UnitSwitcher] Could not load weewx_data.json for header init:", e);
-    });
+    }).catch(function(e) {});
 }
 
 // ============================================================================
 // End Belchertown Unit Switcher
 // ============================================================================
+#end if
 
 function update_weewx_data(data) {
     belchertown_debug("Updating WeeWX data");
@@ -3104,7 +3100,9 @@ function update_weewx_data(data) {
     low = data["day"]["outTemp"]["min"];
     belchertown_set_html(".high", high);
     belchertown_set_html(".low", low);
-    BU_applyCurrent(data); // Unit Switcher: overwrite with chosen-unit values
+    if (typeof BU_applyCurrent === "function") {
+        BU_applyCurrent(data); // Unit Switcher: overwrite with chosen-unit values
+    }
 
     try {
         // Barometer trending by finding a negative number
