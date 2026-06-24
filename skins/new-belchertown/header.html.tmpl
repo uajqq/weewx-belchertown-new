@@ -85,6 +85,54 @@
 #set global $asset_version = "1"
 #end if
 
+## Default unit-switcher system should match the generated site units until a
+## visitor explicitly chooses another system in localStorage.
+#set global $unitSwitcherDefault = "metric"
+#try
+#set $unitSwitcherTempLabel = str($unit.label.outTemp).lower()
+#except
+#set $unitSwitcherTempLabel = ""
+#end try
+#try
+#set $unitSwitcherWindLabel = str($unit.label.windSpeed).lower()
+#except
+#set $unitSwitcherWindLabel = ""
+#end try
+#try
+#set $unitSwitcherPressureLabel = str($unit.label.barometer).lower()
+#except
+#set $unitSwitcherPressureLabel = ""
+#end try
+#if "f" in $unitSwitcherTempLabel
+#set global $unitSwitcherDefault = "us"
+#elif "kt" in $unitSwitcherWindLabel or "knot" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "nautical"
+#elif "mph" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "uk"
+#elif "m/s" in $unitSwitcherWindLabel or "meter_per_second" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "scandinavia"
+#elif "kpa" in $unitSwitcherPressureLabel
+#set global $unitSwitcherDefault = "canada"
+#elif "km" in $unitSwitcherWindLabel
+#set global $unitSwitcherDefault = "metric"
+#end if
+#set global $unitSwitcherDefaultLabel = "Metric"
+#if $unitSwitcherDefault == "us"
+#set global $unitSwitcherDefaultLabel = "US Customary"
+#elif $unitSwitcherDefault == "uk"
+#set global $unitSwitcherDefaultLabel = "UK"
+#elif $unitSwitcherDefault == "scandinavia"
+#set global $unitSwitcherDefaultLabel = "Scandinavia"
+#elif $unitSwitcherDefault == "canada"
+#set global $unitSwitcherDefaultLabel = "Canada"
+#elif $unitSwitcherDefault == "nautical"
+#set global $unitSwitcherDefaultLabel = "Nautical"
+#end if
+#set global $unitSwitcherEnabled = False
+#if $Extras.has_key('unit_switching') and str($Extras.unit_switching).strip() == "1"
+#set global $unitSwitcherEnabled = True
+#end if
+
 ## Page-level JavaScript loading. Keep heavy runtime files off simple pages.
 #set $load_core_js = False
 #if $page == "home" or $page == "kiosk" or $page == "pi" or $page == "records" or $page == "charts"
@@ -135,29 +183,34 @@
         #end if
         <meta property="og:site_name" content="$head_title" />
 
-        <link rel='dns-prefetch' href='https://fonts.googleapis.com' />
-        <link rel='dns-prefetch' href='https://fonts.gstatic.com' />
-        <link rel='dns-prefetch' href='https://stackpath.bootstrapcdn.com' />
-        <link rel='dns-prefetch' href='https://cdn.jsdelivr.net' />
-        <link rel='dns-prefetch' href='https://cdnjs.cloudflare.com' />
+        #if $load_core_js
+        <link rel='dns-prefetch' href='//ajax.googleapis.com' />
+        #end if
+        <link rel='dns-prefetch' href='//fonts.googleapis.com' />
+        <link rel='dns-prefetch' href='//fonts.gstatic.com' />
+        <link rel='dns-prefetch' href='//stackpath.bootstrapcdn.com' />
+        <link rel='dns-prefetch' href='//cdn.jsdelivr.net' />
+        <link rel='dns-prefetch' href='//cdnjs.cloudflare.com' />
 
-        <link rel='preconnect' href='https://fonts.googleapis.com'>
+        #if $load_core_js
+        <link rel='preconnect' href='https://ajax.googleapis.com'>
+        #end if
         <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
         <link rel='preconnect' href='https://stackpath.bootstrapcdn.com' crossorigin>
         <link rel='preconnect' href='https://cdn.jsdelivr.net' crossorigin>
         <link rel='preconnect' href='https://cdnjs.cloudflare.com' crossorigin>
 
-        <link rel='preload' href='https://fonts.googleapis.com/css?family=Roboto%3A300%2C400%2C700&#038;display=swap&#038;ver=1.0' as='style' onload="this.onload=null;this.rel='stylesheet'">
-        <link rel='preload' href='https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css' as='style' integrity='sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN' crossorigin='anonymous' onload="this.onload=null;this.rel='stylesheet'">
-        <link rel='preload' href='https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/css/weather-icons.min.css?ver=4.7.4' as='style' integrity='sha384-z7urxOoxW8XTxSu9GHfjF2IMOLNAJ5YBGVEiX0qaKfOzOhfH/HceecZevk7aFifJ' crossorigin='anonymous' onload="this.onload=null;this.rel='stylesheet'">
+        <link rel='preload' href='//fonts.googleapis.com/css?family=Roboto%3A300%2C400%2C700&#038;display=swap&#038;ver=1.0' as='style' onload="this.onload=null;this.rel='stylesheet'">
+        <link rel='preload' href='//stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css' as='style' onload="this.onload=null;this.rel='stylesheet'">
+        <link rel='preload' href='//cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/css/weather-icons.min.css?ver=4.7.4' as='style' onload="this.onload=null;this.rel='stylesheet'">
         <noscript>
-            <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto%3A300%2C400%2C700&#038;display=swap&#038;ver=1.0' type='text/css' media='all' />
-            <link rel='stylesheet' href='https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css' type='text/css' media='all' integrity='sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN' crossorigin='anonymous' />
-            <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/css/weather-icons.min.css?ver=4.7.4' type='text/css' media='all' integrity='sha384-z7urxOoxW8XTxSu9GHfjF2IMOLNAJ5YBGVEiX0qaKfOzOhfH/HceecZevk7aFifJ' crossorigin='anonymous' />
+            <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Roboto%3A300%2C400%2C700&#038;display=swap&#038;ver=1.0' type='text/css' media='all' />
+            <link rel='stylesheet' href='//stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css' type='text/css' media='all' />
+            <link rel='stylesheet' href='//cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/css/weather-icons.min.css?ver=4.7.4' type='text/css' media='all' />
         </noscript>
-        <link rel='preload' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css' as='style' integrity='sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB' crossorigin='anonymous' onload="this.onload=null;this.rel='stylesheet'">
+        <link rel='preload' href='//cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' as='style' onload="this.onload=null;this.rel='stylesheet'">
         <noscript>
-            <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css' type='text/css' media='all' integrity='sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB' crossorigin='anonymous' />
+            <link rel='stylesheet' href='//cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' type='text/css' media='all' />
         </noscript>
         <link rel='stylesheet' href='$relative_url/style${asset_suffix}.css?ver=$asset_version' type='text/css' media='all' id="belchertownStyle" />
         #if $page == "kiosk"
@@ -177,21 +230,21 @@
         <link rel="apple-touch-icon" sizes="192x192" href="$relative_url/images/station192.png">
         
         #if $load_core_js
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js" integrity="sha384-DpVxUeeBWjUvUV1czyIHJAjh+jYUZFu2lLakbdua5vbwOrBGi1UgaKCHjTC+x3Ky" crossorigin="anonymous"></script>
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/utc.min.js" integrity="sha384-cLloH5orw19ugkLcIDPPz41Lssc3ZgU+QdqwhPhA2X9fhWswqaXM4w5AEbfITBO0" crossorigin="anonymous"></script>
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localizedFormat.js" integrity="sha384-iuFpgyG+/EWLaH+QftleTM09Ui3ttFvEdMGKrvJY24QlklT0IwHR7xj2Sw1Chu8R" crossorigin="anonymous"></script>
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/customParseFormat.min.js" integrity="sha384-Mj1+jlvMhLQnpUVofDWLOvk9L+3mrY0YGl4kGbl20Eeb8T27XINSpR24IRZ1FjJL" crossorigin="anonymous"></script>
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/relativeTime.min.js" integrity="sha384-5Gh2TqZ0gPLaRQty6kH3Czz1Rt+GqSHHsdxMYO36twWul2lbg/tY2vgp76c+135p" crossorigin="anonymous"></script>
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localeData.js" integrity="sha384-WDJmOTY6t1e1tpe0P14xYU7t9NPhMkkkUw0ockspzcJaAjYTTBM6jvki/bBNXQ9E" crossorigin="anonymous"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/utc.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localizedFormat.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/customParseFormat.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/relativeTime.min.js"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localeData.min.js"></script>
         #if $moment_js_tz and str($moment_js_tz).strip() != ""
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/timezone.min.js" integrity="sha384-hKOEAAyceJU9jN4MdfHpclDqQxNDDFCGGhQWIYJAlEl1MDx22dvX2Qeo09/CElJm" crossorigin="anonymous"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/timezone.min.js"></script>
         #end if
         #if $dayjs_locale_js and $dayjs_locale_js not in ("en", "en-us")
-        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/${dayjs_locale_js}.js" crossorigin="anonymous"></script>
+        <script defer type='text/javascript' src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/${dayjs_locale_js}.js"></script>
         #end if
         #end if
         #if $load_mqtt_js
-        <script defer type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js" integrity="sha384-Wc5O7PtWSXXJ6LTS7Miij28L1Q3ip54+UlMs+FDhQw+Py1DmDbVCaan/v0WkAwOg" crossorigin="anonymous"></script>
+        <script defer type='text/javascript' src="//cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
         #end if
         #if $load_highcharts_js
         <script type='text/javascript'>
@@ -219,7 +272,6 @@
                         var script = document.createElement("script");
                         script.src = src;
                         script.async = false;
-                        script.crossOrigin = "anonymous";
                         script.onload = function() {
                             script.setAttribute("data-loaded", "1");
                             resolve();
@@ -240,9 +292,9 @@
                         return highchartsCorePromise;
                     }
 
-                    highchartsCorePromise = loadScript("https://code.highcharts.com/stock/12.6/highstock.js")
+                    highchartsCorePromise = loadScript("//code.highcharts.com/stock/12.6/highstock.js")
                         .then(function() {
-                            return loadScript("https://code.highcharts.com/12.6/highcharts-more.js");
+                            return loadScript("//code.highcharts.com/12.6/highcharts-more.js");
                         })
                         .then(function() {
                             return Highcharts;
@@ -258,7 +310,7 @@
         </script>
         #end if
         #if $load_bootstrap_js
-        <script defer type='text/javascript' src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js' integrity='sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI' crossorigin='anonymous'></script>
+        <script defer type='text/javascript' src='//cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js'></script>
         #end if
         <script defer type='text/javascript' src='$relative_url/js/new-belchertown-utils${asset_suffix}.js?ver=$asset_version'></script>
         #if $load_core_js
@@ -515,6 +567,31 @@
         #include "header.inc"
         #end if
 
+        <script>
+            window.BU_DEFAULT_UNIT_SYSTEM = "$unitSwitcherDefault";
+            window.BU_UNIT_SWITCHER_ENABLED = #if $unitSwitcherEnabled#true#else#false#end if#;
+        </script>
+        #if $unitSwitcherEnabled
+        <style>
+            .unitSwitcherSelect {
+                width: 100%;
+                min-width: 190px;
+                padding: 6px 32px 6px 10px;
+                font-size: 0.9rem;
+                border: 1px solid var(--bs-border-color, #ccc);
+                border-radius: 6px;
+                background-color: var(--bs-body-bg, #fff);
+                color: var(--bs-body-color, #212529);
+            }
+            .unitSwitcherSelect:focus {
+                border-color: var(--bs-primary, #0d6efd);
+                box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.15);
+                outline: 0;
+            }
+            [data-bs-theme="dark"] .unitSwitcherSelect { background-color: var(--bs-body-bg, #212529); color: var(--bs-body-color, #e9ecef); }
+        </style>
+        #end if
+
     </head>
     
     #if $page == "pi"
@@ -577,6 +654,20 @@
                                                         <button type="button" class="themeModeButton $themeModeDarkActive" data-theme-mode="dark" aria-pressed="$themeModeDarkPressed">$obs.label.theme_dark</button>
                                                     </div>
                                                 </div>
+                                                #if $unitSwitcherEnabled
+                                                <h6 class="dropdown-header settings-dropdown-header">Units</h6>
+                                                <div class="settings-toggle-row">
+                                                    <select class="unitSwitcherSelect" aria-label="Units">
+                                                        <option value="" selected>Default ($unitSwitcherDefaultLabel)</option>
+                                                        <option value="us">US Customary</option>
+                                                        <option value="uk">UK</option>
+                                                        <option value="metric">Metric</option>
+                                                        <option value="scandinavia">Scandinavia</option>
+                                                        <option value="canada">Canada</option>
+                                                        <option value="nautical">Nautical</option>
+                                                    </select>
+                                                </div>
+                                                #end if
                                             </div>
                                         </li>
                                     </ul>
@@ -591,5 +682,61 @@
                     </div>
                 </div>
             </header>
+            #if $unitSwitcherEnabled
+            <script>
+            (function() {
+                function initUnitSwitcher() {
+                    var selects = document.querySelectorAll(".unitSwitcherSelect");
+                    if (!selects.length) { return; }
+
+                    var STORAGE_KEY = "belchertown_unit_system";
+                    var DEFAULT_UNIT = window.BU_DEFAULT_UNIT_SYSTEM || "metric";
+                    var VALID_UNITS = ["us", "uk", "metric", "scandinavia", "canada", "nautical"];
+
+                    function setSelected(key) {
+                        selects.forEach(function(select) {
+                            select.value = key || "";
+                        });
+                    }
+
+                    var stored = null;
+                    try { stored = localStorage.getItem(STORAGE_KEY); } catch(ex) {}
+                    if (VALID_UNITS.indexOf(stored) === -1) {
+                        stored = "";
+                    }
+                    setSelected(stored);
+
+                    selects.forEach(function(select) {
+                        select.addEventListener("change", function() {
+                            var key = this.value;
+                            try {
+                                if (key) {
+                                    localStorage.setItem(STORAGE_KEY, key);
+                                } else {
+                                    localStorage.removeItem(STORAGE_KEY);
+                                }
+                            } catch(ex) {}
+                            setSelected(key);
+
+                            try {
+                                window.dispatchEvent(new CustomEvent("belchertownUnitsChanged", {
+                                    detail: { system: key || DEFAULT_UNIT, isDefault: !key }
+                                }));
+                            } catch(ex) {
+                                if (typeof window.Event === "function") {
+                                    window.dispatchEvent(new Event("belchertownUnitsChanged"));
+                                }
+                            }
+                        });
+                    });
+                }
+                if (document.readyState === "loading") {
+                    document.addEventListener("DOMContentLoaded", initUnitSwitcher);
+                } else {
+                    initUnitSwitcher();
+                }
+            })();
+            </script>
             #end if
+        #end if
     #end if

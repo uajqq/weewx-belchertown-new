@@ -1331,6 +1331,23 @@ function update_current_wx(data) {
     if (data.hasOwnProperty("windchill_C")) {
         mqtt_set_text(".curwindchill", parseFloat(parseFloat(data["windchill_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
     }
+
+    // ── Unit Switcher: re-render unit-bearing values in chosen system ──────
+    // BU_applyMQTT (defined in new-belchertown.js.tmpl) reads METRICWX-base
+    // fields from the MQTT payload (outTemp_C, windSpeed_mps, windGust_mps,
+    // barometer_mbar, dayRain_mm, rainRate_mm_per_hour, appTemp_C,
+    // dewpoint_C, windchill_C) and writes the chosen-unit values into
+    // .outtemp, .curwindspeed, .curwindgust, .mph, pressure observations,
+    // .dayRain, .rainRate, .apptemp, .dewpoint, .curwindchill.
+    try {
+        window.BU_lastMQTT = data;
+        if (typeof BU_applyMQTT === "function") {
+            BU_applyMQTT(data);
+        }
+    } catch (_BU_e) {
+        belchertown_debug("Unit Switcher: BU_applyMQTT error - " + _BU_e.message);
+    }
+
     mqtt_render_status_modal();
 };
 // #end if

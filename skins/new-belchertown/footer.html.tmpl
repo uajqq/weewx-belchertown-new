@@ -11,7 +11,7 @@
                 <strong>$obs.label.footer_disclaimer_text</strong>
             </div>
             <div class="col-md-4 footerRight">
-                $obs.label.footer_theme_by <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank" rel="noopener noreferrer">Pat O'Brien and uajqq</a>
+                $obs.label.footer_theme_by <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank">Pat O'Brien and uajqq</a>
             </div>
         </div>
     </div>
@@ -35,6 +35,20 @@
                     <button type="button" class="themeModeButton $themeModeDarkActive" data-theme-mode="dark" aria-pressed="$themeModeDarkPressed">$obs.label.theme_dark</button>
                 </div>
             </div>
+            #if $unitSwitcherEnabled
+            <h6 class="offcanvas-settings-heading">Units</h6>
+            <div class="offcanvas-theme-row">
+                <select class="unitSwitcherSelect" aria-label="Units">
+                    <option value="" selected>Default ($unitSwitcherDefaultLabel)</option>
+                    <option value="us">US Customary</option>
+                    <option value="uk">UK</option>
+                    <option value="metric">Metric</option>
+                    <option value="scandinavia">Scandinavia</option>
+                    <option value="canada">Canada</option>
+                    <option value="nautical">Nautical</option>
+                </select>
+            </div>
+            #end if
         </div>
     </div>
 </div>

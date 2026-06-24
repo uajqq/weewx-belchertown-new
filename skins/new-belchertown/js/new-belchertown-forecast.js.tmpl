@@ -846,7 +846,7 @@ function forecast_daily_link(timestamp) {
         .replace("YYYY", linkMoment.format("YYYY"))
         .replace("MM", linkMoment.format("MM"))
         .replace("DD", linkMoment.format("DD"));
-    return '<a href="' + link + '" target="_blank" rel="noopener noreferrer">' + forecast_escape_html(forecast_label_text("$obs.label.daily_forecast")) + '</a>';
+    return '<a href="' + link + '" target="_blank">' + forecast_escape_html(forecast_label_text("$obs.label.daily_forecast")) + '</a>';
 }
 
 function forecast_metric_rows(row) {
@@ -888,7 +888,12 @@ function forecast_wind_html(row, includeGust) {
     let html = '<div class="forecast-wind">';
     html += '<i class="wi wi-strong-wind"></i> <span class="forecast-wind-speed">' + windSpeedText + '</span>';
     if (includeGust) {
-        html += '<span class="forecast-wind-separator">|</span><span class="forecast-wind-gust">' + forecast_plain_number_text(row["windGust"]) + belchertown_label_html("$unit.label.windSpeed") + '</span>';
+        var gustUnitLabel = "$unit.label.windSpeed";
+        if (typeof BU_getSystem === "function" && typeof BU_SYS !== "undefined") {
+            var gustSys = BU_SYS[BU_getSystem()];
+            if (gustSys) { gustUnitLabel = " " + gustSys.sl; }
+        }
+        html += '<span class="forecast-wind-separator">|</span><span class="forecast-wind-gust">' + forecast_plain_number_text(row["windGust"]) + belchertown_label_html(gustUnitLabel) + '</span>';
     }
     html += '</div>';
     return html;
@@ -1149,12 +1154,80 @@ function forecast_has_common_schema(data) {
     return data && Array.isArray(data["hourly"]) && Array.isArray(data["daily"]);
 }
 
+// ── Unit Switcher: convert forecast rows from their fixed fetch-time system
+// (resolved via BU_resolveForecastBase, reading the payload's own "units"
+// field - see new-belchertown.js.tmpl) to METRICWX in place, once, before
+// any rendering/min-max/padding logic runs on them. Idempotent - rows
+// already converted in this session are skipped via a marker flag.
+function BU_convertForecastRow(row, baseKey) {
+    if (!row || row.__BU_converted) { return; }
+    if (typeof BU_forecastToMetricWX !== "function") { return; }
+
+    if (row.temperature !== undefined && row.temperature !== null) {
+        row.temperature = BU_forecastToMetricWX("temp", row.temperature, baseKey);
+    }
+    if (row.temperatureHigh !== undefined && row.temperatureHigh !== null) {
+        row.temperatureHigh = BU_forecastToMetricWX("temp", row.temperatureHigh, baseKey);
+    }
+    if (row.temperatureLow !== undefined && row.temperatureLow !== null) {
+        row.temperatureLow = BU_forecastToMetricWX("temp", row.temperatureLow, baseKey);
+    }
+    if (row.dewPoint !== undefined && row.dewPoint !== null) {
+        row.dewPoint = BU_forecastToMetricWX("temp", row.dewPoint, baseKey);
+    }
+    if (row.windSpeed !== undefined && row.windSpeed !== null) {
+        row.windSpeed = BU_forecastToMetricWX("speed", row.windSpeed, baseKey);
+    }
+    if (row.windGust !== undefined && row.windGust !== null) {
+        row.windGust = BU_forecastToMetricWX("speed", row.windGust, baseKey);
+    }
+    if (row.snowDepth !== undefined && row.snowDepth !== null) {
+        row.snowDepth = BU_forecastToMetricWX("precip", row.snowDepth, baseKey);
+    }
+
+    // Re-render each value into the user's chosen display system using the
+    // same BU_SYS converters current conditions already use.
+    var sysKey = (typeof BU_getSystem === "function") ? BU_getSystem() : "metric";
+    var s = (typeof BU_SYS !== "undefined") ? BU_SYS[sysKey] : null;
+    if (s) {
+        if (row.temperature !== undefined && row.temperature !== null) { row.temperature = s.temp(row.temperature); }
+        if (row.temperatureHigh !== undefined && row.temperatureHigh !== null) { row.temperatureHigh = s.temp(row.temperatureHigh); }
+        if (row.temperatureLow !== undefined && row.temperatureLow !== null) { row.temperatureLow = s.temp(row.temperatureLow); }
+        if (row.dewPoint !== undefined && row.dewPoint !== null) { row.dewPoint = s.temp(row.dewPoint); }
+        if (row.windSpeed !== undefined && row.windSpeed !== null) { row.windSpeed = s.speed(row.windSpeed); }
+        if (row.windGust !== undefined && row.windGust !== null) { row.windGust = s.speed(row.windGust); }
+        if (row.snowDepth !== undefined && row.snowDepth !== null) { row.snowDepth = s.rain(row.snowDepth); row.snowUnit = s.rl; }
+    }
+
+    row.__BU_converted = true;
+}
+
+function BU_convertForecastRows(rows, baseKey) {
+    if (!Array.isArray(rows)) { return; }
+    for (var i = 0; i < rows.length; i++) { BU_convertForecastRow(rows[i], baseKey); }
+}
+
 function forecast_render_common(data) {
     forecast_update_aqi(data);
+
+    // ── Unit Switcher: keep a pristine, unconverted copy so switching units
+    // later can re-derive from the original fetched values rather than
+    // re-converting already-converted (and now stale) numbers.
+    try {
+        window.BU_lastForecastRaw = JSON.parse(JSON.stringify(data));
+    } catch (_BU_e) { /* silent */ }
+
+    var baseKey = (typeof BU_resolveForecastBase === "function") ? BU_resolveForecastBase(data) : "uk2";
+    belchertown_debug("Unit Switcher: forecast base unit resolved as '" + baseKey + "' (from payload units='" + data.units + "')");
 
     const hourly = Array.isArray(data["hourly"]) ? data["hourly"] : [];
     const threeHourly = Array.isArray(data["threeHourly"]) ? data["threeHourly"] : forecast_pick_three_hourly_from_current_period(hourly);
     const daily = Array.isArray(data["daily"]) ? data["daily"] : [];
+
+    BU_convertForecastRows(hourly, baseKey);
+    BU_convertForecastRows(threeHourly, baseKey);
+    BU_convertForecastRows(daily, baseKey);
+
     const lastUpdated = data["generated_at"] || data["timestamp"] || (Date.now() / 1000);
     forecast_last_updated_epoch = forecast_number(lastUpdated);
 
@@ -1199,5 +1272,18 @@ function update_forecast_data(data) {
         belchertown_debug("Forecast: Missing normalized forecast schema");
     }
 }
+
+// ── Unit Switcher: re-render the forecast tiles in the newly chosen system,
+// using the pristine unconverted snapshot taken at the last successful fetch.
+// Called from BU_reapplyAll() in new-belchertown.js.tmpl.
+window.BU_reapplyForecast = function() {
+    if (!window.BU_lastForecastRaw) {
+        belchertown_debug("Unit Switcher: no forecast data fetched yet, nothing to re-render.");
+        return;
+    }
+    if (typeof forecast_has_common_schema === "function" && forecast_has_common_schema(window.BU_lastForecastRaw)) {
+        forecast_render_common(window.BU_lastForecastRaw);
+    }
+};
 
 // #end if
