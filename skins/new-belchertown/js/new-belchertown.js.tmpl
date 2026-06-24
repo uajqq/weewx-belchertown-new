@@ -2695,7 +2695,6 @@ document.addEventListener("change", function(event) {
 #if $Extras.has_key('unit_switching') and str($Extras.unit_switching).strip() == "1"
 #set $unitSwitcherJsEnabled = True
 #end if
-#if $unitSwitcherJsEnabled
 
 // ── Forecast data is fetched server-side already converted into ONE fixed
 // system (us / si / ca / uk2), mirroring new_belchertown.py's
@@ -2761,12 +2760,12 @@ function BU_forecastToMetricWX(kind, value, baseKey) {
 }
 
 var BU_SYS = {
-    us:          { temp:function(c){return c*9/5+32;},   tl:"\u00b0F", speed:function(ms){return ms*2.23694;}, sl:"mph",  press:function(h){return h*0.02953;}, pl:"inHg", rain:function(mm){return mm*0.03937;}, rl:"in",  rrl:"in/h", distance:function(km){return km*0.621371;}, dl:"mi" },
-    uk:          { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*2.23694;}, sl:"mph",  press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km*0.621371;}, dl:"mi" },
-    metric:      { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*3.6;},     sl:"km/h", press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km" },
-    scandinavia: { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms;},         sl:"m/s",  press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km" },
-    canada:      { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*3.6;},     sl:"km/h", press:function(h){return h*0.1;},      pl:"kPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km" },
-    aviation:    { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*1.94384;}, sl:"kt",   press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km*0.539957;}, dl:"nm" },
+    us:          { temp:function(c){return c*9/5+32;},   tl:"\u00b0F", speed:function(ms){return ms*2.23694;}, sl:"mph",  press:function(h){return h*0.02953;}, pl:"inHg", rain:function(mm){return mm*0.03937;}, rl:"in",  rrl:"in/h", distance:function(km){return km*0.621371;}, dl:"mi", altitude:function(m){return m*3.28084;}, al:"ft" },
+    uk:          { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*2.23694;}, sl:"mph",  press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km*0.621371;}, dl:"mi", altitude:function(m){return m;},         al:"m" },
+    metric:      { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*3.6;},     sl:"km/h", press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km", altitude:function(m){return m;},         al:"m" },
+    scandinavia: { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms;},         sl:"m/s",  press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km", altitude:function(m){return m;},         al:"m" },
+    canada:      { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*3.6;},     sl:"km/h", press:function(h){return h*0.1;},      pl:"kPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km", altitude:function(m){return m;},         al:"m" },
+    nautical:    { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*1.94384;}, sl:"kt",   press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km*0.539957;}, dl:"nm", altitude:function(m){return m;},         al:"m" },
 };
 
 // ============================================================================
@@ -2815,6 +2814,13 @@ var BU_CHART_TO_METRICWX = {
     "kilometer": function(km) { return km; },
     "mi": function(mi) { return mi * 1.609344; },
     "mile": function(mi) { return mi * 1.609344; },
+    // altitude
+    "m": function(m) { return m; },
+    "meter": function(m) { return m; },
+    "metre": function(m) { return m; },
+    "ft": function(ft) { return ft / 3.28084; },
+    "foot": function(ft) { return ft / 3.28084; },
+    "feet": function(ft) { return ft / 3.28084; },
 };
 
 function BU_chartUnitKind(unitToken) {
@@ -2834,6 +2840,8 @@ function BU_chartUnitKind(unitToken) {
     if (t === "in" || t === "inch") { return "rain"; }
     if (t === "km" || t.indexOf("kilometer") !== -1) { return "distance"; }
     if (t === "mi" || t === "mile" || t.indexOf("mile") !== -1) { return "distance"; }
+    if (t === "m" || t === "meter" || t === "metre") { return "altitude"; }
+    if (t === "ft" || t === "foot" || t === "feet") { return "altitude"; }
     return null;
 }
 
@@ -2860,6 +2868,7 @@ function BU_chartMetricWXToDisplay(kind, value) {
         case "rain":     return s.rain(value);
         case "rainrate": return s.rain(value);
         case "distance": return s.distance(value);
+        case "altitude": return s.altitude(value);
         default:         return value;
     }
 }
@@ -2875,6 +2884,7 @@ function BU_chartUnitLabelFor(kind) {
         case "rain":     return s.rl;
         case "rainrate": return s.rrl;
         case "distance": return s.dl;
+        case "altitude": return s.al;
         default:         return "";
     }
 }
@@ -2895,13 +2905,30 @@ function BU_convertChartValue(value, unitToken) {
 function BU_getSystem() {
     var defaultKey = window.BU_DEFAULT_UNIT_SYSTEM || "metric";
     var key = defaultKey;
-    try { key = localStorage.getItem("belchertown_unit_system") || defaultKey; } catch(e) {}
+    if (window.BU_UNIT_SWITCHER_ENABLED) {
+        try { key = localStorage.getItem("belchertown_unit_system") || defaultKey; } catch(e) {}
+    }
     return BU_SYS[key] ? key : (BU_SYS[defaultKey] ? defaultKey : "metric");
 }
 
 function BU_fmt(v, dp) {
     if (v === null || v === undefined || isNaN(v)) { return null; }
-    return parseFloat(v.toFixed(dp !== undefined ? dp : 1));
+    var decimals = parseInt(dp !== undefined ? dp : 1, 10);
+    if (isNaN(decimals)) { decimals = 1; }
+    return Number(v).toLocaleString("$system_locale_js", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function BU_obsDecimals(obsName, fallback) {
+    if (typeof unit_rounding_array === "object" && unit_rounding_array && unit_rounding_array.hasOwnProperty(obsName)) {
+        var rounding = unit_rounding_array[obsName];
+        if (rounding === "%d") { return 0; }
+        var parsed = parseInt(rounding, 10);
+        if (!isNaN(parsed)) { return parsed; }
+    }
+    return fallback;
 }
 
 function BU_setText(sel, val) {
@@ -2914,6 +2941,150 @@ function BU_setHtml(sel, val) {
     document.querySelectorAll(sel).forEach(function(el) { el.innerHTML = val; });
 }
 
+#if $unitSwitcherJsEnabled
+function BU_formatCurrentObservation(value, kind, decimals) {
+    var num = parseFloat(value);
+    if (isNaN(num)) { return null; }
+    var converted = BU_chartMetricWXToDisplay(kind, num);
+    var formatted = BU_fmt(converted, decimals);
+    if (formatted === null) { return null; }
+    var label = BU_chartUnitLabelFor(kind);
+    return formatted + (label ? "\u00a0" + label : "");
+}
+
+function BU_stationObservationUnitMetadata(data) {
+    return data &&
+        data.station_observations &&
+        data.station_observations.unit_switch &&
+        typeof data.station_observations.unit_switch === "object"
+        ? data.station_observations.unit_switch
+        : null;
+}
+
+function BU_applyStationObservationUnitMetadata(metaByObs, valueResolver) {
+    if (!metaByObs) { return; }
+    Object.keys(metaByObs).forEach(function(obsName) {
+        var meta = metaByObs[obsName];
+        if (!meta || !meta.selector || !meta.kind) { return; }
+        var rawValue = valueResolver ? valueResolver(obsName, meta) : meta.raw;
+        var value = BU_formatCurrentObservation(rawValue, meta.kind, meta.decimals);
+        if (value !== null) {
+            BU_setHtml(meta.selector, value);
+        }
+    });
+}
+
+function BU_mqttObservationValue(obsName, meta, packet) {
+    if (!packet) { return null; }
+    var keys = [];
+    if (Array.isArray(meta.mqtt_keys)) {
+        keys = keys.concat(meta.mqtt_keys);
+    }
+    var selectorName = meta.selector ? String(meta.selector).replace(/^\./, "") : "";
+    var names = [obsName, selectorName];
+    var suffixByKind = {
+        temp: "_C",
+        press: "_mbar",
+        rain: "_mm",
+        rainrate: "_mm_per_hour",
+        speed: "_mps",
+        distance: "_km",
+        altitude: "_meter"
+    };
+    var suffix = suffixByKind[meta.kind];
+    if (suffix) {
+        names.forEach(function(name) {
+            if (name && keys.indexOf(name + suffix) === -1) {
+                keys.push(name + suffix);
+            }
+        });
+    }
+    for (var i = 0; i < keys.length; i++) {
+        if (packet[keys[i]] !== undefined && packet[keys[i]] !== null && packet[keys[i]] !== "") {
+            return packet[keys[i]];
+        }
+    }
+
+    var fallbackKeys = [obsName, selectorName];
+    for (var j = 0; j < fallbackKeys.length; j++) {
+        var fallbackKey = fallbackKeys[j];
+        if (!fallbackKey || packet[fallbackKey] === undefined || packet[fallbackKey] === null || packet[fallbackKey] === "") {
+            continue;
+        }
+        var fallbackValue = parseFloat(packet[fallbackKey]);
+        if (isNaN(fallbackValue)) {
+            continue;
+        }
+        var label = "";
+        if (typeof unit_label_array === "object" && unit_label_array) {
+            label = unit_label_array[fallbackKey] || unit_label_array[obsName] || unit_label_array[selectorName] || "";
+        }
+        var token = BU_extractUnitToken(String(label || "").replace(/&nbsp;/g, " ").trim());
+        var toMetricWX = token ? BU_CHART_TO_METRICWX[token] : null;
+        if (toMetricWX) {
+            return toMetricWX(fallbackValue);
+        }
+    }
+
+    return meta.raw;
+}
+
+function BU_mqttPacketMetricWXValue(packet, names, kind, rawSuffixes, fallbackRaw) {
+    if (!packet) { return null; }
+    rawSuffixes = rawSuffixes || [];
+    for (var i = 0; i < names.length; i++) {
+        for (var j = 0; j < rawSuffixes.length; j++) {
+            var key = names[i] + rawSuffixes[j].suffix;
+            if (packet[key] === undefined || packet[key] === null || packet[key] === "") {
+                continue;
+            }
+            var rawValue = parseFloat(packet[key]);
+            if (isNaN(rawValue)) {
+                continue;
+            }
+            return rawSuffixes[j].toMetricWX(rawValue);
+        }
+    }
+
+    for (var k = 0; k < names.length; k++) {
+        var fallbackKey = names[k];
+        if (!fallbackKey || packet[fallbackKey] === undefined || packet[fallbackKey] === null || packet[fallbackKey] === "") {
+            continue;
+        }
+        var fallbackValue = parseFloat(packet[fallbackKey]);
+        if (isNaN(fallbackValue)) {
+            continue;
+        }
+        var label = "";
+        if (typeof unit_label_array === "object" && unit_label_array) {
+            label = unit_label_array[fallbackKey] || "";
+        }
+        var token = BU_extractUnitToken(String(label || "").replace(/&nbsp;/g, " ").trim());
+        var toMetricWX = token ? BU_CHART_TO_METRICWX[token] : null;
+        if (toMetricWX && BU_chartUnitKind(token) === kind) {
+            return toMetricWX(fallbackValue);
+        }
+    }
+
+    return fallbackRaw;
+}
+
+function BU_mqttTemperatureValue(packet, names, fallbackRaw) {
+    return BU_mqttPacketMetricWXValue(packet, names, "temp", [
+        { suffix: "_C", toMetricWX: function(c) { return c; } },
+        { suffix: "_F", toMetricWX: function(f) { return (f - 32) * 5 / 9; } }
+    ], fallbackRaw);
+}
+
+function BU_applyOutTempColor(displayValue, unitLabel) {
+    if (displayValue === null || displayValue === undefined || isNaN(displayValue)) { return; }
+    if (unitLabel === "\u00b0F") {
+        get_outTemp_color("degree_F", displayValue);
+    } else if (unitLabel === "\u00b0C") {
+        get_outTemp_color("degree_C", displayValue);
+    }
+}
+
 // ── Re-render daily high/low and max gust from current weewx_data ──────────
 function BU_applyCurrent(data) {
     if (!data) { return; }
@@ -2924,46 +3095,50 @@ function BU_applyCurrent(data) {
 
     // ── Current temperature ─────────────────────────────────────────────
     var tC = parseFloat(cur.outTemp_raw);
-    if (!isNaN(tC)) {
-        BU_setHtml(".outtemp", BU_fmt(s.temp(tC)));
+    if (tC !== null && tC !== undefined && !isNaN(tC)) {
+        var outTemp = BU_fmt(s.temp(tC), BU_obsDecimals("outTemp", 1));
+        BU_setHtml(".outtemp", outTemp);
         BU_setText(".outtempunitlabelsuper", s.tl);
+        BU_applyOutTempColor(outTemp, s.tl);
     }
 
     var appC = parseFloat(cur.appTemp_raw);
-    if (!isNaN(appC)) {
-        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + BU_fmt(s.temp(appC)) + "\u00a0" + s.tl);
+    if (appC !== null && appC !== undefined && !isNaN(appC)) {
+        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + BU_fmt(s.temp(appC), BU_obsDecimals("appTemp", 1)) + "\u00a0" + s.tl);
     }
 
     var wcC = parseFloat(cur.windchill_raw);
-    if (!isNaN(wcC)) { BU_setText(".curwindchill", BU_fmt(s.temp(wcC)) + "\u00a0" + s.tl); }
+    if (wcC !== null && wcC !== undefined && !isNaN(wcC)) { BU_setText(".curwindchill", BU_fmt(s.temp(wcC), BU_obsDecimals("windchill", 1)) + "\u00a0" + s.tl); }
 
     var dpC = parseFloat(cur.dewpoint_raw);
-    if (!isNaN(dpC)) { BU_setText(".dewpoint", BU_fmt(s.temp(dpC)) + "\u00a0" + s.tl); }
+    if (dpC !== null && dpC !== undefined && !isNaN(dpC)) { BU_setText(".dewpoint", BU_fmt(s.temp(dpC), BU_obsDecimals("dewpoint", 1)) + "\u00a0" + s.tl); }
 
     // ── Current wind ─────────────────────────────────────────────────────
     var wsMs = parseFloat(cur.windspeed_raw);
     var wgMs = parseFloat(cur.windGust_raw);
-    if (!isNaN(wsMs)) { BU_setHtml(".curwindspeed", BU_fmt(s.speed(wsMs))); BU_setText(".mph", s.sl); }
-    if (!isNaN(wgMs)) { BU_setHtml(".curwindgust",  BU_fmt(s.speed(wgMs))); }
+    if (!isNaN(wsMs)) { BU_setHtml(".curwindspeed", BU_fmt(s.speed(wsMs), BU_obsDecimals("windSpeed", 0))); BU_setText(".mph", s.sl); }
+    if (!isNaN(wgMs)) { BU_setHtml(".curwindgust",  BU_fmt(s.speed(wgMs), BU_obsDecimals("windGust", 0))); }
 
     // ── Current pressure ────────────────────────────────────────────────
     var bMb = parseFloat(cur.barometer_raw);
-    if (!isNaN(bMb)) { BU_setHtml(".barometer, .pressure", BU_fmt(s.press(bMb), 2) + "\u00a0" + s.pl); }
+    if (!isNaN(bMb)) { BU_setHtml(".barometer", BU_fmt(s.press(bMb), BU_obsDecimals("barometer", 3)) + "\u00a0" + s.pl); }
 
     // ── Current rain ─────────────────────────────────────────────────────
     var drMm = parseFloat(cur.dayRain_raw);
     var rrMm = parseFloat(cur.rainRate_raw);
-    if (!isNaN(drMm)) { BU_setHtml(".dayRain",  BU_fmt(s.rain(drMm)) + "\u00a0" + s.rl);  }
-    if (!isNaN(rrMm)) { BU_setHtml(".rainRate", BU_fmt(s.rain(rrMm)) + "\u00a0" + s.rrl); }
+    if (!isNaN(drMm)) { BU_setHtml(".dayRain",  BU_fmt(s.rain(drMm), BU_obsDecimals("dayRain", 2)) + "\u00a0" + s.rl);  }
+    if (!isNaN(rrMm)) { BU_setHtml(".rainRate", BU_fmt(s.rain(rrMm), BU_obsDecimals("rainRate", 2)) + "\u00a0" + s.rrl); }
 
     // ── Daily high/low/gust ──────────────────────────────────────────────
     var hiC = parseFloat((day.outTemp || {}).max_raw);
     var loC = parseFloat((day.outTemp || {}).min_raw);
-    if (!isNaN(hiC)) { BU_setHtml(".high", BU_fmt(s.temp(hiC)) + "\u00a0" + s.tl); }
-    if (!isNaN(loC)) { BU_setHtml(".low",  BU_fmt(s.temp(loC)) + "\u00a0" + s.tl); }
+    if (!isNaN(hiC)) { BU_setHtml(".high", BU_fmt(s.temp(hiC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
+    if (!isNaN(loC)) { BU_setHtml(".low",  BU_fmt(s.temp(loC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
 
     var gustMs = parseFloat((day.wind || {}).max_raw);
-    if (!isNaN(gustMs)) { BU_setHtml(".dailymaxgust", BU_fmt(s.speed(gustMs))); }
+    if (!isNaN(gustMs)) { BU_setHtml(".dailymaxgust", BU_fmt(s.speed(gustMs), BU_obsDecimals("windGust", 0))); }
+
+    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(data));
 }
 
 // ── Re-render the daily/weekly/yesterday snapshot grid ─────────────────────
@@ -2976,18 +3151,18 @@ function BU_applySnapshot(data, key, prefix) {
 
     var hiC = parseFloat((d.outTemp || {}).max_raw);
     var loC = parseFloat((d.outTemp || {}).min_raw);
-    if (!isNaN(hiC)) { BU_setHtml("." + prefix + "high", BU_fmt(s.temp(hiC)) + "\u00a0" + s.tl); }
-    if (!isNaN(loC)) { BU_setHtml("." + prefix + "low",  BU_fmt(s.temp(loC)) + "\u00a0" + s.tl); }
+    if (!isNaN(hiC)) { BU_setHtml("." + prefix + "high", BU_fmt(s.temp(hiC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
+    if (!isNaN(loC)) { BU_setHtml("." + prefix + "low",  BU_fmt(s.temp(loC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
 
     var wAvgMs = parseFloat((d.wind || {}).avg_raw);
     var wMaxMs = parseFloat((d.wind || {}).max_raw);
-    if (!isNaN(wAvgMs)) { BU_setHtml("." + prefix + "windavg", BU_fmt(s.speed(wAvgMs)) + "\u00a0" + s.sl); }
-    if (!isNaN(wMaxMs)) { BU_setHtml("." + prefix + "windmax", BU_fmt(s.speed(wMaxMs)) + "\u00a0" + s.sl); }
+    if (!isNaN(wAvgMs)) { BU_setHtml("." + prefix + "windavg", BU_fmt(s.speed(wAvgMs), BU_obsDecimals("windSpeed", 0)) + "\u00a0" + s.sl); }
+    if (!isNaN(wMaxMs)) { BU_setHtml("." + prefix + "windmax", BU_fmt(s.speed(wMaxMs), BU_obsDecimals("windGust", 0)) + "\u00a0" + s.sl); }
 
     var rSumMm = parseFloat((d.rain || {}).sum_raw);
     var rMaxMm = parseFloat((d.rain || {}).max_raw);
-    if (!isNaN(rSumMm)) { BU_setHtml("." + prefix + "rain",     BU_fmt(s.rain(rSumMm)) + "\u00a0" + s.rl);  }
-    if (!isNaN(rMaxMm)) { BU_setHtml("." + prefix + "rainrate", BU_fmt(s.rain(rMaxMm)) + "\u00a0" + s.rrl); }
+    if (!isNaN(rSumMm)) { BU_setHtml("." + prefix + "rain",     BU_fmt(s.rain(rSumMm), BU_obsDecimals("rain", 2)) + "\u00a0" + s.rl);  }
+    if (!isNaN(rMaxMm)) { BU_setHtml("." + prefix + "rainrate", BU_fmt(s.rain(rMaxMm), BU_obsDecimals("rainRate", 2)) + "\u00a0" + s.rrl); }
 }
 
 function BU_applyDailySnapshot(data, key) { BU_applySnapshot(data, key, "dailystats"); }
@@ -2999,32 +3174,41 @@ function BU_applyMQTT(data) {
     var sysKey = BU_getSystem();
     var s = BU_SYS[sysKey];
 
-    var tC = parseFloat(data.outTemp_C);
-    if (!isNaN(tC)) { BU_setHtml(".outtemp", BU_fmt(s.temp(tC))); BU_setText(".outtempunitlabelsuper", s.tl); }
-
-    var appC = parseFloat(data.appTemp_C);
-    if (!isNaN(appC)) {
-        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + BU_fmt(s.temp(appC)) + "\u00a0" + s.tl);
+    var tC = BU_mqttTemperatureValue(data, ["outTemp"], null);
+    if (tC !== null && tC !== undefined && !isNaN(tC)) {
+        var outTemp = BU_fmt(s.temp(tC), BU_obsDecimals("outTemp", 1));
+        BU_setHtml(".outtemp", outTemp);
+        BU_setText(".outtempunitlabelsuper", s.tl);
+        BU_applyOutTempColor(outTemp, s.tl);
     }
 
-    var wcC = parseFloat(data.windchill_C);
-    if (!isNaN(wcC)) { BU_setText(".curwindchill", BU_fmt(s.temp(wcC)) + "\u00a0" + s.tl); }
+    var appC = BU_mqttTemperatureValue(data, ["appTemp"], null);
+    if (appC !== null && appC !== undefined && !isNaN(appC)) {
+        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + BU_fmt(s.temp(appC), BU_obsDecimals("appTemp", 1)) + "\u00a0" + s.tl);
+    }
 
-    var dpC = parseFloat(data.dewpoint_C);
-    if (!isNaN(dpC)) { BU_setText(".dewpoint", BU_fmt(s.temp(dpC)) + "\u00a0" + s.tl); }
+    var wcC = BU_mqttTemperatureValue(data, ["windchill"], null);
+    if (wcC !== null && wcC !== undefined && !isNaN(wcC)) { BU_setText(".curwindchill", BU_fmt(s.temp(wcC), BU_obsDecimals("windchill", 1)) + "\u00a0" + s.tl); }
+
+    var dpC = BU_mqttTemperatureValue(data, ["dewpoint"], null);
+    if (dpC !== null && dpC !== undefined && !isNaN(dpC)) { BU_setText(".dewpoint", BU_fmt(s.temp(dpC), BU_obsDecimals("dewpoint", 1)) + "\u00a0" + s.tl); }
 
     var wsMs = parseFloat(data.windSpeed_mps);
     var wgMs = parseFloat(data.windGust_mps);
-    if (!isNaN(wsMs)) { BU_setHtml(".curwindspeed", BU_fmt(s.speed(wsMs))); BU_setText(".mph", s.sl); }
-    if (!isNaN(wgMs)) { BU_setHtml(".curwindgust",  BU_fmt(s.speed(wgMs))); }
+    if (!isNaN(wsMs)) { BU_setHtml(".curwindspeed", BU_fmt(s.speed(wsMs), BU_obsDecimals("windSpeed", 0))); BU_setText(".mph", s.sl); }
+    if (!isNaN(wgMs)) { BU_setHtml(".curwindgust",  BU_fmt(s.speed(wgMs), BU_obsDecimals("windGust", 0))); }
 
     var bMb = parseFloat(data.barometer_mbar);
-    if (!isNaN(bMb)) { BU_setHtml(".barometer, .pressure", BU_fmt(s.press(bMb), 2) + "\u00a0" + s.pl); }
+    if (!isNaN(bMb)) { BU_setHtml(".barometer", BU_fmt(s.press(bMb), BU_obsDecimals("barometer", 3)) + "\u00a0" + s.pl); }
 
     var drMm = parseFloat(data.dayRain_mm);
     var rrMm = parseFloat(data.rainRate_mm_per_hour);
-    if (!isNaN(drMm)) { BU_setHtml(".dayRain",  BU_fmt(s.rain(drMm)) + "\u00a0" + s.rl);  }
-    if (!isNaN(rrMm)) { BU_setHtml(".rainRate", BU_fmt(s.rain(rrMm)) + "\u00a0" + s.rrl); }
+    if (!isNaN(drMm)) { BU_setHtml(".dayRain",  BU_fmt(s.rain(drMm), BU_obsDecimals("dayRain", 2)) + "\u00a0" + s.rl);  }
+    if (!isNaN(rrMm)) { BU_setHtml(".rainRate", BU_fmt(s.rain(rrMm), BU_obsDecimals("rainRate", 2)) + "\u00a0" + s.rrl); }
+
+    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(weewx_data), function(obsName, meta) {
+        return BU_mqttObservationValue(obsName, meta, data);
+    });
 }
 
 // ── Re-apply everything we know about when the user switches systems ───────

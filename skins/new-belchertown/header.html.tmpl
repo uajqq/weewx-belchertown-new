@@ -106,7 +106,7 @@
 #if "f" in $unitSwitcherTempLabel
 #set global $unitSwitcherDefault = "us"
 #elif "kt" in $unitSwitcherWindLabel or "knot" in $unitSwitcherWindLabel
-#set global $unitSwitcherDefault = "aviation"
+#set global $unitSwitcherDefault = "nautical"
 #elif "mph" in $unitSwitcherWindLabel
 #set global $unitSwitcherDefault = "uk"
 #elif "m/s" in $unitSwitcherWindLabel or "meter_per_second" in $unitSwitcherWindLabel
@@ -115,6 +115,18 @@
 #set global $unitSwitcherDefault = "canada"
 #elif "km" in $unitSwitcherWindLabel
 #set global $unitSwitcherDefault = "metric"
+#end if
+#set global $unitSwitcherDefaultLabel = "Metric"
+#if $unitSwitcherDefault == "us"
+#set global $unitSwitcherDefaultLabel = "US Customary"
+#elif $unitSwitcherDefault == "uk"
+#set global $unitSwitcherDefaultLabel = "UK"
+#elif $unitSwitcherDefault == "scandinavia"
+#set global $unitSwitcherDefaultLabel = "Scandinavia"
+#elif $unitSwitcherDefault == "canada"
+#set global $unitSwitcherDefaultLabel = "Canada"
+#elif $unitSwitcherDefault == "nautical"
+#set global $unitSwitcherDefaultLabel = "Nautical"
 #end if
 #set global $unitSwitcherEnabled = False
 #if $Extras.has_key('unit_switching') and str($Extras.unit_switching).strip() == "1"
@@ -555,34 +567,28 @@
         #include "header.inc"
         #end if
 
-        #if $unitSwitcherEnabled
         <script>
             window.BU_DEFAULT_UNIT_SYSTEM = "$unitSwitcherDefault";
-            window.BU_UNIT_SWITCHER_ENABLED = true;
+            window.BU_UNIT_SWITCHER_ENABLED = #if $unitSwitcherEnabled#true#else#false#end if#;
         </script>
-        #end if
         #if $unitSwitcherEnabled
         <style>
-            .unitSwitcherButtons { display: flex; flex-wrap: wrap; gap: 6px; }
-            .unitSwitcherButton {
-                flex: 1 1 auto;
-                padding: 6px 10px;
-                font-size: 0.85rem;
+            .unitSwitcherSelect {
+                width: 100%;
+                min-width: 190px;
+                padding: 6px 32px 6px 10px;
+                font-size: 0.9rem;
                 border: 1px solid var(--bs-border-color, #ccc);
                 border-radius: 6px;
-                background: transparent;
+                background-color: var(--bs-body-bg, #fff);
                 color: var(--bs-body-color, #212529);
-                cursor: pointer;
-                white-space: nowrap;
             }
-            .unitSwitcherButton:hover { background: rgba(0,0,0,0.05); }
-            .unitSwitcherButton.is-active {
-                background: var(--bs-primary, #0d6efd);
-                color: #fff;
+            .unitSwitcherSelect:focus {
                 border-color: var(--bs-primary, #0d6efd);
+                box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.15);
+                outline: 0;
             }
-            [data-bs-theme="dark"] .unitSwitcherButton { color: var(--bs-body-color, #e9ecef); }
-            [data-bs-theme="dark"] .unitSwitcherButton:hover { background: rgba(255,255,255,0.08); }
+            [data-bs-theme="dark"] .unitSwitcherSelect { background-color: var(--bs-body-bg, #212529); color: var(--bs-body-color, #e9ecef); }
         </style>
         #end if
 
@@ -651,14 +657,15 @@
                                                 #if $unitSwitcherEnabled
                                                 <h6 class="dropdown-header settings-dropdown-header">Units</h6>
                                                 <div class="settings-toggle-row">
-                                                    <div class="unitSwitcherButtons" role="group" aria-label="Units">
-                                                        <button type="button" class="unitSwitcherButton" data-unit="us">US Customary</button>
-                                                        <button type="button" class="unitSwitcherButton" data-unit="uk">UK</button>
-                                                        <button type="button" class="unitSwitcherButton" data-unit="metric">Metric</button>
-                                                        <button type="button" class="unitSwitcherButton" data-unit="scandinavia">Scandinavia</button>
-                                                        <button type="button" class="unitSwitcherButton" data-unit="canada">Canada</button>
-                                                        <button type="button" class="unitSwitcherButton" data-unit="aviation">Aviation</button>
-                                                    </div>
+                                                    <select class="unitSwitcherSelect" aria-label="Units">
+                                                        <option value="" selected>Default ($unitSwitcherDefaultLabel)</option>
+                                                        <option value="us">US Customary</option>
+                                                        <option value="uk">UK</option>
+                                                        <option value="metric">Metric</option>
+                                                        <option value="scandinavia">Scandinavia</option>
+                                                        <option value="canada">Canada</option>
+                                                        <option value="nautical">Nautical</option>
+                                                    </select>
                                                 </div>
                                                 #end if
                                             </div>
@@ -679,47 +686,47 @@
             <script>
             (function() {
                 function initUnitSwitcher() {
-                    // There can be more than one of these on the page now: the
-                    // desktop settings dropdown (header) and the offcanvas
-                    // settings panel (footer, used on mobile widths). Select by
-                    // class rather than id so both stay in sync - duplicate ids
-                    // would break getElementById/querySelector("#...") lookups.
-                    var containers = document.querySelectorAll(".unitSwitcherButtons");
-                    if (!containers.length) { return; }
+                    var selects = document.querySelectorAll(".unitSwitcherSelect");
+                    if (!selects.length) { return; }
 
                     var STORAGE_KEY = "belchertown_unit_system";
                     var DEFAULT_UNIT = window.BU_DEFAULT_UNIT_SYSTEM || "metric";
+                    var VALID_UNITS = ["us", "uk", "metric", "scandinavia", "canada", "nautical"];
 
-                    function setActive(key) {
-                        containers.forEach(function(container) {
-                            container.querySelectorAll(".unitSwitcherButton").forEach(function(btn) {
-                                btn.classList.toggle("is-active", btn.getAttribute("data-unit") === key);
-                            });
+                    function setSelected(key) {
+                        selects.forEach(function(select) {
+                            select.value = key || "";
                         });
                     }
 
                     var stored = null;
                     try { stored = localStorage.getItem(STORAGE_KEY); } catch(ex) {}
-                    setActive(stored || DEFAULT_UNIT);
+                    if (VALID_UNITS.indexOf(stored) === -1) {
+                        stored = "";
+                    }
+                    setSelected(stored);
 
-                    containers.forEach(function(container) {
-                        container.querySelectorAll(".unitSwitcherButton").forEach(function(btn) {
-                            btn.addEventListener("click", function(e) {
-                                e.preventDefault();
-                                var key = this.getAttribute("data-unit");
-                                try { localStorage.setItem(STORAGE_KEY, key); } catch(ex) {}
-                                setActive(key);
-
-                                try {
-                                    window.dispatchEvent(new CustomEvent("belchertownUnitsChanged", {
-                                        detail: { system: key }
-                                    }));
-                                } catch(ex) {
-                                    if (typeof window.Event === "function") {
-                                        window.dispatchEvent(new Event("belchertownUnitsChanged"));
-                                    }
+                    selects.forEach(function(select) {
+                        select.addEventListener("change", function() {
+                            var key = this.value;
+                            try {
+                                if (key) {
+                                    localStorage.setItem(STORAGE_KEY, key);
+                                } else {
+                                    localStorage.removeItem(STORAGE_KEY);
                                 }
-                            });
+                            } catch(ex) {}
+                            setSelected(key);
+
+                            try {
+                                window.dispatchEvent(new CustomEvent("belchertownUnitsChanged", {
+                                    detail: { system: key || DEFAULT_UNIT, isDefault: !key }
+                                }));
+                            } catch(ex) {
+                                if (typeof window.Event === "function") {
+                                    window.dispatchEvent(new Event("belchertownUnitsChanged"));
+                                }
+                            }
                         });
                     });
                 }

@@ -38,14 +38,15 @@
             #if $unitSwitcherEnabled
             <h6 class="offcanvas-settings-heading">Units</h6>
             <div class="offcanvas-theme-row">
-                <div class="unitSwitcherButtons" role="group" aria-label="Units">
-                    <button type="button" class="unitSwitcherButton" data-unit="us">US Customary</button>
-                    <button type="button" class="unitSwitcherButton" data-unit="uk">UK</button>
-                    <button type="button" class="unitSwitcherButton" data-unit="metric">Metric</button>
-                    <button type="button" class="unitSwitcherButton" data-unit="scandinavia">Scandinavia</button>
-                    <button type="button" class="unitSwitcherButton" data-unit="canada">Canada</button>
-                    <button type="button" class="unitSwitcherButton" data-unit="aviation">Aviation</button>
-                </div>
+                <select class="unitSwitcherSelect" aria-label="Units">
+                    <option value="" selected>Default ($unitSwitcherDefaultLabel)</option>
+                    <option value="us">US Customary</option>
+                    <option value="uk">UK</option>
+                    <option value="metric">Metric</option>
+                    <option value="scandinavia">Scandinavia</option>
+                    <option value="canada">Canada</option>
+                    <option value="nautical">Nautical</option>
+                </select>
             </div>
             #end if
         </div>

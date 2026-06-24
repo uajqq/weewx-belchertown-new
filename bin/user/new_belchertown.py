@@ -1487,6 +1487,58 @@ def _station_observation_entries(station_observations):
     ]
 
 
+UNIT_SWITCH_GROUP_KINDS = {
+    "group_temperature": "temp",
+    "group_pressure": "press",
+    "group_rain": "rain",
+    "group_rainrate": "rainrate",
+    "group_speed": "speed",
+    "group_distance": "distance",
+    "group_altitude": "altitude",
+}
+
+
+def _unit_switch_kind_for_observation(obs_name):
+    """Return the front-end unit-switch kind for a WeeWX observation."""
+    obs_group = weewx.units.obs_group_dict.get(obs_name)
+    return UNIT_SWITCH_GROUP_KINDS.get(obs_group)
+
+
+def _unit_switch_raw_from_value_helper(value_helper):
+    """Return a METRICWX raw value for a standard WeeWX ValueHelper."""
+    value_t = getattr(value_helper, "value_t", None)
+    if not value_t:
+        return None
+    try:
+        return weewx.units.convertStd(value_t, weewx.METRICWX)[0]
+    except Exception:
+        return None
+
+
+def _unit_switch_selector(obs_name):
+    """Return the CSS selector used for a station observation value span."""
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", str(obs_name)):
+        return None
+    return "." + str(obs_name)
+
+
+def _unit_switch_station_observation_meta(obs_name, value_helper, decimals=None):
+    """Build client-side unit-switch metadata for a station observation."""
+    kind = _unit_switch_kind_for_observation(obs_name)
+    selector = _unit_switch_selector(obs_name)
+    raw_value = _unit_switch_raw_from_value_helper(value_helper)
+    if not kind or selector is None or raw_value is None:
+        return None
+    meta = {
+        "selector": selector,
+        "kind": kind,
+        "raw": raw_value,
+    }
+    if decimals is not None:
+        meta["decimals"] = decimals
+    return meta
+
+
 def _forecast_alert_limit_value(extras_dict):
     """Return a sane forecast alert limit."""
     limit_value = to_int((extras_dict or {}).get("forecast_alert_limit", 1))
@@ -6592,6 +6644,7 @@ class getData(SearchList):
 
         station_obs_json = OrderedDict()
         station_obs_source_json = OrderedDict()
+        station_obs_unit_json = OrderedDict()
         station_obs_parts = []
         station_observations = _station_observation_entries(
             extras_dict["station_observations"]
@@ -6641,13 +6694,28 @@ class getData(SearchList):
                     self.generator.converter,
                 )
                 dayRain_sum = getattr(obs_binder, "sum")
+                rain_rate = getattr(current, "rainRate")
+                day_rain_meta = _unit_switch_station_observation_meta(
+                    "rain", dayRain_sum
+                )
+                if day_rain_meta:
+                    day_rain_meta["selector"] = ".dayRain"
+                    day_rain_meta["mqtt_keys"] = ["dayRain_mm"]
+                    station_obs_unit_json["dayRain"] = day_rain_meta
+                rain_rate_meta = _unit_switch_station_observation_meta(
+                    "rainRate", rain_rate
+                )
+                if rain_rate_meta:
+                    rain_rate_meta["selector"] = ".rainRate"
+                    rain_rate_meta["mqtt_keys"] = ["rainRate_mm_per_hour"]
+                    station_obs_unit_json["rainRate"] = rain_rate_meta
                 # Need to use dayRain for class name since that is weewx-mqtt
                 # payload's name
                 obs_rain_output = (
                     f"<span class='dayRain'>{dayRain_sum}</span>"
                 )
                 obs_rain_output += "<br class='station-observation-break'>"
-                obs_rain_output += f"<span class='rainRate'>{getattr(current, 'rainRate')}</span>"
+                obs_rain_output += f"<span class='rainRate'>{rain_rate}</span>"
 
                 # Empty field for the JSON "current" output
                 obs_output = ""
@@ -6663,6 +6731,9 @@ class getData(SearchList):
                 try:
                     obs_output = getattr(current, obs)
                     obs_output_str = str(obs_output)
+                    obs_meta = _unit_switch_station_observation_meta(obs, obs_output)
+                    if obs_meta and obs not in station_obs_unit_json:
+                        station_obs_unit_json[obs] = obs_meta
                 except Exception:
                     obs_output = "N/A"
                     obs_output_str = "N/A"
@@ -6783,6 +6854,14 @@ class getData(SearchList):
         all_obs_unit_labels_json["cloud_cover"] = skin_dict["Units"]["Labels"].get(
             "percent", "%"
         )
+        for obs, obs_meta in station_obs_unit_json.items():
+            obs_name = "rain" if obs == "dayRain" else obs
+            if "decimals" not in obs_meta and obs_name in all_obs_rounding_json:
+                try:
+                    obs_meta["decimals"] = int(all_obs_rounding_json[obs_name])
+                except Exception:
+                    if str(all_obs_rounding_json[obs_name]).strip() == "%d":
+                        obs_meta["decimals"] = 0
 
         # ==============================================================================
         # Social Share
@@ -6963,6 +7042,7 @@ class getData(SearchList):
             "cloud_cover": cloud_cover,
             "station_obs_json": json.dumps(station_obs_json),
             "station_obs_source_json": json.dumps(station_obs_source_json),
+            "station_obs_unit_json": json.dumps(station_obs_unit_json),
             "station_obs_html": station_obs_html,
             "all_obs_rounding_json": json.dumps(all_obs_rounding_json),
             "all_obs_unit_labels_json": json.dumps(all_obs_unit_labels_json),

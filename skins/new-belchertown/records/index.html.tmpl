@@ -90,7 +90,7 @@
             var converted = BU_chartMetricWXToDisplay(kind, num);
             var dp = (typeof decimals === "number") ? decimals : 1;
             var fmtVal = (typeof BU_fmt === "function") ? BU_fmt(converted, dp) : converted;
-            if (fmtVal === null || fmtVal === undefined || isNaN(fmtVal)) {
+            if (fmtVal === null || fmtVal === undefined) {
                 return null;
             }
             var label = (typeof BU_chartUnitLabelFor === "function") ? BU_chartUnitLabelFor(kind) : "";
@@ -300,24 +300,15 @@
                     title: "$obs.label.records_rain_records",
                     yearLabel: "$current.dateTime.format('%Y')",
                     alltimeLabel: "$obs.label.records_all_time",
-                    ## NOTE: the rain rows below remain entirely SLE-driven
-                    ## (rainiest_day, rainiest_month, days_with/without_rain,
-                    ## rain_highest_year) and are left unconverted pending
-                    ## review of that Python source - see chat notes. Only
-                    ## the highest daily rain RATE row below converts, since
-                    ## that one is a standard WeeWX ValueHelper.
+                    ## Rainfall rows use raw METRICWX values where available
+                    ## so the front-end switcher can re-render them in the
+                    ## selected unit system.
                     rows: [
                         makeRecord(
                             "$obs.label.records_highest_daily_rainfall",
-                            metric("rain", "maxsum", "maxsumtime", "maxsumtime_raw"),
+                            metric("rain", "maxsum_raw", "maxsumtime", "maxsumtime_raw", "rain"),
                             { value: $rainiest_day_raw[1], dateText: "$rainiest_day[0]", dateRaw: "$rainiest_day[0]" },
                             { value: $at_rainiest_day_raw[1], dateText: "$at_rainiest_day[0]", dateRaw: "$at_rainiest_day[0]" },
-                            ## NOTE: day/yesterday/week/month columns still read
-                            ## weewx_data.json's pre-formatted "maxsum" field
-                            ## (skin-default unit) - that file doesn't yet
-                            ## expose a raw mm companion for this particular
-                            ## field. Year/All-time below are now fixed via
-                            ## belchertown.py's new rainiest_day_raw.
                             { omitTime: true, hideDatePeriods: ["day", "yesterday"], kind: "rain" }
                         ),
                         makeRecord(
@@ -339,7 +330,7 @@
                         ),
                         makeRecord(
                             "$obs.label.records_total_rainfall",
-                            metric("rain", "sum", null, null),
+                            metric("rain", "sum_raw", null, null, "rain"),
                             { value: $year.rain.sum.mm.raw, dateText: "$current.dateTime.format('%Y')", dateRaw: null },
                             { value: $at_rain_highest_year_raw[1], dateText: "$at_rain_highest_year[0]", dateRaw: null },
                             { omitTime: true, hideDatePeriods: ["day", "yesterday"], hideAlltimeLabel: true, kind: "rain" }

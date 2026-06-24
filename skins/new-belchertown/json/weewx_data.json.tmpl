@@ -183,7 +183,8 @@
     },
     "station_observations": {
         "current": $station_obs_json,
-        "sources": $station_obs_source_json
+        "sources": $station_obs_source_json,
+        "unit_switch": $station_obs_unit_json
     },
     "unit_rounding": $all_obs_rounding_json,
     "unit_label": $all_obs_unit_labels_json,
@@ -360,6 +361,7 @@
             "sum": "$day.rain.sum",
             "sum_raw": $day.rain.sum.mm.raw,
             "maxsum": "$day.rain.sum",
+            "maxsum_raw": $day.rain.sum.mm.raw,
             "maxsumtime": "$day.dateTime",
             "max": "$day.rainRate.max",
             "max_raw": $day.rainRate.max.mm_per_hour.raw,
@@ -486,6 +488,7 @@
             "sum": "$span(time_delta=604800).rain.sum",
             "sum_raw": $span(time_delta=604800).rain.sum.mm.raw,
             "maxsum": "$week_rainiest_day[1] $unit.label.rain",
+            "maxsum_raw": $week_rainiest_day_raw[1],
             "maxsumtime": "$week_rainiest_day[0]",
             "maxsumtime_raw": "$week_rainiest_day[0]",
             "max": "$span(time_delta=604800).rainRate.max",
@@ -615,6 +618,7 @@
             "sum": "$month.rain.sum",
             "sum_raw": $month.rain.sum.mm.raw,
             "maxsum": "$month.rain.maxsum",
+            "maxsum_raw": $month.rain.maxsum.mm.raw,
             "maxsumtime": "$month.rain.maxsumtime",
             "maxsumtime_raw": "$month.rain.maxsumtime.raw",
             "max": "$month.rainRate.max",
@@ -841,6 +845,7 @@
             "sum": "$yesterday.rain.sum",
             "sum_raw": $yesterday.rain.sum.mm.raw,
             "maxsum": "$yesterday.rain.sum",
+            "maxsum_raw": $yesterday.rain.sum.mm.raw,
             "maxsumtime": "$yesterday.dateTime",
             "max": "$yesterday.rainRate.max",
             "max_raw": $yesterday.rainRate.max.mm_per_hour.raw,

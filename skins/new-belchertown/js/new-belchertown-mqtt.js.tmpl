@@ -1337,7 +1337,7 @@ function update_current_wx(data) {
     // fields from the MQTT payload (outTemp_C, windSpeed_mps, windGust_mps,
     // barometer_mbar, dayRain_mm, rainRate_mm_per_hour, appTemp_C,
     // dewpoint_C, windchill_C) and writes the chosen-unit values into
-    // .outtemp, .curwindspeed, .curwindgust, .mph, .barometer/.pressure,
+    // .outtemp, .curwindspeed, .curwindgust, .mph, pressure observations,
     // .dayRain, .rainRate, .apptemp, .dewpoint, .curwindchill.
     try {
         window.BU_lastMQTT = data;
