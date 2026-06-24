@@ -2822,7 +2822,7 @@ function BU_chartUnitKind(unitToken) {
     if (t.indexOf("c") !== -1 && (t === "\u00b0c" || t === "degree_c" || t === "c")) { return "temp"; }
     if (t === "\u00b0f" || t === "degree_f" || t === "f") { return "temp"; }
     if (t.indexOf("mph") !== -1 || t === "mile_per_hour") { return "speed"; }
-    if (t.indexOf("km") !== -1) { return "speed"; }
+    if (t === "km/h" || t === "km_per_hour" || t === "kph") { return "speed"; }
     if (t.indexOf("m/s") !== -1 || t === "meter_per_second" || t === "mps") { return "speed"; }
     if (t === "kt" || t === "knot" || t.indexOf("knot") !== -1) { return "speed"; }
     if (t.indexOf("hpa") !== -1 || t.indexOf("mbar") !== -1) { return "press"; }
@@ -2920,8 +2920,6 @@ function BU_applyCurrent(data) {
     var s = BU_SYS[sysKey];
     var cur = data["current"] || {};
     var day = data["day"] || {};
-
-    console.log("[UnitSwitcher] BU_applyCurrent: outTemp_raw=", cur.outTemp_raw, " windspeed_raw=", cur.windspeed_raw, " barometer_raw=", cur.barometer_raw);
 
     // ── Current temperature ─────────────────────────────────────────────
     var tC = parseFloat(cur.outTemp_raw);
