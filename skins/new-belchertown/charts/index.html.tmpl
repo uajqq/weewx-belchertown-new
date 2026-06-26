@@ -18,15 +18,53 @@
                 }
                 var thisPageCharts = chartgroups_raw[chart];
                 var renderedChartGroups = {};
+                var renderingChartGroups = {};
+                var chartGroupRetryTimers = {};
+
+                function scheduleChartGroupRetry(chartgroup, prependRenderTo) {
+                    if (chartGroupRetryTimers[chartgroup]) {
+                        return;
+                    }
+
+                    chartGroupRetryTimers[chartgroup] = window.setTimeout(function() {
+                        chartGroupRetryTimers[chartgroup] = null;
+                        renderChartGroupOnce(chartgroup, prependRenderTo);
+                    }, 15000);
+                }
 
                 function renderChartGroupOnce(chartgroup, prependRenderTo) {
-                    if (renderedChartGroups[chartgroup]) {
+                    if (renderedChartGroups[chartgroup] || renderingChartGroups[chartgroup]) {
                         return;
                     }
 
                     var renderNow = function() {
-                        renderedChartGroups[chartgroup] = true;
-                        showChart(chartgroup, prependRenderTo);
+                        renderingChartGroups[chartgroup] = true;
+                        var renderResult = showChart(chartgroup, prependRenderTo);
+
+                        if (renderResult && typeof renderResult.then === "function") {
+                            renderResult.then(function(rendered) {
+                                if (rendered === false) {
+                                    renderedChartGroups[chartgroup] = false;
+                                    scheduleChartGroupRetry(chartgroup, prependRenderTo);
+                                    return;
+                                }
+
+                                renderedChartGroups[chartgroup] = true;
+                                if (chartGroupRetryTimers[chartgroup]) {
+                                    window.clearTimeout(chartGroupRetryTimers[chartgroup]);
+                                    chartGroupRetryTimers[chartgroup] = null;
+                                }
+                            }).catch(function(err) {
+                                console.log("ERROR: Cannot render charts from [" + chartgroup + "]: " + err.message);
+                                renderedChartGroups[chartgroup] = false;
+                                scheduleChartGroupRetry(chartgroup, prependRenderTo);
+                            }).finally(function() {
+                                renderingChartGroups[chartgroup] = false;
+                            });
+                        } else {
+                            renderedChartGroups[chartgroup] = true;
+                            renderingChartGroups[chartgroup] = false;
+                        }
                     };
 
                     if (typeof showChart !== "function") {

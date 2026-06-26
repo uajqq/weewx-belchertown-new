@@ -2,9 +2,11 @@
 var forecast_last_updated_epoch = null;
 var forecast_relative_timer = null;
 var forecast_refresh_timer = null;
+var forecast_retry_timer = null;
 var forecast_refresh_in_progress = false;
 var forecast_last_fetch_ms = 0;
 var forecast_resume_refresh_min_ms = 60000;
+var forecast_retry_delay_ms = 15000;
 var forecast_refresh_interval_seconds = 3540;
 var forecast_current_conditions_refresh_interval_seconds = 3540;
 var forecast_resume_events_bound = false;
@@ -35,6 +37,48 @@ function forecast_json_url(filename) {
     return get_relative_url() + "/json/" + filename + "?_=" + Date.now();
 }
 
+function forecast_clear_retry_timer() {
+    if (forecast_retry_timer !== null) {
+        window.clearTimeout(forecast_retry_timer);
+        forecast_retry_timer = null;
+    }
+}
+
+function forecast_schedule_retry() {
+    if (forecast_retry_timer !== null || document.hidden) {
+        return;
+    }
+
+    forecast_retry_timer = window.setTimeout(function() {
+        forecast_retry_timer = null;
+        ajaxforecast();
+    }, forecast_retry_delay_ms);
+}
+
+function forecast_fetch_json(filename) {
+    return fetch(forecast_json_url(filename), {cache: "no-store"})
+        .then(function(resp) {
+            if (!resp.ok) {
+                throw new Error("HTTP error! Unable to load " + filename);
+            }
+            return resp.json();
+        })
+        .then(function(data) {
+            return {
+                ok: true,
+                filename: filename,
+                data: data,
+            };
+        })
+        .catch(function(err) {
+            return {
+                ok: false,
+                filename: filename,
+                error: err,
+            };
+        });
+}
+
 function ajaxforecast() {
     const nowMs = Date.now();
     forecast_bind_resume_events();
@@ -46,40 +90,44 @@ function ajaxforecast() {
 
     forecast_refresh_in_progress = true;
     forecast_last_fetch_ms = nowMs;
-    forecast_data = {};
-    current_conditions_data = {};
 
-    const pCurrent = fetch(forecast_json_url("current_conditions.json"), {cache: "no-store"})
-        .then(function(resp) {
-            if (!resp.ok) {
-                throw new Error("HTTP error! Unable to load current_conditions.json");
+    return Promise.all([
+        forecast_fetch_json("current_conditions.json"),
+        forecast_fetch_json("forecast.json"),
+    ])
+        .then(function(results) {
+            const currentResult = results[0];
+            const forecastResult = results[1];
+            const fallbackForecastData = forecastResult.ok
+                ? forecastResult.data
+                : (typeof forecast_data !== "undefined" ? forecast_data : {});
+
+            if (currentResult.ok) {
+                current_conditions_data = currentResult.data;
+                update_current_conditions(currentResult.data, fallbackForecastData);
+            } else {
+                console.error("Forecast fetch failed:", currentResult.error);
             }
-            return resp.json();
-        })
-        .then(function(current_conditions) {
-            current_conditions_data = current_conditions;
-        });
 
-    const pForecast = fetch(forecast_json_url("forecast.json"), {cache: "no-store"})
-        .then(function(resp) {
-            if (!resp.ok) {
-                throw new Error("HTTP error! Unable to load forecast.json");
+            if (forecastResult.ok) {
+                forecast_data = forecastResult.data;
+                update_forecast_data(forecastResult.data);
+            } else {
+                console.error("Forecast fetch failed:", forecastResult.error);
             }
-            return resp.json();
-        })
-        .then(function(forecast) {
-            forecast_data = forecast;
-        });
 
-    const promises = [pCurrent, pForecast];
+            if (currentResult.ok && forecastResult.ok) {
+                forecast_clear_retry_timer();
+                return true;
+            }
 
-    return Promise.all(promises)
-        .then(function() {
-            update_current_conditions(current_conditions_data, forecast_data);
-            update_forecast_data(forecast_data);
+            forecast_schedule_retry();
+            return currentResult.ok || forecastResult.ok;
         })
         .catch(function(err) {
-            console.error("Forecast fetch failed:", err);
+            console.error("Forecast render failed:", err);
+            forecast_schedule_retry();
+            return false;
         })
         .finally(function() {
             forecast_refresh_in_progress = false;
@@ -1060,6 +1108,32 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
     return html;
 }
 
+function forecast_no_data_tile(tileClass) {
+    return '<div class="forecast-day ' + tileClass + ' forecast-tile forecast-no-data">' +
+        '<div class="forecast-conditions">' +
+        '<span class="forecast-condition-text">' + forecast_escape_html(forecast_label_text("$obs.label.no_data")) + '</span>' +
+        '</div>' +
+        '</div>';
+}
+
+function forecast_replace_tiles(selector, html, fallbackTileClass) {
+    const hasNewTiles = String(html || "").trim() !== "";
+
+    document.querySelectorAll(selector).forEach(function(el) {
+        if (hasNewTiles) {
+            el.innerHTML = html;
+            return;
+        }
+
+        if (el.children.length > 0) {
+            belchertown_debug("Forecast: keeping existing " + selector + " tiles because refresh produced no rows.");
+            return;
+        }
+
+        el.innerHTML = forecast_no_data_tile(fallbackTileClass);
+    });
+}
+
 function forecast_fit_daily_condition_text() {
     const minFontSize = 11;
 
@@ -1236,15 +1310,9 @@ function forecast_render_common(data) {
     const onehrHtml = forecast_render_hourly_tiles(hourly, 16, "forecast-1hour");
     const threehrHtml = forecast_render_hourly_tiles(threeHourly, 8, "forecast-3hour");
     const dailyHtml = forecast_render_daily_tiles(daily, 7);
-    document.querySelectorAll(".onehr_forecasts").forEach(function(el) {
-        el.innerHTML = onehrHtml;
-    });
-    document.querySelectorAll(".threehr_forecasts").forEach(function(el) {
-        el.innerHTML = threehrHtml;
-    });
-    document.querySelectorAll(".day_forecasts").forEach(function(el) {
-        el.innerHTML = dailyHtml;
-    });
+    forecast_replace_tiles(".onehr_forecasts", onehrHtml, "forecast-1hour");
+    forecast_replace_tiles(".threehr_forecasts", threehrHtml, "forecast-3hour");
+    forecast_replace_tiles(".day_forecasts", dailyHtml, "forecast-24hour");
     forecast_render_relative_timestamps();
     forecast_start_relative_timer();
     if (typeof forecast_sync_row_height === "function") {

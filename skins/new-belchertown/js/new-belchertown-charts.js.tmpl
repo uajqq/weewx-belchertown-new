@@ -665,7 +665,7 @@ function showChart(json_file, prepend_renderTo = false) {
     });
 
     // Relative URL by finding what page we're on currently.
-    fetch(get_relative_url() + '/json/' + json_file + '.json', {cache: "no-cache"}).then(function(resp) {
+    return fetch(get_relative_url() + '/json/' + json_file + '.json', {cache: "no-cache"}).then(function(resp) {
         if (!resp.ok) {
             throw new Error("HTTP error! Unable to load " + json_file + ".json");
         }
@@ -1951,7 +1951,7 @@ function showChart(json_file, prepend_renderTo = false) {
         };
 
         var requiredModules = belchertown_detect_highcharts_modules(data);
-        highchartsCorePromise.then(function(coreError) {
+        return highchartsCorePromise.then(function(coreError) {
             if (coreError) {
                 throw coreError;
             }
@@ -1959,19 +1959,22 @@ function showChart(json_file, prepend_renderTo = false) {
         }).then(function() {
             belchertown_configure_highcharts_defaults();
             renderCharts();
+            return true;
         }).catch(function(err) {
             if (typeof Highcharts === "undefined") {
                 belchertown_debug("Highcharts load error: " + err.message + ". Skipping chart render.");
-                return;
+                return false;
             }
 
             belchertown_debug("Highcharts module preload error: " + err.message + ". Continuing render with available modules.");
             belchertown_configure_highcharts_defaults();
             renderCharts();
+            return true;
         });
 
     }).catch(function(err) {
         belchertown_debug("Chart data load error: " + err.message + ". Skipping chart render.");
+        return false;
     });
 
 };

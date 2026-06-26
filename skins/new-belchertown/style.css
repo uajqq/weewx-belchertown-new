@@ -3645,9 +3645,8 @@ table.celestial td.label {
   --forecast-meta-size: 14px;
 }
 
-.frontpage .homepage-card--forecast,
+/* Dynamic forecast and Highcharts cards are measured and updated by JS. */
 .frontpage .homepage-secondary-row,
-.frontpage .homepage-card--charts,
 .frontpage .homepage-hook {
   content-visibility: auto;
   contain-intrinsic-size: 720px;

@@ -34,15 +34,56 @@
 
     window.homepage_chartgroup = "$Extras.highcharts_homepage_chartgroup";
     window.homepageChartsInitialized = false;
+    window.homepageChartsRenderInProgress = false;
+    window.homepageChartsRetryTimer = null;
+
+    function scheduleHomepageChartsRetry() {
+        if (window.homepageChartsRetryTimer !== null) {
+            return;
+        }
+
+        window.homepageChartsRetryTimer = window.setTimeout(function() {
+            window.homepageChartsRetryTimer = null;
+            window.renderHomepageCharts(true);
+        }, 15000);
+    }
 
     window.renderHomepageCharts = function(forceRender = false) {
         if (!forceRender && window.homepageChartsInitialized) {
             return;
         }
+        if (window.homepageChartsRenderInProgress) {
+            return;
+        }
 
         var renderChartsNow = function() {
-            showChart(window.homepage_chartgroup);
-            window.homepageChartsInitialized = true;
+            window.homepageChartsRenderInProgress = true;
+            var renderResult = showChart(window.homepage_chartgroup);
+
+            if (renderResult && typeof renderResult.then === "function") {
+                renderResult.then(function(rendered) {
+                    if (rendered === false) {
+                        window.homepageChartsInitialized = false;
+                        scheduleHomepageChartsRetry();
+                        return;
+                    }
+
+                    window.homepageChartsInitialized = true;
+                    if (window.homepageChartsRetryTimer !== null) {
+                        window.clearTimeout(window.homepageChartsRetryTimer);
+                        window.homepageChartsRetryTimer = null;
+                    }
+                }).catch(function(err) {
+                    console.log("ERROR: Cannot render homepage charts: " + err.message);
+                    window.homepageChartsInitialized = false;
+                    scheduleHomepageChartsRetry();
+                }).finally(function() {
+                    window.homepageChartsRenderInProgress = false;
+                });
+            } else {
+                window.homepageChartsInitialized = true;
+                window.homepageChartsRenderInProgress = false;
+            }
         };
 
         if (typeof showChart !== "function") {
