@@ -575,8 +575,22 @@ function forecast_format_alert_start_time(timestamp) {
     return forecast_relative_time(timestamp);
 }
 
+function forecast_alert_start_timestamp(alertObj) {
+    var effectiveTimestamp = alertObj['effective'];
+    var onsetTimestamp = alertObj['onset'];
+    var effectiveEpoch = forecast_number(effectiveTimestamp);
+    var onsetEpoch = forecast_number(onsetTimestamp);
+    var nowEpoch = Date.now() / 1000;
+
+    if (onsetEpoch !== null && onsetEpoch > nowEpoch && (effectiveEpoch === null || effectiveEpoch <= nowEpoch)) {
+        return onsetTimestamp;
+    }
+
+    return effectiveTimestamp || onsetTimestamp;
+}
+
 function forecast_alert_in_effect_text(alertObj) {
-    var startTimestamp = alertObj['effective'] || alertObj['onset'];
+    var startTimestamp = forecast_alert_start_timestamp(alertObj);
     var endTimestamp = alertObj['ends'];
     var startEpoch = forecast_number(startTimestamp);
     var startIsPast = startEpoch !== null && startEpoch <= (Date.now() / 1000);
