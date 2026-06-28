@@ -2301,13 +2301,113 @@ function changeTheme(themeName, toggleOverride = false, themeMode = null) {
     refresh_aqi_color();
 }
 
+function belchertown_snapshot_number(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    var text = String(value).replace(/\u00a0/g, " ").replace(/,/g, ".").trim();
+    var parsed;
+
+    if (!text || text === "--" || text === "N/A") {
+        return null;
+    }
+
+    parsed = parseFloat(text);
+    return isFinite(parsed) ? parsed : null;
+}
+
+function belchertown_snapshot_metric_number(metric, rawKey, displayKey) {
+    var parsed;
+
+    if (!metric) {
+        return null;
+    }
+
+    parsed = belchertown_snapshot_number(metric[rawKey]);
+    if (parsed !== null) {
+        return parsed;
+    }
+
+    return belchertown_snapshot_number(metric[displayKey]);
+}
+
+function belchertown_snapshot_epoch_seconds(value) {
+    var parsed = belchertown_snapshot_number(value);
+
+    if (parsed === null || parsed <= 0) {
+        return null;
+    }
+
+    return parsed;
+}
+
+function belchertown_copy_snapshot_high(target, candidate) {
+    ["max", "max_raw", "maxtime", "maxtime_raw"].forEach(function(field) {
+        if (Object.prototype.hasOwnProperty.call(candidate, field)) {
+            target[field] = candidate[field];
+        }
+    });
+}
+
+function belchertown_normalize_snapshot_period_high(data, targetKey, lookbackDays) {
+    var target = data && data[targetKey] && data[targetKey]["outTemp"];
+    var current = data && data["current"] ? data["current"] : {};
+    var nowSeconds = belchertown_snapshot_epoch_seconds(current["datetime_raw"]);
+    var startSeconds;
+    var targetValue;
+
+    if (!target) {
+        return;
+    }
+
+    if (nowSeconds === null) {
+        nowSeconds = belchertown_snapshot_epoch_seconds(current["epoch"]);
+    }
+
+    if (nowSeconds === null) {
+        return;
+    }
+
+    startSeconds = nowSeconds - (lookbackDays * 24 * 60 * 60);
+    targetValue = belchertown_snapshot_metric_number(target, "max_raw", "max");
+
+    ["month", "year", "alltime"].forEach(function(periodKey) {
+        var candidate = data[periodKey] && data[periodKey]["outTemp"] ? data[periodKey]["outTemp"] : null;
+        var candidateValue = belchertown_snapshot_metric_number(candidate, "max_raw", "max");
+        var candidateTime = candidate ? belchertown_snapshot_epoch_seconds(candidate["maxtime_raw"]) : null;
+
+        if (
+            candidateValue !== null &&
+            candidateTime !== null &&
+            candidateTime >= startSeconds &&
+            candidateTime <= nowSeconds &&
+            (targetValue === null || candidateValue > targetValue)
+        ) {
+            belchertown_copy_snapshot_high(target, candidate);
+            targetValue = candidateValue;
+        }
+    });
+}
+
+function belchertown_normalize_snapshot_highs(data) {
+    if (!data) {
+        return data;
+    }
+
+    belchertown_normalize_snapshot_period_high(data, "week", 7);
+    belchertown_normalize_snapshot_period_high(data, "last365", 365);
+
+    return data;
+}
+
 async function ajaxweewx() {
     var url = get_relative_url() + "/json/weewx_data.json";
     var resp = await fetch(url, {cache: "no-cache"});
     if (!resp.ok) {
         throw new Error("HTTP error! Unable to load weewx_data.json");
     } else {
-        return await resp.json();
+        return belchertown_normalize_snapshot_highs(await resp.json());
     }
 }
 

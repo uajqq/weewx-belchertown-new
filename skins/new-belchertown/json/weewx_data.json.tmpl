@@ -632,6 +632,7 @@
             "max": "$year.outTemp.max",
             "max_raw": $year.outTemp.max.degree_C.raw,
             "maxtime": "$year.outTemp.maxtime",
+            "maxtime_raw": "$year.outTemp.maxtime.raw",
             "min": "$year.outTemp.min",
             "min_raw": $year.outTemp.min.degree_C.raw,
             "mintime": "$year.outTemp.mintime"
@@ -857,6 +858,8 @@
         "outTemp": {
             "max": "$span(time_delta=31536000).outTemp.max",
             "max_raw": $span(time_delta=31536000).outTemp.max.degree_C.raw,
+            "maxtime": "$span(time_delta=31536000).outTemp.maxtime",
+            "maxtime_raw": "$span(time_delta=31536000).outTemp.maxtime.raw",
             "min": "$span(time_delta=31536000).outTemp.min",
             "min_raw": $span(time_delta=31536000).outTemp.min.degree_C.raw,
             "average": "$span(time_delta=31536000).outTemp.avg"
@@ -895,6 +898,8 @@
         "outTemp": {
             "max": "$alltime.outTemp.max",
             "max_raw": $alltime.outTemp.max.degree_C.raw,
+            "maxtime": "$alltime.outTemp.maxtime",
+            "maxtime_raw": "$alltime.outTemp.maxtime.raw",
             "min": "$alltime.outTemp.min",
             "min_raw": $alltime.outTemp.min.degree_C.raw
         },
