@@ -222,7 +222,11 @@
         "windspeed": "$current.windSpeed",
         "windspeed_raw": $current.windSpeed.meter_per_second.raw,
         "winddir": "$current.windDir",
-        "winddir_raw": $current.windDir.raw,
+        #if $current.windDir.raw is not None
+        "winddir_raw": "$current.windDir.raw",
+        #else
+        "winddir_raw": "N/A",
+        #end if
         "winddir_formatted": "$current.windDir.toString(addLabel=False, localize=False)",
         "windGust": "$current.windGust",
         "windGust_formatted": "$current.windGust.toString(addLabel=False, localize=False)",
