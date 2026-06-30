@@ -6947,6 +6947,39 @@ class getData(SearchList):
             if not minify_deps_ok:
                 _log_minifier_missing_error_once(missing_modules)
 
+        charts_page_all_button_label = label_generic_dict.get(
+            "charts_page_all_button", label_dict["charts_page_all_button"]
+        )
+        charts_range_selector_labels = OrderedDict(
+            [
+                (
+                    "day",
+                    label_generic_dict.get("charts_range_selector_1d_button", "1d"),
+                ),
+                (
+                    "week",
+                    label_generic_dict.get("charts_range_selector_1w_button", "1w"),
+                ),
+                (
+                    "month",
+                    label_generic_dict.get("charts_range_selector_1m_button", "1m"),
+                ),
+                (
+                    "three_months",
+                    label_generic_dict.get("charts_range_selector_3m_button", "3m"),
+                ),
+                (
+                    "ytd",
+                    label_generic_dict.get("charts_range_selector_ytd_button", "YTD"),
+                ),
+                (
+                    "year",
+                    label_generic_dict.get("charts_range_selector_1y_button", "1y"),
+                ),
+                ("all", charts_page_all_button_label),
+            ]
+        )
+
         # Build the search list with the new values
         search_list_extension = {
             "belchertown_version": VERSION,
@@ -7071,13 +7104,12 @@ class getData(SearchList):
             "homepage_charts_link_label": label_generic_dict.get(
                 "homepage_charts_link", label_dict["homepage_charts_link"]
             ),
-            "charts_page_all_button_label": label_generic_dict.get(
-                "charts_page_all_button", label_dict["charts_page_all_button"]
-            ),
+            "charts_page_all_button_label": charts_page_all_button_label,
             "charts_page_all_button_label_json": json.dumps(
-                label_generic_dict.get(
-                    "charts_page_all_button", label_dict["charts_page_all_button"]
-                )
+                charts_page_all_button_label
+            ),
+            "charts_range_selector_labels_json": json.dumps(
+                charts_range_selector_labels
             ),
             "charts_windrose_frequency_label": label_generic_dict.get(
                 "charts_windrose_frequency", label_dict["charts_windrose_frequency"]

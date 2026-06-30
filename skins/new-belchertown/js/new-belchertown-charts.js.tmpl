@@ -1980,6 +1980,7 @@ function showChart(json_file, prepend_renderTo = false) {
             var useStockChart = (observation_type !== "windRose") && (xAxis_categories.length === 0 || observation_type === "weatherRange");
             var zoomControlsEnabled = zoomRequested && useStockChart;
             if (zoomControlsEnabled) {
+                var rangeSelectorLabels = $charts_range_selector_labels_json;
                 options.chart.zooming.type = "x";
                 options.chart.zooming.mouseWheel.enabled = true;
                 options.scrollbar.enabled = true;
@@ -1988,29 +1989,29 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.rangeSelector.buttons = [{
                     type: "day",
                     count: 1,
-                    text: "1d"
+                    text: rangeSelectorLabels.day
                 }, {
                     type: "week",
                     count: 1,
-                    text: "1w"
+                    text: rangeSelectorLabels.week
                 }, {
                     type: "month",
                     count: 1,
-                    text: "1m"
+                    text: rangeSelectorLabels.month
                 }, {
                     type: "month",
                     count: 3,
-                    text: "3m"
+                    text: rangeSelectorLabels.three_months
                 }, {
                     type: "ytd",
-                    text: "YTD"
+                    text: rangeSelectorLabels.ytd
                 }, {
                     type: "year",
                     count: 1,
-                    text: "1y"
+                    text: rangeSelectorLabels.year
                 }, {
                     type: "all",
-                    text: $charts_page_all_button_label_json
+                    text: rangeSelectorLabels.all
                 }];
             }
             var chart = useStockChart ? Highcharts.stockChart(options) : Highcharts.chart(options);
