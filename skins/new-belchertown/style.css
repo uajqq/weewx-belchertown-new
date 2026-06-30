@@ -7025,12 +7025,25 @@ body.pi::-webkit-scrollbar {
   stroke-width: 0;
 }
 
-.dark .highcharts-range-label rect {
-  fill: none !important;
+.dark .highcharts-range-label rect,
+.dark .highcharts-crosshair-label .highcharts-label-box {
+  fill: rgba(42, 42, 43, 0.95) !important;
+  stroke: #707073 !important;
+  stroke-width: 1px;
 }
 
-.dark .highcharts-range-label text {
-  fill: #e0e0e3 !important;
+.dark .highcharts-range-label text,
+.dark .highcharts-crosshair-label text {
+  fill: #f0f0f0 !important;
+  stroke: none !important;
+  stroke-width: 0 !important;
+}
+
+.dark .highcharts-range-label .highcharts-text-outline,
+.dark .highcharts-crosshair-label .highcharts-text-outline {
+  fill: none !important;
+  stroke: none !important;
+  stroke-width: 0 !important;
 }
 
 .dark .highcharts-range-input rect {
@@ -7057,12 +7070,7 @@ body.pi::-webkit-scrollbar {
 }
 
 .dark .highcharts-crosshair-label text {
-  fill: #2a2a2b !important;
   font-size: 1.1em;
-}
-
-.dark .highcharts-crosshair-label .highcharts-label-box {
-  fill: inherit !important;
 }
 
 .dark .highcharts-candlestick-series .highcharts-point {
