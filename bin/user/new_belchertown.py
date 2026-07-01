@@ -351,6 +351,68 @@ EXTERNAL_STATION_OBSERVATION_SOURCES = {
 }
 
 
+def _calculate_out_wetbulb_c(temp_c, humidity):
+    """Return outdoor wet-bulb temperature in C using Stull's approximation."""
+    try:
+        temp_c = float(temp_c)
+        humidity = float(humidity)
+    except (TypeError, ValueError):
+        return None
+
+    if not math.isfinite(temp_c) or not math.isfinite(humidity):
+        return None
+    if humidity < 0.0 or humidity > 100.0:
+        return None
+
+    return (
+        temp_c * math.atan(0.151977 * math.sqrt(humidity + 8.313659))
+        + math.atan(temp_c + humidity)
+        - math.atan(humidity - 1.676331)
+        + 0.00391838 * (humidity ** 1.5) * math.atan(0.023101 * humidity)
+        - 4.686035
+    )
+
+
+class OutWetbulbXType(weewx.xtypes.XType):
+    """Calculate outWetbulb from outTemp and outHumidity when not archived."""
+
+    def get_scalar(self, obs_type, record, db_manager=None, **option_dict):
+        if obs_type != "outWetbulb":
+            raise weewx.UnknownType(obs_type)
+        if (
+            not record
+            or record.get("outTemp") is None
+            or record.get("outHumidity") is None
+        ):
+            raise weewx.CannotCalculate(obs_type)
+
+        try:
+            temp_c = weewx.units.convert(
+                weewx.units.as_value_tuple(record, "outTemp"), "degree_C"
+            )[0]
+        except Exception:
+            raise weewx.CannotCalculate(obs_type)
+
+        wetbulb_c = _calculate_out_wetbulb_c(temp_c, record.get("outHumidity"))
+        if wetbulb_c is None:
+            raise weewx.CannotCalculate(obs_type)
+
+        if record.get("usUnits") == weewx.US:
+            wetbulb = weewx.units.convert(
+                (wetbulb_c, "degree_C", "group_temperature"), "degree_F"
+            )[0]
+            unit = "degree_F"
+        else:
+            wetbulb = wetbulb_c
+            unit = "degree_C"
+
+        return weewx.units.ValueTuple(wetbulb, unit, "group_temperature")
+
+
+if not any(isinstance(xtype, OutWetbulbXType) for xtype in weewx.xtypes.xtypes):
+    weewx.xtypes.xtypes.append(OutWetbulbXType())
+
+
 # Module-level helper functions for wind compass rendering
 
 
