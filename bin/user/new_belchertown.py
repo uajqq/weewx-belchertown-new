@@ -6953,6 +6953,10 @@ class getData(SearchList):
         charts_range_selector_labels = OrderedDict(
             [
                 (
+                    "zoom",
+                    label_generic_dict.get("charts_range_selector_zoom_label", "Zoom"),
+                ),
+                (
                     "day",
                     label_generic_dict.get("charts_range_selector_1d_button", "1d"),
                 ),
@@ -6977,6 +6981,52 @@ class getData(SearchList):
                     label_generic_dict.get("charts_range_selector_1y_button", "1y"),
                 ),
                 ("all", charts_page_all_button_label),
+            ]
+        )
+        charts_range_selector_titles = OrderedDict(
+            [
+                (
+                    "day",
+                    label_generic_dict.get(
+                        "charts_range_selector_1d_title", "View 1 day"
+                    ),
+                ),
+                (
+                    "week",
+                    label_generic_dict.get(
+                        "charts_range_selector_1w_title", "View 1 week"
+                    ),
+                ),
+                (
+                    "month",
+                    label_generic_dict.get(
+                        "charts_range_selector_1m_title", "View 1 month"
+                    ),
+                ),
+                (
+                    "three_months",
+                    label_generic_dict.get(
+                        "charts_range_selector_3m_title", "View 3 months"
+                    ),
+                ),
+                (
+                    "ytd",
+                    label_generic_dict.get(
+                        "charts_range_selector_ytd_title", "View year to date"
+                    ),
+                ),
+                (
+                    "year",
+                    label_generic_dict.get(
+                        "charts_range_selector_1y_title", "View 1 year"
+                    ),
+                ),
+                (
+                    "all",
+                    label_generic_dict.get(
+                        "charts_range_selector_all_title", "View all"
+                    ),
+                ),
             ]
         )
 
@@ -7110,6 +7160,9 @@ class getData(SearchList):
             ),
             "charts_range_selector_labels_json": json.dumps(
                 charts_range_selector_labels
+            ),
+            "charts_range_selector_titles_json": json.dumps(
+                charts_range_selector_titles
             ),
             "charts_windrose_frequency_label": label_generic_dict.get(
                 "charts_windrose_frequency", label_dict["charts_windrose_frequency"]

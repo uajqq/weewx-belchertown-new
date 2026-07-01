@@ -113,6 +113,8 @@ function belchertown_configure_highcharts_defaults() {
         return;
     }
 
+    var highchartsRangeSelectorLabels = $charts_range_selector_labels_json;
+
     Highcharts.setOptions({
         time: {
             timezoneOffset: $highcharts_timezoneoffset
@@ -151,7 +153,8 @@ function belchertown_configure_highcharts_defaults() {
             weekdays: dayjs.weekdays(),
             shortWeekdays: dayjs.weekdaysShort(),
             decimalPoint: "$highcharts_decimal",
-            thousandsSep: "$highcharts_thousands"
+            thousandsSep: "$highcharts_thousands",
+            rangeSelectorZoom: highchartsRangeSelectorLabels.zoom
         }
     });
 
@@ -1990,6 +1993,7 @@ function showChart(json_file, prepend_renderTo = false) {
             var zoomControlsEnabled = zoomRequested && useStockChart;
             if (zoomControlsEnabled) {
                 var rangeSelectorLabels = $charts_range_selector_labels_json;
+                var rangeSelectorTitles = $charts_range_selector_titles_json;
                 options.chart.zooming.type = "x";
                 options.chart.zooming.mouseWheel.enabled = true;
                 options.scrollbar.enabled = true;
@@ -1998,29 +2002,36 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.rangeSelector.buttons = [{
                     type: "day",
                     count: 1,
-                    text: rangeSelectorLabels.day
+                    text: rangeSelectorLabels.day,
+                    title: rangeSelectorTitles.day
                 }, {
                     type: "week",
                     count: 1,
-                    text: rangeSelectorLabels.week
+                    text: rangeSelectorLabels.week,
+                    title: rangeSelectorTitles.week
                 }, {
                     type: "month",
                     count: 1,
-                    text: rangeSelectorLabels.month
+                    text: rangeSelectorLabels.month,
+                    title: rangeSelectorTitles.month
                 }, {
                     type: "month",
                     count: 3,
-                    text: rangeSelectorLabels.three_months
+                    text: rangeSelectorLabels.three_months,
+                    title: rangeSelectorTitles.three_months
                 }, {
                     type: "ytd",
-                    text: rangeSelectorLabels.ytd
+                    text: rangeSelectorLabels.ytd,
+                    title: rangeSelectorTitles.ytd
                 }, {
                     type: "year",
                     count: 1,
-                    text: rangeSelectorLabels.year
+                    text: rangeSelectorLabels.year,
+                    title: rangeSelectorTitles.year
                 }, {
                     type: "all",
-                    text: rangeSelectorLabels.all
+                    text: rangeSelectorLabels.all,
+                    title: rangeSelectorTitles.all
                 }];
             }
             var chart = useStockChart ? Highcharts.stockChart(options) : Highcharts.chart(options);
