@@ -5661,7 +5661,7 @@ class getData(SearchList):
                         return aqi_payload
 
                     provider_key = _canonical_forecast_provider(forecast_provider)
-                    if provider_key == "open-meteo":
+                    if provider_key in ("nws", "open-meteo"):
                         return _refresh_openmeteo_aqi_fallback(force=force)
                     if provider_key == "aeris":
                         return _refresh_xweather_aqi_fallback(force=force)
