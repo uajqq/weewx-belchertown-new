@@ -114,6 +114,14 @@ function belchertown_configure_highcharts_defaults() {
     }
 
     var highchartsRangeSelectorLabels = $charts_range_selector_labels_json;
+    var highchartsLang = $highcharts_lang_json;
+    highchartsLang.months = dayjs.months();
+    highchartsLang.shortMonths = dayjs.monthsShort();
+    highchartsLang.weekdays = dayjs.weekdays();
+    highchartsLang.shortWeekdays = dayjs.weekdaysShort();
+    highchartsLang.decimalPoint = "$highcharts_decimal";
+    highchartsLang.thousandsSep = "$highcharts_thousands";
+    highchartsLang.rangeSelectorZoom = highchartsRangeSelectorLabels.zoom;
 
     Highcharts.setOptions({
         time: {
@@ -147,15 +155,7 @@ function belchertown_configure_highcharts_defaults() {
                 fontWeight: '300'
             }
         },
-        lang: {
-            months: dayjs.months(),
-            shortMonths: dayjs.monthsShort(),
-            weekdays: dayjs.weekdays(),
-            shortWeekdays: dayjs.weekdaysShort(),
-            decimalPoint: "$highcharts_decimal",
-            thousandsSep: "$highcharts_thousands",
-            rangeSelectorZoom: highchartsRangeSelectorLabels.zoom
-        }
+        lang: highchartsLang
     });
 
     belchertown_highcharts_defaults_applied = true;

@@ -62,6 +62,23 @@ log.info(f"version {VERSION}")
 # Default timeout for all HTTP requests (seconds)
 DEFAULT_HTTP_TIMEOUT = 15
 
+HIGHCHARTS_LANG_DEFAULTS = OrderedDict(
+    [
+        ("contextButtonTitle", "Chart context menu"),
+        ("downloadCSV", "Download CSV"),
+        ("downloadJPEG", "Download JPEG image"),
+        ("downloadPDF", "Download PDF document"),
+        ("downloadPNG", "Download PNG image"),
+        ("downloadSVG", "Download SVG vector image"),
+        ("downloadXLS", "Download XLS"),
+        ("exitFullscreen", "Exit from full screen"),
+        ("hideData", "Hide data table"),
+        ("printChart", "Print chart"),
+        ("viewData", "View data table"),
+        ("viewFullscreen", "View in full screen"),
+    ]
+)
+
 # Moment.js uses "nb" for Norwegian Bokmal while some upstream forecast APIs
 # and older configs use "no".
 MOMENT_LOCALE_ALIASES = {
@@ -744,6 +761,25 @@ def _normalize_forecast_units(forecast_units, config_dict=None):
 def _openmeteo_unit_params(forecast_units):
     """Return Open-Meteo API unit parameters for a normalized forecast unit key."""
     return OPENMETEO_UNIT_PARAMS.get(forecast_units, OPENMETEO_UNIT_PARAMS["us"])
+
+
+def _highcharts_lang_options(skin_dict):
+    """Return Highcharts language options, overlaid with skin translations."""
+    highcharts_lang = OrderedDict(HIGHCHARTS_LANG_DEFAULTS)
+    texts_dict = (skin_dict or {}).get("Texts", {})
+    if not isinstance(texts_dict, (dict, configobj.Section)):
+        return highcharts_lang
+
+    configured_lang = texts_dict.get("Highcharts", {})
+    if not isinstance(configured_lang, (dict, configobj.Section)):
+        return highcharts_lang
+
+    for key in highcharts_lang:
+        value = configured_lang.get(key)
+        if value not in (None, ""):
+            highcharts_lang[key] = str(value)
+
+    return highcharts_lang
 
 
 def _forecast_cache_matches_config(forecast_file, forecast_provider, forecast_units):
@@ -7091,6 +7127,7 @@ class getData(SearchList):
                 ),
             ]
         )
+        highcharts_lang = _highcharts_lang_options(skin_dict)
 
         # Build the search list with the new values
         search_list_extension = {
@@ -7226,6 +7263,7 @@ class getData(SearchList):
             "charts_range_selector_titles_json": json.dumps(
                 charts_range_selector_titles
             ),
+            "highcharts_lang_json": json.dumps(highcharts_lang),
             "charts_windrose_frequency_label": label_generic_dict.get(
                 "charts_windrose_frequency", label_dict["charts_windrose_frequency"]
             ),
