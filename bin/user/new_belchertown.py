@@ -4839,8 +4839,10 @@ class getData(SearchList):
             skin_dict["SKIN_ROOT"],
             skin_dict.get("skin", ""),
         )
+        # Look up the custom filename using "charts_conf" parameter, falling back to the literal "charts.conf"
+        charts_conf_filename = extras_dict.get("charts_conf", "charts.conf")
         legacy_chart_config_path = os.path.join(skin_root_path, "graphs.conf")
-        chart_config_path = os.path.join(skin_root_path, "charts.conf")
+        chart_config_path = os.path.join(skin_root_path, charts_conf_filename)
         default_chart_config_path = os.path.join(skin_root_path, "charts.conf.example")
         if os.path.exists(legacy_chart_config_path):
             log.warning(
@@ -7643,11 +7645,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             self.skin_dict.get("skin", ""),
             "graphs.conf",
         )
+        # Look up the custom filename using "charts_conf" parameter, falling back to the literal "charts.conf"
+        charts_conf_filename = self.skin_dict.get("Extras", {}).get("charts_conf", "charts.conf")
         chart_config_path = os.path.join(
             self.config_dict["WEEWX_ROOT"],
             self.skin_dict["SKIN_ROOT"],
             self.skin_dict.get("skin", ""),
-            "charts.conf",
+            charts_conf_filename,
         )
         default_chart_config_path = os.path.join(
             self.config_dict["WEEWX_ROOT"],
