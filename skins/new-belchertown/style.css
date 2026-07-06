@@ -4942,11 +4942,24 @@ span.highcharts-title {
 .about .wx-stn-info-current-obs,
 .reports .wx-stn-info-current-obs {
   order: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "icon icon"
+    "temp unit";
+  align-items: start;
   justify-content: center;
-  gap: 6px;
+  column-gap: 4px;
+  row-gap: 6px;
+}
+
+.charts .obs-header-icon,
+.records .obs-header-icon,
+.about .obs-header-icon,
+.reports .obs-header-icon {
+  grid-area: icon;
+  justify-self: center;
+  width: auto;
 }
 
 .charts .obs-header-icon img,
@@ -4962,26 +4975,26 @@ span.highcharts-title {
 .records .obs-header-outtemp,
 .about .obs-header-outtemp,
 .reports .obs-header-outtemp {
+  grid-area: temp;
   display: inline-block;
   font-size: 24px;
   font-weight: 500;
   line-height: 1.1;
+  justify-self: end;
 }
 
-/* The base .outtempunitlabelsuper rule (line ~1071) has no positioning
-   context to apply its `top` offset against here, since .obs-header-outtemp
-   was `display: block` and pushed the sup onto a new line entirely. Making
-   the temp span inline-block (above) keeps the sup on the same line; this
-   gives the sup its own relative positioning context so `top` actually
-   does something, without touching page-header.inc's markup at all. */
+/* Keep the page-header temperature unit readable and paired with the value. */
 .charts .outtempunitlabelsuper,
 .records .outtempunitlabelsuper,
 .about .outtempunitlabelsuper,
 .reports .outtempunitlabelsuper {
+  grid-area: unit;
+  align-self: start;
+  justify-self: start;
   position: relative;
-  top: -0.6em;
-  margin-left: 0.15em;
-  font-size: 50%;
+  top: 0;
+  margin-left: 0;
+  font-size: 15px;
   line-height: 1;
 }
 
