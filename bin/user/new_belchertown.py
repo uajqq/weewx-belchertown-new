@@ -207,6 +207,12 @@ VALID_FORECAST_PROVIDERS = (
     "pirateweather",
 )
 
+VALID_AQI_SOURCES = (
+    "auto",
+    "local",
+    "forecast",
+)
+
 VALID_FORECAST_UNITS = (
     "us",
     "si",
@@ -716,6 +722,36 @@ def _canonical_forecast_provider(provider):
     if provider_key == "xweather":
         return "aeris"
     return provider_key
+
+
+def _normalize_aqi_source(aqi_source):
+    """Normalize the configured AQI source selection."""
+    source_key = str(aqi_source or "").strip().lower()
+    source_key = {
+        "local-sensor": "local",
+        "local_sensor": "local",
+        "provider": "forecast",
+        "remote": "forecast",
+    }.get(source_key, source_key)
+    if source_key in VALID_AQI_SOURCES:
+        return source_key
+
+    log.warning(
+        "Invalid aqi_source '%s'. Valid values are: %s. Falling back to 'auto'.",
+        aqi_source,
+        ", ".join(VALID_AQI_SOURCES),
+    )
+    return "auto"
+
+
+def _aqi_forecast_provider_for_forecast_provider(forecast_provider):
+    """Return the AQI provider used by a forecast provider, if any."""
+    provider_key = _canonical_forecast_provider(forecast_provider)
+    if provider_key in ("nws", "open-meteo"):
+        return "open-meteo"
+    if provider_key == "aeris":
+        return "aeris"
+    return None
 
 
 def _forecast_units_from_weewx_target(config_dict):
@@ -2235,6 +2271,46 @@ def _merge_aqi_payload_into_forecast_file(forecast_file, aqi_payload):
     return True
 
 
+def _cached_aqi_provider_from_forecast_data(forecast_data, aqi_payload):
+    """Return the provider key for a cached AQI payload."""
+    if not isinstance(aqi_payload, dict):
+        return ""
+    provider = aqi_payload.get("provider")
+    if not provider:
+        provider = (forecast_data or {}).get("provider")
+    return _canonical_forecast_provider(provider)
+
+
+def _clear_aqi_payload_from_forecast_file(forecast_file, allowed_providers=None):
+    """Remove cached AQI when it is not allowed by the selected AQI source."""
+    try:
+        if not os.path.isfile(forecast_file):
+            return False
+        with open(forecast_file, "r", encoding="utf-8") as fh:
+            forecast_data = json.load(fh)
+        if not isinstance(forecast_data, dict) or "aqi" not in forecast_data:
+            return False
+
+        if allowed_providers is not None:
+            allowed = {
+                _canonical_forecast_provider(provider)
+                for provider in allowed_providers
+            }
+            aqi_array = forecast_data.get("aqi") or []
+            aqi_payload = aqi_array[0] if aqi_array else None
+            if _cached_aqi_provider_from_forecast_data(
+                forecast_data, aqi_payload
+            ) in allowed:
+                return False
+
+        del forecast_data["aqi"]
+        _write_json_file(forecast_file, forecast_data)
+        return True
+    except Exception as e:
+        log.debug(f"Cached AQI cleanup skipped: {e}")
+        return False
+
+
 def _load_aqi_payload_from_forecast_file(forecast_file, require_success=False):
     """Load the first cached AQI payload from forecast.json."""
     try:
@@ -2250,8 +2326,8 @@ def _load_aqi_payload_from_forecast_file(forecast_file, require_success=False):
             and forecast_data.get("provider")
         ):
             aqi_payload = dict(aqi_payload)
-            aqi_payload["provider"] = _canonical_forecast_provider(
-                forecast_data.get("provider")
+            aqi_payload["provider"] = _cached_aqi_provider_from_forecast_data(
+                forecast_data, aqi_payload
             )
         if require_success and not (aqi_payload and aqi_payload.get("success")):
             return None
@@ -5590,6 +5666,10 @@ class getData(SearchList):
         # Forecast enabled default should be on when missing.
         forecast_enabled = str(extras_dict.get("forecast_enabled", "1")).strip()
         aqi_enabled = to_bool(extras_dict.get("aqi_enabled", "0"))
+        aqi_source = _normalize_aqi_source(extras_dict.get("aqi_source", "auto"))
+        extras_dict["aqi_source"] = aqi_source
+        local_aqi_enabled = aqi_enabled and aqi_source in ("auto", "local")
+        forecast_aqi_enabled = aqi_enabled and aqi_source in ("auto", "forecast")
 
         # Ensure AQI variables are always defined to avoid NameError when forecast is disabled or fails
         # aqi and aqi_category are global so they can be used by Highcharts
@@ -5598,7 +5678,9 @@ class getData(SearchList):
         aqi_category = ""
         aqi_location = ""
         aqi_time = ""
-        local_aqi_payload = _archive_local_aqi_payload(manager) if aqi_enabled else None
+        local_aqi_payload = (
+            _archive_local_aqi_payload(manager) if local_aqi_enabled else None
+        )
         if local_aqi_payload is not None:
             (
                 aqi,
@@ -5675,7 +5757,7 @@ class getData(SearchList):
                     return None
 
                 def _refresh_openmeteo_aqi_fallback(force=False):
-                    if not aqi_enabled:
+                    if not forecast_aqi_enabled:
                         return None
 
                     if not force:
@@ -5706,7 +5788,7 @@ class getData(SearchList):
                         return _cached_aqi_for_provider("open-meteo")
 
                 def _refresh_xweather_aqi_fallback(force=False):
-                    if not aqi_enabled:
+                    if not forecast_aqi_enabled:
                         return None
 
                     if not force:
@@ -5737,7 +5819,9 @@ class getData(SearchList):
                 def _refresh_local_aqi_payload():
                     nonlocal local_aqi_payload
                     local_aqi_payload = (
-                        _archive_local_aqi_payload(manager) if aqi_enabled else None
+                        _archive_local_aqi_payload(manager)
+                        if local_aqi_enabled
+                        else None
                     )
                     return local_aqi_payload
 
@@ -5745,23 +5829,52 @@ class getData(SearchList):
                     if not aqi_enabled:
                         return None
 
-                    aqi_payload = _refresh_local_aqi_payload()
-                    if aqi_payload is not None:
-                        try:
-                            if _merge_aqi_payload_into_forecast_file(
-                                forecast_file, aqi_payload
-                            ):
-                                log.debug("Local AQI cached to forecast.json")
-                        except Exception as e:
-                            log.warning(
-                                f"Local AQI cache update failed. Reason: {e}"
-                            )
-                        return aqi_payload
+                    if local_aqi_enabled:
+                        aqi_payload = _refresh_local_aqi_payload()
+                        if aqi_payload is not None:
+                            try:
+                                if _merge_aqi_payload_into_forecast_file(
+                                    forecast_file, aqi_payload
+                                ):
+                                    log.debug("Local AQI cached to forecast.json")
+                            except Exception as e:
+                                log.warning(
+                                    f"Local AQI cache update failed. Reason: {e}"
+                                )
+                            return aqi_payload
 
-                    provider_key = _canonical_forecast_provider(forecast_provider)
-                    if provider_key in ("nws", "open-meteo"):
+                        if aqi_source == "local":
+                            if _clear_aqi_payload_from_forecast_file(forecast_file):
+                                log.debug(
+                                    "Cached AQI removed because aqi_source is local "
+                                    "and no local AQI is available."
+                                )
+                            return None
+
+                    forecast_aqi_provider = (
+                        _aqi_forecast_provider_for_forecast_provider(
+                            forecast_provider
+                        )
+                    )
+                    if not forecast_aqi_enabled or forecast_aqi_provider is None:
+                        if _clear_aqi_payload_from_forecast_file(forecast_file):
+                            log.debug(
+                                "Cached AQI removed because no forecast AQI source "
+                                "is enabled."
+                            )
+                        return None
+
+                    if _clear_aqi_payload_from_forecast_file(
+                        forecast_file, allowed_providers=(forecast_aqi_provider,)
+                    ):
+                        log.debug(
+                            "Cached AQI removed because it does not match "
+                            f"aqi_source={aqi_source}."
+                        )
+
+                    if forecast_aqi_provider == "open-meteo":
                         return _refresh_openmeteo_aqi_fallback(force=force)
-                    if provider_key == "aeris":
+                    if forecast_aqi_provider == "aeris":
                         return _refresh_xweather_aqi_fallback(force=force)
                     return None
 
