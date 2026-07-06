@@ -91,13 +91,13 @@
                 connect(); // Begin mqtt after WeeWX initial load
             }
 
-            // #if $Extras.has_key("reload_hook_images") and $Extras.reload_hook_images == '1'
-            // Update any images in the radar section or hooks
-
             // #if $Extras.has_key("reload_images_radar") and $Extras.reload_images_radar != '-1'
             var reload_radar_timer = $Extras.reload_images_radar * 1000; // convert to millis
             setTimeout(function() {ajaximages("radar", $Extras.reload_images_radar);}, reload_radar_timer);
             // #end if
+
+            // #if $Extras.has_key("reload_hook_images") and $Extras.reload_hook_images == '1'
+            // Update any images in the hooks
 
             // #if $Extras.has_key("reload_images_hook_asi") and $Extras.reload_images_hook_asi != '-1'
             var reload_asi_timer = $Extras.reload_images_hook_asi * 1000; // convert to millis
