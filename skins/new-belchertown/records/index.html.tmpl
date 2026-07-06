@@ -75,25 +75,43 @@
         }
 
         // ── Unit-aware value rendering ──────────────────────────────────
-        // kind is one of "temp" | "speed" | "press" | "rain" | "rainrate" |
-        // null. Reuses the existing global BU_chartMetricWXToDisplay /
-        // BU_chartUnitLabelFor helpers from new-belchertown.js.tmpl (built
-        // for the charts) rather than duplicating conversion logic again.
+        // kind is one of "temp" | "temp_delta" | "speed" | "press" | "rain" |
+        // "rainrate" | null. Reuses the existing global unit helpers from
+        // new-belchertown.js.tmpl rather than duplicating conversion logic.
+        function displayUnitLabel(kind) {
+            var labelKind = kind === "temp_delta" ? "temp" : kind;
+            return (typeof BU_chartUnitLabelFor === "function") ? BU_chartUnitLabelFor(labelKind) : "";
+        }
+
+        function displayMetricWxValue(rawMetricWxValue, kind) {
+            if (kind === "temp_delta") {
+                return (typeof BU_getSystem === "function" && BU_getSystem() === "us")
+                    ? rawMetricWxValue * 9 / 5
+                    : rawMetricWxValue;
+            }
+
+            if (typeof BU_chartMetricWXToDisplay !== "function") {
+                return rawMetricWxValue;
+            }
+
+            return BU_chartMetricWXToDisplay(kind, rawMetricWxValue);
+        }
+
         function convertedValueHtml(rawMetricWxValue, kind, decimals) {
             var num = parseFloat(rawMetricWxValue);
             if (isNaN(num)) {
                 return null;
             }
-            if (!kind || typeof BU_chartMetricWXToDisplay !== "function") {
+            if (!kind) {
                 return belchertown_trim(displayText(rawMetricWxValue));
             }
-            var converted = BU_chartMetricWXToDisplay(kind, num);
+            var converted = displayMetricWxValue(num, kind);
             var dp = (typeof decimals === "number") ? decimals : 1;
             var fmtVal = (typeof BU_fmt === "function") ? BU_fmt(converted, dp) : converted;
             if (fmtVal === null || fmtVal === undefined) {
                 return null;
             }
-            var label = (typeof BU_chartUnitLabelFor === "function") ? BU_chartUnitLabelFor(kind) : "";
+            var label = displayUnitLabel(kind);
             return fmtVal + (label ? "\u00a0" + label : "");
         }
 
@@ -114,7 +132,7 @@
             }
             // Strip the trailing unit label from the first value - only
             // the closing one needs it, e.g. "(11.9 - 33.5 \u00b0F)".
-            var label = (typeof BU_chartUnitLabelFor === "function") ? BU_chartUnitLabelFor(kind) : "";
+            var label = displayUnitLabel(kind);
             var minNoLabel = label ? minText.replace("\u00a0" + label, "") : minText;
             return "(" + minNoLabel + " - " + maxText + ")";
         }
@@ -230,7 +248,8 @@
                         omitTime: true,
                         hideDatePeriods: ["day"],
                         blankPeriods: ["day"],
-                        kind: "temp",
+                        kind: "temp_delta",
+                        detailKind: "temp",
                         rangeDetail: true,
                         periodValues: {
                             yesterday: { value: $yesterday_outTemp_range_max_raw[1], valueDetail: [$yesterday_outTemp_range_max_raw[2], $yesterday_outTemp_range_max_raw[3]], dateText: "$yesterday_outTemp_range_max[0]", dateRaw: "$yesterday_outTemp_range_max[0]" },
@@ -248,7 +267,8 @@
                         omitTime: true,
                         ##hideDatePeriods: ["day"],
                         blankPeriods: ["day", "yesterday"],
-                        kind: "temp",
+                        kind: "temp_delta",
+                        detailKind: "temp",
                         rangeDetail: true,
                         periodValues: {
                             yesterday: { value: $yesterday_outTemp_range_min_raw[1], valueDetail: [$yesterday_outTemp_range_min_raw[2], $yesterday_outTemp_range_min_raw[3]], dateText: "$yesterday_outTemp_range_min[0]", dateRaw: "$yesterday_outTemp_range_min[0]" },
@@ -722,7 +742,7 @@
                 if (convertedText !== null) {
                     valueText = convertedText;
                     if (rowOptions.rangeDetail) {
-                        valueDetailText = formatRangeDetail(valueDetailText, rowOptions.kind);
+                        valueDetailText = formatRangeDetail(valueDetailText, rowOptions.detailKind || rowOptions.kind);
                     }
                 }
             }
@@ -819,6 +839,7 @@
 
                 var rowOptions = rowConfig.options || {};
                 var rowKind = rowOptions.kind || null;
+                var rowDetailKind = rowOptions.detailKind || rowKind;
 
                 var yearRawOrText = rowConfig.year.value;
                 var yearValueText;
@@ -828,7 +849,7 @@
                     yearValueText = belchertown_trim(displayText(yearRawOrText || "--")) || "--";
                 }
                 var yearValueDetailText = rowOptions.rangeDetail
-                    ? formatRangeDetail(rowConfig.year.valueDetail, rowKind)
+                    ? formatRangeDetail(rowConfig.year.valueDetail, rowDetailKind)
                     : belchertown_trim(displayText(rowConfig.year.valueDetail || ""));
                 var yearDateText = belchertown_trim(displayText(rowConfig.year.dateText || "--")) || "--";
                 var yearDateRaw = rowConfig.year.dateRaw;
@@ -895,7 +916,7 @@
                     alltimeValueText = belchertown_trim(displayText(alltimeRawOrText || "--")) || "--";
                 }
                 var alltimeValueDetailText = rowOptions.rangeDetail
-                    ? formatRangeDetail(rowConfig.alltime.valueDetail, rowKind)
+                    ? formatRangeDetail(rowConfig.alltime.valueDetail, rowDetailKind)
                     : belchertown_trim(displayText(rowConfig.alltime.valueDetail || ""));
                 var alltimeDateText = belchertown_trim(displayText(rowConfig.alltime.dateText || "--")) || "--";
                 var alltimeDateRaw = rowConfig.alltime.dateRaw;
