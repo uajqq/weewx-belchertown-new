@@ -1,7 +1,8 @@
 #encoding UTF-8
 #import datetime
+#import json
 #import math
-#from user.new_belchertown import build_almanac_template_context
+#from user.new_belchertown import build_almanac_template_context, build_earthquake_map_context
 #errorCatcher Echo
 
 ## Almanac/daylight precompute (safe defaults so values are available even without hasExtras).
@@ -116,6 +117,7 @@
 #set $diagram_current_ts_attr = $almanac_diagram_context.get("diagram_current_ts_attr", "")
 #set $diagram_current_x_attr = $almanac_diagram_context.get("diagram_current_x_attr", "")
 #set $almanac_svg_markup_attr = $almanac_diagram_context.get("almanac_svg_markup_attr", "")
+#set $earthquake_map_context = build_earthquake_map_context($earthquake_lat, $earthquake_lon)
 
 #try
     #set $moon_tilt_degrees = float($almanac.moon.moon_tilt.raw)
@@ -179,7 +181,8 @@
         "distance_away": "$earthquake_distance_away",
         "distance_label": "$earthquake_distance_label",
         "bearing": "$earthquake_bearing",
-        "bearing_raw": "$earthquake_bearing_raw"
+        "bearing_raw": "$earthquake_bearing_raw",
+        "map": #if $earthquake_map_context##echo json.dumps($earthquake_map_context)##else#null#end if#
     },
     "station_observations": {
         "current": $station_obs_json,

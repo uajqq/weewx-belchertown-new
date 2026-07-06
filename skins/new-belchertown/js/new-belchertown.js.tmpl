@@ -54,6 +54,10 @@ var belchertownAutoThemeMediaQuery = null;
 var belchertownWindyRadarResizeTimer = null;
 var belchertownWindyRadarViewportWidth = null;
 var belchertownWebcamReloadTimers = [];
+var belchertownEarthquakeRefreshTimer = null;
+var belchertownEarthquakeLastRefreshMs = 0;
+var belchertownEarthquakeResumeHandlersBound = false;
+var belchertownEarthquakeResumeRefreshMinMs = 60000;
 
 function belchertown_radar_tab_containers() {
     var candidates = Array.prototype.slice.call(document.querySelectorAll(".belchertown-radar-tabs"));
@@ -760,6 +764,228 @@ function belchertown_set_text(selector, text) {
     document.querySelectorAll(selector).forEach(function(el) {
         el.textContent = text;
     });
+}
+
+function earthquakeMapTileUrl(subdomain, zoom, x, y) {
+    var host = subdomain ? subdomain + ".tile.openstreetmap.org" : "tile.openstreetmap.org";
+    return "https://" + host + "/" + zoom + "/" + x + "/" + y + ".png";
+}
+
+function createEarthquakeMapSubcard() {
+    var cardBody = document.querySelector(".homepage-card--earthquake .eq-region");
+    var mapSubcard;
+    var mapWrap;
+    var mapLink;
+    var map;
+    var mapGrid;
+    var marker;
+    var mapLabel = belchertown_label_text("$obs.label.earthquake_title");
+
+    if (!cardBody) {
+        return null;
+    }
+
+    mapSubcard = document.createElement("div");
+    mapSubcard.className = "earthquake-subcard earthquake-subcard--map";
+    mapWrap = document.createElement("div");
+    mapWrap.className = "earthquake-map-wrap";
+    mapLink = document.createElement("a");
+    mapLink.className = "earthquake-map-link";
+    mapLink.target = "_blank";
+    mapLink.setAttribute("aria-label", mapLabel);
+    map = document.createElement("div");
+    map.className = "earthquake-map";
+    map.setAttribute("role", "img");
+    map.setAttribute("aria-label", mapLabel);
+    mapGrid = document.createElement("div");
+    mapGrid.className = "earthquake-map-grid";
+    marker = document.createElement("span");
+    marker.className = "earthquake-map-marker";
+    marker.setAttribute("aria-hidden", "true");
+
+    map.appendChild(mapGrid);
+    mapLink.appendChild(map);
+    mapWrap.appendChild(mapLink);
+    mapWrap.appendChild(marker);
+    mapSubcard.appendChild(mapWrap);
+    cardBody.appendChild(mapSubcard);
+    return mapSubcard;
+}
+
+function clearEarthquakeMapGrid(mapGrid) {
+    while (mapGrid.firstChild) {
+        mapGrid.removeChild(mapGrid.firstChild);
+    }
+}
+
+function renderEarthquakeMap(mapData, url) {
+    var mapSubcard = document.querySelector(".homepage-card--earthquake .earthquake-subcard--map");
+    var zoom = mapData ? parseInt(mapData.zoom, 10) : null;
+    var tiles = mapData && Array.isArray(mapData.tiles) ? mapData.tiles : [];
+    var offsetX = mapData ? parseFloat(mapData.offset_x) : null;
+    var offsetY = mapData ? parseFloat(mapData.offset_y) : null;
+    var mapLink;
+    var mapGrid;
+
+    if (!mapData || !isFinite(zoom) || !isFinite(offsetX) || !isFinite(offsetY) || !tiles.length) {
+        if (mapSubcard) {
+            mapSubcard.style.display = "none";
+        }
+        return;
+    }
+
+    if (!mapSubcard) {
+        mapSubcard = createEarthquakeMapSubcard();
+    }
+    if (!mapSubcard) {
+        return;
+    }
+
+    mapLink = mapSubcard.querySelector(".earthquake-map-link");
+    mapGrid = mapSubcard.querySelector(".earthquake-map-grid");
+    if (!mapLink || !mapGrid) {
+        return;
+    }
+    mapSubcard.style.display = "";
+    mapGrid.style.setProperty("--earthquake-map-grid-left", "calc(50% - " + offsetX + "px)");
+    mapGrid.style.setProperty("--earthquake-map-grid-top", "calc(50% - " + offsetY + "px)");
+    clearEarthquakeMapGrid(mapGrid);
+
+    tiles.forEach(function(tile) {
+        var x = parseInt(tile.x, 10);
+        var y = parseInt(tile.y, 10);
+        var image;
+
+        if (!isFinite(x) || !isFinite(y)) {
+            return;
+        }
+
+        image = document.createElement("img");
+        image.className = "earthquake-map-tile";
+        image.alt = "";
+        image.setAttribute("aria-hidden", "true");
+        image.setAttribute("loading", "lazy");
+        image.setAttribute("decoding", "async");
+        image.setAttribute("fetchpriority", "low");
+        image.width = 256;
+        image.height = 256;
+        image.src = earthquakeMapTileUrl("", zoom, x, y);
+        image.onerror = function() {
+            var fallbackIndex = parseInt(this.dataset.fallback || "0", 10);
+            var fallbackSubdomains = ["a", "b", "c"];
+
+            if (fallbackIndex >= fallbackSubdomains.length) {
+                return;
+            }
+
+            this.dataset.fallback = String(fallbackIndex + 1);
+            this.src = earthquakeMapTileUrl(fallbackSubdomains[fallbackIndex], zoom, x, y);
+        };
+        mapGrid.appendChild(image);
+    });
+
+    if (url) {
+        mapLink.href = url;
+    } else {
+        mapLink.removeAttribute("href");
+    }
+}
+
+function renderEarthquakeData(data) {
+    var quake = data && data.earthquake ? data.earthquake : null;
+    var timeValue = quake ? quake.time : "";
+    var epoch = parseFloat(timeValue);
+    var quakeUrl = quake && quake.url ? belchertown_decode_html_entities(quake.url) : "";
+    var distanceParts = [];
+
+    if (!document.querySelector(".homepage-card--earthquake")) {
+        return;
+    }
+
+    if (isFinite(epoch) && typeof dayjs !== "undefined" && dayjs.unix(epoch).isValid()) {
+        belchertown_set_text(".earthquake-time", tzAdjustedMoment(epoch).format(belchertown_label_text("$obs.label.time_earthquake")));
+    } else {
+        belchertown_set_text(".earthquake-time", belchertown_label_text(timeValue));
+    }
+
+    belchertown_set_text(".homepage-card--earthquake .magnitude", quake ? quake.magnitude : "");
+
+    ["distance_away", "distance_label", "bearing"].forEach(function(key) {
+        if (quake && quake[key]) {
+            distanceParts.push(belchertown_decode_html_entities(quake[key]));
+        }
+    });
+    belchertown_set_text(".homepage-card--earthquake .earthquake-distance", distanceParts.join(" "));
+
+    document.querySelectorAll(".homepage-card--earthquake .earthquake-info-link").forEach(function(link) {
+        if (quakeUrl) {
+            link.href = quakeUrl;
+            link.style.pointerEvents = "";
+        } else {
+            link.removeAttribute("href");
+            link.style.pointerEvents = "none";
+        }
+    });
+
+    renderEarthquakeMap(quake ? quake.map : null, quakeUrl);
+}
+
+function refreshEarthquakeData(force) {
+    var now = Date.now();
+
+    if (!document.querySelector(".homepage-card--earthquake") || typeof ajaxweewx !== "function") {
+        return;
+    }
+    if (!force && belchertownEarthquakeLastRefreshMs && (now - belchertownEarthquakeLastRefreshMs) < belchertownEarthquakeResumeRefreshMinMs) {
+        return;
+    }
+
+    belchertownEarthquakeLastRefreshMs = now;
+    ajaxweewx().then(function(data) {
+        if (data) {
+            weewx_data = data;
+            renderEarthquakeData(data);
+        }
+    }).catch(function(e) {
+        belchertown_debug("Earthquake refresh failed: " + e.message);
+    });
+}
+
+function refreshEarthquakeDataAfterResume() {
+    if (document.hidden) {
+        return;
+    }
+    refreshEarthquakeData(false);
+}
+
+function bindEarthquakeRefreshResumeHandlers() {
+    if (belchertownEarthquakeResumeHandlersBound) {
+        return;
+    }
+
+    belchertownEarthquakeResumeHandlersBound = true;
+    document.addEventListener("visibilitychange", refreshEarthquakeDataAfterResume);
+    window.addEventListener("focus", refreshEarthquakeDataAfterResume);
+    window.addEventListener("pageshow", refreshEarthquakeDataAfterResume);
+    window.addEventListener("online", refreshEarthquakeDataAfterResume);
+}
+
+function belchertown_start_earthquake_refresh_timer(intervalSeconds) {
+    var seconds = parseFloat(intervalSeconds);
+    var intervalMs;
+
+    if (!document.querySelector(".homepage-card--earthquake") || belchertownEarthquakeRefreshTimer !== null) {
+        return;
+    }
+    if (!isFinite(seconds) || seconds <= 0) {
+        seconds = 10740;
+    }
+
+    intervalMs = Math.max(seconds * 1000, 60000);
+    bindEarthquakeRefreshResumeHandlers();
+    belchertownEarthquakeRefreshTimer = window.setInterval(function() {
+        refreshEarthquakeData(true);
+    }, intervalMs);
 }
 
 function belchertown_apply_readable_color(selector, color, minimumRatio) {
@@ -3429,6 +3655,7 @@ function update_weewx_data(data) {
     // Do not synthesize daylight text in JS. Keep server-rendered daylight
     // string authoritative (includes change-vs-yesterday when available).
 
+    renderEarthquakeData(data);
     renderAlmanacDiagram(data["almanac"]["diagram"]);
     // #if $almanac.hasExtras
     // Close current modal if open
