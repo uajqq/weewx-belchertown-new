@@ -6966,6 +6966,26 @@ body.pi::-webkit-scrollbar {
   fill: #666 !important;
 }
 
+.highcharts-navigator-xaxis.highcharts-axis-labels text,
+.highcharts-navigator-xaxis .highcharts-axis-labels text {
+  fill: #000 !important;
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: #fff !important;
+  stroke-linejoin: round;
+  stroke-width: 2px !important;
+}
+
+.dark .highcharts-navigator-xaxis.highcharts-axis-labels text,
+.dark .highcharts-navigator-xaxis .highcharts-axis-labels text {
+  fill: #fff !important;
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: #000 !important;
+  stroke-linejoin: round;
+  stroke-width: 2px !important;
+}
+
 .dark .highcharts-navigator-yaxis .highcharts-grid-line {
   stroke-width: 0;
 }
