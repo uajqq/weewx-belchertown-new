@@ -822,7 +822,7 @@ function update_current_conditions(data, forecastData) {
 
         try {
             document.querySelectorAll(".station-observations .visibility").forEach(function(el) {
-                el.innerHTML = forecast_visibility_text(cc["visibility"], cc["visibilityQualifier"]);
+                el.innerHTML = forecast_visibility_text(cc["visibility"], cc["visibilityQualifier"], data);
             });
         } catch (err) { /* silent */}
 
@@ -856,7 +856,40 @@ function forecast_percent_text(value, fallback) {
     return percentValue.toFixed(0) + '%';
 }
 
-function forecast_visibility_unit_label() {
+function forecast_visibility_base_key(sourceData) {
+    if (typeof BU_resolveForecastBase === "function") {
+        if (sourceData && typeof sourceData === "object") {
+            return BU_resolveForecastBase(sourceData);
+        }
+        if (sourceData) {
+            return BU_resolveForecastBase({units: sourceData});
+        }
+        return BU_resolveForecastBase({units: "$Extras.forecast_units"});
+    }
+
+    const aliasMap = {imperial: "us", metric: "ca", metricwx: "si"};
+    let forecastUnits = "$Extras.forecast_units";
+    if (sourceData && typeof sourceData === "object" && sourceData["units"]) {
+        forecastUnits = sourceData["units"];
+    } else if (sourceData) {
+        forecastUnits = sourceData;
+    }
+    forecastUnits = aliasMap[String(forecastUnits || "").trim().toLowerCase()] || String(forecastUnits || "").trim().toLowerCase();
+    return (["us", "si", "ca", "uk2"].indexOf(forecastUnits) !== -1) ? forecastUnits : "us";
+}
+
+function forecast_visibility_unit_label(sourceData) {
+    if (
+        window.BU_UNIT_SWITCHER_ENABLED &&
+        typeof BU_getSystem === "function" &&
+        typeof BU_SYS !== "undefined"
+    ) {
+        const unitSystem = BU_SYS[BU_getSystem()];
+        if (unitSystem && unitSystem.dl) {
+            return unitSystem.dl;
+        }
+    }
+
     if (
         unit_label_array &&
         typeof unit_label_array === "object" &&
@@ -866,12 +899,50 @@ function forecast_visibility_unit_label() {
         return String(unit_label_array["visibility"]);
     }
 
-    const forecastUnits = "$Extras.forecast_units";
+    const forecastUnits = forecast_visibility_base_key(sourceData);
     return (forecastUnits === "si" || forecastUnits === "ca") ? "km" : "miles";
 }
 
-function forecast_visibility_text(value, qualifier) {
-    const numberValue = forecast_number(value);
+function forecast_visibility_number(value) {
+    let visibilityQualifier = "";
+    let visibilityValue = value;
+
+    if (typeof value === "string") {
+        const trimmedValue = value.trim();
+        if (trimmedValue.charAt(0) === "<" || trimmedValue.charAt(0) === ">") {
+            visibilityQualifier = trimmedValue.charAt(0);
+            visibilityValue = trimmedValue.slice(1).trim();
+        }
+    }
+
+    return {
+        value: forecast_number(visibilityValue),
+        qualifier: visibilityQualifier
+    };
+}
+
+function forecast_visibility_display_value(value, sourceData) {
+    if (
+        !window.BU_UNIT_SWITCHER_ENABLED ||
+        typeof BU_forecastToMetricWX !== "function" ||
+        typeof BU_getSystem !== "function" ||
+        typeof BU_SYS === "undefined"
+    ) {
+        return value;
+    }
+
+    const baseKey = forecast_visibility_base_key(sourceData);
+    const visibilityKm = BU_forecastToMetricWX("vis", value, baseKey);
+    const unitSystem = BU_SYS[BU_getSystem()];
+    if (visibilityKm === null || !unitSystem || typeof unitSystem.distance !== "function") {
+        return value;
+    }
+    return unitSystem.distance(visibilityKm);
+}
+
+function forecast_visibility_text(value, qualifier, sourceData) {
+    const parsedVisibility = forecast_visibility_number(value);
+    const numberValue = parsedVisibility.value;
     if (numberValue === null) return "N/A";
 
     const rounding = (
@@ -879,10 +950,11 @@ function forecast_visibility_text(value, qualifier) {
         typeof unit_rounding_array === "object" &&
         unit_rounding_array.hasOwnProperty("visibility")
     ) ? unit_rounding_array["visibility"] : 2;
-    const unitLabel = forecast_visibility_unit_label();
-    const visibilityQualifier = (qualifier === "<" || qualifier === ">") ? qualifier : "";
+    const unitLabel = forecast_visibility_unit_label(sourceData);
+    const displayValue = forecast_visibility_display_value(numberValue, sourceData);
+    const visibilityQualifier = (qualifier === "<" || qualifier === ">") ? qualifier : parsedVisibility.qualifier;
 
-    return visibilityQualifier + numberValue.toLocaleString(
+    return visibilityQualifier + displayValue.toLocaleString(
         "$system_locale_js",
         {
             minimumFractionDigits: rounding,
@@ -1272,6 +1344,9 @@ function BU_convertForecastRow(row, baseKey) {
     if (row.snowDepth !== undefined && row.snowDepth !== null) {
         row.snowDepth = BU_forecastToMetricWX("precip", row.snowDepth, baseKey);
     }
+    if (row.visibility !== undefined && row.visibility !== null) {
+        row.visibility = BU_forecastToMetricWX("vis", row.visibility, baseKey);
+    }
 
     // Re-render each value into the user's chosen display system using the
     // same BU_SYS converters current conditions already use.
@@ -1285,6 +1360,7 @@ function BU_convertForecastRow(row, baseKey) {
         if (row.windSpeed !== undefined && row.windSpeed !== null) { row.windSpeed = s.speed(row.windSpeed); }
         if (row.windGust !== undefined && row.windGust !== null) { row.windGust = s.speed(row.windGust); }
         if (row.snowDepth !== undefined && row.snowDepth !== null) { row.snowDepth = s.rain(row.snowDepth); row.snowUnit = s.rl; }
+        if (row.visibility !== undefined && row.visibility !== null) { row.visibility = s.distance(row.visibility); row.visibilityUnit = s.dl; }
     }
 
     row.__BU_converted = true;
@@ -1359,6 +1435,10 @@ function update_forecast_data(data) {
 // using the pristine unconverted snapshot taken at the last successful fetch.
 // Called from BU_reapplyAll() in new-belchertown.js.tmpl.
 window.BU_reapplyForecast = function() {
+    if (typeof current_conditions_data !== "undefined" && current_conditions_data) {
+        const fallbackForecastData = window.BU_lastForecastRaw || (typeof forecast_data !== "undefined" ? forecast_data : {});
+        update_current_conditions(current_conditions_data, fallbackForecastData);
+    }
     if (!window.BU_lastForecastRaw) {
         belchertown_debug("Unit Switcher: no forecast data fetched yet, nothing to re-render.");
         return;
