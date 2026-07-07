@@ -2622,6 +2622,19 @@ LABELS_GENERIC_LEGACY_MAPPING = {
     "graphs_windDir_ordinals": "charts_windDir_ordinals",
 }
 
+CHART_LABEL_TOKEN_RE = re.compile(
+    r"\$\{([A-Za-z_][A-Za-z0-9_.-]*)\}"
+)
+CHART_LABEL_LITERAL_DOLLAR = "\0NEW_BELCHERTOWN_CHART_LITERAL_DOLLAR\0"
+CHART_TEXT_SERIES_OPTIONS = frozenset(
+    (
+        "yAxis_label",
+        "yAxis_label_unit",
+        "yAxis_plotLine_label",
+    )
+)
+_UNRESOLVED_CHART_LABEL_TOKENS = set()
+
 
 def _warn_legacy_options(extras_dict, label_generic_dict=None):
     """Check for deprecated/legacy option names and warn users."""
@@ -2634,6 +2647,51 @@ def _warn_legacy_options(extras_dict, label_generic_dict=None):
         )
 
     return extras_dict
+
+
+def _resolve_chart_label_text(value, label_generic_dict, context="charts.conf"):
+    """Resolve ${label_key} tokens in chart-facing text."""
+
+    if isinstance(value, list):
+        return [
+            _resolve_chart_label_text(item, label_generic_dict, context)
+            for item in value
+        ]
+
+    if not isinstance(value, str) or "$" not in value:
+        return value
+
+    if not isinstance(label_generic_dict, (dict, configobj.Section)):
+        label_generic_dict = {}
+
+    source = value.replace("$$", CHART_LABEL_LITERAL_DOLLAR)
+    unresolved_tokens = []
+
+    def replace_label_token(match_obj):
+        label_key = match_obj.group(1)
+        if label_key in label_generic_dict:
+            label_value = label_generic_dict.get(label_key)
+            return "" if label_value is None else str(label_value)
+
+        unresolved_tokens.append(match_obj.group(0))
+        return match_obj.group(0)
+
+    resolved = CHART_LABEL_TOKEN_RE.sub(replace_label_token, source)
+    resolved = resolved.replace(CHART_LABEL_LITERAL_DOLLAR, "$")
+
+    for token in unresolved_tokens:
+        warn_key = (context, token)
+        if warn_key in _UNRESOLVED_CHART_LABEL_TOKENS:
+            continue
+        _UNRESOLVED_CHART_LABEL_TOKENS.add(warn_key)
+        log.warning(
+            "New Belchertown: charts.conf label token '%s' in %s has no "
+            "matching [Labels][Generic] entry.",
+            token,
+            context,
+        )
+
+    return resolved
 
 
 def _safe_float(value):
@@ -4862,13 +4920,25 @@ class getData(SearchList):
         for chartgroup in chart_dict.sections:
             chart_group_config = chart_dict[chartgroup]
             charts[chartgroup] = list(chart_group_config.sections)
-            chartpage_titles[chartgroup] = chart_group_config.get("title", chartgroup)
+            chartpage_titles[chartgroup] = _resolve_chart_label_text(
+                chart_group_config.get("title", chartgroup),
+                label_generic_dict,
+                f"[{chartgroup}] title",
+            )
 
             if "page_content" in chart_group_config:
-                chartpage_content[chartgroup] = chart_group_config["page_content"]
+                chartpage_content[chartgroup] = _resolve_chart_label_text(
+                    chart_group_config["page_content"],
+                    label_generic_dict,
+                    f"[{chartgroup}] page_content",
+                )
 
             if chart_group_config.get("show_button", "").lower() == "true":
-                button_text = chart_group_config.get("button_text", chartgroup)
+                button_text = _resolve_chart_label_text(
+                    chart_group_config.get("button_text", chartgroup),
+                    label_generic_dict,
+                    f"[{chartgroup}] button_text",
+                )
                 button_parts.append(
                     f'<a href="./?chart={chartgroup}"><button type="button" class="btn btn-primary">{button_text}</button></a>'
                 )
@@ -7712,7 +7782,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             output[chart_group]["colors"] = colors
 
             # chartgroup_title is used on the charts page
-            chartgroup_title = chart_options.get("title", None)
+            chartgroup_title = _resolve_chart_label_text(
+                chart_options.get("title", None),
+                d,
+                f"[{chart_group}] title",
+            )
             if chartgroup_title:
                 output[chart_group]["chartgroup_title"] = chartgroup_title
 
@@ -7721,7 +7795,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             output[chart_group]["tooltip_date_format"] = tooltip_date_format
 
             # Credits Text
-            credits = chart_options.get("credits", "highcharts_default")
+            credits = _resolve_chart_label_text(
+                chart_options.get("credits", "highcharts_default"),
+                d,
+                f"[{chart_group}] credits",
+            )
             output[chart_group]["credits"] = credits
 
             # Credits URL
@@ -7818,10 +7896,18 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     if not plotgen_ts:
                         plotgen_ts = time.time()
 
-                chart_title = plot_options.get("title", "")
+                chart_title = _resolve_chart_label_text(
+                    plot_options.get("title", ""),
+                    d,
+                    f"[{chart_group}][{plotname}] title",
+                )
                 output[chart_group][plotname]["options"]["title"] = chart_title
 
-                chart_subtitle = plot_options.get("subtitle", "")
+                chart_subtitle = _resolve_chart_label_text(
+                    plot_options.get("subtitle", ""),
+                    d,
+                    f"[{chart_group}][{plotname}] subtitle",
+                )
                 output[chart_group][plotname]["options"]["subtitle"] = chart_subtitle
 
                 # Get the type of plot ("bar', 'line', 'spline', or 'scatter')
@@ -7860,6 +7946,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 # it into a list
                 if not isinstance(xAxis_categories, list):
                     xAxis_categories = xAxis_categories.split()
+                xAxis_categories = _resolve_chart_label_text(
+                    xAxis_categories,
+                    d,
+                    f"[{chart_group}][{plotname}] xAxis_categories",
+                )
                 output[chart_group][plotname]["options"][
                     "xAxis_categories"
                 ] = xAxis_categories
@@ -8124,6 +8215,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
 
                     # Get any custom names for this observation
                     name = line_options.get("name", None)
+                    name = _resolve_chart_label_text(
+                        name,
+                        d,
+                        f"[{chart_group}][{plotname}][{line_name}] name",
+                    )
                     if not name:
                         # No explicit name. Look up a generic one. NB:
                         # label_dict is a KeyDict which will substitute the key
@@ -8173,20 +8269,30 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     else:
                         wind_obs = "windSpeed"
                         obs_label = observation_type
-                    unit_label = line_options.get(
-                        "yAxis_label_unit",
-                        self.formatter.get_label_string(
+                    unit_label_config = line_options.get("yAxis_label_unit", None)
+                    if unit_label_config is not None:
+                        unit_label = _resolve_chart_label_text(
+                            unit_label_config,
+                            d,
+                            f"[{chart_group}][{plotname}][{line_name}] yAxis_label_unit",
+                        )
+                    else:
+                        unit_label = self.formatter.get_label_string(
                             special_target_unit
                             if special_target_unit
                             else self.converter.getTargetUnit(
                                 obs_label, aggregate_type
                             )[0]
-                        ),
-                    )
+                        )
 
                     # Set the yAxis label. Place into series for custom
                     # JavaScript. Highcharts will ignore these by default
                     yAxisLabel_config = line_options.get("yAxis_label", None)
+                    yAxisLabel_config = _resolve_chart_label_text(
+                        yAxisLabel_config,
+                        d,
+                        f"[{chart_group}][{plotname}][{line_name}] yAxis_label",
+                    )
                     # Set a default yAxis label if charts.conf yAxis_label is
                     # none and there's a unit_label - e.g. Temperature (F)
                     if yAxisLabel_config is None and unit_label:
@@ -8248,6 +8354,12 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     for highcharts_config, highcharts_value in self.chart_dict[
                         chart_group
                     ][plotname][line_name].items():
+                        if highcharts_config in CHART_TEXT_SERIES_OPTIONS:
+                            highcharts_value = _resolve_chart_label_text(
+                                highcharts_value,
+                                d,
+                                f"[{chart_group}][{plotname}][{line_name}] {highcharts_config}",
+                            )
                         output[chart_group][plotname]["series"][line_name][
                             highcharts_config
                         ] = highcharts_value
