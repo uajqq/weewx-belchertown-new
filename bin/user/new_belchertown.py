@@ -61,6 +61,8 @@ log.info(f"version {VERSION}")
 
 # Default timeout for all HTTP requests (seconds)
 DEFAULT_HTTP_TIMEOUT = 15
+FORECAST_RETRY_INTERVAL = 300
+FORECAST_FAILURE_CACHE_SCHEMA = "belchertown.forecast.failures.v1"
 
 HIGHCHARTS_LANG_DEFAULTS = OrderedDict(
     [
@@ -861,6 +863,177 @@ def _forecast_cache_generated_at(forecast_file):
     if generated_at is not None:
         return generated_at
     return _safe_epoch(cached.get("timestamp"))
+
+
+def _forecast_failure_cache_path(forecast_file):
+    """Return the sidecar path used to throttle repeated forecast failures."""
+    return os.path.join(os.path.dirname(forecast_file), ".forecast_failure.json")
+
+
+def _load_forecast_failure_records(failure_file):
+    """Load forecast provider failure records."""
+    try:
+        with open(failure_file, "r", encoding="utf-8") as read_file:
+            cached = json.load(read_file)
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        log.debug(f"Forecast failure cache read failed: {e}")
+        return []
+
+    if not isinstance(cached, dict):
+        return []
+
+    records = cached.get("failures", [])
+    if isinstance(records, dict):
+        records = list(records.values())
+    if not isinstance(records, list):
+        return []
+
+    return [record for record in records if isinstance(record, dict)]
+
+
+def _write_forecast_failure_records(failure_file, records):
+    """Persist forecast provider failure records, removing the sidecar when empty."""
+    records = [record for record in records if isinstance(record, dict)]
+    if records:
+        _write_json_file(
+            failure_file,
+            {
+                "schema": FORECAST_FAILURE_CACHE_SCHEMA,
+                "failures": records,
+            },
+        )
+        return
+
+    try:
+        os.remove(failure_file)
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        log.debug(f"Forecast failure cache cleanup failed: {e}")
+
+
+def _forecast_failure_record_matches(
+    record,
+    forecast_provider,
+    forecast_units,
+    forecast_place,
+    failure_kind="forecast",
+):
+    """Return True when a failure record applies to this provider/config."""
+    return (
+        str(record.get("kind", "forecast")) == str(failure_kind)
+        and _canonical_forecast_provider(record.get("provider"))
+        == _canonical_forecast_provider(forecast_provider)
+        and str(record.get("units", "")) == str(forecast_units or "")
+        and str(record.get("place", "")) == str(forecast_place or "")
+    )
+
+
+def _forecast_failure_retry_delay(
+    failure_file,
+    forecast_provider,
+    forecast_units,
+    forecast_place,
+    current_time,
+    retry_interval,
+    failure_kind="forecast",
+):
+    """Return remaining retry cooldown seconds for a provider/config."""
+    if retry_interval <= 0:
+        return 0
+
+    for record in _load_forecast_failure_records(failure_file):
+        if not _forecast_failure_record_matches(
+            record,
+            forecast_provider,
+            forecast_units,
+            forecast_place,
+            failure_kind=failure_kind,
+        ):
+            continue
+
+        retry_after = _safe_epoch(record.get("retry_after"))
+        if retry_after is None:
+            last_failed_at = _safe_epoch(record.get("last_failed_at"))
+            if last_failed_at is not None:
+                retry_after = last_failed_at + retry_interval
+
+        if retry_after is not None and retry_after > current_time:
+            return int(retry_after - current_time)
+
+    return 0
+
+
+def _record_forecast_failure(
+    failure_file,
+    forecast_provider,
+    forecast_units,
+    forecast_place,
+    current_time,
+    retry_interval,
+    failure_kind="forecast",
+):
+    """Record a provider failure so later calls can skip the cooldown window."""
+    if retry_interval <= 0:
+        return
+
+    records = []
+    for record in _load_forecast_failure_records(failure_file):
+        if _forecast_failure_record_matches(
+            record,
+            forecast_provider,
+            forecast_units,
+            forecast_place,
+            failure_kind=failure_kind,
+        ):
+            continue
+
+        retry_after = _safe_epoch(record.get("retry_after"))
+        if retry_after is None or retry_after > current_time:
+            records.append(record)
+
+    records.append(
+        {
+            "kind": str(failure_kind),
+            "provider": _canonical_forecast_provider(forecast_provider),
+            "units": str(forecast_units or ""),
+            "place": str(forecast_place or ""),
+            "last_failed_at": int(current_time),
+            "retry_after": int(current_time + retry_interval),
+        }
+    )
+
+    try:
+        _write_forecast_failure_records(failure_file, records)
+    except Exception as e:
+        log.debug(f"Forecast failure cache write failed: {e}")
+
+
+def _clear_forecast_failure(
+    failure_file,
+    forecast_provider,
+    forecast_units,
+    forecast_place,
+    failure_kind="forecast",
+):
+    """Clear a provider/config failure record after a successful refresh."""
+    records = [
+        record
+        for record in _load_forecast_failure_records(failure_file)
+        if not _forecast_failure_record_matches(
+            record,
+            forecast_provider,
+            forecast_units,
+            forecast_place,
+            failure_kind=failure_kind,
+        )
+    ]
+    try:
+        _write_forecast_failure_records(failure_file, records)
+    except Exception as e:
+        log.debug(f"Forecast failure cache cleanup failed: {e}")
 
 
 def _write_current_conditions_from_forecast(forecast_file, current_conditions_file):
@@ -5795,6 +5968,7 @@ class getData(SearchList):
                 # Setup variables common to both forecast sources
                 forecast_file = f"{html_root}/json/forecast.json"
                 current_conditions_file = f"{html_root}/json/current_conditions.json"
+                forecast_failure_file = _forecast_failure_cache_path(forecast_file)
                 forecast_json_dir = os.path.dirname(forecast_file)
                 try:
                     os.makedirs(forecast_json_dir, exist_ok=True)
@@ -5831,6 +6005,37 @@ class getData(SearchList):
                     forecast_place = f"{latitude},{longitude}"
                 if belchertown_debug > 0:
                     log.info(f"forecast_place set to {forecast_place}")
+
+                def _provider_retry_delay(provider_key, failure_kind="forecast"):
+                    return _forecast_failure_retry_delay(
+                        forecast_failure_file,
+                        provider_key,
+                        forecast_units,
+                        forecast_place,
+                        current_time,
+                        FORECAST_RETRY_INTERVAL,
+                        failure_kind=failure_kind,
+                    )
+
+                def _record_provider_failure(provider_key, failure_kind="forecast"):
+                    _record_forecast_failure(
+                        forecast_failure_file,
+                        provider_key,
+                        forecast_units,
+                        forecast_place,
+                        current_time,
+                        FORECAST_RETRY_INTERVAL,
+                        failure_kind=failure_kind,
+                    )
+
+                def _clear_provider_failure(provider_key, failure_kind="forecast"):
+                    _clear_forecast_failure(
+                        forecast_failure_file,
+                        provider_key,
+                        forecast_units,
+                        forecast_place,
+                        failure_kind=failure_kind,
+                    )
 
                 def _cached_aqi_for_provider(provider_key):
                     cached_aqi = _load_aqi_payload_from_forecast_file(
@@ -6037,25 +6242,37 @@ class getData(SearchList):
                 if forecast_provider == "pirateweather":
                     # Fetch → normalize → write forecast
                     if forecast_is_stale:
-                        try:
-                            url = f"https://api.pirateweather.net/forecast/{forecast_api_id}/{forecast_place}?units={forecast_units}&lang={forecast_lang}&exclude=minutely"
-                            pw_raw = _http_get_json(url)
-                            normalized = _pw_transform_to_belch(
-                                pw_raw,
-                                forecast_units,
-                            )
-                            _write_json_file(forecast_file, normalized)
+                        retry_delay = _provider_retry_delay("pirateweather")
+                        if retry_delay:
                             log.debug(
-                                f"New Pirate Weather forecast cached to {forecast_file}"
-                            ),
-                        except urllib.error.HTTPError as e:
-                            log.error(
-                                f"Pirate Weather HTTP error {e.code}: {e.reason}",
+                                "Pirate Weather forecast update skipped; previous "
+                                "failure cooldown has %s seconds remaining.",
+                                retry_delay,
                             )
-                        except ValueError as e:
-                            log.error(f"Pirate Weather missing config: {e}")
-                        except Exception as e:
-                            log.error(f"Pirate Weather update failed: {e}")
+                        else:
+                            try:
+                                url = f"https://api.pirateweather.net/forecast/{forecast_api_id}/{forecast_place}?units={forecast_units}&lang={forecast_lang}&exclude=minutely"
+                                pw_raw = _http_get_json(url)
+                                normalized = _pw_transform_to_belch(
+                                    pw_raw,
+                                    forecast_units,
+                                )
+                                _write_json_file(forecast_file, normalized)
+                                _clear_provider_failure("pirateweather")
+                                log.debug(
+                                    f"New Pirate Weather forecast cached to {forecast_file}"
+                                ),
+                            except urllib.error.HTTPError as e:
+                                _record_provider_failure("pirateweather")
+                                log.error(
+                                    f"Pirate Weather HTTP error {e.code}: {e.reason}",
+                                )
+                            except ValueError as e:
+                                _record_provider_failure("pirateweather")
+                                log.error(f"Pirate Weather missing config: {e}")
+                            except Exception as e:
+                                _record_provider_failure("pirateweather")
+                                log.error(f"Pirate Weather update failed: {e}")
                     else:
                         log.debug("Forecast is current, no update needed.")
 
@@ -6102,6 +6319,7 @@ class getData(SearchList):
                 elif forecast_provider == "nws":
                     # NWS does not require API id/secret, but does expect a descriptive User-Agent.
                     nws_forecast_failed = False
+                    nws_forecast_retry_suppressed = False
 
                     nws_lat, nws_lon = _resolve_forecast_lat_lon(
                         latitude, longitude, forecast_place
@@ -6109,83 +6327,95 @@ class getData(SearchList):
 
                     # Forecast file (daily/hourly/current + alerts)
                     if forecast_is_stale:
-                        try:
-                            points_url = f"https://api.weather.gov/points/{nws_lat},{nws_lon}"
-                            points_data = _http_get_json(
-                                points_url, headers=HTTP_HEADERS["NWS_WEATHER"]
-                            )
-                            points_props = points_data.get("properties", {})
-
-                            forecast_url = points_props.get("forecast")
-                            forecast_hourly_url = points_props.get("forecastHourly")
-                            stations_url = points_props.get("observationStations")
-
-                            if not forecast_url or not forecast_hourly_url:
-                                raise ValueError("NWS points response missing forecast URLs")
-
-                            forecast_24_data = _http_get_json(
-                                forecast_url, headers=HTTP_HEADERS["NWS_WEATHER"]
-                            )
-                            forecast_hourly_data = _http_get_json(
-                                forecast_hourly_url,
-                                headers=HTTP_HEADERS["NWS_WEATHER"],
-                            )
-
-                            observation_data = {}
-                            station_id = extras_dict.get("nws_station_id", "").strip()
-                            obs_latest_url = ""
-                            if station_id:
-                                obs_latest_url = (
-                                    f"https://api.weather.gov/stations/{station_id}/observations/latest"
-                                )
-                            elif stations_url:
-                                stations_data = _http_get_json(
-                                    stations_url,
-                                    headers=HTTP_HEADERS["NWS_WEATHER"],
-                                )
-                                stations = stations_data.get("features", [])
-                                if stations:
-                                    first_station_props = (
-                                        (stations[0] or {}).get("properties") or {}
-                                    )
-                                    first_station = first_station_props.get(
-                                        "stationIdentifier"
-                                    )
-                                    if first_station:
-                                        obs_latest_url = (
-                                            f"https://api.weather.gov/stations/{first_station}/observations/latest"
-                                        )
-                            if obs_latest_url:
-                                observation_data = _http_get_json(
-                                    obs_latest_url,
-                                    headers=HTTP_HEADERS["NWS_WEATHER"],
-                                )
-
-                            alerts_data = {}
-                            if extras_dict.get("forecast_alert_enabled") == "1":
-                                alerts_url = (
-                                    f"https://api.weather.gov/alerts/active?point={nws_lat},{nws_lon}"
-                                )
-                                alerts_data = _http_get_json(
-                                    alerts_url,
-                                    headers=HTTP_HEADERS["NWS_WEATHER"],
-                                )
-
-                            normalized = _nws_transform_to_belch(
-                                forecast_payload=forecast_24_data,
-                                hourly_payload=forecast_hourly_data,
-                                observation_payload=observation_data,
-                                alerts_payload=alerts_data,
-                                forecast_units=forecast_units,
-                            )
-                            _write_json_file(forecast_file, normalized)
-                            log.info(f"New NWS forecast cached to {forecast_file}")
-                        except Exception as e:
+                        retry_delay = _provider_retry_delay("nws")
+                        if retry_delay:
                             nws_forecast_failed = True
-                            log.warning(
-                                "NWS forecast update failed; treating forecast_enabled as 0 for this cycle. "
-                                f"Reason: {e}"
+                            nws_forecast_retry_suppressed = True
+                            log.debug(
+                                "NWS forecast update skipped; previous failure "
+                                "cooldown has %s seconds remaining.",
+                                retry_delay,
                             )
+                        else:
+                            try:
+                                points_url = f"https://api.weather.gov/points/{nws_lat},{nws_lon}"
+                                points_data = _http_get_json(
+                                    points_url, headers=HTTP_HEADERS["NWS_WEATHER"]
+                                )
+                                points_props = points_data.get("properties", {})
+
+                                forecast_url = points_props.get("forecast")
+                                forecast_hourly_url = points_props.get("forecastHourly")
+                                stations_url = points_props.get("observationStations")
+
+                                if not forecast_url or not forecast_hourly_url:
+                                    raise ValueError("NWS points response missing forecast URLs")
+
+                                forecast_24_data = _http_get_json(
+                                    forecast_url, headers=HTTP_HEADERS["NWS_WEATHER"]
+                                )
+                                forecast_hourly_data = _http_get_json(
+                                    forecast_hourly_url,
+                                    headers=HTTP_HEADERS["NWS_WEATHER"],
+                                )
+
+                                observation_data = {}
+                                station_id = extras_dict.get("nws_station_id", "").strip()
+                                obs_latest_url = ""
+                                if station_id:
+                                    obs_latest_url = (
+                                        f"https://api.weather.gov/stations/{station_id}/observations/latest"
+                                    )
+                                elif stations_url:
+                                    stations_data = _http_get_json(
+                                        stations_url,
+                                        headers=HTTP_HEADERS["NWS_WEATHER"],
+                                    )
+                                    stations = stations_data.get("features", [])
+                                    if stations:
+                                        first_station_props = (
+                                            (stations[0] or {}).get("properties") or {}
+                                        )
+                                        first_station = first_station_props.get(
+                                            "stationIdentifier"
+                                        )
+                                        if first_station:
+                                            obs_latest_url = (
+                                                f"https://api.weather.gov/stations/{first_station}/observations/latest"
+                                            )
+                                if obs_latest_url:
+                                    observation_data = _http_get_json(
+                                        obs_latest_url,
+                                        headers=HTTP_HEADERS["NWS_WEATHER"],
+                                    )
+
+                                alerts_data = {}
+                                if extras_dict.get("forecast_alert_enabled") == "1":
+                                    alerts_url = (
+                                        f"https://api.weather.gov/alerts/active?point={nws_lat},{nws_lon}"
+                                    )
+                                    alerts_data = _http_get_json(
+                                        alerts_url,
+                                        headers=HTTP_HEADERS["NWS_WEATHER"],
+                                    )
+
+                                normalized = _nws_transform_to_belch(
+                                    forecast_payload=forecast_24_data,
+                                    hourly_payload=forecast_hourly_data,
+                                    observation_payload=observation_data,
+                                    alerts_payload=alerts_data,
+                                    forecast_units=forecast_units,
+                                )
+                                _write_json_file(forecast_file, normalized)
+                                _clear_provider_failure("nws")
+                                log.info(f"New NWS forecast cached to {forecast_file}")
+                            except Exception as e:
+                                nws_forecast_failed = True
+                                _record_provider_failure("nws")
+                                log.warning(
+                                    "NWS forecast update failed; treating forecast_enabled as 0 for this cycle. "
+                                    f"Reason: {e}"
+                                )
                     else:
                         log.debug("Forecast is current, no update needed.")
 
@@ -6235,14 +6465,21 @@ class getData(SearchList):
                             )
 
                     if nws_forecast_failed:
-                        log.warning(
-                            "NWS forecast is unavailable for this cycle. Falling back to Open-Meteo."
-                        )
+                        if nws_forecast_retry_suppressed:
+                            log.debug(
+                                "NWS forecast is unavailable due to a recent "
+                                "failure. Falling back to Open-Meteo."
+                            )
+                        else:
+                            log.warning(
+                                "NWS forecast is unavailable for this cycle. Falling back to Open-Meteo."
+                            )
                         forecast_provider = "open-meteo"
                     else:
                         _refresh_and_apply_aqi(force=forecast_is_stale)
                 if forecast_provider == "open-meteo":
                     openmeteo_forecast_failed = False
+                    openmeteo_forecast_retry_suppressed = False
 
                     om_lat, om_lon = _resolve_forecast_lat_lon(
                         latitude, longitude, forecast_place
@@ -6254,54 +6491,66 @@ class getData(SearchList):
                     )
 
                     if forecast_is_stale:
-                        try:
-                            om_url = (
-                                "https://api.open-meteo.com/v1/forecast"
-                                f"?latitude={om_lat}&longitude={om_lon}"
-                                "&current=temperature_2m,apparent_temperature,relative_humidity_2m,"
-                                "pressure_msl,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
-                                "cloud_cover,visibility,dew_point_2m,precipitation,rain,showers,snowfall,"
-                                "weather_code,is_day"
-                                "&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,"
-                                "dew_point_2m,pressure_msl,surface_pressure,visibility,precipitation_probability,"
-                                "precipitation,rain,showers,snowfall,weather_code,is_day,cloud_cover,"
-                                "wind_speed_10m,wind_gusts_10m,wind_direction_10m"
-                                "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
-                                "apparent_temperature_max,apparent_temperature_min,precipitation_sum,"
-                                "rain_sum,showers_sum,snowfall_sum,precipitation_hours,"
-                                "precipitation_probability_max,cloud_cover_mean,relative_humidity_2m_mean,"
-                                "dew_point_2m_mean,wind_speed_10m_max,wind_gusts_10m_max,"
-                                "wind_direction_10m_dominant,sunrise,sunset,uv_index_max"
-                                f"&temperature_unit={om_temp_unit}"
-                                f"&wind_speed_unit={om_wind_unit}"
-                                f"&precipitation_unit={om_precip_unit}"
-                                "&timezone=auto&forecast_days=7"
-                            )
-                            om_raw = _http_get_json(
-                                om_url, headers=HTTP_HEADERS["OPEN_METEO"]
-                            )
-                            normalized = _openmeteo_transform_to_belch(
-                                om_raw, forecast_units
-                            )
-                            (
-                                normalized["alerts"],
-                                alert_provider,
-                            ) = _fetch_openmeteo_alerts(
-                                om_lat,
-                                om_lon,
-                                extras_dict,
-                                openmeteo_payload=om_raw,
-                            )
-                            if alert_provider:
-                                normalized["alert_provider"] = alert_provider
-                            _write_json_file(forecast_file, normalized)
-                            log.info(f"New Open-Meteo forecast cached to {forecast_file}")
-                        except Exception as e:
+                        retry_delay = _provider_retry_delay("open-meteo")
+                        if retry_delay:
                             openmeteo_forecast_failed = True
-                            log.warning(
-                                "Open-Meteo forecast update failed; treating forecast_enabled as 0 for this cycle. "
-                                f"Reason: {e}"
+                            openmeteo_forecast_retry_suppressed = True
+                            log.debug(
+                                "Open-Meteo forecast update skipped; previous "
+                                "failure cooldown has %s seconds remaining.",
+                                retry_delay,
                             )
+                        else:
+                            try:
+                                om_url = (
+                                    "https://api.open-meteo.com/v1/forecast"
+                                    f"?latitude={om_lat}&longitude={om_lon}"
+                                    "&current=temperature_2m,apparent_temperature,relative_humidity_2m,"
+                                    "pressure_msl,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
+                                    "cloud_cover,visibility,dew_point_2m,precipitation,rain,showers,snowfall,"
+                                    "weather_code,is_day"
+                                    "&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,"
+                                    "dew_point_2m,pressure_msl,surface_pressure,visibility,precipitation_probability,"
+                                    "precipitation,rain,showers,snowfall,weather_code,is_day,cloud_cover,"
+                                    "wind_speed_10m,wind_gusts_10m,wind_direction_10m"
+                                    "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
+                                    "apparent_temperature_max,apparent_temperature_min,precipitation_sum,"
+                                    "rain_sum,showers_sum,snowfall_sum,precipitation_hours,"
+                                    "precipitation_probability_max,cloud_cover_mean,relative_humidity_2m_mean,"
+                                    "dew_point_2m_mean,wind_speed_10m_max,wind_gusts_10m_max,"
+                                    "wind_direction_10m_dominant,sunrise,sunset,uv_index_max"
+                                    f"&temperature_unit={om_temp_unit}"
+                                    f"&wind_speed_unit={om_wind_unit}"
+                                    f"&precipitation_unit={om_precip_unit}"
+                                    "&timezone=auto&forecast_days=7"
+                                )
+                                om_raw = _http_get_json(
+                                    om_url, headers=HTTP_HEADERS["OPEN_METEO"]
+                                )
+                                normalized = _openmeteo_transform_to_belch(
+                                    om_raw, forecast_units
+                                )
+                                (
+                                    normalized["alerts"],
+                                    alert_provider,
+                                ) = _fetch_openmeteo_alerts(
+                                    om_lat,
+                                    om_lon,
+                                    extras_dict,
+                                    openmeteo_payload=om_raw,
+                                )
+                                if alert_provider:
+                                    normalized["alert_provider"] = alert_provider
+                                _write_json_file(forecast_file, normalized)
+                                _clear_provider_failure("open-meteo")
+                                log.info(f"New Open-Meteo forecast cached to {forecast_file}")
+                            except Exception as e:
+                                openmeteo_forecast_failed = True
+                                _record_provider_failure("open-meteo")
+                                log.warning(
+                                    "Open-Meteo forecast update failed; treating forecast_enabled as 0 for this cycle. "
+                                    f"Reason: {e}"
+                                )
                     else:
                         log.debug("Forecast is current, no update needed.")
 
@@ -6349,6 +6598,11 @@ class getData(SearchList):
                             )
 
                     if openmeteo_forecast_failed:
+                        if openmeteo_forecast_retry_suppressed:
+                            log.debug(
+                                "Open-Meteo forecast is unavailable due to a "
+                                "recent failure."
+                            )
                         (
                             current_obs_icon,
                             current_obs_summary,
@@ -6405,111 +6659,125 @@ class getData(SearchList):
                     # File is stale, download a new copy
                     if forecast_is_stale:
                         forecast_file_result = None
-                        try:
-                            if "forecast_dev_file" in extras_dict:
-                                # Hidden option to use a pre-downloaded forecast file
-                                # rather than using API calls for no reason
-                                dev_forecast_file = extras_dict["forecast_dev_file"]
-                                req = Request(
-                                    dev_forecast_file,
-                                    None,
-                                    HTTP_HEADERS["AERIS_WEATHER"],
-                                )
-                                with urlopen(
-                                    req, timeout=DEFAULT_HTTP_TIMEOUT
-                                ) as response:
-                                    forecast_file_result = response.read()
-                                dev_payload = _parse_aeris_json(forecast_file_result)
-                                if dev_payload.get("schema") == "belchertown.forecast.v1":
-                                    dev_payload["units"] = forecast_units
-                                    forecast_file_result = json.dumps(dev_payload)
-                                else:
-                                    forecast_file_result = json.dumps(
-                                        _aeris_transform_to_belch(
-                                            dev_payload,
-                                            forecast_units,
-                                            label_dict,
-                                            aeris_icon_map,
-                                        )
-                                    )
-                            else:
-                                # 24hr forecast (was Forecast)
-                                req = Request(
-                                    forecast_24hr_url,
-                                    None,
-                                    HTTP_HEADERS["AERIS_WEATHER"],
-                                )
-                                with urlopen(
-                                    req, timeout=DEFAULT_HTTP_TIMEOUT
-                                ) as response:
-                                    forecast_24hr_page = response.read()
-                                if belchertown_debug > 1:
-                                    log.info(f"Forecast 24hr URL: {forecast_24hr_url}")
-                                # 3hr forecast
-                                req = Request(
-                                    forecast_3hr_url,
-                                    None,
-                                    HTTP_HEADERS["AERIS_WEATHER"],
-                                )
-                                with urlopen(
-                                    req, timeout=DEFAULT_HTTP_TIMEOUT
-                                ) as response:
-                                    forecast_3hr_page = response.read()
-                                if belchertown_debug > 1:
-                                    log.info(f"Forecast 3hr URL: {forecast_3hr_url}")
-                                # 1hr forecast
-                                req = Request(
-                                    forecast_1hr_url,
-                                    None,
-                                    HTTP_HEADERS["AERIS_WEATHER"],
-                                )
-                                with urlopen(
-                                    req, timeout=DEFAULT_HTTP_TIMEOUT
-                                ) as response:
-                                    forecast_1hr_page = response.read()
-                                if belchertown_debug > 1:
-                                    log.info(f"Forecast 1hr URL: {forecast_1hr_url}")
-                                if extras_dict["forecast_alert_enabled"] == "1":
-                                    # Alerts
+                        forecast_download_retry_suppressed = False
+                        retry_delay = 0
+                        if "forecast_dev_file" not in extras_dict:
+                            retry_delay = _provider_retry_delay(forecast_provider)
+                        if retry_delay:
+                            forecast_download_retry_suppressed = True
+                            log.debug(
+                                "Xweather forecast update skipped; previous "
+                                "failure cooldown has %s seconds remaining.",
+                                retry_delay,
+                            )
+                        else:
+                            try:
+                                if "forecast_dev_file" in extras_dict:
+                                    # Hidden option to use a pre-downloaded forecast file
+                                    # rather than using API calls for no reason
+                                    dev_forecast_file = extras_dict["forecast_dev_file"]
                                     req = Request(
-                                        forecast_alerts_url,
+                                        dev_forecast_file,
                                         None,
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
                                         req, timeout=DEFAULT_HTTP_TIMEOUT
                                     ) as response:
-                                        alerts_page = response.read()
-                                    if belchertown_debug > 1:
-                                        log.info(f"Alerts URL: {forecast_alerts_url}")
-
-                                # Combine all into 1 file - simplified parsing helper
-
-                                data = {
-                                    "timestamp": int(time.time()),
-                                    "forecast_24hr": [
-                                        _parse_aeris_json(forecast_24hr_page)
-                                    ],
-                                    "forecast_3hr": [
-                                        _parse_aeris_json(forecast_3hr_page)
-                                    ],
-                                    "forecast_1hr": [
-                                        _parse_aeris_json(forecast_1hr_page)
-                                    ],
-                                    "aqi": [],
-                                }
-                                if extras_dict.get("forecast_alert_enabled") == "1":
-                                    data["alerts"] = [_parse_aeris_json(alerts_page)]
-                                forecast_file_result = json.dumps(
-                                    _aeris_transform_to_belch(
-                                        data,
-                                        forecast_units,
-                                        label_dict,
-                                        aeris_icon_map,
+                                        forecast_file_result = response.read()
+                                    dev_payload = _parse_aeris_json(forecast_file_result)
+                                    if dev_payload.get("schema") == "belchertown.forecast.v1":
+                                        dev_payload["units"] = forecast_units
+                                        forecast_file_result = json.dumps(dev_payload)
+                                    else:
+                                        forecast_file_result = json.dumps(
+                                            _aeris_transform_to_belch(
+                                                dev_payload,
+                                                forecast_units,
+                                                label_dict,
+                                                aeris_icon_map,
+                                            )
+                                        )
+                                else:
+                                    # 24hr forecast (was Forecast)
+                                    req = Request(
+                                        forecast_24hr_url,
+                                        None,
+                                        HTTP_HEADERS["AERIS_WEATHER"],
                                     )
-                                )
-                        except Exception as e:
-                            log.error(f"Error downloading forecast data: {e}")
+                                    with urlopen(
+                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                    ) as response:
+                                        forecast_24hr_page = response.read()
+                                    if belchertown_debug > 1:
+                                        log.info(f"Forecast 24hr URL: {forecast_24hr_url}")
+                                    # 3hr forecast
+                                    req = Request(
+                                        forecast_3hr_url,
+                                        None,
+                                        HTTP_HEADERS["AERIS_WEATHER"],
+                                    )
+                                    with urlopen(
+                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                    ) as response:
+                                        forecast_3hr_page = response.read()
+                                    if belchertown_debug > 1:
+                                        log.info(f"Forecast 3hr URL: {forecast_3hr_url}")
+                                    # 1hr forecast
+                                    req = Request(
+                                        forecast_1hr_url,
+                                        None,
+                                        HTTP_HEADERS["AERIS_WEATHER"],
+                                    )
+                                    with urlopen(
+                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                    ) as response:
+                                        forecast_1hr_page = response.read()
+                                    if belchertown_debug > 1:
+                                        log.info(f"Forecast 1hr URL: {forecast_1hr_url}")
+                                    if extras_dict["forecast_alert_enabled"] == "1":
+                                        # Alerts
+                                        req = Request(
+                                            forecast_alerts_url,
+                                            None,
+                                            HTTP_HEADERS["AERIS_WEATHER"],
+                                        )
+                                        with urlopen(
+                                            req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        ) as response:
+                                            alerts_page = response.read()
+                                        if belchertown_debug > 1:
+                                            log.info(f"Alerts URL: {forecast_alerts_url}")
+
+                                    # Combine all into 1 file - simplified parsing helper
+
+                                    data = {
+                                        "timestamp": int(time.time()),
+                                        "forecast_24hr": [
+                                            _parse_aeris_json(forecast_24hr_page)
+                                        ],
+                                        "forecast_3hr": [
+                                            _parse_aeris_json(forecast_3hr_page)
+                                        ],
+                                        "forecast_1hr": [
+                                            _parse_aeris_json(forecast_1hr_page)
+                                        ],
+                                        "aqi": [],
+                                    }
+                                    if extras_dict.get("forecast_alert_enabled") == "1":
+                                        data["alerts"] = [_parse_aeris_json(alerts_page)]
+                                    forecast_file_result = json.dumps(
+                                        _aeris_transform_to_belch(
+                                            data,
+                                            forecast_units,
+                                            label_dict,
+                                            aeris_icon_map,
+                                        )
+                                    )
+                            except Exception as e:
+                                if "forecast_dev_file" not in extras_dict:
+                                    _record_provider_failure(forecast_provider)
+                                log.error(f"Error downloading forecast data: {e}")
 
                         # Save forecast data to file. w+ creates the file if it doesn't
                         # exist, and truncates the file and re-writes it everytime
@@ -6520,6 +6788,7 @@ class getData(SearchList):
                                     log.info(
                                         f"New forecast file downloaded to {forecast_file}"
                                     )
+                                    _clear_provider_failure(forecast_provider)
                             except FileNotFoundError:
                                 log.info(
                                     "New Belchertown JSON folder does not exist. Usually this "
@@ -6530,7 +6799,7 @@ class getData(SearchList):
                                 log.error(
                                     f"Error writing forecast info to {forecast_file}. Reason: {e}"
                                 )
-                        else:
+                        elif not forecast_download_retry_suppressed:
                             log.info(
                                 "Forecast download failed; keeping existing forecast file if present."
                             )
