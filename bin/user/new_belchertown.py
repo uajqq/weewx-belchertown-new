@@ -845,6 +845,24 @@ def _forecast_cache_matches_config(forecast_file, forecast_provider, forecast_un
     )
 
 
+def _forecast_cache_generated_at(forecast_file):
+    """Return the cached forecast data timestamp, independent of file mtime."""
+    try:
+        with open(forecast_file, "r", encoding="utf-8") as read_file:
+            cached = json.load(read_file)
+    except Exception as e:
+        log.debug(f"Forecast cache timestamp check failed: {e}")
+        return None
+
+    if not isinstance(cached, dict):
+        return None
+
+    generated_at = _safe_epoch(cached.get("generated_at"))
+    if generated_at is not None:
+        return generated_at
+    return _safe_epoch(cached.get("timestamp"))
+
+
 def _write_current_conditions_from_forecast(forecast_file, current_conditions_file):
     """Write current_conditions.json from forecast.json current object."""
     with open(forecast_file, "r", encoding="utf-8") as rf:
@@ -5976,15 +5994,18 @@ class getData(SearchList):
                     # new_belchertown.py is called 12 times per archive, so the last condition ensures forecast on the hour is only downloaded once
                     forecast_stat = os.stat(forecast_file)
                     file_modtime = int(forecast_stat.st_mtime)
+                    forecast_cache_time = (
+                        _forecast_cache_generated_at(forecast_file) or file_modtime
+                    )
                     archive_interval = int(
                         config_dict["StdArchive"]["archive_interval"]
                     )
                     forecast_is_stale = (
-                        (current_time - file_modtime) > forecast_stale_timer
+                        (current_time - forecast_cache_time) > forecast_stale_timer
                         or forecast_stat.st_size == 0
                         or (
                             int(time.strftime("%M")) < archive_interval / 60
-                            and (current_time - file_modtime) > archive_interval
+                            and (current_time - forecast_cache_time) > archive_interval
                         )
                     )
                     if not _forecast_cache_matches_config(
