@@ -856,7 +856,7 @@ function forecast_percent_text(value, fallback) {
     return percentValue.toFixed(0) + '%';
 }
 
-function forecast_visibility_base_key(sourceData) {
+function forecast_base_unit_key(sourceData) {
     if (typeof BU_resolveForecastBase === "function") {
         if (sourceData && typeof sourceData === "object") {
             return BU_resolveForecastBase(sourceData);
@@ -899,8 +899,30 @@ function forecast_visibility_unit_label(sourceData) {
         return String(unit_label_array["visibility"]);
     }
 
-    const forecastUnits = forecast_visibility_base_key(sourceData);
+    const forecastUnits = forecast_base_unit_key(sourceData);
     return (forecastUnits === "si" || forecastUnits === "ca") ? "km" : "miles";
+}
+
+function forecast_wind_unit_label(sourceData) {
+    if (
+        window.BU_UNIT_SWITCHER_ENABLED &&
+        typeof BU_getSystem === "function" &&
+        typeof BU_SYS !== "undefined"
+    ) {
+        const unitSystem = BU_SYS[BU_getSystem()];
+        if (unitSystem && unitSystem.sl) {
+            return unitSystem.sl;
+        }
+    }
+
+    const forecastUnits = forecast_base_unit_key(sourceData);
+    if (forecastUnits === "si") {
+        return "m/s";
+    }
+    if (forecastUnits === "ca") {
+        return "km/h";
+    }
+    return "mph";
 }
 
 function forecast_visibility_number(value) {
@@ -931,7 +953,7 @@ function forecast_visibility_display_value(value, sourceData) {
         return value;
     }
 
-    const baseKey = forecast_visibility_base_key(sourceData);
+    const baseKey = forecast_base_unit_key(sourceData);
     const visibilityKm = BU_forecastToMetricWX("vis", value, baseKey);
     const unitSystem = BU_SYS[BU_getSystem()];
     if (visibilityKm === null || !unitSystem || typeof unitSystem.distance !== "function") {
@@ -1017,17 +1039,14 @@ function forecast_metric_rows(row) {
     return html;
 }
 
-function forecast_wind_html(row, includeGust) {
+function forecast_wind_html(row, includeGust, sourceData) {
     const windSpeedText = forecast_plain_number_text(row["windSpeed"]);
     let html = '<div class="forecast-wind">';
     html += '<i class="wi wi-strong-wind"></i> <span class="forecast-wind-speed">' + windSpeedText + '</span>';
     if (includeGust) {
-        var gustUnitLabel = "$unit.label.windSpeed";
-        if (typeof BU_getSystem === "function" && typeof BU_SYS !== "undefined") {
-            var gustSys = BU_SYS[BU_getSystem()];
-            if (gustSys) { gustUnitLabel = " " + gustSys.sl; }
-        }
-        html += '<span class="forecast-wind-separator">|</span><span class="forecast-wind-gust">' + forecast_plain_number_text(row["windGust"]) + belchertown_label_html(gustUnitLabel) + '</span>';
+        const gustUnitLabel = forecast_wind_unit_label(sourceData);
+        const gustUnitHtml = gustUnitLabel ? " " + belchertown_label_html(gustUnitLabel) : "";
+        html += '<span class="forecast-wind-separator">|</span><span class="forecast-wind-gust">' + forecast_plain_number_text(row["windGust"]) + gustUnitHtml + '</span>';
     }
     html += '</div>';
     return html;
@@ -1086,7 +1105,7 @@ function forecast_pick_three_hourly_from_current_period(hourlyArray) {
     return output;
 }
 
-function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
+function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass, sourceData) {
     let html = "";
     const forecastInterval = (tileClass === "forecast-3hour") ? "forecast_3hr" : "forecast_1hr";
     const periodHours = forecastInterval === "forecast_3hr" ? 3 : 1;
@@ -1156,7 +1175,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
             html += '<br>';
         }
         html += '<div class="forecast-precip">' + forecast_metric_rows(row) + '</div>';
-        html += forecast_wind_html(row, forecastInterval !== "forecast_1hr");
+        html += forecast_wind_html(row, forecastInterval !== "forecast_1hr", sourceData);
         html += forecast_daily_link(row["time"]);
         html += '</div>';
         html += '</div>';
@@ -1165,7 +1184,7 @@ function forecast_render_hourly_tiles(hourlySource, maxTiles, tileClass) {
     return html;
 }
 
-function forecast_render_daily_tiles(dailySource, maxTiles) {
+function forecast_render_daily_tiles(dailySource, maxTiles, sourceData) {
     let html = "";
     const tileCount = Math.min(maxTiles, dailySource.length);
 
@@ -1185,7 +1204,7 @@ function forecast_render_daily_tiles(dailySource, maxTiles) {
         html += '<span class="forecast-temp-range"><span class="forecast-high">' + forecast_temp_text(row["temperatureHigh"]) + '</span> | <span class="forecast-low">' + forecast_temp_text(row["temperatureLow"]) + '</span></span>';
         html += '<br>';
         html += '<div class="forecast-precip">' + forecast_metric_rows(row) + '</div>';
-        html += forecast_wind_html(row, true);
+        html += forecast_wind_html(row, true, sourceData);
         html += forecast_daily_link(row["time"]);
         html += '</div>';
         html += '</div>';
@@ -1320,6 +1339,8 @@ function forecast_has_common_schema(data) {
 // any rendering/min-max/padding logic runs on them. Idempotent - rows
 // already converted in this session are skipped via a marker flag.
 function BU_convertForecastRow(row, baseKey) {
+    // Without the visible unit switcher, forecast_units is already the display contract.
+    if (!window.BU_UNIT_SWITCHER_ENABLED) { return; }
     if (!row || row.__BU_converted) { return; }
     if (typeof BU_forecastToMetricWX !== "function") { return; }
 
@@ -1397,9 +1418,9 @@ function forecast_render_common(data) {
 
     forecast_render_source(data);
     forecast_register_external_observations("forecast", data, {epoch: lastUpdated});
-    const onehrHtml = forecast_render_hourly_tiles(hourly, 16, "forecast-1hour");
-    const threehrHtml = forecast_render_hourly_tiles(threeHourly, 8, "forecast-3hour");
-    const dailyHtml = forecast_render_daily_tiles(daily, 7);
+    const onehrHtml = forecast_render_hourly_tiles(hourly, 16, "forecast-1hour", data);
+    const threehrHtml = forecast_render_hourly_tiles(threeHourly, 8, "forecast-3hour", data);
+    const dailyHtml = forecast_render_daily_tiles(daily, 7, data);
     forecast_replace_tiles(".onehr_forecasts", onehrHtml, "forecast-1hour");
     forecast_replace_tiles(".threehr_forecasts", threehrHtml, "forecast-3hour");
     forecast_replace_tiles(".day_forecasts", dailyHtml, "forecast-24hour");
