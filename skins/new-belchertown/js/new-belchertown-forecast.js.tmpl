@@ -1279,7 +1279,6 @@ function forecast_update_aqi(data) {
             document.querySelectorAll(".wx-aqi-category").forEach(function(el) {
                 el.textContent = aqiCategory;
             });
-            get_aqi_color(aqiValue);
             if ("$Extras.aqi_location_enabled" === "1") {
                 const aqiPlace = data["aqi"][0]["response"][0]["place"]["name"] || "";
                 document.querySelectorAll(".aqi_location_outer").forEach(function(el) {
@@ -1289,11 +1288,16 @@ function forecast_update_aqi(data) {
             }
             try {
                 document.querySelectorAll(".station-observations .aqi").forEach(function(el) {
-                    el.textContent = aqiValue + " (" + aqiCategory + ")";
+                    el.textContent = aqiValue + " ";
+                    const category = document.createElement("span");
+                    category.className = "wx-aqi-category";
+                    category.textContent = aqiCategory;
+                    el.appendChild(category);
                 });
             } catch (err) {
                 // AQI not in the station observation table, so silently exit
             }
+            get_aqi_color(aqiValue);
             forecast_register_external_observations("aqi", data, {
                 sourceProvider: aqiPayload["provider"],
                 epoch: aqiPeriod["timestamp"] || data["generated_at"] || data["timestamp"]
@@ -1314,7 +1318,11 @@ function forecast_update_aqi(data) {
             }
             try {
                 document.querySelectorAll(".station-observations .aqi").forEach(function(el) {
-                    el.textContent = forecast_label_text("$obs.label.no_data") + " (" + aqiNoDataCategory + ")";
+                    el.textContent = forecast_label_text("$obs.label.no_data") + " ";
+                    const category = document.createElement("span");
+                    category.className = "wx-aqi-category";
+                    category.textContent = aqiNoDataCategory;
+                    el.appendChild(category);
                 });
             } catch (err) {
                 // AQI not in the station observation table, so silently exit

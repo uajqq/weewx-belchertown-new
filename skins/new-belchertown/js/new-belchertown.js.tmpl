@@ -1003,7 +1003,7 @@ const AQI_MIN_CONTRAST = {
     light: 2,
     dark: 4.5
 };
-const AQI_COLOR_SELECTOR = ".wx-aqi, .wx-aqi-category, .aqi_outer, .station-observations .aqi";
+const AQI_CATEGORY_SELECTOR = ".wx-aqi-category";
 
 function belchertown_on_ready(fn) {
     if (document.readyState === "loading") {
@@ -1259,7 +1259,7 @@ function belchertown_aqi_color(aqi) {
     return palette[5];
 }
 
-// Change the color of the AQI value
+// Color only the AQI category badge.
 function get_aqi_color(aqi) {
     aqi = parseInt(aqi);
     if (isNaN(aqi)) {
@@ -1267,11 +1267,18 @@ function get_aqi_color(aqi) {
         return;
     }
     var theme = belchertown_current_theme();
-    belchertown_apply_readable_color(AQI_COLOR_SELECTOR, belchertown_aqi_color(aqi), AQI_MIN_CONTRAST[theme]);
+    var aqiColor = belchertown_aqi_color(aqi);
+    document.querySelectorAll(AQI_CATEGORY_SELECTOR).forEach(function(el) {
+        el.style.color = "";
+        var normalTextColor = window.getComputedStyle(el).color;
+        el.style.backgroundColor = aqiColor;
+        el.style.color = belchertown_readable_color(normalTextColor, aqiColor, AQI_MIN_CONTRAST[theme]);
+    });
 }
 
 function clear_aqi_color() {
-    document.querySelectorAll(AQI_COLOR_SELECTOR).forEach(function(el) {
+    document.querySelectorAll(AQI_CATEGORY_SELECTOR).forEach(function(el) {
+        el.style.backgroundColor = "";
         el.style.color = "";
     });
 }
