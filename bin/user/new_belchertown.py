@@ -7389,6 +7389,16 @@ class getData(SearchList):
 
         all_obs_rounding_json = OrderedDict()
         all_obs_unit_labels_json = OrderedDict()
+        configured_unit_names_by_kind = OrderedDict()
+        configured_unit_labels_by_kind = OrderedDict()
+        for obs_group, unit_kind in UNIT_SWITCH_GROUP_KINDS.items():
+            configured_unit = self.generator.converter.group_unit_dict.get(obs_group)
+            if not configured_unit:
+                continue
+            configured_unit_names_by_kind[unit_kind] = configured_unit
+            configured_unit_labels_by_kind[unit_kind] = (
+                self.generator.formatter.get_label_string(configured_unit)
+            )
         for obs in sorted(weewx.units.obs_group_dict):
             try:
                 # Find the unit from group (like group_temperature = degree_F)
@@ -7701,6 +7711,12 @@ class getData(SearchList):
             "station_obs_html": station_obs_html,
             "all_obs_rounding_json": json.dumps(all_obs_rounding_json),
             "all_obs_unit_labels_json": json.dumps(all_obs_unit_labels_json),
+            "configured_unit_names_by_kind_json": json.dumps(
+                configured_unit_names_by_kind
+            ),
+            "configured_unit_labels_by_kind_json": json.dumps(
+                configured_unit_labels_by_kind
+            ),
             "earthquake_time": eqtime,
             "earthquake_url": equrl,
             "earthquake_place": eqplace,

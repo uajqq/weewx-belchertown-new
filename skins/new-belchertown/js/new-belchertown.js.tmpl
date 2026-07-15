@@ -3101,6 +3101,47 @@ var BU_SYS = {
     nautical:    { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*1.94384;}, sl:"kt",   press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km*0.539957;}, dl:"nm", altitude:function(m){return m;},         al:"m" },
 };
 
+var BU_CONFIGURED_UNIT_NAMES = $configured_unit_names_by_kind_json;
+var BU_CONFIGURED_UNIT_LABELS = $configured_unit_labels_by_kind_json;
+
+// BEGIN MQTT CONFIGURED UNIT CONVERSION
+var BU_METRICWX_TO_CONFIGURED_UNIT = {
+    degree_c:          { kind: "temp",     convert: function(c) { return c; } },
+    degree_f:          { kind: "temp",     convert: function(c) { return c * 9 / 5 + 32; } },
+    meter_per_second:  { kind: "speed",    convert: function(ms) { return ms; } },
+    km_per_hour:       { kind: "speed",    convert: function(ms) { return ms * 3.6; } },
+    mile_per_hour:     { kind: "speed",    convert: function(ms) { return ms * 2.23694; } },
+    knot:              { kind: "speed",    convert: function(ms) { return ms * 1.94384; } },
+    beaufort:          { kind: "speed",    convert: function(ms) { return kts_to_beaufort(ms * 1.943844); } },
+    mbar:              { kind: "press",    convert: function(hpa) { return hpa; } },
+    hpa:               { kind: "press",    convert: function(hpa) { return hpa; } },
+    kpa:               { kind: "press",    convert: function(hpa) { return hpa * 0.1; } },
+    inhg:              { kind: "press",    convert: function(hpa) { return hpa * 0.02953; } },
+    mmhg:              { kind: "press",    convert: function(hpa) { return hpa * 0.7500617; } },
+    mm:                { kind: "rain",     convert: function(mm) { return mm; } },
+    cm:                { kind: "rain",     convert: function(mm) { return mm / 10; } },
+    inch:              { kind: "rain",     convert: function(mm) { return mm * 0.03937; } },
+    mm_per_hour:       { kind: "rainrate", convert: function(mm) { return mm; } },
+    cm_per_hour:       { kind: "rainrate", convert: function(mm) { return mm / 10; } },
+    inch_per_hour:     { kind: "rainrate", convert: function(mm) { return mm * 0.03937; } },
+    km:                { kind: "distance", convert: function(km) { return km; } },
+    mile:              { kind: "distance", convert: function(km) { return km * 0.621371; } },
+    nautical_mile:     { kind: "distance", convert: function(km) { return km * 0.539957; } },
+    meter:             { kind: "altitude", convert: function(m) { return m; } },
+    foot:              { kind: "altitude", convert: function(m) { return m * 3.28084; } },
+};
+
+function BU_metricWXToConfiguredUnit(kind, value, unitName) {
+    var numericValue = parseFloat(value);
+    var normalizedUnit = String(unitName || "").trim().toLowerCase();
+    var converter = BU_METRICWX_TO_CONFIGURED_UNIT[normalizedUnit];
+    if (!isFinite(numericValue) || !converter || converter.kind !== kind) {
+        return null;
+    }
+    return converter.convert(numericValue);
+}
+// END MQTT CONFIGURED UNIT CONVERSION
+
 // ============================================================================
 // Chart unit classification & conversion
 // ============================================================================
@@ -3138,6 +3179,9 @@ var BU_CHART_TO_METRICWX = {
     "mm/hr": function(mm) { return mm; },
     "mm_per_hour": function(mm) { return mm; },
     "mm": function(mm) { return mm; },
+    "cm/hr": function(cm) { return cm * 10; },
+    "cm_per_hour": function(cm) { return cm * 10; },
+    "cm": function(cm) { return cm * 10; },
     "in/hr": function(inch) { return inch / 0.03937; },
     "inch_per_hour": function(inch) { return inch / 0.03937; },
     "in": function(inch) { return inch / 0.03937; },
@@ -3167,8 +3211,8 @@ function BU_chartUnitKind(unitToken) {
     if (t.indexOf("hpa") !== -1 || t.indexOf("mbar") !== -1) { return "press"; }
     if (t.indexOf("kpa") !== -1) { return "press"; }
     if (t.indexOf("inhg") !== -1) { return "press"; }
-    if (t.indexOf("mm/hr") !== -1 || t === "mm_per_hour") { return "rainrate"; }
-    if (t === "mm" || t.indexOf("millimeter") !== -1) { return "rain"; }
+    if (t.indexOf("mm/hr") !== -1 || t === "mm_per_hour" || t.indexOf("cm/hr") !== -1 || t === "cm_per_hour") { return "rainrate"; }
+    if (t === "mm" || t.indexOf("millimeter") !== -1 || t === "cm") { return "rain"; }
     if (t.indexOf("in/hr") !== -1 || t === "inch_per_hour") { return "rainrate"; }
     if (t === "in" || t === "inch") { return "rain"; }
     if (t === "km" || t.indexOf("kilometer") !== -1) { return "distance"; }
@@ -3274,15 +3318,37 @@ function BU_setHtml(sel, val) {
     document.querySelectorAll(sel).forEach(function(el) { el.innerHTML = val; });
 }
 
-#if $unitSwitcherJsEnabled
-function BU_formatCurrentObservation(value, kind, decimals) {
-    var num = parseFloat(value);
-    if (isNaN(num)) { return null; }
-    var converted = BU_chartMetricWXToDisplay(kind, num);
+// BEGIN ALWAYS-ON MQTT UNIT APPLICATION
+function BU_mqttDisplayMeasurement(value, kind, decimals) {
+    var numericValue = parseFloat(value);
+    if (!isFinite(numericValue)) { return null; }
+
+    var converted;
+    var label;
+    var unitName = "";
+    if (window.BU_UNIT_SWITCHER_ENABLED === true) {
+        converted = BU_chartMetricWXToDisplay(kind, numericValue);
+        label = BU_chartUnitLabelFor(kind);
+    } else {
+        unitName = BU_CONFIGURED_UNIT_NAMES[kind] || "";
+        converted = BU_metricWXToConfiguredUnit(kind, numericValue, unitName);
+        label = BU_CONFIGURED_UNIT_LABELS[kind] || "";
+    }
+
     var formatted = BU_fmt(converted, decimals);
     if (formatted === null) { return null; }
-    var label = BU_chartUnitLabelFor(kind);
-    return formatted + (label ? "\u00a0" + label : "");
+    return {
+        numeric: converted,
+        formatted: formatted,
+        label: String(label || "").replace(/&nbsp;/g, " ").trim(),
+        unitName: unitName,
+    };
+}
+
+function BU_formatCurrentObservation(value, kind, decimals) {
+    var measurement = BU_mqttDisplayMeasurement(value, kind, decimals);
+    if (!measurement) { return null; }
+    return measurement.formatted + (measurement.label ? "\u00a0" + measurement.label : "");
 }
 
 function BU_stationObservationUnitMetadata(data) {
@@ -3315,27 +3381,21 @@ function BU_mqttObservationValue(obsName, meta, packet) {
     }
     var selectorName = meta.selector ? String(meta.selector).replace(/^\./, "") : "";
     var names = [obsName, selectorName];
-    var suffixByKind = {
-        temp: "_C",
-        press: "_mbar",
-        rain: "_mm",
-        rainrate: "_mm_per_hour",
-        speed: "_mps",
-        distance: "_km",
-        altitude: "_meter"
-    };
-    var suffix = suffixByKind[meta.kind];
-    if (suffix) {
-        names.forEach(function(name) {
-            if (name && keys.indexOf(name + suffix) === -1) {
-                keys.push(name + suffix);
-            }
-        });
-    }
     for (var i = 0; i < keys.length; i++) {
         if (packet[keys[i]] !== undefined && packet[keys[i]] !== null && packet[keys[i]] !== "") {
             return packet[keys[i]];
         }
+    }
+
+    var suffixedValue = BU_mqttPacketMetricWXValue(
+        packet,
+        names,
+        meta.kind,
+        BU_mqttMetricSuffixes(meta.kind),
+        null
+    );
+    if (suffixedValue !== null && suffixedValue !== undefined) {
+        return suffixedValue;
     }
 
     var fallbackKeys = [obsName, selectorName];
@@ -3360,6 +3420,52 @@ function BU_mqttObservationValue(obsName, meta, packet) {
     }
 
     return meta.raw;
+}
+
+// BEGIN MQTT PAYLOAD NORMALIZATION
+function BU_mqttMetricSuffixes(kind) {
+    var suffixesByKind = {
+        temp: [
+            { suffix: "_C", toMetricWX: function(c) { return c; } },
+            { suffix: "_F", toMetricWX: function(f) { return (f - 32) * 5 / 9; } },
+        ],
+        press: [
+            { suffix: "_mbar", toMetricWX: function(hpa) { return hpa; } },
+            { suffix: "_hPa", toMetricWX: function(hpa) { return hpa; } },
+            { suffix: "_kPa", toMetricWX: function(kpa) { return kpa * 10; } },
+            { suffix: "_inHg", toMetricWX: function(inhg) { return inhg / 0.02953; } },
+            { suffix: "_mmHg", toMetricWX: function(mmhg) { return mmhg / 0.7500617; } },
+        ],
+        rain: [
+            { suffix: "_mm", toMetricWX: function(mm) { return mm; } },
+            { suffix: "_cm", toMetricWX: function(cm) { return cm * 10; } },
+            { suffix: "_inch", toMetricWX: function(inch) { return inch / 0.03937; } },
+        ],
+        rainrate: [
+            { suffix: "_mm_per_hour", toMetricWX: function(mm) { return mm; } },
+            { suffix: "_cm_per_hour", toMetricWX: function(cm) { return cm * 10; } },
+            { suffix: "_inch_per_hour", toMetricWX: function(inch) { return inch / 0.03937; } },
+        ],
+        speed: [
+            { suffix: "_mps", toMetricWX: function(ms) { return ms; } },
+            { suffix: "_kph", toMetricWX: function(kph) { return kph / 3.6; } },
+            { suffix: "_mph", toMetricWX: function(mph) { return mph / 2.23694; } },
+            { suffix: "_knot", toMetricWX: function(knot) { return knot / 1.94384; } },
+            { suffix: "_beaufort", toMetricWX: function(beaufort) {
+                var knots = beaufort_to_knots(beaufort);
+                return knots === null ? NaN : knots / 1.94384;
+            } },
+        ],
+        distance: [
+            { suffix: "_km", toMetricWX: function(km) { return km; } },
+            { suffix: "_mile", toMetricWX: function(mile) { return mile * 1.609344; } },
+        ],
+        altitude: [
+            { suffix: "_meter", toMetricWX: function(meter) { return meter; } },
+            { suffix: "_foot", toMetricWX: function(foot) { return foot / 3.28084; } },
+        ],
+    };
+    return suffixesByKind[kind] || [];
 }
 
 function BU_mqttPacketMetricWXValue(packet, names, kind, rawSuffixes, fallbackRaw) {
@@ -3401,22 +3507,92 @@ function BU_mqttPacketMetricWXValue(packet, names, kind, rawSuffixes, fallbackRa
 
     return fallbackRaw;
 }
+// END MQTT PAYLOAD NORMALIZATION
 
 function BU_mqttTemperatureValue(packet, names, fallbackRaw) {
-    return BU_mqttPacketMetricWXValue(packet, names, "temp", [
-        { suffix: "_C", toMetricWX: function(c) { return c; } },
-        { suffix: "_F", toMetricWX: function(f) { return (f - 32) * 5 / 9; } }
-    ], fallbackRaw);
+    return BU_mqttPacketMetricWXValue(packet, names, "temp", BU_mqttMetricSuffixes("temp"), fallbackRaw);
 }
 
-function BU_applyOutTempColor(displayValue, unitLabel) {
+function BU_applyOutTempColor(displayValue, unitLabel, unitName) {
     if (displayValue === null || displayValue === undefined || isNaN(displayValue)) { return; }
-    if (unitLabel === "\u00b0F") {
+    var normalizedName = String(unitName || "").trim().toLowerCase();
+    if (normalizedName === "degree_f" || unitLabel === "\u00b0F") {
         get_outTemp_color("degree_F", displayValue);
-    } else if (unitLabel === "\u00b0C") {
+    } else if (normalizedName === "degree_c" || unitLabel === "\u00b0C") {
         get_outTemp_color("degree_C", displayValue);
     }
 }
+
+// MQTT values are normalized on every live update. The optional unit switcher
+// only selects the target system; with it disabled, the configured WeeWX units
+// embedded above remain the target.
+function BU_applyMQTT(data) {
+    if (!data) { return; }
+
+    var tC = BU_mqttTemperatureValue(data, ["outTemp"], null);
+    var outTemp = BU_mqttDisplayMeasurement(tC, "temp", BU_obsDecimals("outTemp", 1));
+    if (outTemp) {
+        BU_setHtml(".outtemp", outTemp.formatted);
+        BU_setText(".outtempunitlabelsuper", outTemp.label);
+        BU_applyOutTempColor(outTemp.numeric, outTemp.label, outTemp.unitName);
+    }
+
+    var appC = BU_mqttTemperatureValue(data, ["appTemp"], null);
+    var appTemp = BU_mqttDisplayMeasurement(appC, "temp", BU_obsDecimals("appTemp", 1));
+    if (appTemp) {
+        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + appTemp.formatted + (appTemp.label ? "\u00a0" + appTemp.label : ""));
+    }
+
+    var wcC = BU_mqttTemperatureValue(data, ["windchill"], null);
+    var windchill = BU_mqttDisplayMeasurement(wcC, "temp", BU_obsDecimals("windchill", 1));
+    if (windchill) {
+        BU_setText(".curwindchill", windchill.formatted + (windchill.label ? "\u00a0" + windchill.label : ""));
+    }
+
+    var dpC = BU_mqttTemperatureValue(data, ["dewpoint"], null);
+    var dewpoint = BU_mqttDisplayMeasurement(dpC, "temp", BU_obsDecimals("dewpoint", 1));
+    if (dewpoint) {
+        BU_setText(".dewpoint", dewpoint.formatted + (dewpoint.label ? "\u00a0" + dewpoint.label : ""));
+    }
+
+    var wsMs = BU_mqttPacketMetricWXValue(data, ["windSpeed"], "speed", BU_mqttMetricSuffixes("speed"), null);
+    var windSpeed = BU_mqttDisplayMeasurement(wsMs, "speed", BU_obsDecimals("windSpeed", 0));
+    if (windSpeed) {
+        BU_setHtml(".curwindspeed", windSpeed.formatted);
+        BU_setText(".mph", windSpeed.label);
+    }
+
+    var wgMs = BU_mqttPacketMetricWXValue(data, ["windGust"], "speed", BU_mqttMetricSuffixes("speed"), null);
+    var windGust = BU_mqttDisplayMeasurement(wgMs, "speed", BU_obsDecimals("windGust", 0));
+    if (windGust) {
+        BU_setHtml(".curwindgust", windGust.formatted);
+    }
+
+    var bMb = BU_mqttPacketMetricWXValue(data, ["barometer"], "press", BU_mqttMetricSuffixes("press"), null);
+    var barometer = BU_mqttDisplayMeasurement(bMb, "press", BU_obsDecimals("barometer", 3));
+    if (barometer) {
+        BU_setHtml(".barometer", barometer.formatted + (barometer.label ? "\u00a0" + barometer.label : ""));
+    }
+
+    var drMm = BU_mqttPacketMetricWXValue(data, ["dayRain"], "rain", BU_mqttMetricSuffixes("rain"), null);
+    var dayRain = BU_mqttDisplayMeasurement(drMm, "rain", BU_obsDecimals("dayRain", 2));
+    if (dayRain) {
+        BU_setHtml(".dayRain", dayRain.formatted + (dayRain.label ? "\u00a0" + dayRain.label : ""));
+    }
+
+    var rrMm = BU_mqttPacketMetricWXValue(data, ["rainRate"], "rainrate", BU_mqttMetricSuffixes("rainrate"), null);
+    var rainRate = BU_mqttDisplayMeasurement(rrMm, "rainrate", BU_obsDecimals("rainRate", 2));
+    if (rainRate) {
+        BU_setHtml(".rainRate", rainRate.formatted + (rainRate.label ? "\u00a0" + rainRate.label : ""));
+    }
+
+    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(weewx_data), function(obsName, meta) {
+        return BU_mqttObservationValue(obsName, meta, data);
+    });
+}
+// END ALWAYS-ON MQTT UNIT APPLICATION
+
+#if $unitSwitcherJsEnabled
 
 // ── Re-render daily high/low and max gust from current weewx_data ──────────
 function BU_applyCurrent(data) {
@@ -3500,49 +3676,6 @@ function BU_applySnapshot(data, key, prefix) {
 
 function BU_applyDailySnapshot(data, key) { BU_applySnapshot(data, key, "dailystats"); }
 function BU_applyMonthlySnapshot(data, key) { BU_applySnapshot(data, key, "monthstats"); }
-
-// ── Apply METRICWX values straight from an MQTT payload ────────────────────
-function BU_applyMQTT(data) {
-    if (!data) { return; }
-    var sysKey = BU_getSystem();
-    var s = BU_SYS[sysKey];
-
-    var tC = BU_mqttTemperatureValue(data, ["outTemp"], null);
-    if (tC !== null && tC !== undefined && !isNaN(tC)) {
-        var outTemp = BU_fmt(s.temp(tC), BU_obsDecimals("outTemp", 1));
-        BU_setHtml(".outtemp", outTemp);
-        BU_setText(".outtempunitlabelsuper", s.tl);
-        BU_applyOutTempColor(outTemp, s.tl);
-    }
-
-    var appC = BU_mqttTemperatureValue(data, ["appTemp"], null);
-    if (appC !== null && appC !== undefined && !isNaN(appC)) {
-        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + BU_fmt(s.temp(appC), BU_obsDecimals("appTemp", 1)) + "\u00a0" + s.tl);
-    }
-
-    var wcC = BU_mqttTemperatureValue(data, ["windchill"], null);
-    if (wcC !== null && wcC !== undefined && !isNaN(wcC)) { BU_setText(".curwindchill", BU_fmt(s.temp(wcC), BU_obsDecimals("windchill", 1)) + "\u00a0" + s.tl); }
-
-    var dpC = BU_mqttTemperatureValue(data, ["dewpoint"], null);
-    if (dpC !== null && dpC !== undefined && !isNaN(dpC)) { BU_setText(".dewpoint", BU_fmt(s.temp(dpC), BU_obsDecimals("dewpoint", 1)) + "\u00a0" + s.tl); }
-
-    var wsMs = parseFloat(data.windSpeed_mps);
-    var wgMs = parseFloat(data.windGust_mps);
-    if (!isNaN(wsMs)) { BU_setHtml(".curwindspeed", BU_fmt(s.speed(wsMs), BU_obsDecimals("windSpeed", 0))); BU_setText(".mph", s.sl); }
-    if (!isNaN(wgMs)) { BU_setHtml(".curwindgust",  BU_fmt(s.speed(wgMs), BU_obsDecimals("windGust", 0))); }
-
-    var bMb = parseFloat(data.barometer_mbar);
-    if (!isNaN(bMb)) { BU_setHtml(".barometer", BU_fmt(s.press(bMb), BU_obsDecimals("barometer", 3)) + "\u00a0" + s.pl); }
-
-    var drMm = parseFloat(data.dayRain_mm);
-    var rrMm = parseFloat(data.rainRate_mm_per_hour);
-    if (!isNaN(drMm)) { BU_setHtml(".dayRain",  BU_fmt(s.rain(drMm), BU_obsDecimals("dayRain", 2)) + "\u00a0" + s.rl);  }
-    if (!isNaN(rrMm)) { BU_setHtml(".rainRate", BU_fmt(s.rain(rrMm), BU_obsDecimals("rainRate", 2)) + "\u00a0" + s.rrl); }
-
-    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(weewx_data), function(obsName, meta) {
-        return BU_mqttObservationValue(obsName, meta, data);
-    });
-}
 
 // ── Re-apply everything we know about when the user switches systems ───────
 function BU_reapplyAll() {
