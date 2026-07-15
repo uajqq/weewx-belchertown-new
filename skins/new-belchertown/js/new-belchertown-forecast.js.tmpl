@@ -512,6 +512,8 @@ function forecast_render_relative_timestamps() {
         forecast_render_observation_modal(activeObservation);
     }
 
+    forecast_render_alert_states();
+
     if (typeof forecast_sync_row_height === "function") {
         forecast_sync_row_height();
     }
@@ -568,11 +570,7 @@ function forecast_format_alert_time(timestamp) {
 }
 
 function forecast_format_alert_start_time(timestamp) {
-    if (timestamp == null || timestamp === "") {
-        return "";
-    }
-
-    return forecast_relative_time(timestamp);
+    return forecast_format_alert_time(timestamp);
 }
 
 function forecast_alert_start_timestamp(alertObj) {
@@ -591,7 +589,7 @@ function forecast_alert_start_timestamp(alertObj) {
 
 function forecast_alert_in_effect_text(alertObj) {
     var startTimestamp = forecast_alert_start_timestamp(alertObj);
-    var endTimestamp = alertObj['ends'];
+    var endTimestamp = alertObj['ends'] || alertObj['expires'];
     var startEpoch = forecast_number(startTimestamp);
     var startIsPast = startEpoch !== null && startEpoch <= (Date.now() / 1000);
     var startText = forecast_format_alert_start_time(startTimestamp);
@@ -599,13 +597,13 @@ function forecast_alert_in_effect_text(alertObj) {
 
     if (startText && endText) {
         if (startIsPast) {
-            return forecast_label_text("$obs.label.alert_in_effect_now") + " " + forecast_label_text("$obs.label.alert_until") + " " + endText;
+            return forecast_label_text("$obs.label.alert_in_effect_since") + " " + startText + " " + forecast_label_text("$obs.label.alert_until") + " " + endText;
         }
         return forecast_label_text("$obs.label.alert_in_effect_starting") + " " + startText + " " + forecast_label_text("$obs.label.alert_until") + " " + endText;
     }
     if (startText) {
         if (startIsPast) {
-            return forecast_label_text("$obs.label.alert_in_effect_now");
+            return forecast_label_text("$obs.label.alert_in_effect_since") + " " + startText;
         }
         return forecast_label_text("$obs.label.alert_in_effect_starting") + " " + startText;
     }
@@ -614,6 +612,73 @@ function forecast_alert_in_effect_text(alertObj) {
     }
 
     return "";
+}
+
+function forecast_alert_is_pending(alertObj) {
+    var startEpoch = forecast_number(forecast_alert_start_timestamp(alertObj));
+    return startEpoch !== null && startEpoch > (Date.now() / 1000);
+}
+
+function forecast_alert_line_starts_section(line) {
+    return /^[*\u2022-]\s+/.test(line)
+        || /^[^:]{1,32}:\s+\S/.test(line)
+        || /^[A-Z][A-Z /-]+\.{3}/.test(line);
+}
+
+function forecast_alert_body_html(description) {
+    var normalizedDescription = String(description || "")
+        .replace(/\r\n?/g, "\n")
+        .trim();
+    if (!normalizedDescription) {
+        return "";
+    }
+
+    var paragraphs = [];
+    var paragraphLines = [];
+    function finishParagraph() {
+        if (!paragraphLines.length) {
+            return;
+        }
+        paragraphs.push(paragraphLines.join(" "));
+        paragraphLines = [];
+    }
+
+    normalizedDescription.split("\n").forEach(function(line) {
+        var trimmedLine = line.trim();
+        if (!trimmedLine) {
+            finishParagraph();
+            return;
+        }
+        if (paragraphLines.length && forecast_alert_line_starts_section(trimmedLine)) {
+            finishParagraph();
+        }
+        paragraphLines.push(trimmedLine);
+    });
+    finishParagraph();
+
+    return paragraphs.map(function(paragraph) {
+        return "<p>" + forecast_escape_html(paragraph) + "</p>";
+    }).join("");
+}
+
+function forecast_render_alert_states() {
+    document.querySelectorAll(".forecast-alert-badge").forEach(function(badge) {
+        var alertTiming = forecast_alert_in_effect_text({
+            "effective": badge.dataset.alertStart,
+            "ends": badge.dataset.alertEnd
+        });
+        var isPending = forecast_alert_is_pending({"effective": badge.dataset.alertStart});
+        badge.classList.toggle("forecast-alert-badge--pending", isPending);
+        badge.classList.toggle("forecast-alert-badge--active", !isPending);
+        badge.setAttribute("aria-label", badge.textContent + (alertTiming ? ", " + alertTiming : ""));
+    });
+
+    document.querySelectorAll(".forecast-alert-timing").forEach(function(timing) {
+        timing.textContent = forecast_alert_in_effect_text({
+            "effective": timing.dataset.alertStart,
+            "ends": timing.dataset.alertEnd
+        });
+    });
 }
 
 function forecast_active_alert_modal() {
@@ -631,10 +696,13 @@ function forecast_alert_modal_html(forecastAlertId, forecastAlertTitleId, alertD
     modal += "<div class='modal-dialog' role='document'>";
     modal += "<div class='modal-content'>";
     modal += "<div class='modal-header'>";
+    modal += "<div class='forecast-alert-modal-heading'>";
     modal += "<h4 class='modal-title' id='" + forecastAlertTitleId + "'>" + forecast_escape_html(alertData["title"]) + "</h4>";
+    modal += "<div class='forecast-alert-timing' data-alert-start='" + forecast_escape_html(alertData["start"]) + "' data-alert-end='" + forecast_escape_html(alertData["end"]) + "'>" + forecast_escape_html(alertData["timing"]) + "</div>";
+    modal += "</div>";
     modal += "<button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='" + forecast_escape_html(forecast_label_text("$obs.label.close")) + "'></button>";
     modal += "</div>";
-    modal += "<div class='modal-body'>";
+    modal += "<div class='modal-body forecast-alert-modal-body'>";
     modal += alertData["body"];
     modal += "</div>";
     modal += "<div class='modal-footer'>";
@@ -654,8 +722,20 @@ function forecast_update_alert_modal(modal, forecastAlertTitleId, alertData) {
         modalTitle.id = forecastAlertTitleId;
         modalTitle.innerHTML = forecast_escape_html(alertData["title"]);
     }
+    var modalTiming = modal.querySelector(".forecast-alert-timing");
+    if (!modalTiming && modalTitle) {
+        modalTiming = document.createElement("div");
+        modalTiming.className = "forecast-alert-timing";
+        modalTitle.insertAdjacentElement("afterend", modalTiming);
+    }
+    if (modalTiming) {
+        modalTiming.dataset.alertStart = alertData["start"];
+        modalTiming.dataset.alertEnd = alertData["end"];
+        modalTiming.textContent = alertData["timing"];
+    }
     var modalBody = modal.querySelector(".modal-body");
     if (modalBody) {
+        modalBody.classList.add("forecast-alert-modal-body");
         modalBody.innerHTML = alertData["body"];
     }
 }
@@ -682,7 +762,8 @@ function forecast_remove_stale_alert_modals(currentAlertIds, activeAlertId) {
 function show_forcast_alert(data) {
     belchertown_debug("Forecast: Updating alert data");
     var i, forecast_alerts, forecast_alert_title, forecast_alert_body;
-    var forecast_alert_link, forecast_alert_expires, forecast_alert_in_effect, alert_link;
+    var forecast_alert_start, forecast_alert_end, forecast_alert_timing, forecast_alert_state;
+    var alert_aria_label, alert_link;
     var activeAlertModal = forecast_active_alert_modal();
     var activeAlertId = (activeAlertModal && activeAlertModal.id) || "";
     var currentAlertIds = {};
@@ -707,16 +788,18 @@ function show_forcast_alert(data) {
             forecast_alert_title = (alertObj['title'] == null)
                 ? forecast_label_text("$obs.label.alert")
                 : forecast_compact_alert_title(alertObj['title']);
-            forecast_alert_body = forecast_escape_html(alertDescription).replace(/\n/g, '<br>');
-            forecast_alert_link = forecast_alert_title;
-            forecast_alert_expires = forecast_format_alert_time(alertObj['expires']);
-            forecast_alert_in_effect = forecast_alert_in_effect_text(alertObj);
+            forecast_alert_body = forecast_alert_body_html(alertDescription);
+            forecast_alert_start = forecast_alert_start_timestamp(alertObj) || "";
+            forecast_alert_end = alertObj['ends'] || alertObj['expires'] || "";
+            forecast_alert_timing = forecast_alert_in_effect_text(alertObj);
+            forecast_alert_state = forecast_alert_is_pending(alertObj) ? "pending" : "active";
             forecast_alerts.push({
                 "title": forecast_alert_title,
                 "body": forecast_alert_body,
-                "link": forecast_alert_link,
-                "expires": forecast_alert_expires,
-                "in_effect": forecast_alert_in_effect
+                "start": forecast_alert_start,
+                "end": forecast_alert_end,
+                "timing": forecast_alert_timing,
+                "state": forecast_alert_state
             });
         }
     }
@@ -727,13 +810,13 @@ function show_forcast_alert(data) {
 
             var forecastAlertId = "forecast-alert-" + i;
             var forecastAlertTitleId = forecastAlertId + "-title";
-            var alertLinkText = forecast_alerts[i]["title"];
-            if (forecast_alerts[i]["in_effect"]) {
-                alertLinkText += " " + forecast_alerts[i]["in_effect"];
-            }
 
             currentAlertIds[forecastAlertId] = true;
-            alert_link = "<i class='fa fa-exclamation-triangle' aria-hidden='true'></i> <a href='#" + forecastAlertId + "' data-bs-toggle='modal' data-bs-target='#" + forecastAlertId + "'>" + forecast_escape_html(alertLinkText) + "</a><br>";
+            alert_aria_label = forecast_alerts[i]["title"];
+            if (forecast_alerts[i]["timing"]) {
+                alert_aria_label += ", " + forecast_alerts[i]["timing"];
+            }
+            alert_link = "<a class='forecast-alert-badge forecast-alert-badge--" + forecast_alerts[i]["state"] + "' href='#" + forecastAlertId + "' data-alert-start='" + forecast_escape_html(forecast_alerts[i]["start"]) + "' data-alert-end='" + forecast_escape_html(forecast_alerts[i]["end"]) + "' data-bs-toggle='modal' data-bs-target='#" + forecastAlertId + "' aria-label='" + forecast_escape_html(alert_aria_label) + "'>" + forecast_escape_html(forecast_alerts[i]["title"]) + "</a>";
             if (alertContainer) {
                 alertContainer.insertAdjacentHTML("beforeend", alert_link);
             }
