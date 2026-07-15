@@ -7,6 +7,7 @@ var forecast_refresh_in_progress = false;
 var forecast_last_fetch_ms = 0;
 var forecast_resume_refresh_min_ms = 60000;
 var forecast_retry_delay_ms = 15000;
+var forecast_stale_retry_delay_ms = 60000;
 var forecast_refresh_interval_seconds = 3540;
 var forecast_current_conditions_refresh_interval_seconds = 3540;
 var forecast_resume_events_bound = false;
@@ -33,6 +34,32 @@ function forecast_refresh_interval_ms() {
     return Math.max(Math.min(forecastSeconds, currentConditionsSeconds), 60) * 1000;
 }
 
+function forecast_payload_generated_at_ms(data) {
+    if (!data || typeof data !== "object") {
+        return null;
+    }
+
+    const value = data["generated_at"] || data["timestamp"];
+    const epoch = parseFloat(value);
+    if (!isFinite(epoch) || epoch <= 0) {
+        return null;
+    }
+
+    // Normalized forecast payloads use epoch seconds. Retain compatibility
+    // with a millisecond timestamp if a custom or legacy payload supplies one.
+    return epoch > 100000000000 ? epoch : epoch * 1000;
+}
+
+function forecast_payload_is_stale(data) {
+    const generatedAtMs = forecast_payload_generated_at_ms(data);
+    if (generatedAtMs === null) {
+        return false;
+    }
+
+    const staleAfterMs = forecast_refresh_seconds(forecast_refresh_interval_seconds, 3540) * 1000;
+    return (Date.now() - generatedAtMs) >= staleAfterMs;
+}
+
 function forecast_json_url(filename) {
     return get_relative_url() + "/json/" + filename + "?_=" + Date.now();
 }
@@ -44,15 +71,20 @@ function forecast_clear_retry_timer() {
     }
 }
 
-function forecast_schedule_retry() {
+function forecast_schedule_retry(delayMs) {
     if (forecast_retry_timer !== null || document.hidden) {
         return;
     }
 
+    const parsedDelayMs = parseFloat(delayMs);
+    const retryDelayMs = isFinite(parsedDelayMs) && parsedDelayMs > 0
+        ? parsedDelayMs
+        : forecast_retry_delay_ms;
+
     forecast_retry_timer = window.setTimeout(function() {
         forecast_retry_timer = null;
         ajaxforecast();
-    }, forecast_retry_delay_ms);
+    }, retryDelayMs);
 }
 
 function forecast_fetch_json(filename) {
@@ -98,6 +130,8 @@ function ajaxforecast() {
         .then(function(results) {
             const currentResult = results[0];
             const forecastResult = results[1];
+            const forecastPayloadIsStale = forecastResult.ok
+                && forecast_payload_is_stale(forecastResult.data);
             const fallbackForecastData = forecastResult.ok
                 ? forecastResult.data
                 : (typeof forecast_data !== "undefined" ? forecast_data : {});
@@ -118,6 +152,13 @@ function ajaxforecast() {
 
             if (currentResult.ok && forecastResult.ok) {
                 forecast_clear_retry_timer();
+                // A successful request can still return the previous forecast
+                // when this browser polls just before WeeWX regenerates the
+                // JSON file. Retry soon instead of waiting another full stale
+                // interval for the next regular poll.
+                if (forecastPayloadIsStale) {
+                    forecast_schedule_retry(forecast_stale_retry_delay_ms);
+                }
                 return true;
             }
 
