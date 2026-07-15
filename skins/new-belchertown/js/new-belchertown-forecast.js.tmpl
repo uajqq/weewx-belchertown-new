@@ -619,6 +619,10 @@ function forecast_alert_is_pending(alertObj) {
     return startEpoch !== null && startEpoch > (Date.now() / 1000);
 }
 
+function forecast_alert_start_sort_timestamp(alertObj) {
+    return forecast_number(forecast_alert_start_timestamp(alertObj));
+}
+
 function forecast_alert_line_starts_section(line) {
     return /^[*\u2022-]\s+/.test(line)
         || /^[^:]{1,32}:\s+\S/.test(line)
@@ -799,10 +803,29 @@ function show_forcast_alert(data) {
                 "start": forecast_alert_start,
                 "end": forecast_alert_end,
                 "timing": forecast_alert_timing,
-                "state": forecast_alert_state
+                "state": forecast_alert_state,
+                "start_order": forecast_alert_start_sort_timestamp(alertObj),
+                "source_order": i
             });
         }
     }
+
+    forecast_alerts.sort(function(firstAlert, secondAlert) {
+        if (firstAlert["state"] !== secondAlert["state"]) {
+            return firstAlert["state"] === "active" ? -1 : 1;
+        }
+        if (firstAlert["start_order"] === null && secondAlert["start_order"] === null) {
+            return firstAlert["source_order"] - secondAlert["source_order"];
+        }
+        if (firstAlert["start_order"] === null) {
+            return 1;
+        }
+        if (secondAlert["start_order"] === null) {
+            return -1;
+        }
+        return firstAlert["start_order"] - secondAlert["start_order"]
+            || firstAlert["source_order"] - secondAlert["source_order"];
+    });
 
     if (forecast_alerts.length > 0) {
         belchertown_debug("Forecast: There are " + forecast_alerts.length + " alert(s).");
