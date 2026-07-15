@@ -3129,6 +3129,9 @@ var BU_METRICWX_TO_CONFIGURED_UNIT = {
     nautical_mile:     { kind: "distance", convert: function(km) { return km * 0.539957; } },
     meter:             { kind: "altitude", convert: function(m) { return m; } },
     foot:              { kind: "altitude", convert: function(m) { return m * 3.28084; } },
+    microgram_per_meter_cubed: { kind: "concentration", convert: function(ug) { return ug; } },
+    milligram_per_meter_cubed: { kind: "concentration", convert: function(ug) { return ug / 1000; } },
+    gram_per_meter_cubed:      { kind: "concentration", convert: function(ug) { return ug / 1000000; } },
 };
 
 function BU_metricWXToConfiguredUnit(kind, value, unitName) {
@@ -3319,20 +3322,32 @@ function BU_setHtml(sel, val) {
 }
 
 // BEGIN ALWAYS-ON MQTT UNIT APPLICATION
-function BU_mqttDisplayMeasurement(value, kind, decimals) {
+var BU_UNIT_SWITCHER_MEASUREMENT_KINDS = {
+    temp: true,
+    speed: true,
+    press: true,
+    rain: true,
+    rainrate: true,
+    distance: true,
+    altitude: true,
+};
+
+function BU_mqttDisplayMeasurement(value, kind, decimals, displayMeta) {
     var numericValue = parseFloat(value);
     if (!isFinite(numericValue)) { return null; }
 
     var converted;
     var label;
     var unitName = "";
-    if (window.BU_UNIT_SWITCHER_ENABLED === true) {
+    if (window.BU_UNIT_SWITCHER_ENABLED === true && BU_UNIT_SWITCHER_MEASUREMENT_KINDS[kind]) {
         converted = BU_chartMetricWXToDisplay(kind, numericValue);
         label = BU_chartUnitLabelFor(kind);
     } else {
-        unitName = BU_CONFIGURED_UNIT_NAMES[kind] || "";
+        unitName = (displayMeta && displayMeta.unit_name) || BU_CONFIGURED_UNIT_NAMES[kind] || "";
         converted = BU_metricWXToConfiguredUnit(kind, numericValue, unitName);
-        label = BU_CONFIGURED_UNIT_LABELS[kind] || "";
+        label = displayMeta && displayMeta.hasOwnProperty("unit_label")
+            ? displayMeta.unit_label
+            : BU_CONFIGURED_UNIT_LABELS[kind] || "";
     }
 
     var formatted = BU_fmt(converted, decimals);
@@ -3345,10 +3360,16 @@ function BU_mqttDisplayMeasurement(value, kind, decimals) {
     };
 }
 
-function BU_formatCurrentObservation(value, kind, decimals) {
-    var measurement = BU_mqttDisplayMeasurement(value, kind, decimals);
+function BU_formatCurrentObservation(value, kind, decimals, displayMeta) {
+    var measurement = BU_mqttDisplayMeasurement(value, kind, decimals, displayMeta);
     if (!measurement) { return null; }
     return measurement.formatted + (measurement.label ? "\u00a0" + measurement.label : "");
+}
+
+function BU_formatCurrentObservationTime(value) {
+    var timestamp = parseFloat(value);
+    if (!isFinite(timestamp) || typeof tzAdjustedMoment !== "function") { return null; }
+    return tzAdjustedMoment(timestamp).format("L LTS");
 }
 
 function BU_stationObservationUnitMetadata(data) {
@@ -3366,7 +3387,9 @@ function BU_applyStationObservationUnitMetadata(metaByObs, valueResolver) {
         var meta = metaByObs[obsName];
         if (!meta || !meta.selector || !meta.kind) { return; }
         var rawValue = valueResolver ? valueResolver(obsName, meta) : meta.raw;
-        var value = BU_formatCurrentObservation(rawValue, meta.kind, meta.decimals);
+        var value = meta.kind === "time"
+            ? BU_formatCurrentObservationTime(rawValue)
+            : BU_formatCurrentObservation(rawValue, meta.kind, meta.decimals, meta);
         if (value !== null) {
             BU_setHtml(meta.selector, value);
         }
@@ -3381,6 +3404,15 @@ function BU_mqttObservationValue(obsName, meta, packet) {
     }
     var selectorName = meta.selector ? String(meta.selector).replace(/^\./, "") : "";
     var names = [obsName, selectorName];
+    if (meta.kind === "time") {
+        for (var timeIndex = 0; timeIndex < names.length; timeIndex++) {
+            var timeKey = names[timeIndex];
+            if (timeKey && packet[timeKey] !== undefined && packet[timeKey] !== null && packet[timeKey] !== "") {
+                return packet[timeKey];
+            }
+        }
+        return meta.raw;
+    }
     for (var i = 0; i < keys.length; i++) {
         if (packet[keys[i]] !== undefined && packet[keys[i]] !== null && packet[keys[i]] !== "") {
             return packet[keys[i]];
@@ -3407,6 +3439,9 @@ function BU_mqttObservationValue(obsName, meta, packet) {
         var fallbackValue = parseFloat(packet[fallbackKey]);
         if (isNaN(fallbackValue)) {
             continue;
+        }
+        if (meta.kind === "concentration") {
+            return fallbackValue;
         }
         var label = "";
         if (typeof unit_label_array === "object" && unit_label_array) {
@@ -3463,6 +3498,11 @@ function BU_mqttMetricSuffixes(kind) {
         altitude: [
             { suffix: "_meter", toMetricWX: function(meter) { return meter; } },
             { suffix: "_foot", toMetricWX: function(foot) { return foot / 3.28084; } },
+        ],
+        concentration: [
+            { suffix: "_microgram_per_meter_cubed", toMetricWX: function(ug) { return ug; } },
+            { suffix: "_milligram_per_meter_cubed", toMetricWX: function(mg) { return mg * 1000; } },
+            { suffix: "_gram_per_meter_cubed", toMetricWX: function(g) { return g * 1000000; } },
         ],
     };
     return suffixesByKind[kind] || [];

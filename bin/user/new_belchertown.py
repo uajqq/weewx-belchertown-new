@@ -1820,12 +1820,24 @@ UNIT_SWITCH_GROUP_KINDS = {
     "group_speed": "speed",
     "group_distance": "distance",
     "group_altitude": "altitude",
+    "group_concentration": "concentration",
 }
 
 
-def _unit_switch_kind_for_observation(obs_name):
+def _station_observation_group(obs_name, value_helper=None):
+    """Return the unit group attached to a station observation value."""
+    value_t = getattr(value_helper, "value_t", None)
+    try:
+        if value_t and value_t[2]:
+            return value_t[2]
+    except (IndexError, TypeError):
+        pass
+    return weewx.units.obs_group_dict.get(obs_name)
+
+
+def _unit_switch_kind_for_observation(obs_name, value_helper=None):
     """Return the front-end unit-switch kind for a WeeWX observation."""
-    obs_group = weewx.units.obs_group_dict.get(obs_name)
+    obs_group = _station_observation_group(obs_name, value_helper)
     return UNIT_SWITCH_GROUP_KINDS.get(obs_group)
 
 
@@ -1847,18 +1859,51 @@ def _unit_switch_selector(obs_name):
     return "." + str(obs_name)
 
 
+def _unit_format_decimals(format_string):
+    """Return decimal places represented by a printf-style unit format."""
+    match = re.search(r"\.([0-9]+)[eEfFgG]$", str(format_string or ""))
+    if match:
+        return int(match.group(1))
+    if re.search(r"[diu]$", str(format_string or "")):
+        return 0
+    return None
+
+
 def _unit_switch_station_observation_meta(obs_name, value_helper, decimals=None):
     """Build client-side unit-switch metadata for a station observation."""
-    kind = _unit_switch_kind_for_observation(obs_name)
+    obs_group = _station_observation_group(obs_name, value_helper)
+    kind = _unit_switch_kind_for_observation(obs_name, value_helper)
     selector = _unit_switch_selector(obs_name)
     raw_value = _unit_switch_raw_from_value_helper(value_helper)
-    if not kind or selector is None or raw_value is None:
+    if selector is None or raw_value is None:
+        return None
+    if obs_group == "group_time":
+        return {
+            "selector": selector,
+            "kind": "time",
+            "raw": raw_value,
+        }
+    if not kind:
         return None
     meta = {
         "selector": selector,
         "kind": kind,
         "raw": raw_value,
     }
+    value_t = getattr(value_helper, "value_t", None)
+    try:
+        unit_name = value_t[1]
+    except (IndexError, TypeError):
+        unit_name = None
+    if unit_name:
+        meta["unit_name"] = unit_name
+        formatter = getattr(value_helper, "formatter", None)
+        if formatter is not None:
+            meta["unit_label"] = formatter.get_label_string(unit_name)
+            if decimals is None:
+                decimals = _unit_format_decimals(
+                    formatter.get_format_string(unit_name)
+                )
     if decimals is not None:
         meta["decimals"] = decimals
     return meta
@@ -7377,6 +7422,11 @@ class getData(SearchList):
                         "<span class='outHumAbs'>%s</span>" % humabs_val
                     )
                     row_parts.append(obs_humabs_output)
+                    humabs_meta = _unit_switch_station_observation_meta(
+                        "outHumAbs", humabs_val
+                    )
+                    if humabs_meta:
+                        station_obs_unit_json.setdefault("outHumAbs", humabs_meta)
             row_parts.append("</td>")
             row_parts.append("</tr>")
             station_obs_parts.append("".join(row_parts))
