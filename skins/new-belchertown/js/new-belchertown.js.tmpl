@@ -996,12 +996,22 @@ function belchertown_apply_readable_color(selector, color, minimumRatio) {
 }
 
 const AQI_COLORS = {
-    light: ["#00bb00", "#ffbe00", "#ff7e00", "#ff0000", "#8f3f97", "#7e0023"],
-    dark: ["#7bdc65", "#f0cf5a", "#ffb45a", "#ff7a73", "#d69af0", "#f0a3bd"]
-};
-const AQI_MIN_CONTRAST = {
-    light: 2,
-    dark: 4.5
+    light: [
+        {background: "#1b6f35", text: "#ffffff"},
+        {background: "#ffbe00", text: "#000000"},
+        {background: "#ff7e00", text: "#000000"},
+        {background: "#c1121f", text: "#ffffff"},
+        {background: "#8f3f97", text: "#ffffff"},
+        {background: "#7e0023", text: "#ffffff"}
+    ],
+    dark: [
+        {background: "#7bdc65", text: "#000000"},
+        {background: "#f0cf5a", text: "#000000"},
+        {background: "#ffb45a", text: "#000000"},
+        {background: "#ff7a73", text: "#000000"},
+        {background: "#d69af0", text: "#000000"},
+        {background: "#f0a3bd", text: "#000000"}
+    ]
 };
 const AQI_CATEGORY_SELECTOR = ".wx-aqi-category";
 
@@ -1243,7 +1253,7 @@ function belchertown_current_theme() {
     return "light";
 }
 
-function belchertown_aqi_color(aqi) {
+function belchertown_aqi_colors(aqi) {
     var palette = AQI_COLORS[belchertown_current_theme()];
     if (aqi <= 50) {
         return palette[0];
@@ -1266,13 +1276,10 @@ function get_aqi_color(aqi) {
         clear_aqi_color();
         return;
     }
-    var theme = belchertown_current_theme();
-    var aqiColor = belchertown_aqi_color(aqi);
+    var aqiColors = belchertown_aqi_colors(aqi);
     document.querySelectorAll(AQI_CATEGORY_SELECTOR).forEach(function(el) {
-        el.style.color = "";
-        var normalTextColor = window.getComputedStyle(el).color;
-        el.style.backgroundColor = aqiColor;
-        el.style.color = belchertown_readable_color(normalTextColor, aqiColor, AQI_MIN_CONTRAST[theme]);
+        el.style.backgroundColor = aqiColors.background;
+        el.style.color = aqiColors.text;
     });
 }
 
