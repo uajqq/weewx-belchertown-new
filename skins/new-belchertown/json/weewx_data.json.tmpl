@@ -193,37 +193,73 @@
     "unit_label": $all_obs_unit_labels_json,
     "current": {
         "datetime": "$current.dateTime",
+        #if $current.dateTime.raw is not None
         "datetime_raw": "$current.dateTime.raw",
+        #else
+        "datetime_raw": null,
+        #end if
         "epoch": "#echo int( time.time() )#",
         "outTemp": "$current.outTemp",
         "outTemp_formatted": "$current.outTemp.toString(addLabel=False, localize=False)",
+        #if $current.outTemp.degree_C.raw is not None
         "outTemp_raw": $current.outTemp.degree_C.raw,
+        #else
+        "outTemp_raw": null,
+        #end if
         "outHumidity": "$current.outHumidity",
         ## TODO: Move inside data to it's own json file, and update ajax functions to correctly pull and parse data.
         #if $Extras.has_key("aqi_enabled_kiosk") and $Extras.aqi_enabled_kiosk == '0'
         "inTemp": "$current.inTemp",
         "inTemp_formatted": "$current.inTemp.toString(addLabel=False, localize=False)",
+        #if $current.inTemp.degree_C.raw is not None
         "inTemp_raw": $current.inTemp.degree_C.raw,
+        #else
+        "inTemp_raw": null,
+        #end if
         "inHumidity": "$current.inHumidity",
         "inHumidity_formatted": "$current.inHumidity.toString(addLabel=False, localize=False)",
         #end if
         #if $records_has_app_temp
         "appTemp": "$current.appTemp",
+        #if $current.appTemp.degree_C.raw is not None
         "appTemp_raw": $current.appTemp.degree_C.raw,
+        #else
+        "appTemp_raw": null,
+        #end if
         #end if
         "windchill": "$current.windchill",
+        #if $current.windchill.degree_C.raw is not None
         "windchill_raw": $current.windchill.degree_C.raw,
+        #else
+        "windchill_raw": null,
+        #end if
         "heatindex": "$current.heatindex",
+        #if $current.heatindex.degree_C.raw is not None
         "heatindex_raw": $current.heatindex.degree_C.raw,
+        #else
+        "heatindex_raw": null,
+        #end if
         "dewpoint": "$current.dewpoint",
+        #if $current.dewpoint.degree_C.raw is not None
         "dewpoint_raw": $current.dewpoint.degree_C.raw,
+        #else
+        "dewpoint_raw": null,
+        #end if
         "barometer": "$current.barometer",
         "barometer_formatted": "$current.barometer.toString(addLabel=False, localize=False)",
+        #if $current.barometer.hPa.raw is not None
         "barometer_raw": $current.barometer.hPa.raw,
+        #else
+        "barometer_raw": null,
+        #end if
         "barometer_trend": "$trend.barometer",
         "barometer_trend_formatted": "$trend.barometer.toString(addLabel=False, localize=False)",
         "windspeed": "$current.windSpeed",
+        #if $current.windSpeed.meter_per_second.raw is not None
         "windspeed_raw": $current.windSpeed.meter_per_second.raw,
+        #else
+        "windspeed_raw": null,
+        #end if
         "winddir": "$current.windDir",
         #if $current.windDir.raw is not None
         "winddir_raw": $current.windDir.raw,
@@ -233,7 +269,11 @@
         "winddir_formatted": "$current.windDir.toString(addLabel=False, localize=False)",
         "windGust": "$current.windGust",
         "windGust_formatted": "$current.windGust.toString(addLabel=False, localize=False)",
+        #if $current.windGust.meter_per_second.raw is not None
         "windGust_raw": $current.windGust.meter_per_second.raw,
+        #else
+        "windGust_raw": null,
+        #end if
         "windGustDir": "$current.windGustDir",
         "windcompass": "$current.windDir.ordinal_compass",
         #if $records_has_windrun
@@ -241,7 +281,11 @@
         #end if
         #if $day.extraTemp1.has_data
         "extraTemp1": "$current.extraTemp1",
+        #if $current.extraTemp1.degree_C.raw is not None
         "extraTemp1_raw": $current.extraTemp1.degree_C.raw,
+        #else
+        "extraTemp1_raw": null,
+        #end if
         #end if
         #if $records_has_uv
         "uv": "$current.UV",
@@ -253,10 +297,22 @@
         "et": "$current.ET",
         #end if
         "rainRate": "$current.rainRate",
+        #if $current.rainRate.mm_per_hour.raw is not None
         "rainRate_raw": $current.rainRate.mm_per_hour.raw,
+        #else
+        "rainRate_raw": null,
+        #end if
         "rain": "$current.rain",
+        #if $current.rain.mm.raw is not None
         "rain_raw": $current.rain.mm.raw,
+        #else
+        "rain_raw": null,
+        #end if
+        #if $day.rain.sum.mm.raw is not None
         "dayRain_raw": $day.rain.sum.mm.raw,
+        #else
+        "dayRain_raw": null,
+        #end if
         "unit_system": "metricwx"
     },
     "day": {
@@ -945,7 +1001,7 @@
         #if $almanac.sunrise.raw is not None
         "sunrise_hour": "#echo datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%H')#",
         "sunrise_minute": "#echo datetime.datetime.fromtimestamp($almanac.sunrise.raw).strftime('%M')#",
-        #else 
+        #else
         "sunrise_hour": "0",
         "sunrise_minute": "0",
         #end if
