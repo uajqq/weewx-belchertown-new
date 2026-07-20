@@ -1223,6 +1223,11 @@ function update_current_wx(data) {
 
     // Update the station observation box elements
     station_mqtt_data = Object.keys(data); // Turn data (mqtt message) into an object we can forEach
+    // Keep the original packet values paired with their advertised unit suffixes.
+    // BU_applyMQTT() normalizes those values later; mutating dayRain_cm into mm
+    // here would make that path interpret the converted value as cm and multiply
+    // it by 10 a second time.
+    var station_display_data = Object.assign({}, data);
 
     // If our rain payload is in cm, convert it as necessary to the desired UOM
     try {
@@ -1239,14 +1244,14 @@ function update_current_wx(data) {
             rateFactor = 10;
         } // else we are assuming we want "cm/hr"
 
-        data["dayRain_cm"] = parseFloat(data["dayRain_cm"] * conversionFactor).toFixed(4);
-        data["hourRain_cm"] = parseFloat(data["hourRain_cm"] * conversionFactor).toFixed(4);
-        data["monthRain_cm"] = parseFloat(data["monthRain_cm"] * conversionFactor).toFixed(4);
-        data["rain24_cm"] = parseFloat(data["rain24_cm"] * conversionFactor).toFixed(4);
-        data["rainRate_cm_per_hour"] = parseFloat(data["rainRate_cm_per_hour"] * rateFactor).toPrecision(4);
-        data["rain_cm"] = parseFloat(data["rain_cm"] * conversionFactor).toFixed(4);
-        data["stormRain_cm"] = parseFloat(data["stormRain_cm"] * conversionFactor).toFixed(4);
-        data["yearRain_cm"] = parseFloat(data["yearRain_cm"] * conversionFactor).toFixed(4);
+        station_display_data["dayRain_cm"] = parseFloat(station_display_data["dayRain_cm"] * conversionFactor).toFixed(4);
+        station_display_data["hourRain_cm"] = parseFloat(station_display_data["hourRain_cm"] * conversionFactor).toFixed(4);
+        station_display_data["monthRain_cm"] = parseFloat(station_display_data["monthRain_cm"] * conversionFactor).toFixed(4);
+        station_display_data["rain24_cm"] = parseFloat(station_display_data["rain24_cm"] * conversionFactor).toFixed(4);
+        station_display_data["rainRate_cm_per_hour"] = parseFloat(station_display_data["rainRate_cm_per_hour"] * rateFactor).toPrecision(4);
+        station_display_data["rain_cm"] = parseFloat(station_display_data["rain_cm"] * conversionFactor).toFixed(4);
+        station_display_data["stormRain_cm"] = parseFloat(station_display_data["stormRain_cm"] * conversionFactor).toFixed(4);
+        station_display_data["yearRain_cm"] = parseFloat(station_display_data["yearRain_cm"] * conversionFactor).toFixed(4);
     } catch (err) {
         // Silent
     }
@@ -1262,7 +1267,7 @@ function update_current_wx(data) {
             return;
         }
 
-        var numericValue = parseFloat(data[mqttKey]);
+        var numericValue = parseFloat(station_display_data[mqttKey]);
         if (!isFinite(numericValue)) {
             return;
         }
