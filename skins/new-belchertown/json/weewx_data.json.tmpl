@@ -201,79 +201,39 @@
         "epoch": "#echo int( time.time() )#",
         "outTemp": "$current.outTemp",
         "outTemp_formatted": "$current.outTemp.toString(addLabel=False, localize=False)",
-        #if $current.outTemp.degree_C.raw is not None
-        "outTemp_raw": $current.outTemp.degree_C.raw,
-        #else
-        "outTemp_raw": null,
-        #end if
+        "outTemp_raw": $json.dumps($current.outTemp.degree_C.raw),
         "outHumidity": "$current.outHumidity",
         ## TODO: Move inside data to it's own json file, and update ajax functions to correctly pull and parse data.
         #if $Extras.has_key("aqi_enabled_kiosk") and $Extras.aqi_enabled_kiosk == '0'
         "inTemp": "$current.inTemp",
         "inTemp_formatted": "$current.inTemp.toString(addLabel=False, localize=False)",
-        #if $current.inTemp.degree_C.raw is not None
-        "inTemp_raw": $current.inTemp.degree_C.raw,
-        #else
-        "inTemp_raw": null,
-        #end if
+        "inTemp_raw": $json.dumps($current.inTemp.degree_C.raw),
         "inHumidity": "$current.inHumidity",
         "inHumidity_formatted": "$current.inHumidity.toString(addLabel=False, localize=False)",
         #end if
         #if $records_has_app_temp
         "appTemp": "$current.appTemp",
-        #if $current.appTemp.degree_C.raw is not None
-        "appTemp_raw": $current.appTemp.degree_C.raw,
-        #else
-        "appTemp_raw": null,
-        #end if
+        "appTemp_raw": $json.dumps($current.appTemp.degree_C.raw),
         #end if
         "windchill": "$current.windchill",
-        #if $current.windchill.degree_C.raw is not None
-        "windchill_raw": $current.windchill.degree_C.raw,
-        #else
-        "windchill_raw": null,
-        #end if
+        "windchill_raw": $json.dumps($current.windchill.degree_C.raw),
         "heatindex": "$current.heatindex",
-        #if $current.heatindex.degree_C.raw is not None
-        "heatindex_raw": $current.heatindex.degree_C.raw,
-        #else
-        "heatindex_raw": null,
-        #end if
+        "heatindex_raw": $json.dumps($current.heatindex.degree_C.raw),
         "dewpoint": "$current.dewpoint",
-        #if $current.dewpoint.degree_C.raw is not None
-        "dewpoint_raw": $current.dewpoint.degree_C.raw,
-        #else
-        "dewpoint_raw": null,
-        #end if
+        "dewpoint_raw": $json.dumps($current.dewpoint.degree_C.raw),
         "barometer": "$current.barometer",
         "barometer_formatted": "$current.barometer.toString(addLabel=False, localize=False)",
-        #if $current.barometer.hPa.raw is not None
-        "barometer_raw": $current.barometer.hPa.raw,
-        #else
-        "barometer_raw": null,
-        #end if
+        "barometer_raw": $json.dumps($current.barometer.hPa.raw),
         "barometer_trend": "$trend.barometer",
         "barometer_trend_formatted": "$trend.barometer.toString(addLabel=False, localize=False)",
         "windspeed": "$current.windSpeed",
-        #if $current.windSpeed.meter_per_second.raw is not None
-        "windspeed_raw": $current.windSpeed.meter_per_second.raw,
-        #else
-        "windspeed_raw": null,
-        #end if
+        "windspeed_raw": $json.dumps($current.windSpeed.meter_per_second.raw),
         "winddir": "$current.windDir",
-        #if $current.windDir.raw is not None
-        "winddir_raw": $current.windDir.raw,
-        #else
-        "winddir_raw": null,
-        #end if
+        "winddir_raw": $json.dumps($current.windDir.raw),
         "winddir_formatted": "$current.windDir.toString(addLabel=False, localize=False)",
         "windGust": "$current.windGust",
         "windGust_formatted": "$current.windGust.toString(addLabel=False, localize=False)",
-        #if $current.windGust.meter_per_second.raw is not None
-        "windGust_raw": $current.windGust.meter_per_second.raw,
-        #else
-        "windGust_raw": null,
-        #end if
+        "windGust_raw": $json.dumps($current.windGust.meter_per_second.raw),
         "windGustDir": "$current.windGustDir",
         "windcompass": "$current.windDir.ordinal_compass",
         #if $records_has_windrun
@@ -281,11 +241,7 @@
         #end if
         #if $day.extraTemp1.has_data
         "extraTemp1": "$current.extraTemp1",
-        #if $current.extraTemp1.degree_C.raw is not None
-        "extraTemp1_raw": $current.extraTemp1.degree_C.raw,
-        #else
-        "extraTemp1_raw": null,
-        #end if
+        "extraTemp1_raw": $json.dumps($current.extraTemp1.degree_C.raw),
         #end if
         #if $records_has_uv
         "uv": "$current.UV",
@@ -297,55 +253,45 @@
         "et": "$current.ET",
         #end if
         "rainRate": "$current.rainRate",
-        #if $current.rainRate.mm_per_hour.raw is not None
-        "rainRate_raw": $current.rainRate.mm_per_hour.raw,
-        #else
-        "rainRate_raw": null,
-        #end if
+        "rainRate_raw": $json.dumps($current.rainRate.mm_per_hour.raw),
         "rain": "$current.rain",
-        #if $current.rain.mm.raw is not None
-        "rain_raw": $current.rain.mm.raw,
-        #else
-        "rain_raw": null,
-        #end if
-        #if $day.rain.sum.mm.raw is not None
-        "dayRain_raw": $day.rain.sum.mm.raw,
-        #else
-        "dayRain_raw": null,
-        #end if
+        "rain_raw": $json.dumps($current.rain.mm.raw),
+        "dayRain_raw": $json.dumps($day.rain.sum.mm.raw),
         "unit_system": "metricwx"
     },
+    ## Keep numeric raw observations JSON-safe: json.dumps(None) renders null instead of
+    ## leaving an empty Cheetah substitution that invalidates the entire response.
     "day": {
         "outTemp": {
             "max": "$day.outTemp.max",
             "max_formatted": "$day.outTemp.max.toString(addLabel=False, localize=False)",
-            "max_raw": $day.outTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($day.outTemp.max.degree_C.raw),
             "maxtime": "$day.outTemp.maxtime",
             "average": "$day.outTemp.avg",
-            "avg_raw": $day.outTemp.avg.degree_C.raw,
+            "avg_raw": $json.dumps($day.outTemp.avg.degree_C.raw),
             "min": "$day.outTemp.min",
             "min_formatted": "$day.outTemp.min.toString(addLabel=False, localize=False)",
-            "min_raw": $day.outTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($day.outTemp.min.degree_C.raw),
             "mintime": "$day.outTemp.mintime"
         },
         #if $records_has_app_temp
         "appTemp": {
             "max": "$day.appTemp.max",
-            "max_raw": $day.appTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($day.appTemp.max.degree_C.raw),
             "maxtime": "$day.appTemp.maxtime",
             "min": "$day.appTemp.min",
-            "min_raw": $day.appTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($day.appTemp.min.degree_C.raw),
             "mintime": "$day.appTemp.mintime"
         },
         #end if
         "heatindex": {
             "max": "$day.heatindex.max",
-            "max_raw": $day.heatindex.max.degree_C.raw,
+            "max_raw": $json.dumps($day.heatindex.max.degree_C.raw),
             "maxtime": "$day.heatindex.maxtime"
         },
         "windchill": {
             "max": "$day.windchill.min",
-            "max_raw": $day.windchill.min.degree_C.raw,
+            "max_raw": $json.dumps($day.windchill.min.degree_C.raw),
             "maxtime": "$day.windchill.mintime"
         },
         "humidity": {
@@ -356,28 +302,28 @@
         },
         "dewpoint": {
             "max": "$day.dewpoint.max",
-            "max_raw": $day.dewpoint.max.degree_C.raw,
+            "max_raw": $json.dumps($day.dewpoint.max.degree_C.raw),
             "maxtime": "$day.dewpoint.maxtime",
             "min": "$day.dewpoint.min",
-            "min_raw": $day.dewpoint.min.degree_C.raw,
+            "min_raw": $json.dumps($day.dewpoint.min.degree_C.raw),
             "mintime": "$day.dewpoint.mintime"
         },
         "barometer": {
             "max": "$day.barometer.max",
-            "max_raw": $day.barometer.max.hPa.raw,
+            "max_raw": $json.dumps($day.barometer.max.hPa.raw),
             "maxtime": "$day.barometer.maxtime",
             "min": "$day.barometer.min",
-            "min_raw": $day.barometer.min.hPa.raw,
+            "min_raw": $json.dumps($day.barometer.min.hPa.raw),
             "mintime": "$day.barometer.mintime"
         },
         "wind": {
             "max": "$day.wind.max",
             "max_formatted": "$day.wind.max.toString(addLabel=False, localize=False)",
-            "max_raw": $day.wind.max.meter_per_second.raw,
+            "max_raw": $json.dumps($day.wind.max.meter_per_second.raw),
             "maxtime": "$day.wind.maxtime",
             "gustdir": "$day.wind.gustdir",
             "average": "$day.wind.avg",
-            "avg_raw": $day.wind.avg.meter_per_second.raw,
+            "avg_raw": $json.dumps($day.wind.avg.meter_per_second.raw),
             "vectordir": "$day.wind.vecdir",
             "vectoravg": "$day.wind.vecavg",
             "rms": "$day.wind.rms"
@@ -394,7 +340,7 @@
         },
         "windGust": {
             "max": "$day.windGust.max",
-            "max_raw": $day.windGust.max.meter_per_second.raw,
+            "max_raw": $json.dumps($day.windGust.max.meter_per_second.raw),
             "maxtime": "$day.windGust.maxtime"
         },
         #if $records_has_uv
@@ -422,49 +368,49 @@
         #end if
         "rain": {
             "sum": "$day.rain.sum",
-            "sum_raw": $day.rain.sum.mm.raw,
+            "sum_raw": $json.dumps($day.rain.sum.mm.raw),
             "maxsum": "$day.rain.sum",
-            "maxsum_raw": $day.rain.sum.mm.raw,
+            "maxsum_raw": $json.dumps($day.rain.sum.mm.raw),
             "maxsumtime": "$day.dateTime",
             "max": "$day.rainRate.max",
-            "max_raw": $day.rainRate.max.mm_per_hour.raw,
+            "max_raw": $json.dumps($day.rainRate.max.mm_per_hour.raw),
             "maxtime": "$day.rainRate.maxtime"
         }
     },
     "week": {
         "outTemp": {
             "max": "$span(time_delta=604800).outTemp.max",
-            "max_raw": $span(time_delta=604800).outTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).outTemp.max.degree_C.raw),
             "maxtime": "$span(time_delta=604800).outTemp.maxtime",
             "maxtime_raw": "$span(time_delta=604800).outTemp.maxtime.raw",
             "average": "$span(time_delta=604800).outTemp.avg",
-            "avg_raw": $span(time_delta=604800).outTemp.avg.degree_C.raw,
+            "avg_raw": $json.dumps($span(time_delta=604800).outTemp.avg.degree_C.raw),
             "min": "$span(time_delta=604800).outTemp.min",
-            "min_raw": $span(time_delta=604800).outTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($span(time_delta=604800).outTemp.min.degree_C.raw),
             "mintime": "$span(time_delta=604800).outTemp.mintime",
             "mintime_raw": "$span(time_delta=604800).outTemp.mintime.raw"
         },
         #if $records_has_app_temp
         "appTemp": {
             "max": "$span(time_delta=604800).appTemp.max",
-            "max_raw": $span(time_delta=604800).appTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).appTemp.max.degree_C.raw),
             "maxtime": "$span(time_delta=604800).appTemp.maxtime",
             "maxtime_raw": "$span(time_delta=604800).appTemp.maxtime.raw",
             "min": "$span(time_delta=604800).appTemp.min",
-            "min_raw": $span(time_delta=604800).appTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($span(time_delta=604800).appTemp.min.degree_C.raw),
             "mintime": "$span(time_delta=604800).appTemp.mintime",
             "mintime_raw": "$span(time_delta=604800).appTemp.mintime.raw"
         },
         #end if
         "heatindex": {
             "max": "$span(time_delta=604800).heatindex.max",
-            "max_raw": $span(time_delta=604800).heatindex.max.degree_C.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).heatindex.max.degree_C.raw),
             "maxtime": "$span(time_delta=604800).heatindex.maxtime",
             "maxtime_raw": "$span(time_delta=604800).heatindex.maxtime.raw"
         },
         "windchill": {
             "max": "$span(time_delta=604800).windchill.min",
-            "max_raw": $span(time_delta=604800).windchill.min.degree_C.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).windchill.min.degree_C.raw),
             "maxtime": "$span(time_delta=604800).windchill.mintime",
             "maxtime_raw": "$span(time_delta=604800).windchill.mintime.raw"
         },
@@ -478,21 +424,21 @@
         },
         "dewpoint": {
             "max": "$span(time_delta=604800).dewpoint.max",
-            "max_raw": $span(time_delta=604800).dewpoint.max.degree_C.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).dewpoint.max.degree_C.raw),
             "maxtime": "$span(time_delta=604800).dewpoint.maxtime",
             "maxtime_raw": "$span(time_delta=604800).dewpoint.maxtime.raw",
             "min": "$span(time_delta=604800).dewpoint.min",
-            "min_raw": $span(time_delta=604800).dewpoint.min.degree_C.raw,
+            "min_raw": $json.dumps($span(time_delta=604800).dewpoint.min.degree_C.raw),
             "mintime": "$span(time_delta=604800).dewpoint.mintime",
             "mintime_raw": "$span(time_delta=604800).dewpoint.mintime.raw"
         },
         "barometer": {
             "max": "$span(time_delta=604800).barometer.max",
-            "max_raw": $span(time_delta=604800).barometer.max.hPa.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).barometer.max.hPa.raw),
             "maxtime": "$span(time_delta=604800).barometer.maxtime",
             "maxtime_raw": "$span(time_delta=604800).barometer.maxtime.raw",
             "min": "$span(time_delta=604800).barometer.min",
-            "min_raw": $span(time_delta=604800).barometer.min.hPa.raw,
+            "min_raw": $json.dumps($span(time_delta=604800).barometer.min.hPa.raw),
             "mintime": "$span(time_delta=604800).barometer.mintime",
             "mintime_raw": "$span(time_delta=604800).barometer.mintime.raw"
         },
@@ -501,9 +447,9 @@
             "maxtime": "$span(time_delta=604800).wind.maxtime",
             "maxtime_raw": "$span(time_delta=604800).wind.maxtime.raw",
             "gustdir": "$span(time_delta=604800).wind.gustdir",
-            "max_raw": $span(time_delta=604800).wind.max.meter_per_second.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).wind.max.meter_per_second.raw),
             "average": "$span(time_delta=604800).wind.avg",
-            "avg_raw": $span(time_delta=604800).wind.avg.meter_per_second.raw,
+            "avg_raw": $json.dumps($span(time_delta=604800).wind.avg.meter_per_second.raw),
             "vectordir": "$span(time_delta=604800).wind.vecdir",
             "vectoravg": "$span(time_delta=604800).wind.vecavg"
             #if $records_has_windrun
@@ -549,13 +495,13 @@
         #end if
         "rain": {
             "sum": "$span(time_delta=604800).rain.sum",
-            "sum_raw": $span(time_delta=604800).rain.sum.mm.raw,
+            "sum_raw": $json.dumps($span(time_delta=604800).rain.sum.mm.raw),
             "maxsum": "$week_rainiest_day[1] $unit.label.rain",
-            "maxsum_raw": $week_rainiest_day_raw[1],
+            "maxsum_raw": $json.dumps($week_rainiest_day_raw[1]),
             "maxsumtime": "$week_rainiest_day[0]",
             "maxsumtime_raw": "$week_rainiest_day[0]",
             "max": "$span(time_delta=604800).rainRate.max",
-            "max_raw": $span(time_delta=604800).rainRate.max.mm_per_hour.raw,
+            "max_raw": $json.dumps($span(time_delta=604800).rainRate.max.mm_per_hour.raw),
             "maxtime": "$span(time_delta=604800).rainRate.maxtime",
             "maxtime_raw": "$span(time_delta=604800).rainRate.maxtime.raw"
         }
@@ -563,37 +509,37 @@
     "month": {
         "outTemp": {
             "max": "$month.outTemp.max",
-            "max_raw": $month.outTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($month.outTemp.max.degree_C.raw),
             "maxtime": "$month.outTemp.maxtime",
             "maxtime_raw": "$month.outTemp.maxtime.raw",
             "average": "$month.outTemp.avg",
-            "avg_raw": $month.outTemp.avg.degree_C.raw,
+            "avg_raw": $json.dumps($month.outTemp.avg.degree_C.raw),
             "min": "$month.outTemp.min",
-            "min_raw": $month.outTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($month.outTemp.min.degree_C.raw),
             "mintime": "$month.outTemp.mintime",
             "mintime_raw": "$month.outTemp.mintime.raw"
         },
         #if $records_has_app_temp
         "appTemp": {
             "max": "$month.appTemp.max",
-            "max_raw": $month.appTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($month.appTemp.max.degree_C.raw),
             "maxtime": "$month.appTemp.maxtime",
             "maxtime_raw": "$month.appTemp.maxtime.raw",
             "min": "$month.appTemp.min",
-            "min_raw": $month.appTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($month.appTemp.min.degree_C.raw),
             "mintime": "$month.appTemp.mintime",
             "mintime_raw": "$month.appTemp.mintime.raw"
         },
         #end if
         "heatindex": {
             "max": "$month.heatindex.max",
-            "max_raw": $month.heatindex.max.degree_C.raw,
+            "max_raw": $json.dumps($month.heatindex.max.degree_C.raw),
             "maxtime": "$month.heatindex.maxtime",
             "maxtime_raw": "$month.heatindex.maxtime.raw"
         },
         "windchill": {
             "max": "$month.windchill.min",
-            "max_raw": $month.windchill.min.degree_C.raw,
+            "max_raw": $json.dumps($month.windchill.min.degree_C.raw),
             "maxtime": "$month.windchill.mintime",
             "maxtime_raw": "$month.windchill.mintime.raw"
         },
@@ -607,21 +553,21 @@
         },
         "dewpoint": {
             "max": "$month.dewpoint.max",
-            "max_raw": $month.dewpoint.max.degree_C.raw,
+            "max_raw": $json.dumps($month.dewpoint.max.degree_C.raw),
             "maxtime": "$month.dewpoint.maxtime",
             "maxtime_raw": "$month.dewpoint.maxtime.raw",
             "min": "$month.dewpoint.min",
-            "min_raw": $month.dewpoint.min.degree_C.raw,
+            "min_raw": $json.dumps($month.dewpoint.min.degree_C.raw),
             "mintime": "$month.dewpoint.mintime",
             "mintime_raw": "$month.dewpoint.mintime.raw"
         },
         "barometer": {
             "max": "$month.barometer.max",
-            "max_raw": $month.barometer.max.hPa.raw,
+            "max_raw": $json.dumps($month.barometer.max.hPa.raw),
             "maxtime": "$month.barometer.maxtime",
             "maxtime_raw": "$month.barometer.maxtime.raw",
             "min": "$month.barometer.min",
-            "min_raw": $month.barometer.min.hPa.raw,
+            "min_raw": $json.dumps($month.barometer.min.hPa.raw),
             "mintime": "$month.barometer.mintime",
             "mintime_raw": "$month.barometer.mintime.raw"
         },
@@ -629,10 +575,10 @@
             "max": "$month.wind.max",
             "maxtime": "$month.wind.maxtime",
             "maxtime_raw": "$month.wind.maxtime.raw",
-            "max_raw": $month.wind.max.meter_per_second.raw,
+            "max_raw": $json.dumps($month.wind.max.meter_per_second.raw),
             "gustdir": "$month.wind.gustdir",
             "average": "$month.wind.avg",
-            "avg_raw": $month.wind.avg.meter_per_second.raw,
+            "avg_raw": $json.dumps($month.wind.avg.meter_per_second.raw),
             "vectordir": "$month.wind.vecdir",
             "vectoravg": "$month.wind.vecavg",
             "rms": "$month.wind.rms"
@@ -679,13 +625,13 @@
         #end if
         "rain": {
             "sum": "$month.rain.sum",
-            "sum_raw": $month.rain.sum.mm.raw,
+            "sum_raw": $json.dumps($month.rain.sum.mm.raw),
             "maxsum": "$month.rain.maxsum",
-            "maxsum_raw": $month.rain.maxsum.mm.raw,
+            "maxsum_raw": $json.dumps($month.rain.maxsum.mm.raw),
             "maxsumtime": "$month.rain.maxsumtime",
             "maxsumtime_raw": "$month.rain.maxsumtime.raw",
             "max": "$month.rainRate.max",
-            "max_raw": $month.rainRate.max.mm_per_hour.raw,
+            "max_raw": $json.dumps($month.rainRate.max.mm_per_hour.raw),
             "maxtime": "$month.rainRate.maxtime",
             "maxtime_raw": "$month.rainRate.maxtime.raw"
         }
@@ -693,34 +639,34 @@
     "year": {
         "outTemp": {
             "max": "$year.outTemp.max",
-            "max_raw": $year.outTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($year.outTemp.max.degree_C.raw),
             "maxtime": "$year.outTemp.maxtime",
             "maxtime_raw": "$year.outTemp.maxtime.raw",
             "min": "$year.outTemp.min",
-            "min_raw": $year.outTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($year.outTemp.min.degree_C.raw),
             "mintime": "$year.outTemp.mintime"
         },
         #if $records_has_app_temp
         "appTemp": {
             "max": "$year.appTemp.max",
-            "max_raw": $year.appTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($year.appTemp.max.degree_C.raw),
             "maxtime": "$year.appTemp.maxtime",
             "maxtime_raw": "$year.appTemp.maxtime.raw",
             "min": "$year.appTemp.min",
-            "min_raw": $year.appTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($year.appTemp.min.degree_C.raw),
             "mintime": "$year.appTemp.mintime",
             "mintime_raw": "$year.appTemp.mintime.raw"
         },
         #end if
         "heatindex": {
             "max": "$year.heatindex.max",
-            "max_raw": $year.heatindex.max.degree_C.raw,
+            "max_raw": $json.dumps($year.heatindex.max.degree_C.raw),
             "maxtime": "$year.heatindex.maxtime",
             "maxtime_raw": "$year.heatindex.maxtime.raw"
         },
         "windchill": {
             "max": "$year.windchill.min",
-            "max_raw": $year.windchill.min.degree_C.raw,
+            "max_raw": $json.dumps($year.windchill.min.degree_C.raw),
             "maxtime": "$year.windchill.mintime",
             "maxtime_raw": "$year.windchill.mintime.raw"
         },
@@ -732,31 +678,31 @@
         },
         "dewpoint": {
             "max": "$year.dewpoint.max",
-            "max_raw": $year.dewpoint.max.degree_C.raw,
+            "max_raw": $json.dumps($year.dewpoint.max.degree_C.raw),
             "maxtime": "$year.dewpoint.maxtime",
             "maxtime_raw": "$year.dewpoint.maxtime.raw",
             "min": "$year.dewpoint.min",
-            "min_raw": $year.dewpoint.min.degree_C.raw,
+            "min_raw": $json.dumps($year.dewpoint.min.degree_C.raw),
             "mintime": "$year.dewpoint.mintime",
             "mintime_raw": "$year.dewpoint.mintime.raw"
         },
         "barometer": {
             "max": "$year.barometer.max",
-            "max_raw": $year.barometer.max.hPa.raw,
+            "max_raw": $json.dumps($year.barometer.max.hPa.raw),
             "maxtime": "$year.barometer.maxtime",
             "maxtime_raw": "$year.barometer.maxtime.raw",
             "min": "$year.barometer.min",
-            "min_raw": $year.barometer.min.hPa.raw,
+            "min_raw": $json.dumps($year.barometer.min.hPa.raw),
             "mintime": "$year.barometer.mintime",
             "mintime_raw": "$year.barometer.mintime.raw"
         },
         "wind": {
             "max": "$year.wind.max",
-            "max_raw": $year.wind.max.meter_per_second.raw,
+            "max_raw": $json.dumps($year.wind.max.meter_per_second.raw),
             "maxtime": "$year.wind.maxtime",
             "gustdir": "$year.wind.gustdir",
             "average": "$year.wind.avg",
-            "avg_raw": $year.wind.avg.meter_per_second.raw,
+            "avg_raw": $json.dumps($year.wind.avg.meter_per_second.raw),
             "vectordir": "$year.wind.vecdir",
             "vectoravg": "$year.wind.vecavg",
             "rms": "$year.wind.rms"
@@ -792,46 +738,46 @@
         #end if
         "rain": {
             "sum": "$year.rain.sum",
-            "sum_raw": $year.rain.sum.mm.raw,
+            "sum_raw": $json.dumps($year.rain.sum.mm.raw),
             "max": "$year.rainRate.max",
-            "max_raw": $year.rainRate.max.mm_per_hour.raw,
+            "max_raw": $json.dumps($year.rainRate.max.mm_per_hour.raw),
             "maxtime": "$year.rainRate.maxtime"
         }
     },
     "yesterday": {
         "outTemp": {
             "max": "$yesterday.outTemp.max",
-            "max_raw": $yesterday.outTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($yesterday.outTemp.max.degree_C.raw),
             "maxtime": "$yesterday.outTemp.maxtime",
             "maxtime_raw": "$yesterday.outTemp.maxtime.raw",
             "average": "$yesterday.outTemp.avg",
-            "avg_raw": $yesterday.outTemp.avg.degree_C.raw,
+            "avg_raw": $json.dumps($yesterday.outTemp.avg.degree_C.raw),
             "min": "$yesterday.outTemp.min",
-            "min_raw": $yesterday.outTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($yesterday.outTemp.min.degree_C.raw),
             "mintime": "$yesterday.outTemp.mintime",
             "mintime_raw": "$yesterday.outTemp.mintime.raw"
         },
         #if $records_has_app_temp
         "appTemp": {
             "max": "$yesterday.appTemp.max",
-            "max_raw": $yesterday.appTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($yesterday.appTemp.max.degree_C.raw),
             "maxtime": "$yesterday.appTemp.maxtime",
             "maxtime_raw": "$yesterday.appTemp.maxtime.raw",
             "min": "$yesterday.appTemp.min",
-            "min_raw": $yesterday.appTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($yesterday.appTemp.min.degree_C.raw),
             "mintime": "$yesterday.appTemp.mintime",
             "mintime_raw": "$yesterday.appTemp.mintime.raw"
         },
         #end if
         "heatindex": {
             "max": "$yesterday.heatindex.max",
-            "max_raw": $yesterday.heatindex.max.degree_C.raw,
+            "max_raw": $json.dumps($yesterday.heatindex.max.degree_C.raw),
             "maxtime": "$yesterday.heatindex.maxtime",
             "maxtime_raw": "$yesterday.heatindex.maxtime.raw"
         },
         "windchill": {
             "max": "$yesterday.windchill.min",
-            "max_raw": $yesterday.windchill.min.degree_C.raw,
+            "max_raw": $json.dumps($yesterday.windchill.min.degree_C.raw),
             "maxtime": "$yesterday.windchill.mintime",
             "maxtime_raw": "$yesterday.windchill.mintime.raw"
         },
@@ -845,21 +791,21 @@
         },
         "dewpoint": {
             "max": "$yesterday.dewpoint.max",
-            "max_raw": $yesterday.dewpoint.max.degree_C.raw,
+            "max_raw": $json.dumps($yesterday.dewpoint.max.degree_C.raw),
             "maxtime": "$yesterday.dewpoint.maxtime",
             "maxtime_raw": "$yesterday.dewpoint.maxtime.raw",
             "min": "$yesterday.dewpoint.min",
-            "min_raw": $yesterday.dewpoint.min.degree_C.raw,
+            "min_raw": $json.dumps($yesterday.dewpoint.min.degree_C.raw),
             "mintime": "$yesterday.dewpoint.mintime",
             "mintime_raw": "$yesterday.dewpoint.mintime.raw"
         },
         "barometer": {
             "max": "$yesterday.barometer.max",
-            "max_raw": $yesterday.barometer.max.hPa.raw,
+            "max_raw": $json.dumps($yesterday.barometer.max.hPa.raw),
             "maxtime": "$yesterday.barometer.maxtime",
             "maxtime_raw": "$yesterday.barometer.maxtime.raw",
             "min": "$yesterday.barometer.min",
-            "min_raw": $yesterday.barometer.min.hPa.raw,
+            "min_raw": $json.dumps($yesterday.barometer.min.hPa.raw),
             "mintime": "$yesterday.barometer.mintime",
             "mintime_raw": "$yesterday.barometer.mintime.raw"
         },
@@ -867,9 +813,9 @@
             "max": "$yesterday.wind.max",
             "maxtime": "$yesterday.wind.maxtime",
             "maxtime_raw": "$yesterday.wind.maxtime.raw",
-            "max_raw": $yesterday.wind.max.meter_per_second.raw,
+            "max_raw": $json.dumps($yesterday.wind.max.meter_per_second.raw),
             "average": "$yesterday.wind.avg",
-            "avg_raw": $yesterday.wind.avg.meter_per_second.raw
+            "avg_raw": $json.dumps($yesterday.wind.avg.meter_per_second.raw)
             #if $records_has_windrun
             ,"windrun_maxsum": "$yesterday.windrun.sum"
             ,"windrun_maxsumtime": "$yesterday.windrun.maxtime"
@@ -907,12 +853,12 @@
         #end if
         "rain": {
             "sum": "$yesterday.rain.sum",
-            "sum_raw": $yesterday.rain.sum.mm.raw,
+            "sum_raw": $json.dumps($yesterday.rain.sum.mm.raw),
             "maxsum": "$yesterday.rain.sum",
-            "maxsum_raw": $yesterday.rain.sum.mm.raw,
+            "maxsum_raw": $json.dumps($yesterday.rain.sum.mm.raw),
             "maxsumtime": "$yesterday.dateTime",
             "max": "$yesterday.rainRate.max",
-            "max_raw": $yesterday.rainRate.max.mm_per_hour.raw,
+            "max_raw": $json.dumps($yesterday.rainRate.max.mm_per_hour.raw),
             "maxtime": "$yesterday.rainRate.maxtime",
             "maxtime_raw": "$yesterday.rainRate.maxtime.raw"
         }
@@ -920,18 +866,18 @@
     "last365": {
         "outTemp": {
             "max": "$span(time_delta=31536000).outTemp.max",
-            "max_raw": $span(time_delta=31536000).outTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($span(time_delta=31536000).outTemp.max.degree_C.raw),
             "maxtime": "$span(time_delta=31536000).outTemp.maxtime",
             "maxtime_raw": "$span(time_delta=31536000).outTemp.maxtime.raw",
             "min": "$span(time_delta=31536000).outTemp.min",
-            "min_raw": $span(time_delta=31536000).outTemp.min.degree_C.raw,
+            "min_raw": $json.dumps($span(time_delta=31536000).outTemp.min.degree_C.raw),
             "average": "$span(time_delta=31536000).outTemp.avg"
         },
         "wind": {
             "max": "$span(time_delta=31536000).wind.max",
-            "max_raw": $span(time_delta=31536000).wind.max.meter_per_second.raw,
+            "max_raw": $json.dumps($span(time_delta=31536000).wind.max.meter_per_second.raw),
             "average": "$span(time_delta=31536000).wind.avg",
-            "avg_raw": $span(time_delta=31536000).wind.avg.meter_per_second.raw
+            "avg_raw": $json.dumps($span(time_delta=31536000).wind.avg.meter_per_second.raw)
         },
         #if $records_has_uv
         "uv": {
@@ -952,25 +898,25 @@
         #end if
         "rain": {
             "sum": "$span(time_delta=31536000).rain.sum",
-            "sum_raw": $span(time_delta=31536000).rain.sum.mm.raw,
+            "sum_raw": $json.dumps($span(time_delta=31536000).rain.sum.mm.raw),
             "max": "$span(time_delta=31536000).rainRate.max",
-            "max_raw": $span(time_delta=31536000).rainRate.max.mm_per_hour.raw
+            "max_raw": $json.dumps($span(time_delta=31536000).rainRate.max.mm_per_hour.raw)
         }
     },
     "alltime": {
         "outTemp": {
             "max": "$alltime.outTemp.max",
-            "max_raw": $alltime.outTemp.max.degree_C.raw,
+            "max_raw": $json.dumps($alltime.outTemp.max.degree_C.raw),
             "maxtime": "$alltime.outTemp.maxtime",
             "maxtime_raw": "$alltime.outTemp.maxtime.raw",
             "min": "$alltime.outTemp.min",
-            "min_raw": $alltime.outTemp.min.degree_C.raw
+            "min_raw": $json.dumps($alltime.outTemp.min.degree_C.raw)
         },
         "wind": {
             "max": "$alltime.wind.max",
-            "max_raw": $alltime.wind.max.meter_per_second.raw,
+            "max_raw": $json.dumps($alltime.wind.max.meter_per_second.raw),
             "average": "$alltime.wind.avg",
-            "avg_raw": $alltime.wind.avg.meter_per_second.raw
+            "avg_raw": $json.dumps($alltime.wind.avg.meter_per_second.raw)
             #if $records_has_windrun
             ,"windrun": "$alltime.windrun.sum"
             #end if
@@ -989,9 +935,9 @@
         #end if
         "rain": {
             "sum": "$alltime.rain.sum",
-            "sum_raw": $alltime.rain.sum.mm.raw,
+            "sum_raw": $json.dumps($alltime.rain.sum.mm.raw),
             "max": "$alltime.rainRate.max",
-            "max_raw": $alltime.rainRate.max.mm_per_hour.raw
+            "max_raw": $json.dumps($alltime.rainRate.max.mm_per_hour.raw)
         }
     },
     "almanac": {
