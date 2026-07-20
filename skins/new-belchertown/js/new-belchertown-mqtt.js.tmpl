@@ -919,6 +919,18 @@ var mqtt_message_count = 0;
 var mqtt_latest_payload = null;
 var mqtt_latest_packet_rows = [];
 var mqtt_update_scheduled = false;
+var mqtt_weewx_refresh_timer = null;
+var mqtt_weewx_refresh_due_ms = null;
+var mqtt_weewx_refresh_in_progress = false;
+var mqtt_weewx_refresh_required_epoch = null;
+var mqtt_weewx_refresh_retry_count = 0;
+var mqtt_weewx_refresh_max_retries = 4;
+var mqtt_weewx_refresh_delay_ms = 10000;
+var mqtt_weewx_refresh_retry_delay_ms = 15000;
+var mqtt_archive_chart_refresh_timer = null;
+var mqtt_archive_forecast_refresh_timer = null;
+var mqtt_visibility_refresh_bound = false;
+var mqtt_tab_was_hidden = typeof document !== "undefined" && document.hidden;
 var mqttStatusElements = null;
 var mqttGtagConfigured = false;
 var stationObservationElementsByKey = null;
@@ -1013,6 +1025,182 @@ function schedule_mqtt_ui_update(payload) {
     });
 }
 
+function mqtt_weewx_data_epoch(data) {
+    var epoch = parseFloat(data && data["current"] && data["current"]["datetime_raw"]);
+    return isFinite(epoch) ? epoch : null;
+}
+
+function mqtt_update_required_weewx_epoch(epoch) {
+    var requiredEpoch = parseFloat(epoch);
+    if (!isFinite(requiredEpoch)) {
+        return;
+    }
+
+    if (mqtt_weewx_refresh_required_epoch === null || requiredEpoch > mqtt_weewx_refresh_required_epoch) {
+        mqtt_weewx_refresh_required_epoch = requiredEpoch;
+    }
+}
+
+function mqtt_schedule_weewx_refresh(delayMs, requiredEpoch, resetRetries, reason) {
+    mqtt_update_required_weewx_epoch(requiredEpoch);
+    if (resetRetries) {
+        mqtt_weewx_refresh_retry_count = 0;
+    }
+
+    var parsedDelayMs = parseFloat(delayMs);
+    var refreshDelayMs = isFinite(parsedDelayMs) && parsedDelayMs > 0 ? parsedDelayMs : 0;
+    var refreshDueMs = Date.now() + refreshDelayMs;
+
+    // Keep the earliest scheduled fetch. A visibility-resume request therefore
+    // advances an archive refresh that was throttled while the tab was hidden.
+    if (mqtt_weewx_refresh_timer !== null) {
+        if (
+            refreshDelayMs > 0 &&
+            mqtt_weewx_refresh_due_ms !== null &&
+            refreshDueMs >= mqtt_weewx_refresh_due_ms
+        ) {
+            return;
+        }
+        clearTimeout(mqtt_weewx_refresh_timer);
+    }
+
+    mqtt_weewx_refresh_due_ms = refreshDueMs;
+    belchertown_debug("MQTT: Scheduling WeeWX data refresh in " + refreshDelayMs + " ms" + (reason ? " (" + reason + ")" : ""));
+    mqtt_weewx_refresh_timer = setTimeout(function() {
+        mqtt_weewx_refresh_timer = null;
+        mqtt_weewx_refresh_due_ms = null;
+        mqtt_refresh_weewx_data(reason);
+    }, refreshDelayMs);
+}
+
+function mqtt_schedule_weewx_retry(reason) {
+    if (mqtt_weewx_refresh_retry_count >= mqtt_weewx_refresh_max_retries) {
+        belchertown_debug("MQTT: WeeWX data refresh retry limit reached" + (reason ? " (" + reason + ")" : ""));
+        mqtt_weewx_refresh_required_epoch = null;
+        mqtt_weewx_refresh_retry_count = 0;
+        return;
+    }
+
+    mqtt_weewx_refresh_retry_count++;
+    mqtt_schedule_weewx_refresh(
+        mqtt_weewx_refresh_retry_delay_ms,
+        null,
+        false,
+        (reason || "retry") + " " + mqtt_weewx_refresh_retry_count + "/" + mqtt_weewx_refresh_max_retries
+    );
+}
+
+function mqtt_refresh_weewx_data(reason) {
+    if (mqtt_weewx_refresh_in_progress) {
+        mqtt_schedule_weewx_refresh(1000, null, false, reason || "refresh already in progress");
+        return;
+    }
+    if (typeof ajaxweewx !== "function" || typeof update_weewx_data !== "function") {
+        belchertown_debug("MQTT: WeeWX data refresh functions are unavailable");
+        return;
+    }
+
+    mqtt_weewx_refresh_in_progress = true;
+    ajaxweewx().then(function(data) {
+        if (!data || typeof data !== "object") {
+            throw new Error("weewx_data.json did not contain an object");
+        }
+
+        var dataEpoch = mqtt_weewx_data_epoch(data);
+        var requiredEpoch = mqtt_weewx_refresh_required_epoch;
+        if (requiredEpoch !== null && (dataEpoch === null || dataEpoch < requiredEpoch)) {
+            belchertown_debug(
+                "MQTT: weewx_data.json is older than the archive packet" +
+                " (JSON " + (dataEpoch === null ? "unknown" : dataEpoch) +
+                ", required " + requiredEpoch + ")"
+            );
+            mqtt_schedule_weewx_retry("stale WeeWX data");
+            return;
+        }
+
+        update_weewx_data(data);
+        belchertown_debug(data);
+        mqtt_weewx_refresh_required_epoch = null;
+        mqtt_weewx_refresh_retry_count = 0;
+    }).catch(function(e) {
+        console.log(e);
+        mqtt_schedule_weewx_retry("WeeWX data fetch failed");
+    }).finally(function() {
+        mqtt_weewx_refresh_in_progress = false;
+    });
+}
+
+function mqtt_render_archive_charts() {
+    if (typeof renderHomepageCharts === "function") {
+        renderHomepageCharts(true);
+    } else if (typeof homepage_chartgroup !== "undefined" && homepage_chartgroup !== "") {
+        if (typeof belchertownEnsureHighcharts === "function") {
+            belchertownEnsureHighcharts().then(function() {
+                showChart(homepage_chartgroup);
+            }).catch(function(err) {
+                belchertown_debug("MQTT: Failed loading Highcharts assets: " + err.message);
+            });
+        } else {
+            showChart(homepage_chartgroup);
+        }
+    }
+}
+
+function mqtt_handle_archive_packet(data) {
+    belchertown_debug("MQTT: Archive interval detected - updating charts and data");
+    belchertown_debug("MQTT: Archive interval: " + data.interval_minute + " minutes");
+
+    // Delay the fetch itself so WeeWX has time to regenerate and publish the
+    // skin JSON. The previous code fetched immediately and merely delayed
+    // applying the already-stale result.
+    mqtt_schedule_weewx_refresh(
+        mqtt_weewx_refresh_delay_ms,
+        data["dateTime"],
+        true,
+        "archive interval"
+    );
+
+    if (pageName == "pi" || pageName == "kiosk.html") {
+        belchertown_debug("Skipping chart update for page " + pageName + ", no charts to be updated.");
+    } else if (mqtt_archive_chart_refresh_timer === null) {
+        mqtt_archive_chart_refresh_timer = setTimeout(function() {
+            mqtt_archive_chart_refresh_timer = null;
+            mqtt_render_archive_charts();
+        }, 30000);
+    }
+
+    if (typeof ajaxforecast === "function" && mqtt_archive_forecast_refresh_timer === null) {
+        mqtt_archive_forecast_refresh_timer = setTimeout(function() {
+            mqtt_archive_forecast_refresh_timer = null;
+            ajaxforecast();
+        }, mqtt_weewx_refresh_delay_ms);
+    }
+}
+
+function mqtt_refresh_weewx_after_resume() {
+    if (document.hidden) {
+        mqtt_tab_was_hidden = true;
+        return;
+    }
+    if (!mqtt_tab_was_hidden) {
+        return;
+    }
+
+    mqtt_tab_was_hidden = false;
+    mqtt_schedule_weewx_refresh(0, null, true, "tab became visible");
+}
+
+function mqtt_bind_visibility_refresh() {
+    if (mqtt_visibility_refresh_bound || typeof document === "undefined") {
+        return;
+    }
+
+    mqtt_visibility_refresh_bound = true;
+    document.addEventListener("visibilitychange", mqtt_refresh_weewx_after_resume);
+}
+
+mqtt_bind_visibility_refresh();
+
 // New message from mqtt, process it
 function onMessageArrived(message) {
     mqtt_message_count++;
@@ -1020,6 +1208,13 @@ function onMessageArrived(message) {
     belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message received - Size: " + payload_size + " bytes, Topic: " + message.destinationName);
     try {
         mqtt_payload = JSON.parse(message.payloadString);
+        // Archive packets carry control information as well as display values.
+        // Process that control path synchronously so the next live packet cannot
+        // replace it in the animation-frame UI buffer.
+        if (mqtt_payload && mqtt_payload.hasOwnProperty("interval_minute")) {
+            mqtt_handle_archive_packet(mqtt_payload);
+        }
+        mqtt_note_message_activity(mqtt_payload);
         mqtt_set_latest_packet_data(mqtt_payload);
         schedule_mqtt_ui_update(mqtt_payload);
         belchertown_debug("MQTT: [Msg #" + mqtt_message_count + "] Message processed successfully");
@@ -1149,7 +1344,6 @@ function update_current_wx(data) {
         data = JSON.parse(data);
     }
     data = normalize_mqtt_payload(data);
-    mqtt_note_message_activity(data);
 
     var statusEls = get_mqtt_status_elements();
     var onlineMarkerEl = statusEls.onlineMarkerEl;
@@ -1172,41 +1366,7 @@ function update_current_wx(data) {
     }
     // #end if
 
-    // This message is a WeeWX archive update. Update WeeWX data, forecast data and highcharts charts
-    if (data.hasOwnProperty("interval_minute")) {
-        // Delays are recommended to allow the other skins to complete processing
-        belchertown_debug("MQTT: Archive interval detected - updating charts and data");
-        belchertown_debug("MQTT: Archive interval: " + data.interval_minute + " minutes");
-        if (pageName == "pi" || pageName == "kiosk.html") {
-            belchertown_debug("Skipping chart update for page " + pageName + ", no charts to be updated.");
-        }
-        else {
-            setTimeout(function() {
-                if (typeof renderHomepageCharts === "function") {
-                    renderHomepageCharts(true);
-                } else if (typeof homepage_chartgroup !== "undefined" && homepage_chartgroup !== "") {
-                    if (typeof belchertownEnsureHighcharts === "function") {
-                        belchertownEnsureHighcharts().then(function() {
-                            showChart(homepage_chartgroup);
-                        }).catch(function(err) {
-                            belchertown_debug("MQTT: Failed loading Highcharts assets: " + err.message);
-                        });
-                    } else {
-                        showChart(homepage_chartgroup);
-                    }
-                }
-            }, 30000); // Load updated charts.
-        }
-        ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
-            setTimeout(update_weewx_data.bind(null, weewx_data), 10000); // Initial call to update (date, daily high, low, etc)
-            setTimeout(belchertown_debug.bind(null, weewx_data), 10000); // Make weewx_data.json available in debugging console
-            // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
-            setTimeout(ajaxforecast, 10000); // Update forecast data
-            // #end if
-        }).catch(function(e) {
-            console.log(e);
-        });
-    } else {
+    if (!data.hasOwnProperty("interval_minute")) {
         // Only show the updated time on non-archive packets
         epoch = parseFloat(data["dateTime"]).toFixed(0);
         if (pageName == "pi") {
