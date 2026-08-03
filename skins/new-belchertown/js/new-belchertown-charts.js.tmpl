@@ -18,6 +18,12 @@ function belchertown_apply_automatic_data_grouping(seriesList) {
         if (series.obsType === "windBarb") {
             return;
         }
+        // Hays charts rebuild their range series later and require every
+        // original high/low timestamp to preserve the polar envelope.
+        if (series.obsType === "haysChart") {
+            series.dataGrouping = {enabled: false};
+            return;
+        }
         series.dataGrouping = {enabled: enabled};
     });
 
@@ -1695,6 +1701,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     color: currentSeriesColor,
                     fillColor: currentSeriesColor,
                     connectEnds: false,
+                    dataGrouping: {enabled: false},
                 });
             }
 
