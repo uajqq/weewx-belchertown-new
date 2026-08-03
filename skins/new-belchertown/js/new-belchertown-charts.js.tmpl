@@ -3,6 +3,26 @@ var belchertown_chart_resume_events_bound = false;
 var belchertown_chart_resume_refresh_in_progress = false;
 var belchertown_chart_resume_refresh_min_ms = 60000;
 var belchertown_rendered_chart_groups = {};
+var belchertown_chart_data_grouping_threshold = 2000;
+
+function belchertown_apply_automatic_data_grouping(seriesList) {
+    // Keep normal charts at their exact generated timestamps. For genuinely
+    // large datasets, group the whole chart so mixed series stay aligned.
+    var enabled = seriesList.some(function(series) {
+        return Array.isArray(series.data) && series.data.length >= belchertown_chart_data_grouping_threshold;
+    });
+
+    seriesList.forEach(function(series) {
+        // Wind barbs rely on Highstock's native grouping to thin the symbols,
+        // while their companion wind-speed line is kept ungrouped separately.
+        if (series.obsType === "windBarb") {
+            return;
+        }
+        series.dataGrouping = {enabled: enabled};
+    });
+
+    return enabled;
+}
 
 function belchertown_track_chart_group(json_file, prepend_renderTo) {
     if (typeof json_file === "undefined" || json_file === null || json_file === "") {
@@ -1395,6 +1415,8 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             belchertown_apply_flat_axis_ranges(options, seriesAnalysis);
+
+            belchertown_apply_automatic_data_grouping(options.series);
 
             // If windRose is present, configure a special chart to show that data
             if (observation_type == "windRose") {
