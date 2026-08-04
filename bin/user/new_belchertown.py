@@ -56,13 +56,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-VERSION = "2.1beta4"
-log.info(f"version {VERSION}")
-
-# Default timeout for all HTTP requests (seconds)
-DEFAULT_HTTP_TIMEOUT = 15
-FORECAST_RETRY_INTERVAL = 300
-FORECAST_FAILURE_CACHE_SCHEMA = "belchertown.forecast.failures.v1"
+log.info("version 2.1beta4")
 
 HIGHCHARTS_LANG_DEFAULTS = OrderedDict(
     [
@@ -309,8 +303,6 @@ AQI_OBS_MAP = {
     "so2": {"pollutant": "so2", "value_key": "valuePPB"},
 }
 
-LOCAL_AQI_PROVIDER = "local-sensor"
-
 # EPA/AirNow PM2.5 AQI breakpoints, updated for the 2024 PM NAAQS revision.
 # Concentrations are PM2.5 micrograms per cubic meter, truncated to 0.1 first.
 PM25_AQI_BREAKPOINTS = (
@@ -362,8 +354,6 @@ WINDROSE_SPEED_RANGE_LABELS = {
     "knot": ["< 1", "1-3", "4-6", "7-10", "11-16", "17-21", "22+"],
     "beaufort": ["0", "1", "2", "3", "4", "5", "6+"],
 }
-
-WIND_COMPASS_CALM_THRESHOLD_KNOTS = 1.0
 
 # Cached minifier dependency status: (all_available: bool, missing: tuple[str, ...])
 _MINIFIER_DEPS_STATUS = None
@@ -479,7 +469,7 @@ def build_wind_compass_marker_context(
     direction,
     wind_speed_knots,
     wind_gust_knots,
-    calm_threshold_knots=WIND_COMPASS_CALM_THRESHOLD_KNOTS,
+    calm_threshold_knots=1.0,
 ):
     wind_values = [
         value for value in (
@@ -506,7 +496,7 @@ def build_wind_compass_marker_context(
 # Module-level helper functions for HTTP and JSON processing
 
 
-def _http_get_json(url, headers=None, timeout=DEFAULT_HTTP_TIMEOUT):
+def _http_get_json(url, headers=None, timeout=15):
     """Fetch JSON data from an HTTP endpoint and parse as UTF-8 JSON."""
     req_headers = headers or HTTP_HEADERS["PIRATE_WEATHER"]
     req = Request(url, headers=req_headers)
@@ -514,7 +504,7 @@ def _http_get_json(url, headers=None, timeout=DEFAULT_HTTP_TIMEOUT):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _http_get_text(url, headers=None, timeout=DEFAULT_HTTP_TIMEOUT):
+def _http_get_text(url, headers=None, timeout=15):
     """Fetch text from an HTTP endpoint."""
     req_headers = headers or HTTP_HEADERS["PIRATE_WEATHER"]
     req = Request(url, headers=req_headers)
@@ -900,7 +890,7 @@ def _write_forecast_failure_records(failure_file, records):
         _write_json_file(
             failure_file,
             {
-                "schema": FORECAST_FAILURE_CACHE_SCHEMA,
+                "schema": "belchertown.forecast.failures.v1",
                 "failures": records,
             },
         )
@@ -2297,7 +2287,7 @@ def _local_aqi_payload(aqi_value, timestamp, method, pm25_value=None):
                 ],
             }
         ],
-        "provider": LOCAL_AQI_PROVIDER,
+        "provider": "local-sensor",
         "method": method,
     }
 
@@ -2861,7 +2851,6 @@ LABELS_GENERIC_LEGACY_MAPPING = {
 CHART_LABEL_TOKEN_RE = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_.-]*)\}"
 )
-CHART_LABEL_LITERAL_DOLLAR = "\0NEW_BELCHERTOWN_CHART_LITERAL_DOLLAR\0"
 CHART_TEXT_SERIES_OPTIONS = frozenset(
     (
         "yAxis_label",
@@ -2900,7 +2889,7 @@ def _resolve_chart_label_text(value, label_generic_dict, context="charts.conf"):
     if not isinstance(label_generic_dict, (dict, configobj.Section)):
         label_generic_dict = {}
 
-    source = value.replace("$$", CHART_LABEL_LITERAL_DOLLAR)
+    source = value.replace("$$", "\0NEW_BELCHERTOWN_CHART_LITERAL_DOLLAR\0")
     unresolved_tokens = []
 
     def replace_label_token(match_obj):
@@ -2913,7 +2902,7 @@ def _resolve_chart_label_text(value, label_generic_dict, context="charts.conf"):
         return match_obj.group(0)
 
     resolved = CHART_LABEL_TOKEN_RE.sub(replace_label_token, source)
-    resolved = resolved.replace(CHART_LABEL_LITERAL_DOLLAR, "$")
+    resolved = resolved.replace("\0NEW_BELCHERTOWN_CHART_LITERAL_DOLLAR\0", "$")
 
     for token in unresolved_tokens:
         warn_key = (context, token)
@@ -3412,13 +3401,6 @@ ALMANAC_DIAGRAM_DEFAULTS = {
     "center_apex_mode": "transit",
 }
 
-# Baseline viewport used to normalize curve amplification behavior. When users
-# increase configured SVG height relative to width, vertical curve amplitude is
-# increased in Python rather than stretching via SVG aspect-ratio tricks.
-ALMANAC_BASELINE_SVG_WIDTH = 200.0
-ALMANAC_BASELINE_SVG_HEIGHT = 250.0
-
-
 def _apply_almanac_diagram_extras_overrides(extras_dict):
     """Apply optional almanac diagram mode from [Extras]."""
 
@@ -3444,11 +3426,6 @@ def _apply_almanac_diagram_extras_overrides(extras_dict):
                 "Valid values are: off, now, transit. Using default 'transit'.",
                 mode_raw,
             )
-
-# Resolution for sampled day tracks used to build sun/moon SVG path geometry.
-# Smaller values produce denser curves that better align with live alt/az points.
-ALMANAC_DIAGRAM_SAMPLE_STEP_MINUTES = 30
-ALMANAC_DIAGRAM_MOON_SAMPLE_STEP_MINUTES = 30
 
 def get_almanac_diagram_defaults():
     """Return centralized defaults for almanac diagram rendering."""
@@ -3494,12 +3471,12 @@ def _get_vertical_scale():
     if scale is None:
         return 1.0
 
-    svg_width = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_width", ALMANAC_BASELINE_SVG_WIDTH))
-    svg_height = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_height", ALMANAC_BASELINE_SVG_HEIGHT))
+    svg_width = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_width", 200.0))
+    svg_height = _safe_float(ALMANAC_DIAGRAM_DEFAULTS.get("svg_height", 250.0))
     if svg_width is None or svg_height is None or svg_width <= 0:
         return max(0.0, scale)
 
-    baseline_ratio = ALMANAC_BASELINE_SVG_HEIGHT / ALMANAC_BASELINE_SVG_WIDTH
+    baseline_ratio = 250.0 / 200.0
     ratio = svg_height / svg_width
     amplification = ratio / baseline_ratio if baseline_ratio > 0 else 1.0
 
@@ -4271,8 +4248,8 @@ def build_daylight_change_string(
 def build_almanac_diagram_payload(
     almanac_obj,
     current_ts,
-    sample_step_minutes=ALMANAC_DIAGRAM_SAMPLE_STEP_MINUTES,
-    moon_sample_step_minutes=ALMANAC_DIAGRAM_MOON_SAMPLE_STEP_MINUTES,
+    sample_step_minutes=30,
+    moon_sample_step_minutes=30,
 ):
     """Compute almanac diagram payload in Python.
 
@@ -6095,7 +6072,7 @@ class getData(SearchList):
                         forecast_units,
                         forecast_place,
                         current_time,
-                        FORECAST_RETRY_INTERVAL,
+                        300,
                         failure_kind=failure_kind,
                     )
 
@@ -6106,7 +6083,7 @@ class getData(SearchList):
                         forecast_units,
                         forecast_place,
                         current_time,
-                        FORECAST_RETRY_INTERVAL,
+                        300,
                         failure_kind=failure_kind,
                     )
 
@@ -6764,7 +6741,7 @@ class getData(SearchList):
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
-                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        req, timeout=15
                                     ) as response:
                                         forecast_file_result = response.read()
                                     dev_payload = _parse_aeris_json(forecast_file_result)
@@ -6788,7 +6765,7 @@ class getData(SearchList):
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
-                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        req, timeout=15
                                     ) as response:
                                         forecast_24hr_page = response.read()
                                     if belchertown_debug > 1:
@@ -6800,7 +6777,7 @@ class getData(SearchList):
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
-                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        req, timeout=15
                                     ) as response:
                                         forecast_3hr_page = response.read()
                                     if belchertown_debug > 1:
@@ -6812,7 +6789,7 @@ class getData(SearchList):
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
-                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        req, timeout=15
                                     ) as response:
                                         forecast_1hr_page = response.read()
                                     if belchertown_debug > 1:
@@ -6825,7 +6802,7 @@ class getData(SearchList):
                                             HTTP_HEADERS["AERIS_WEATHER"],
                                         )
                                         with urlopen(
-                                            req, timeout=DEFAULT_HTTP_TIMEOUT
+                                            req, timeout=15
                                         ) as response:
                                             alerts_page = response.read()
                                         if belchertown_debug > 1:
@@ -6902,7 +6879,7 @@ class getData(SearchList):
                                     HTTP_HEADERS["AERIS_WEATHER"],
                                 )
                                 with urlopen(
-                                    req, timeout=DEFAULT_HTTP_TIMEOUT
+                                    req, timeout=15
                                 ) as response:
                                     forecast_file_result = response.read()
                                 current_payload = _parse_aeris_json(forecast_file_result)
@@ -6928,7 +6905,7 @@ class getData(SearchList):
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
-                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        req, timeout=15
                                     ) as response:
                                         current_page = response.read()
                                     if belchertown_debug > 1:
@@ -6940,7 +6917,7 @@ class getData(SearchList):
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
-                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        req, timeout=15
                                     ) as response:
                                         current_page = response.read()
                                     if belchertown_debug > 1:
@@ -6952,7 +6929,7 @@ class getData(SearchList):
                                         HTTP_HEADERS["AERIS_WEATHER"],
                                     )
                                     with urlopen(
-                                        req, timeout=DEFAULT_HTTP_TIMEOUT
+                                        req, timeout=15
                                     ) as response:
                                         current_page = response.read()
                                     try:  # Obs okay?
@@ -6971,7 +6948,7 @@ class getData(SearchList):
                                             HTTP_HEADERS["AERIS_WEATHER"],
                                         )
                                         with urlopen(
-                                            req, timeout=DEFAULT_HTTP_TIMEOUT
+                                            req, timeout=15
                                         ) as response:
                                             current_page = response.read()
                                 # Stash in a file
@@ -7134,7 +7111,7 @@ class getData(SearchList):
                     user_agent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3"
                     headers = {"User-Agent": user_agent}
                     req = Request(earthquake_url, None, headers)
-                    with urlopen(req, timeout=DEFAULT_HTTP_TIMEOUT) as response:
+                    with urlopen(req, timeout=15) as response:
                         page = response.read()
                     if weewx.debug:
                         log.debug(
@@ -7701,7 +7678,7 @@ class getData(SearchList):
 
         # Build the search list with the new values
         search_list_extension = {
-            "belchertown_version": VERSION,
+            "belchertown_version": "2.1beta4",
             "asset_suffix": asset_suffix,
             "belchertown_debug": belchertown_debug,
             "moment_js_utc_offset": moment_js_utc_offset,
@@ -8164,7 +8141,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             )  # This retains the order in which to load the charts on the page.
             chart_options = accumulateLeaves(self.chart_dict[chart_group])
 
-            output[chart_group]["belchertown_version"] = VERSION
+            output[chart_group]["belchertown_version"] = "2.1beta4"
             output[chart_group]["generated_timestamp"] = generated_timestamp
 
             # Setup the JSON file name for each chart group

@@ -25,7 +25,6 @@ def loader():
 
 
 class NewBelchertownInstaller(ExtensionInstaller):
-    _NEW_REPORT_NAME = "new-belchertown"
     _OLD_REPORT_NAMES = ("Belchertown", "belchertown")
     _SKIN_CONF_REL_PATH = ("skins", "new-belchertown", "skin.conf")
     _NEW_BELCHERTOWN_ROOT_KEYS = {
@@ -33,7 +32,6 @@ class NewBelchertownInstaller(ExtensionInstaller):
         "HTML_ROOT": "new-belchertown",
         "enable": "true",
     }
-    _EXTRAS_PLACEHOLDER_KEY = "required_section_placeholder"
     _LEGACY_PLACEHOLDER_KEYS = ("work_around_ConfigObj_limitations",)
     _LABEL_TYPO_NORMALIZATIONS = {
         "Servere": "Severe",
@@ -64,10 +62,10 @@ class NewBelchertownInstaller(ExtensionInstaller):
 
         stripped = value.strip()
         if stripped.lower() == "belchertown":
-            return cls._NEW_REPORT_NAME if allow_bare else value
+            return "new-belchertown" if allow_bare else value
 
         def replace_segment(match):
-            return "%s%s" % (match.group(1), cls._NEW_REPORT_NAME)
+            return "%s%s" % (match.group(1), "new-belchertown")
 
         return re.sub(
             r"(^|[/\\])belchertown(?=$|[/\\])",
@@ -246,7 +244,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
                 elif marker_level == 2:
                     section_name = stripped[2:-2].strip()
                     in_belchertown = (
-                        in_stdreport and section_name == cls._NEW_REPORT_NAME
+                        in_stdreport and section_name == "new-belchertown"
                     )
                     if in_belchertown:
                         append_blank_line_if_needed(newline)
@@ -428,7 +426,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
             return {}
 
         report_names = tuple(
-            report_names or ((cls._NEW_REPORT_NAME,) + cls._OLD_REPORT_NAMES)
+            report_names or (("new-belchertown",) + cls._OLD_REPORT_NAMES)
         )
         config_path = cls._guess_weewx_config_path(engine, current_config)
         if not config_path:
@@ -683,7 +681,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
         known_keys.update(cls._LEGACY_LABELS_GENERIC_MAPPING)
         known_keys.update(cls._LEGACY_LABELS_GENERIC_MAPPING.values())
         known_keys.update(cls._LEGACY_PLACEHOLDER_KEYS)
-        known_keys.add(cls._EXTRAS_PLACEHOLDER_KEY)
+        known_keys.add("required_section_placeholder")
         return known_keys
 
     @staticmethod
@@ -796,7 +794,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
             return
 
         report_names = cls._section_names(std_report)
-        candidates = [cls._NEW_REPORT_NAME]
+        candidates = ["new-belchertown"]
         old_report_name = cls._find_old_belchertown_report_name(std_report)
         if old_report_name:
             candidates.append(old_report_name)
@@ -877,7 +875,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
             extras_lines,
             "            ",
             current_extras,
-            cls._EXTRAS_PLACEHOLDER_KEY,
+            "required_section_placeholder",
             commented_extra_overrides,
             legacy_extra_overrides,
             legacy_insert_before,
@@ -942,7 +940,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
     @classmethod
     def _is_placeholder_key(cls, key):
         """Return True if key is current or legacy placeholder sentinel."""
-        return key == cls._EXTRAS_PLACEHOLDER_KEY or key in cls._LEGACY_PLACEHOLDER_KEYS
+        return key == "required_section_placeholder" or key in cls._LEGACY_PLACEHOLDER_KEYS
 
     @classmethod
     def _normalize_placeholder_in_section(cls, section):
@@ -954,8 +952,8 @@ class NewBelchertownInstaller(ExtensionInstaller):
             if legacy_key not in section:
                 continue
 
-            if cls._EXTRAS_PLACEHOLDER_KEY not in section:
-                section[cls._EXTRAS_PLACEHOLDER_KEY] = section[legacy_key]
+            if "required_section_placeholder" not in section:
+                section["required_section_placeholder"] = section[legacy_key]
 
             del section[legacy_key]
 
@@ -1186,8 +1184,8 @@ class NewBelchertownInstaller(ExtensionInstaller):
         belchertown.comments["Labels"] = [""]
 
         if not cls._empty_sections_survive_round_trip(config):
-            extras[cls._EXTRAS_PLACEHOLDER_KEY] = "true"
-            generic[cls._EXTRAS_PLACEHOLDER_KEY] = "true"
+            extras["required_section_placeholder"] = "true"
+            generic["required_section_placeholder"] = "true"
 
         return config
 
@@ -1240,9 +1238,9 @@ class NewBelchertownInstaller(ExtensionInstaller):
         std_report = current_config.setdefault("StdReport", {})
         old_report_name = self._find_old_belchertown_report_name(std_report)
 
-        if self._NEW_REPORT_NAME in std_report:
-            source_report_name = self._NEW_REPORT_NAME
-            current_report = std_report.get(self._NEW_REPORT_NAME, {})
+        if "new-belchertown" in std_report:
+            source_report_name = "new-belchertown"
+            current_report = std_report.get("new-belchertown", {})
         elif old_report_name:
             source_report_name = old_report_name
             current_report = std_report.get(old_report_name, {})
@@ -1252,7 +1250,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
                 flush=True,
             )
         else:
-            source_report_name = self._NEW_REPORT_NAME
+            source_report_name = "new-belchertown"
             current_report = {}
 
         commented_extra_overrides = self._extract_commented_extra_overrides(
@@ -1309,7 +1307,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
             return False
 
         self._cleanup_following_report_comments(std_report)
-        report_names_to_replace = [self._NEW_REPORT_NAME]
+        report_names_to_replace = ["new-belchertown"]
         report_names_to_replace.extend(self._OLD_REPORT_NAMES)
         if old_report_name and old_report_name not in report_names_to_replace:
             report_names_to_replace.append(old_report_name)
@@ -1318,7 +1316,7 @@ class NewBelchertownInstaller(ExtensionInstaller):
                 del std_report[report_name]
 
         current_config.merge(fresh_config)
-        report_section = std_report[self._NEW_REPORT_NAME]
+        report_section = std_report["new-belchertown"]
 
         if preserved_report_options:
             if hasattr(report_section, "merge"):
