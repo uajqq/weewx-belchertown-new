@@ -5498,11 +5498,11 @@ class getData(SearchList):
             forces the value to target_unit (e.g. "mm", "km") regardless of
             skin.conf's configured unit_system, for the front-end unit
             switcher to re-convert from."""
-            if query_row is not None:
+            if query_row is not None and query_row[1] is not None:
                 value_tuple = (query_row[1], source_unit, group_name)
                 raw_val = weewx.units.convert(value_tuple, target_unit)[0]
                 return [query_row[0], raw_val]
-            return [calendar.timegm(time.gmtime()), 0.0]
+            return [None, None]
 
         rainiest_day_sql = """
             SELECT dateTime, sum FROM archive_day_rain
@@ -5530,26 +5530,43 @@ class getData(SearchList):
             week_rainiest_day_query, rain_unit, "group_rain", "mm"
         )
 
-        if records_obs_available["windrun"]:
-            week_windrun_maxsum_sql = """
-                SELECT dateTime, sum FROM archive_day_windrun
-                WHERE dateTime >= ? AND dateTime < ? ORDER BY sum DESC LIMIT 1;
+        def _query_windrun_maxsum(period_name, start_epoch=None, stop_epoch=None):
+            """Return the highest daily wind run for a bounded period."""
+            if not records_obs_available["windrun"]:
+                return None
+
+            conditions = ["sum IS NOT NULL"]
+            params = []
+            if start_epoch is not None:
+                conditions.append("dateTime >= ?")
+                params.append(start_epoch)
+            if stop_epoch is not None:
+                conditions.append("dateTime < ?")
+                params.append(stop_epoch)
+
+            day_table = f"{wx_manager.table_name}_day_windrun"
+            windrun_maxsum_sql = f"""
+                SELECT dateTime, sum FROM {day_table}
+                WHERE {' AND '.join(conditions)}
+                ORDER BY sum DESC, dateTime ASC LIMIT 1;
             """
             try:
-                week_windrun_maxsum_query = wx_manager.getSql(
-                    week_windrun_maxsum_sql,
-                    (week_daily_start_epoch, week_daily_stop_epoch),
-                )
+                return wx_manager.getSql(windrun_maxsum_sql, tuple(params))
             except Exception as e:
-                if "archive_day_windrun" in str(e):
-                    log.debug(
-                        "Wind run stats not available: archive_day_windrun table not found."
-                    )
-                else:
-                    log.debug(f"Skipping wind run stats: {e}")
-                week_windrun_maxsum_query = None
-        else:
-            week_windrun_maxsum_query = None
+                log.debug(f"Skipping {period_name} wind run stats: {e}")
+                return None
+
+        week_windrun_maxsum_query = _query_windrun_maxsum(
+            "weekly", week_daily_start_epoch, week_daily_stop_epoch
+        )
+        month_windrun_maxsum_query = _query_windrun_maxsum(
+            "monthly", month_start_epoch, week_daily_stop_epoch
+        )
+        year_windrun_maxsum_query = _query_windrun_maxsum(
+            "yearly", year_start_epoch, week_daily_stop_epoch
+        )
+        at_windrun_maxsum_query = _query_windrun_maxsum("all-time")
+
         week_windrun_maxsum = _convert_daily_summary_result(
             week_windrun_maxsum_query,
             windrun_unit,
@@ -5559,6 +5576,22 @@ class getData(SearchList):
         )
         week_windrun_maxsum_raw = _convert_daily_summary_result_raw(
             week_windrun_maxsum_query, windrun_unit, "group_distance", "km"
+        )
+        month_windrun_maxsum = _convert_daily_summary_result(
+            month_windrun_maxsum_query,
+            windrun_unit,
+            "group_distance",
+            windrun_round,
+            windrun_label,
+        )
+        month_windrun_maxsum_raw = _convert_daily_summary_result_raw(
+            month_windrun_maxsum_query, windrun_unit, "group_distance", "km"
+        )
+        year_windrun_maxsum_raw = _convert_daily_summary_result_raw(
+            year_windrun_maxsum_query, windrun_unit, "group_distance", "km"
+        )
+        at_windrun_maxsum_raw = _convert_daily_summary_result_raw(
+            at_windrun_maxsum_query, windrun_unit, "group_distance", "km"
         )
 
         at_rainiest_day_sql = """
@@ -7732,6 +7765,10 @@ class getData(SearchList):
             "at_rainiest_day_raw": at_rainiest_day_raw,
             "week_windrun_maxsum": week_windrun_maxsum,
             "week_windrun_maxsum_raw": week_windrun_maxsum_raw,
+            "month_windrun_maxsum": month_windrun_maxsum,
+            "month_windrun_maxsum_raw": month_windrun_maxsum_raw,
+            "year_windrun_maxsum_raw": year_windrun_maxsum_raw,
+            "at_windrun_maxsum_raw": at_windrun_maxsum_raw,
             "sunniest_day": sunniest_day,
             "at_sunniest_day": at_sunniest_day,
             "year_rainiest_month": year_rainiest_month,

@@ -329,6 +329,7 @@
             "rms": "$day.wind.rms"
             #if $records_has_windrun
             ,"windrun_maxsum": "$day.windrun.sum",
+            "windrun_maxsum_raw": $json.dumps($day.windrun.sum.km.raw),
             "windrun_maxsumtime": "$day.windrun.maxtime",
             "windrun_maxsumtime_raw": "$day.windrun.maxtime.raw",
             "windrun_max": "$day.windrun.max",
@@ -454,8 +455,9 @@
             "vectoravg": "$span(time_delta=604800).wind.vecavg"
             #if $records_has_windrun
             ,"windrun_maxsum": "$week_windrun_maxsum[1]",
-            "windrun_maxsumtime": "$week_windrun_maxsum[0]",
-            "windrun_maxsumtime_raw": "$week_windrun_maxsum[0]",
+            "windrun_maxsum_raw": $json.dumps($week_windrun_maxsum_raw[1]),
+            "windrun_maxsumtime": "$week_windrun_maxsum_raw[0]",
+            "windrun_maxsumtime_raw": $json.dumps($week_windrun_maxsum_raw[0]),
             "windrun_max": "$span(time_delta=604800).windrun.max",
             "windrun_maxtime": "$span(time_delta=604800).windrun.maxtime",
             "windrun_maxtime_raw": "$span(time_delta=604800).windrun.maxtime.raw",
@@ -583,9 +585,10 @@
             "vectoravg": "$month.wind.vecavg",
             "rms": "$month.wind.rms"
             #if $records_has_windrun
-            ,"windrun_maxsum": "$month.windrun.maxsum",
-            "windrun_maxsumtime": "$month.windrun.maxsumtime",
-            "windrun_maxsumtime_raw": "$month.windrun.maxsumtime.raw",
+            ,"windrun_maxsum": "$month_windrun_maxsum[1]",
+            "windrun_maxsum_raw": $json.dumps($month_windrun_maxsum_raw[1]),
+            "windrun_maxsumtime": "$month_windrun_maxsum_raw[0]",
+            "windrun_maxsumtime_raw": $json.dumps($month_windrun_maxsum_raw[0]),
             "windrun_max": "$month.windrun.max",
             "windrun_maxtime": "$month.windrun.maxtime",
             "windrun_maxtime_raw": "$month.windrun.maxtime.raw",
@@ -818,6 +821,7 @@
             "avg_raw": $json.dumps($yesterday.wind.avg.meter_per_second.raw)
             #if $records_has_windrun
             ,"windrun_maxsum": "$yesterday.windrun.sum"
+            ,"windrun_maxsum_raw": $json.dumps($yesterday.windrun.sum.km.raw)
             ,"windrun_maxsumtime": "$yesterday.windrun.maxtime"
             ,"windrun_maxsumtime_raw": "$yesterday.windrun.maxtime.raw"
             ,"windrun": "$yesterday.windrun.sum"
