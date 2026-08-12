@@ -4003,13 +4003,26 @@ def _build_almanac_svg_markup(payload, current_ts):
         wrap_x=use_x_offsets,
     )
 
+    sun_track = (
+        f'<path class="almanac-diagram-track almanac-diagram-track--sun" '
+        f'd="{html.escape(sun_path_d)}"></path>'
+    )
+    moon_track = (
+        f'<path class="almanac-diagram-track almanac-diagram-track--moon" '
+        f'd="{html.escape(moon_path_d)}"></path>'
+    )
+    sun_altitude = _safe_float(payload.get("sun_alt_attr"))
+    if sun_altitude is not None and sun_altitude >= 0:
+        track_markup = moon_track + sun_track
+    else:
+        track_markup = sun_track + moon_track
+
     return (
         f'<svg class="almanac-diagram-svg" width="{svg_width:.1f}" height="{svg_height:.1f}" '
         f'viewBox="{viewbox_x:.1f} {viewbox_y:.1f} {viewbox_w:.1f} {viewbox_h:.1f}" '
         'preserveAspectRatio="xMidYMid meet" role="img" aria-label="Sun and moon">'
         f'<line class="almanac-diagram-horizon" x1="{min_x:.1f}" y1="0" x2="{max_x:.1f}" y2="0"></line>'
-        f'<path class="almanac-diagram-track almanac-diagram-track--sun" d="{html.escape(sun_path_d)}"></path>'
-        f'<path class="almanac-diagram-track almanac-diagram-track--moon" d="{html.escape(moon_path_d)}"></path>'
+        f"{track_markup}"
         f"{moon_group}"
         f"{sun_group}"
         "</svg>"

@@ -1922,6 +1922,29 @@ function almanacEventBelowHorizon(riseEpoch, setEpoch, nowEpoch) {
     return !aboveHorizon;
 }
 
+function setAlmanacDiagramTrackOrder(sunIsUp) {
+    if (typeof sunIsUp !== "boolean") {
+        return;
+    }
+
+    document.querySelectorAll(".almanac-diagram-svg").forEach(function(svg) {
+        var sunTrack = svg.querySelector(".almanac-diagram-track--sun");
+        var moonTrack = svg.querySelector(".almanac-diagram-track--moon");
+        var firstObject = svg.querySelector(".almanac-diagram-object");
+        var topTrack;
+        var bottomTrack;
+
+        if (!sunTrack || !moonTrack) {
+            return;
+        }
+
+        topTrack = sunIsUp ? sunTrack : moonTrack;
+        bottomTrack = sunIsUp ? moonTrack : sunTrack;
+        svg.insertBefore(bottomTrack, firstObject);
+        svg.insertBefore(topTrack, firstObject);
+    });
+}
+
 function setAlmanacDiagramBodyBelowHorizon(bodyKey, belowHorizon) {
     var key = bodyKey === "moon" ? "moon" : "sun";
 
@@ -1935,6 +1958,9 @@ function setAlmanacDiagramBodyBelowHorizon(bodyKey, belowHorizon) {
 
     if (key === "sun" && !document.querySelector(".almanac-diagram-track--sun, .almanac-diagram-track--moon")) {
         toggleAll(".almanac-diagram-track");
+    }
+    if (key === "sun") {
+        setAlmanacDiagramTrackOrder(!belowHorizon);
     }
 }
 
@@ -2211,6 +2237,9 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
     // Keep only dynamic state classes in sync during live updates.
     setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--sun", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
     setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--moon", diagramData && diagramData["moon"] && diagramData["moon"]["altitude"]);
+    if (isFinite(sunAlt)) {
+        setAlmanacDiagramTrackOrder(sunAlt >= 0);
+    }
 
     if (!document.querySelector(".almanac-diagram-track--sun, .almanac-diagram-track--moon")) {
         setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
