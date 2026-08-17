@@ -4282,6 +4282,12 @@ table.celestial td.label {
   object-fit: cover;
 }
 
+/* Preserve the full frame for webcam and other directly linked tab images. */
+.frontpage .homepage-card--radar .belchertown-webcam-panel img,
+.frontpage .homepage-card--radar .belchertown-radar-tab-panel > a > img {
+  object-fit: contain;
+}
+
 .radar_image.radar_image--scaled-frame {
   position: relative;
   overflow: hidden;

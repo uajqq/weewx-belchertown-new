@@ -154,14 +154,27 @@ function belchertown_reload_webcam_images(container) {
     var containers = container ? [container] : belchertown_radar_tab_containers();
 
     containers.forEach(function(containerEl) {
-        containerEl.querySelectorAll("#webcam img").forEach(function(image) {
+        containerEl.querySelectorAll('.belchertown-webcam-panel img, .belchertown-radar-tab-panel[id^="webcam"] img').forEach(function(image) {
             var imageUrl = image.getAttribute("src");
 
             if (!imageUrl) {
                 return;
             }
 
-            image.setAttribute("src", imageUrl.split("?")[0] + "?" + Math.floor(Math.random() * 999999999));
+            var hashIndex = imageUrl.indexOf("#");
+            var fragment = hashIndex === -1 ? "" : imageUrl.slice(hashIndex);
+            var urlWithoutFragment = hashIndex === -1 ? imageUrl : imageUrl.slice(0, hashIndex);
+            var cacheValue = Math.floor(Math.random() * 999999999);
+            var cacheParam = "belchertown_cache=" + cacheValue;
+            var cachePattern = /([?&])belchertown_cache=[^&#]*/;
+
+            if (cachePattern.test(urlWithoutFragment)) {
+                urlWithoutFragment = urlWithoutFragment.replace(cachePattern, "$1" + cacheParam);
+            } else {
+                urlWithoutFragment += (urlWithoutFragment.indexOf("?") === -1 ? "?" : "&") + cacheParam;
+            }
+
+            image.setAttribute("src", urlWithoutFragment + fragment);
         });
     });
 }

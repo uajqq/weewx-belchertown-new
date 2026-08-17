@@ -18,8 +18,11 @@ See other example at https://github.com/poblabs/weewx-belchertown/issues/703 -->
         <div id="radar" class="belchertown-radar-tab-panel is-active">
             <div class="radar_image">$default_radar_html</div>
         </div>
-        <div id="webcam" class="belchertown-radar-tab-panel">
-            <a name="webcam" href="https://your_domain/your_photo.jpg" target="_blank"><img src="https://your_domain/your_photo.jpg"></a>
+        <div id="webcam" class="belchertown-radar-tab-panel belchertown-webcam-panel">
+            <a class="belchertown-webcam-link" name="webcam" href="https://your_domain/your_photo.jpg" target="_blank">
+                <img src="https://your_domain/your_photo.jpg" alt="Station Camera">
+            </a>
+            <div class="belchertown-webcam-caption">Station Camera</div>
         </div>
     </div>
 </div>
@@ -83,6 +86,11 @@ See other example at https://github.com/poblabs/weewx-belchertown/issues/703 -->
     display: block;
 }
 
+.belchertown-radar-tab-panel.belchertown-webcam-panel.is-active {
+    display: flex;
+    flex-direction: column;
+}
+
 .belchertown-radar-tab-panel .radar_image,
 .belchertown-radar-tab-panel iframe,
 .belchertown-radar-tab-panel a,
@@ -95,6 +103,22 @@ See other example at https://github.com/poblabs/weewx-belchertown/issues/703 -->
 .belchertown-radar-tab-panel a,
 .belchertown-radar-tab-panel img {
     display: block;
+}
+
+.belchertown-webcam-panel > .belchertown-webcam-link {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+
+.belchertown-webcam-panel > .belchertown-webcam-link > img {
+    object-fit: contain;
+}
+
+.belchertown-webcam-caption {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    text-align: center;
 }
 
 .tabs-menu > li > a {
