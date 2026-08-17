@@ -708,6 +708,12 @@ def _write_json_file(file_path, payload):
         json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
 
 
+def _write_normalized_forecast_file(file_path, payload):
+    """Validate a normalized forecast before replacing its cache file."""
+    _validate_normalized_forecast(payload)
+    _write_json_file(file_path, payload)
+
+
 def _canonical_forecast_provider(provider):
     """Return the provider key used in normalized forecast payloads."""
     provider_key = str(provider or "").strip().lower()
@@ -1031,13 +1037,20 @@ def _write_current_conditions_from_forecast(forecast_file, current_conditions_fi
     with open(forecast_file, "r", encoding="utf-8") as rf:
         data_cc = json.load(rf)
 
+    _validate_normalized_forecast(data_cc, require_current=True)
+    current = data_cc.get("current")
+    if isinstance(current, list):
+        current = current[0]
+
     cc_out = {
         "timestamp": int(time.time()),
         "provider": data_cc.get("provider"),
         "units": data_cc.get("units"),
+        "schema": "belchertown.current.v1",
         "source": "forecast",
-        "current": [data_cc.get("current", {})],
+        "current": [current],
     }
+    _validate_normalized_current_conditions(cc_out)
     _write_json_file(current_conditions_file, cc_out)
 
 
@@ -2479,8 +2492,10 @@ def _fetch_xweather_aqi_payload(forecast_place, forecast_api_id, forecast_api_se
         f"?format=json&client_id={forecast_api_id}&client_secret={forecast_api_secret}"
     )
     aqi_payload = _http_get_json(aqi_url, headers=HTTP_HEADERS["AERIS_WEATHER"])
-    if isinstance(aqi_payload, dict):
-        aqi_payload.setdefault("provider", "aeris")
+    aqi_response = _aeris_success_response(aqi_payload, "air quality")
+    if not isinstance(aqi_response, list) or not aqi_response:
+        raise ValueError("Xweather air-quality response contained no usable data")
+    aqi_payload.setdefault("provider", "aeris")
     return aqi_payload
 
 
@@ -2493,7 +2508,7 @@ def _merge_aqi_payload_into_forecast_file(forecast_file, aqi_payload):
         forecast_data = json.load(fh)
 
     forecast_data["aqi"] = [aqi_payload]
-    _write_json_file(forecast_file, forecast_data)
+    _write_normalized_forecast_file(forecast_file, forecast_data)
     return True
 
 
@@ -2530,7 +2545,7 @@ def _clear_aqi_payload_from_forecast_file(forecast_file, allowed_providers=None)
                 return False
 
         del forecast_data["aqi"]
-        _write_json_file(forecast_file, forecast_data)
+        _write_normalized_forecast_file(forecast_file, forecast_data)
         return True
     except Exception as e:
         log.debug(f"Cached AQI cleanup skipped: {e}")
@@ -2820,6 +2835,78 @@ def _parse_aeris_json(obj):
         return {}
 
 
+def _aeris_success_response(payload, endpoint):
+    """Return a successful Xweather response or raise a useful failure."""
+    if not isinstance(payload, dict):
+        raise ValueError(f"Xweather {endpoint} response was not a JSON object")
+
+    if payload.get("success") is not True:
+        error = payload.get("error")
+        if isinstance(error, dict):
+            error_code = str(error.get("code") or "unknown_error").strip()
+            error_description = str(
+                error.get("description") or "request was not successful"
+            ).strip()
+            error_detail = f"{error_code}: {error_description}"
+        else:
+            error_detail = "request was not successful"
+        raise ValueError(f"Xweather {endpoint} request failed ({error_detail})")
+
+    return payload.get("response")
+
+
+def _aeris_forecast_periods(payload, endpoint):
+    """Return required Xweather forecast periods from a successful response."""
+    response = _aeris_success_response(payload, endpoint)
+    if not isinstance(response, list) or not response:
+        raise ValueError(f"Xweather {endpoint} response contained no forecast data")
+
+    forecast = response[0]
+    if not isinstance(forecast, dict):
+        raise ValueError(f"Xweather {endpoint} response was malformed")
+
+    periods = forecast.get("periods")
+    if (
+        not isinstance(periods, list)
+        or not periods
+        or not all(isinstance(period, dict) and period for period in periods)
+    ):
+        raise ValueError(f"Xweather {endpoint} response contained no usable periods")
+    return periods
+
+
+def _aeris_current_data(payload, current_conditions):
+    """Return usable Xweather observation or conditions data."""
+    endpoint = {
+        "obs": "observations",
+        "conds": "conditions",
+    }.get(current_conditions, "current conditions")
+    response = _aeris_success_response(payload, endpoint)
+
+    if current_conditions in ("obs", "obs-on-fail-conds"):
+        if isinstance(response, dict):
+            observation = response.get("ob")
+            if isinstance(observation, dict) and observation:
+                return observation
+        if current_conditions == "obs":
+            raise ValueError("Xweather observations response contained no usable observation")
+
+    if current_conditions in ("conds", "obs-on-fail-conds"):
+        if isinstance(response, list) and response and isinstance(response[0], dict):
+            periods = response[0].get("periods")
+            if (
+                isinstance(periods, list)
+                and periods
+                and isinstance(periods[0], dict)
+                and periods[0]
+            ):
+                return periods[0]
+        if current_conditions == "conds":
+            raise ValueError("Xweather conditions response contained no usable period")
+
+    raise ValueError("Xweather current-conditions response contained no usable data")
+
+
 def _warn_legacy_option_names(section_dict, section_name, legacy_mapping):
     """Warn about legacy option names without treating them as aliases."""
 
@@ -2985,6 +3072,145 @@ def _safe_epoch(value):
     if epoch_value is None:
         return None
     return int(epoch_value)
+
+
+_NORMALIZED_FORECAST_SIGNAL_FIELDS = (
+    "summary",
+    "icon",
+    "temperature",
+    "temperatureHigh",
+    "temperatureLow",
+    "apparentTemperature",
+    "apparentTemperatureHigh",
+    "apparentTemperatureLow",
+    "windSpeed",
+    "windGust",
+    "humidity",
+    "pressure",
+    "pressureMSL",
+    "visibility",
+    "dewPoint",
+    "precipIntensity",
+    "rain",
+    "showers",
+    "snowfall",
+    "cloudCover",
+    "weatherCode",
+    "uvIndex",
+)
+
+_NORMALIZED_CURRENT_SIGNAL_FIELDS = _NORMALIZED_FORECAST_SIGNAL_FIELDS + (
+    "windBearing",
+)
+
+
+def _normalized_signal_is_usable(value):
+    """Return True for a real normalized weather value, including numeric zero."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return math.isfinite(value)
+    if isinstance(value, str):
+        return value.strip().lower() not in ("", "unknown", "n/a", "none", "null")
+    return False
+
+
+def _validate_normalized_weather_record(record, fields, context):
+    """Require a timestamp and at least one usable weather value."""
+    if not isinstance(record, dict) or not record:
+        raise ValueError(f"Normalized {context} record was missing or malformed")
+
+    timestamp = _safe_epoch(record.get("time"))
+    if timestamp is None or timestamp <= 0:
+        raise ValueError(f"Normalized {context} record had no valid timestamp")
+
+    if not any(
+        _normalized_signal_is_usable(record.get(field)) for field in fields
+    ):
+        raise ValueError(f"Normalized {context} record contained no usable weather data")
+    return timestamp
+
+
+def _validate_normalized_forecast(payload, require_current=None):
+    """Validate the provider-independent forecast cache contract."""
+    if not isinstance(payload, dict):
+        raise ValueError("Normalized forecast was not a JSON object")
+    if payload.get("schema") != "belchertown.forecast.v1":
+        raise ValueError("Normalized forecast schema was missing or unsupported")
+
+    provider = _canonical_forecast_provider(payload.get("provider"))
+    valid_providers = {
+        _canonical_forecast_provider(item) for item in VALID_FORECAST_PROVIDERS
+    }
+    if provider not in valid_providers:
+        raise ValueError("Normalized forecast provider was missing or unsupported")
+    if payload.get("units") not in VALID_FORECAST_UNITS:
+        raise ValueError("Normalized forecast units were missing or unsupported")
+    if _safe_epoch(payload.get("generated_at")) is None:
+        raise ValueError("Normalized forecast generation time was missing or invalid")
+
+    for collection_name in ("hourly", "threeHourly", "daily"):
+        rows = payload.get(collection_name)
+        if not isinstance(rows, list) or not rows:
+            raise ValueError(
+                f"Normalized forecast contained no usable {collection_name} periods"
+            )
+
+        previous_timestamp = None
+        for row in rows:
+            timestamp = _validate_normalized_weather_record(
+                row,
+                _NORMALIZED_FORECAST_SIGNAL_FIELDS,
+                f"forecast {collection_name}",
+            )
+            if previous_timestamp is not None and timestamp <= previous_timestamp:
+                raise ValueError(
+                    f"Normalized forecast {collection_name} periods were not chronological"
+                )
+            previous_timestamp = timestamp
+
+    if require_current is None:
+        require_current = provider != "aeris"
+
+    current = payload.get("current")
+    if isinstance(current, list):
+        current = current[0] if current else None
+    if require_current or current:
+        _validate_normalized_weather_record(
+            current,
+            _NORMALIZED_CURRENT_SIGNAL_FIELDS,
+            "current conditions",
+        )
+    return payload
+
+
+def _validate_normalized_current_conditions(payload):
+    """Validate the provider-independent current-conditions cache contract."""
+    if not isinstance(payload, dict):
+        raise ValueError("Normalized current conditions were not a JSON object")
+    if payload.get("schema") != "belchertown.current.v1":
+        raise ValueError("Normalized current-conditions schema was missing or unsupported")
+
+    provider = _canonical_forecast_provider(payload.get("provider"))
+    valid_providers = {
+        _canonical_forecast_provider(item) for item in VALID_FORECAST_PROVIDERS
+    }
+    if provider not in valid_providers:
+        raise ValueError("Normalized current-conditions provider was missing or unsupported")
+    if payload.get("units") not in VALID_FORECAST_UNITS:
+        raise ValueError("Normalized current-conditions units were missing or unsupported")
+
+    current = payload.get("current")
+    if not isinstance(current, list) or not current:
+        raise ValueError("Normalized current conditions contained no current record")
+    _validate_normalized_weather_record(
+        current[0],
+        _NORMALIZED_CURRENT_SIGNAL_FIELDS,
+        "current conditions",
+    )
+    return payload
 
 
 def _local_hour_is_divisible(ts, divisor):
@@ -3227,9 +3453,16 @@ def _aeris_period_to_common(period, interval, forecast_units, label_dict, icon_m
 
 def _aeris_alerts_to_common(alerts_payload, label_dict):
     """Normalize Aeris/Xweather alert payload to the common alert schema."""
-    alerts_response = (
-        ((alerts_payload or {}).get("alerts") or [{}])[0].get("response") or []
-    )
+    alert_payloads = (alerts_payload or {}).get("alerts")
+    if not alert_payloads:
+        return []
+    if not isinstance(alert_payloads, list) or not isinstance(alert_payloads[0], dict):
+        raise ValueError("Xweather alerts response was malformed")
+
+    alerts_response = _aeris_success_response(alert_payloads[0], "alerts")
+    if not isinstance(alerts_response, list):
+        raise ValueError("Xweather alerts response was malformed")
+
     output = []
     for alert in alerts_response:
         details = (alert or {}).get("details") or {}
@@ -3260,14 +3493,14 @@ def _aeris_transform_to_belch(aeris_payload, forecast_units, label_dict, icon_ma
     aeris_payload = aeris_payload or {}
 
     def _periods(interval):
-        try:
-            return (
-                aeris_payload.get(interval, [{}])[0]
-                .get("response", [{}])[0]
-                .get("periods", [])
-            )
-        except Exception:
-            return []
+        endpoint_payloads = aeris_payload.get(interval)
+        if (
+            not isinstance(endpoint_payloads, list)
+            or not endpoint_payloads
+            or not isinstance(endpoint_payloads[0], dict)
+        ):
+            raise ValueError(f"Xweather {interval} response was missing")
+        return _aeris_forecast_periods(endpoint_payloads[0], interval)
 
     hourly = _slice_from_current_period(
         [
@@ -3293,6 +3526,9 @@ def _aeris_transform_to_belch(aeris_payload, forecast_units, label_dict, icon_ma
         for p in _periods("forecast_24hr")
     ]
 
+    if not hourly or not three_hourly or not daily:
+        raise ValueError("Xweather forecast response contained no current forecast periods")
+
     return {
         "current": [],
         "hourly": hourly,
@@ -3310,20 +3546,15 @@ def _aeris_transform_to_belch(aeris_payload, forecast_units, label_dict, icon_ma
 def _aeris_current_to_common(current_payload, current_conditions, forecast_units, label_dict, icon_map):
     """Map Aeris/Xweather current-condition response to the common current schema."""
     current_payload = current_payload or {}
-    response = ((current_payload.get("current") or [{}])[0]).get("response")
-    current_data = None
+    current_payloads = current_payload.get("current")
+    if isinstance(current_payloads, list) and current_payloads:
+        endpoint_payload = current_payloads[0]
+    elif "success" in current_payload:
+        endpoint_payload = current_payload
+    else:
+        raise ValueError("Xweather current-conditions response was missing")
 
-    if current_conditions == "obs" and isinstance(response, dict):
-        current_data = response.get("ob")
-    elif current_conditions == "conds" and isinstance(response, list):
-        current_data = (((response[0] or {}).get("periods") or [{}])[0] if response else None)
-    elif current_conditions == "obs-on-fail-conds":
-        if isinstance(response, dict):
-            current_data = response.get("ob")
-        if current_data is None and isinstance(response, list) and response:
-            current_data = ((response[0] or {}).get("periods") or [{}])[0]
-
-    current_data = current_data or {}
+    current_data = _aeris_current_data(endpoint_payload, current_conditions)
     visibility = (
         _safe_float(current_data.get("visibilityKM"))
         if forecast_units in ("si", "ca")
@@ -6362,7 +6593,9 @@ class getData(SearchList):
                                     pw_raw,
                                     forecast_units,
                                 )
-                                _write_json_file(forecast_file, normalized)
+                                _write_normalized_forecast_file(
+                                    forecast_file, normalized
+                                )
                                 _clear_provider_failure("pirateweather")
                                 log.debug(
                                     f"New Pirate Weather forecast cached to {forecast_file}"
@@ -6374,7 +6607,7 @@ class getData(SearchList):
                                 )
                             except ValueError as e:
                                 _record_provider_failure("pirateweather")
-                                log.error(f"Pirate Weather missing config: {e}")
+                                log.error(f"Pirate Weather update rejected: {e}")
                             except Exception as e:
                                 _record_provider_failure("pirateweather")
                                 log.error(f"Pirate Weather update failed: {e}")
@@ -6511,7 +6744,9 @@ class getData(SearchList):
                                     alerts_payload=alerts_data,
                                     forecast_units=forecast_units,
                                 )
-                                _write_json_file(forecast_file, normalized)
+                                _write_normalized_forecast_file(
+                                    forecast_file, normalized
+                                )
                                 _clear_provider_failure("nws")
                                 log.info(f"New NWS forecast cached to {forecast_file}")
                             except Exception as e:
@@ -6646,7 +6881,9 @@ class getData(SearchList):
                                 )
                                 if alert_provider:
                                     normalized["alert_provider"] = alert_provider
-                                _write_json_file(forecast_file, normalized)
+                                _write_normalized_forecast_file(
+                                    forecast_file, normalized
+                                )
                                 _clear_provider_failure("open-meteo")
                                 log.info(f"New Open-Meteo forecast cached to {forecast_file}")
                             except Exception as e:
@@ -6793,16 +7030,18 @@ class getData(SearchList):
                                     dev_payload = _parse_aeris_json(forecast_file_result)
                                     if dev_payload.get("schema") == "belchertown.forecast.v1":
                                         dev_payload["units"] = forecast_units
-                                        forecast_file_result = json.dumps(dev_payload)
+                                        normalized_forecast = dev_payload
                                     else:
-                                        forecast_file_result = json.dumps(
-                                            _aeris_transform_to_belch(
-                                                dev_payload,
-                                                forecast_units,
-                                                label_dict,
-                                                aeris_icon_map,
-                                            )
+                                        normalized_forecast = _aeris_transform_to_belch(
+                                            dev_payload,
+                                            forecast_units,
+                                            label_dict,
+                                            aeris_icon_map,
                                         )
+                                    _validate_normalized_forecast(normalized_forecast)
+                                    forecast_file_result = json.dumps(
+                                        normalized_forecast
+                                    )
                                 else:
                                     # 24hr forecast (was Forecast)
                                     req = Request(
@@ -6815,7 +7054,10 @@ class getData(SearchList):
                                     ) as response:
                                         forecast_24hr_page = response.read()
                                     if belchertown_debug > 1:
-                                        log.info(f"Forecast 24hr URL: {forecast_24hr_url}")
+                                        log.info(
+                                            "Xweather 24-hour forecast requested for %s",
+                                            forecast_place,
+                                        )
                                     # 3hr forecast
                                     req = Request(
                                         forecast_3hr_url,
@@ -6827,7 +7069,10 @@ class getData(SearchList):
                                     ) as response:
                                         forecast_3hr_page = response.read()
                                     if belchertown_debug > 1:
-                                        log.info(f"Forecast 3hr URL: {forecast_3hr_url}")
+                                        log.info(
+                                            "Xweather 3-hour forecast requested for %s",
+                                            forecast_place,
+                                        )
                                     # 1hr forecast
                                     req = Request(
                                         forecast_1hr_url,
@@ -6839,7 +7084,10 @@ class getData(SearchList):
                                     ) as response:
                                         forecast_1hr_page = response.read()
                                     if belchertown_debug > 1:
-                                        log.info(f"Forecast 1hr URL: {forecast_1hr_url}")
+                                        log.info(
+                                            "Xweather 1-hour forecast requested for %s",
+                                            forecast_place,
+                                        )
                                     if extras_dict["forecast_alert_enabled"] == "1":
                                         # Alerts
                                         req = Request(
@@ -6852,7 +7100,10 @@ class getData(SearchList):
                                         ) as response:
                                             alerts_page = response.read()
                                         if belchertown_debug > 1:
-                                            log.info(f"Alerts URL: {forecast_alerts_url}")
+                                            log.info(
+                                                "Xweather alerts requested for %s",
+                                                forecast_place,
+                                            )
 
                                     # Combine all into 1 file - simplified parsing helper
 
@@ -6871,13 +7122,15 @@ class getData(SearchList):
                                     }
                                     if extras_dict.get("forecast_alert_enabled") == "1":
                                         data["alerts"] = [_parse_aeris_json(alerts_page)]
+                                    normalized_forecast = _aeris_transform_to_belch(
+                                        data,
+                                        forecast_units,
+                                        label_dict,
+                                        aeris_icon_map,
+                                    )
+                                    _validate_normalized_forecast(normalized_forecast)
                                     forecast_file_result = json.dumps(
-                                        _aeris_transform_to_belch(
-                                            data,
-                                            forecast_units,
-                                            label_dict,
-                                            aeris_icon_map,
-                                        )
+                                        normalized_forecast
                                     )
                             except Exception as e:
                                 if "forecast_dev_file" not in extras_dict:
@@ -6911,137 +7164,153 @@ class getData(SearchList):
 
                     # File is stale, download a new copy
                     if current_conditions_is_stale:
-                        forecast_file_result = None
-                        try:
-                            if "current_conditions_dev_file" in extras_dict:
-                                # Hidden option to use a pre-downloaded forecast file
-                                # rather than using API calls for no reason
-                                dev_forecast_file = extras_dict[
-                                    "current_conditions_dev_file"
-                                ]
-                                req = Request(
-                                    dev_forecast_file,
-                                    None,
-                                    HTTP_HEADERS["AERIS_WEATHER"],
-                                )
-                                with urlopen(
-                                    req, timeout=15
-                                ) as response:
-                                    forecast_file_result = response.read()
-                                current_payload = _parse_aeris_json(forecast_file_result)
-                                if current_payload.get("schema") == "belchertown.current.v1":
-                                    current_payload["units"] = forecast_units
-                                    forecast_file_result = json.dumps(current_payload)
-                                else:
-                                    forecast_file_result = json.dumps(
-                                        _aeris_current_to_common(
+                        current_conditions_result = None
+                        current_conditions_retry_suppressed = False
+                        retry_delay = 0
+                        if "current_conditions_dev_file" not in extras_dict:
+                            retry_delay = _provider_retry_delay(
+                                forecast_provider,
+                                failure_kind="current_conditions",
+                            )
+                        if retry_delay:
+                            current_conditions_retry_suppressed = True
+                            log.debug(
+                                "Xweather current-conditions update skipped; previous "
+                                "failure cooldown has %s seconds remaining.",
+                                retry_delay,
+                            )
+                        else:
+                            try:
+                                if "current_conditions_dev_file" in extras_dict:
+                                    # Hidden option to use pre-downloaded current data.
+                                    dev_forecast_file = extras_dict[
+                                        "current_conditions_dev_file"
+                                    ]
+                                    req = Request(
+                                        dev_forecast_file,
+                                        None,
+                                        HTTP_HEADERS["AERIS_WEATHER"],
+                                    )
+                                    with urlopen(req, timeout=15) as response:
+                                        dev_current_page = response.read()
+                                    current_payload = _parse_aeris_json(dev_current_page)
+                                    if (
+                                        current_payload.get("schema")
+                                        == "belchertown.current.v1"
+                                    ):
+                                        current_payload["units"] = forecast_units
+                                        normalized_current = current_payload
+                                    else:
+                                        normalized_current = _aeris_current_to_common(
                                             current_payload,
                                             current_conditions,
                                             forecast_units,
                                             label_dict,
                                             aeris_icon_map,
                                         )
+                                    _validate_normalized_current_conditions(
+                                        normalized_current
                                     )
-                            else:
-                                # Current conditions
-                                if current_conditions == "obs":
-                                    req = Request(
-                                        current_obs_url,
-                                        None,
-                                        HTTP_HEADERS["AERIS_WEATHER"],
+                                    current_conditions_result = json.dumps(
+                                        normalized_current
                                     )
-                                    with urlopen(
-                                        req, timeout=15
-                                    ) as response:
-                                        current_page = response.read()
-                                    if belchertown_debug > 1:
-                                        log.info(f"Obs URL: {current_obs_url}")
-                                elif current_conditions == "conds":
-                                    req = Request(
-                                        current_conds_url,
-                                        None,
-                                        HTTP_HEADERS["AERIS_WEATHER"],
-                                    )
-                                    with urlopen(
-                                        req, timeout=15
-                                    ) as response:
-                                        current_page = response.read()
-                                    if belchertown_debug > 1:
-                                        log.info(f"Conditions URL: {current_conds_url}")
-                                else:  # current_conditions == "obs-on-fail-conds":
-                                    req = Request(
-                                        current_obs_url,
-                                        None,
-                                        HTTP_HEADERS["AERIS_WEATHER"],
-                                    )
-                                    with urlopen(
-                                        req, timeout=15
-                                    ) as response:
-                                        current_page = response.read()
-                                    try:  # Obs okay?
-                                        obs_payload = _parse_aeris_json(current_page)
-                                        if not (
-                                            isinstance(obs_payload.get("response"), dict)
-                                            and obs_payload["response"].get("ob")
-                                        ):
-                                            raise ValueError("No usable observation data")
-                                    except Exception:  # Nope, try Conds
-                                        if belchertown_debug > 0:
-                                            log.info("No good Obs data, using Conds")
+                                else:
+                                    # Current conditions
+                                    if current_conditions == "obs":
+                                        req = Request(
+                                            current_obs_url,
+                                            None,
+                                            HTTP_HEADERS["AERIS_WEATHER"],
+                                        )
+                                        with urlopen(req, timeout=15) as response:
+                                            current_page = response.read()
+                                        if belchertown_debug > 1:
+                                            log.info(
+                                                "Xweather observations requested for %s",
+                                                forecast_place,
+                                            )
+                                    elif current_conditions == "conds":
                                         req = Request(
                                             current_conds_url,
                                             None,
                                             HTTP_HEADERS["AERIS_WEATHER"],
                                         )
-                                        with urlopen(
-                                            req, timeout=15
-                                        ) as response:
+                                        with urlopen(req, timeout=15) as response:
                                             current_page = response.read()
-                                # Stash in a file
-                                data = {
-                                    "timestamp": int(time.time()),
-                                    "current": [_parse_aeris_json(current_page)],
-                                }
-                                forecast_file_result = json.dumps(
-                                    _aeris_current_to_common(
+                                        if belchertown_debug > 1:
+                                            log.info(
+                                                "Xweather conditions requested for %s",
+                                                forecast_place,
+                                            )
+                                    else:  # obs-on-fail-conds
+                                        req = Request(
+                                            current_obs_url,
+                                            None,
+                                            HTTP_HEADERS["AERIS_WEATHER"],
+                                        )
+                                        with urlopen(req, timeout=15) as response:
+                                            current_page = response.read()
+                                        try:
+                                            obs_payload = _parse_aeris_json(current_page)
+                                            _aeris_current_data(obs_payload, "obs")
+                                        except Exception as obs_error:
+                                            if belchertown_debug > 0:
+                                                log.info(
+                                                    "No usable Xweather observation; "
+                                                    "using conditions. Reason: %s",
+                                                    obs_error,
+                                                )
+                                            req = Request(
+                                                current_conds_url,
+                                                None,
+                                                HTTP_HEADERS["AERIS_WEATHER"],
+                                            )
+                                            with urlopen(req, timeout=15) as response:
+                                                current_page = response.read()
+
+                                    data = {
+                                        "timestamp": int(time.time()),
+                                        "current": [_parse_aeris_json(current_page)],
+                                    }
+                                    normalized_current = _aeris_current_to_common(
                                         data,
                                         current_conditions,
                                         forecast_units,
                                         label_dict,
                                         aeris_icon_map,
                                     )
-                                )
-                        except Exception as e:
-                            if current_conditions == "obs":
+                                    _validate_normalized_current_conditions(
+                                        normalized_current
+                                    )
+                                    current_conditions_result = json.dumps(
+                                        normalized_current
+                                    )
+                            except Exception as e:
+                                if "current_conditions_dev_file" not in extras_dict:
+                                    _record_provider_failure(
+                                        forecast_provider,
+                                        failure_kind="current_conditions",
+                                    )
                                 log.error(
-                                    "Error downloading forecast Current Conditions data. "
-                                    "Check the URL in your configuration and try again. "
-                                    f"You are trying to use URL: {current_obs_url}, "
-                                    f"and the error is: {e}"
-                                )
-                            elif current_conditions == "conds":
-                                log.error(
-                                    "Error downloading forecast Current Conditions data. "
-                                    "Check the URL in your configuration and try again. "
-                                    f"You are trying to use URL: {current_conds_url}, "
-                                    f"and the error is: {e}"
-                                )
-                            elif current_conditions == "obs-on-fail-conds":
-                                log.error(
-                                    "Error downloading forecast Current Conditions data. "
-                                    "Check the URL in your configuration and try again. "
-                                    f"You are trying to use URL: {current_conds_url}, "
-                                    f"and the error is: {e}"
+                                    "Xweather current-conditions update failed for %s "
+                                    "at %s: %s",
+                                    current_conditions,
+                                    forecast_place,
+                                    e,
                                 )
 
                         # Save forecast Current Conditions data to file. w+ creates the file if it doesn't
                         # exist, and truncates the file and re-writes it everytime
-                        if forecast_file_result is not None:
+                        if current_conditions_result is not None:
                             try:
                                 with open(current_conditions_file, "wb+") as file:
-                                    file.write(forecast_file_result.encode("utf-8"))
+                                    file.write(current_conditions_result.encode("utf-8"))
                                     log.info(
                                         f"New forecast Current Conditions file downloaded to {current_conditions_file}"
+                                    )
+                                    _clear_provider_failure(
+                                        forecast_provider,
+                                        failure_kind="current_conditions",
                                     )
                             except FileNotFoundError:
                                 log.info(
@@ -7056,7 +7325,7 @@ class getData(SearchList):
                                 )
                             except Exception as e:
                                 log.error(f"Current Conditions error: {e}")
-                        else:
+                        elif not current_conditions_retry_suppressed:
                             log.info(
                                 "Current conditions download failed; keeping existing current conditions file if present."
                             )
