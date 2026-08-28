@@ -7664,6 +7664,21 @@ class getData(SearchList):
 
                 # Empty field for the JSON "current" output
                 obs_output = ""
+            elif obs == "ET":
+                # ET shows daily sum instead of the tiny per-interval instantaneous value
+                obs_binder = weewx.tags.ObservationBinder(
+                    "ET",
+                    archiveDaySpan(current_stamp),
+                    db_lookup,
+                    None,
+                    "day",
+                    self.generator.formatter,
+                    self.generator.converter,
+                )
+                obs_output = getattr(obs_binder, "sum")
+                obs_meta = _unit_switch_station_observation_meta("ET", obs_output)
+                if obs_meta:
+                    station_obs_unit_json["ET"] = obs_meta
             elif obs == "cloud_cover":
                 obs_output = cloud_cover
                 obs_source = EXTERNAL_STATION_OBSERVATION_SOURCES.get(obs)
