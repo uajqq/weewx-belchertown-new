@@ -907,11 +907,18 @@ function show_forcast_alert(data) {
 
 function forecast_aqi_translate(data) {
     if (data === "good") data = "$obs.label.aqi_good";
+    else if (data === "low") data = "$obs.label.aqi_low";
+    else if (data === "fair") data = "$obs.label.aqi_fair";
     else if (data === "moderate") data = "$obs.label.aqi_moderate";
+    else if (data === "high") data = "$obs.label.aqi_high";
     else if (data === "usg") data = "$obs.label.aqi_usg";
     else if (data === "unhealthy") data = "$obs.label.aqi_unhealthy";
+    else if (data === "poor") data = "$obs.label.aqi_poor";
     else if (data === "very unhealthy") data = "$obs.label.aqi_very_unhealthy";
+    else if (data === "very poor") data = "$obs.label.aqi_very_poor";
     else if (data === "hazardous") data = "$obs.label.aqi_hazardous";
+    else if (data === "extremely poor") data = "$obs.label.aqi_extremely_poor";
+    else if (data === "very high") data = "$obs.label.aqi_very_high";
     else data = "$obs.label.aqi_unknown";
 
     return forecast_label_text(data);
