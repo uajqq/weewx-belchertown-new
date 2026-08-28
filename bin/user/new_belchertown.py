@@ -7670,7 +7670,7 @@ class getData(SearchList):
                     "ET",
                     archiveDaySpan(current_stamp),
                     db_lookup,
-                    None,
+                    obs_binding,
                     "day",
                     self.generator.formatter,
                     self.generator.converter,
@@ -7678,7 +7678,10 @@ class getData(SearchList):
                 obs_output = getattr(obs_binder, "sum")
                 obs_meta = _unit_switch_station_observation_meta("ET", obs_output)
                 if obs_meta:
-                    station_obs_unit_json["ET"] = obs_meta
+                    # Keep this distinct from the per-archive ET MQTT field.
+                    obs_meta["selector"] = ".dayET"
+                    obs_meta["mqtt_keys"] = ["dayET_mm"]
+                    station_obs_unit_json["dayET"] = obs_meta
             elif obs == "cloud_cover":
                 obs_output = cloud_cover
                 obs_source = EXTERNAL_STATION_OBSERVATION_SOURCES.get(obs)
@@ -7706,21 +7709,29 @@ class getData(SearchList):
                 obs_output = "N/A"
                 obs_output_str = "N/A"
 
-            # Build the json "current" array for weewx_data.json for JavaScript
-            if obs not in station_obs_json:
-                station_obs_json[obs] = obs_output_str
+            # Build the json "current" array for weewx_data.json for JavaScript.
+            # ET is reported as a daily total in this table, so do not reuse the
+            # per-archive ET key that MQTT publishes.
+            station_obs_key = "dayET" if obs == "ET" else obs
+            if station_obs_key not in station_obs_json:
+                station_obs_json[station_obs_key] = obs_output_str
             if obs_source is not None and obs not in station_obs_source_json:
                 station_obs_source_json[obs] = dict(obs_source)
 
             # Build the HTML for the front page (accumulate into list, join later)
+            station_obs_label = (
+                "dayET" if obs == "ET" and "dayET" in label_dict else obs
+            )
             row_parts = [
-                f"<tr data-observation='{html.escape(obs, quote=True)}'>",
-                f"<td class='station-observations-label'>{label_dict[obs]}</td>",
+                f"<tr data-observation='{html.escape(station_obs_key, quote=True)}'>",
+                f"<td class='station-observations-label'>{label_dict[station_obs_label]}</td>",
                 "<td>",
             ]
             if obs == "rainWithRainRate":
                 # Add special rain + rainRate stacked value
                 row_parts.append(obs_rain_output)
+            elif obs == "ET":
+                row_parts.append(f"<span class='dayET'>{obs_output_str}</span>")
             elif obs == "cloud_cover" and obs_output_str not in ("", "N/A"):
                 cloud_cover_unit_label = skin_dict["Units"]["Labels"].get(
                     "percent", "%"
@@ -7830,7 +7841,7 @@ class getData(SearchList):
             "percent", "%"
         )
         for obs, obs_meta in station_obs_unit_json.items():
-            obs_name = "rain" if obs == "dayRain" else obs
+            obs_name = {"dayRain": "rain", "dayET": "ET"}.get(obs, obs)
             if "decimals" not in obs_meta and obs_name in all_obs_rounding_json:
                 try:
                     obs_meta["decimals"] = int(all_obs_rounding_json[obs_name])

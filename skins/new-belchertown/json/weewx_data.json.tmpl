@@ -249,8 +249,11 @@
         #if $records_has_radiation
         "solar_radiation": "$current.radiation",
         #end if
-        #if $day.ET.has_data and $day.ET.sum.raw > 0.0
+        ## et is the current archive interval; dayET is today's accumulated ET.
+        #if $day.ET.has_data
         "et": "$current.ET",
+        "dayET": "$day.ET.sum",
+        "dayET_raw": $json.dumps($day.ET.sum.mm.raw),
         #end if
         "rainRate": "$current.rainRate",
         "rainRate_raw": $json.dumps($current.rainRate.mm_per_hour.raw),
