@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Charts: multiple yAxis reference lines, with per-line style
+
+The single threshold line added in the 2.1 beta (#228) can now be a set of
+numbered lines, each styled independently. The keys follow the same numbering
+as the gauge `colorX` options: `yAxis_plotLine_value` is line 1,
+`yAxis_plotLine2_value` is line 2, and so on (up to 20). Each line takes its
+own `_label`, `_color`, `_dashStyle`, `_width`, `_zIndex`, `_labelAlign`
+(`left`/`center`/`right`) and `_labelVerticalAlign` (`top`/`middle`/`bottom`):
+
+```
+[[[lakeSurfaceLevel]]]
+    yAxis_plotLine_value               = 322
+    yAxis_plotLine_label               = Conservation pool
+    yAxis_plotLine_color               = "#71bc3c"
+    yAxis_plotLine2_value              = 340
+    yAxis_plotLine2_label              = Top of dam
+    yAxis_plotLine2_color              = "#f7a35c"
+    yAxis_plotLine2_dashStyle          = Dash
+    yAxis_plotLine2_width              = 3
+    yAxis_plotLine2_labelVerticalAlign = bottom
+```
+
+Only the value, label and colour were configurable before, with dash and
+width hard-coded; `_labelVerticalAlign` keeps labels legible when two lines
+sit close together. Existing single-line configs render exactly as before.
+Thanks to @ThomasForeman1986 for the original single-line feature.
+
 ## 1.8 — May 17, 2026
 
 Lots of new options in this release, including a few potentially breaking changes. Read the notes carefully.

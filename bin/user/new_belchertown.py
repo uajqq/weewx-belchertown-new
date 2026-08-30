@@ -3279,6 +3279,9 @@ CHART_TEXT_SERIES_OPTIONS = frozenset(
         "yAxis_plotLine_label",
     )
 )
+# Numbered reference-line labels (yAxis_plotLine_label, yAxis_plotLine2_label,
+# ...) get the same ${label_key} resolution as the keys in the frozenset above.
+CHART_PLOTLINE_LABEL_RE = re.compile(r"^yAxis_plotLine\d*_label$")
 _UNRESOLVED_CHART_LABEL_TOKENS = set()
 
 
@@ -9425,7 +9428,10 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     for highcharts_config, highcharts_value in self.chart_dict[
                         chart_group
                     ][plotname][line_name].items():
-                        if highcharts_config in CHART_TEXT_SERIES_OPTIONS:
+                        if (
+                            highcharts_config in CHART_TEXT_SERIES_OPTIONS
+                            or CHART_PLOTLINE_LABEL_RE.match(highcharts_config)
+                        ):
                             highcharts_value = _resolve_chart_label_text(
                                 highcharts_value,
                                 d,
