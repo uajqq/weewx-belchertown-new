@@ -2954,8 +2954,12 @@ def _extract_aqi_globals_from_payload(aqi_payload, label_dict):
 
         category = _localized_aqi_category(period.get("category"), label_dict)
         place = (first_response.get("place") or {}).get("name", "")
+        if aqi_payload.get("provider") == "local-sensor":
+            place = label_dict["local_sensor"]
+        elif place:
+            place = place.title()
         point_time = period.get("timestamp", "")
-        return (aqi_value, category, place.title() if place else "", point_time)
+        return (aqi_value, category, place, point_time)
     except Exception:
         return ("No Data", label_dict["aqi_unknown"], "", "")
 

@@ -361,6 +361,7 @@ function forecast_provider_label(provider) {
     if (providerKey === "pirateweather") return "Pirate Weather";
     if (providerKey === "xweather") return "Xweather";
     if (providerKey === "aeris") return "Aeris/Xweather";
+    if (providerKey === "local-sensor") return forecast_label_text("$obs.label.local_sensor");
     return provider ? String(provider) : forecast_label_text("$obs.label.forecast_data");
 }
 
@@ -488,7 +489,9 @@ function forecast_register_external_observation(observationKey, data, options) {
     const label = forecast_observation_label(row, observationKey);
     const metadata = options["metadata"] || {};
     const sourceProvider = options["sourceProvider"] || metadata["provider"];
-    const source = forecast_payload_source(data, sourceProvider);
+    const source = sourceProvider
+        ? forecast_provider_label(sourceProvider)
+        : forecast_payload_source(data, "");
     let observationEpoch = forecast_number(options["epoch"] || metadata["epoch"]);
     if (observationEpoch === null) {
         observationEpoch = forecast_current_observation_epoch(data);
@@ -1434,7 +1437,9 @@ function forecast_update_aqi(data) {
                 el.textContent = aqiCategory;
             });
             if ("$Extras.aqi_location_enabled" === "1") {
-                const aqiPlace = data["aqi"][0]["response"][0]["place"]["name"] || "";
+                const aqiPlace = aqiPayload["provider"] === "local-sensor"
+                    ? forecast_label_text("$obs.label.local_sensor")
+                    : data["aqi"][0]["response"][0]["place"]["name"] || "";
                 document.querySelectorAll(".aqi_location_outer").forEach(function(el) {
                     el.innerHTML = aqiPlace ? "<br>" + aqiPlace : "";
                     el.style.textTransform = "capitalize";
