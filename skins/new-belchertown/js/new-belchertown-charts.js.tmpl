@@ -1367,7 +1367,9 @@ function showChart(json_file, prepend_renderTo = false) {
                         s[plKey + "_labelVerticalAlign"]
                     ).toLowerCase();
                     var plLabelOpts = {
-                        text: plUnquote(s[plKey + "_label"]) || null,
+                        // ConfigObj already removes config quotes; preserve
+                        // punctuation in literal and translated label text.
+                        text: s[plKey + "_label"] || null,
                         align: plLabelAlign,
                         x: plEdgeOffset[plLabelAlign],
                         style: { color: plColor, fontWeight: "bold" }
