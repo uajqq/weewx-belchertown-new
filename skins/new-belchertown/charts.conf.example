@@ -14,6 +14,34 @@
 # Under the chart are the observation names from the WeeWX database. Any item within your database "archive type" can be charted. For a list of "archive types" refer to this chart. http://weewx.com/docs/customizing.htm#archive_types
 # Each observation can be customized with built-in Highcharts "series" options. Popular ones are color, name and zIndex. For a list of Highcharts Series options refer to https://api.highcharts.com/highcharts/series
 #
+# Reference lines: draw one or more horizontal lines on an observation's yAxis
+# (freezing mark, flood stage, record highs, reservoir pool elevations). Lines
+# are numbered like the gauge colorX options -- yAxis_plotLine_value is line 1,
+# yAxis_plotLine2_value is line 2, and so on:
+#   [[[outTemp]]]
+#       yAxis_plotLine_value = 32
+#       yAxis_plotLine_label = Freezing
+#   [[[lakeSurfaceLevel]]]
+#       yAxis_plotLine_value = 322
+#       yAxis_plotLine_label = Conservation pool
+#       yAxis_plotLine_color = "#71bc3c"
+#       yAxis_plotLine2_value = 333
+#       yAxis_plotLine2_label = Flood pool
+#       yAxis_plotLine2_color = "#f7a35c"
+#       yAxis_plotLine2_dashStyle = Dash
+#       yAxis_plotLine3_value = 340
+#       yAxis_plotLine3_label = Top of dam
+#       yAxis_plotLine3_color = "#dc322f"
+#       yAxis_plotLine3_width = 3
+#       yAxis_plotLine3_labelVerticalAlign = bottom
+# Per-line keys: _value (required), _label, _color, _dashStyle, _width,
+# _zIndex, _labelAlign (left/center/right), _labelVerticalAlign
+# (top/middle/bottom -- useful when two lines sit close together). Defaults:
+# _color red, _dashStyle ShortDash, _width 2, _zIndex 5, _labelAlign right,
+# no label. _dashStyle takes any Highcharts dash style (Solid, Dash,
+# LongDashDot, ...). Quote colors so charts.conf does not read the leading #
+# as a comment. Labels accept ${label_key} tokens like other chart text.
+#
 # Chart text values can reference [Labels][Generic] entries with ${label_key}.
 # Use $$ for a literal dollar sign. This lets one shared charts.conf use
 # different chart titles, buttons, subtitles, series names, y-axis labels,

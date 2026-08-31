@@ -1323,23 +1323,80 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.yAxis[this_yAxis].softMin = axisOptionNumber(s, "yAxis_softMin");
                 options.yAxis[this_yAxis].softMax = axisOptionNumber(s, "yAxis_softMax");
 
-                // Optional horizontal threshold line on this series' yAxis
-                // (e.g. a river flood level or a frost line).
-                if (isFiniteNumber(s.yAxis_plotLine_value)) {
-                    var plotLineColor = s.yAxis_plotLine_color || "#dc322f";
-                    options.yAxis[this_yAxis].plotLines = options.yAxis[this_yAxis].plotLines || [];
-                    options.yAxis[this_yAxis].plotLines.push({
-                        value: parseFloat(s.yAxis_plotLine_value),
-                        color: plotLineColor,
-                        dashStyle: "ShortDash",
-                        width: 2,
-                        zIndex: 5,
-                        label: {
-                            text: s.yAxis_plotLine_label || null,
-                            align: "right",
-                            x: -8,
-                            style: { color: plotLineColor, fontWeight: "bold" }
+                // Horizontal reference line(s) on this series' yAxis -- a
+                // freezing mark, flood stage, record highs, reservoir pool
+                // elevations. Lines are numbered like the gauge colorX options:
+                // yAxis_plotLine_value is line 1, yAxis_plotLine2_value is line
+                // 2, and so on (max 20). Each line takes its own _label /
+                // _color / _dashStyle / _width / _zIndex / _labelAlign /
+                // _labelVerticalAlign with the matching number; numbering stops
+                // at the first missing _value.
+                var plUnquote = function (v) {
+                    // Strip surrounding quotes charts.conf string quoting can
+                    // leave behind (matches the colorX handling below).
+                    return v === undefined || v === null
+                        ? ""
+                        : String(v).replace(/^["']|["']$/g, "");
+                };
+                var plEdgeOffset = { left: 8, center: 0, right: -8 };
+                for (var pl = 1; pl <= 20; pl++) {
+                    var plKey = "yAxis_plotLine" + (pl === 1 ? "" : pl);
+                    if (!isFiniteNumber(s[plKey + "_value"])) {
+                        break;
+                    }
+                    var plColor = plUnquote(s[plKey + "_color"]) || "#dc322f";
+                    var plDashStyle =
+                        plUnquote(s[plKey + "_dashStyle"]) || "ShortDash";
+                    var plWidth = isFiniteNumber(s[plKey + "_width"])
+                        ? parseFloat(s[plKey + "_width"])
+                        : 2;
+                    var plZIndex = isFiniteNumber(s[plKey + "_zIndex"])
+                        ? parseFloat(s[plKey + "_zIndex"])
+                        : 5;
+                    var plLabelAlign = plUnquote(
+                        s[plKey + "_labelAlign"]
+                    ).toLowerCase();
+                    if (
+                        plLabelAlign !== "left" &&
+                        plLabelAlign !== "center" &&
+                        plLabelAlign !== "right"
+                    ) {
+                        plLabelAlign = "right";
+                    }
+                    var plLabelVAlign = plUnquote(
+                        s[plKey + "_labelVerticalAlign"]
+                    ).toLowerCase();
+                    var plLabelOpts = {
+                        // ConfigObj already removes config quotes; preserve
+                        // punctuation in literal and translated label text.
+                        text: s[plKey + "_label"] || null,
+                        align: plLabelAlign,
+                        x: plEdgeOffset[plLabelAlign],
+                        style: { color: plColor, fontWeight: "bold" }
+                    };
+                    if (
+                        plLabelVAlign === "top" ||
+                        plLabelVAlign === "middle" ||
+                        plLabelVAlign === "bottom"
+                    ) {
+                        plLabelOpts.verticalAlign = plLabelVAlign;
+                        // Highcharts anchors the label at the line; nudge it
+                        // clear when it sits on or below the line.
+                        if (plLabelVAlign === "middle") {
+                            plLabelOpts.y = 4;
+                        } else if (plLabelVAlign === "bottom") {
+                            plLabelOpts.y = 14;
                         }
+                    }
+                    options.yAxis[this_yAxis].plotLines =
+                        options.yAxis[this_yAxis].plotLines || [];
+                    options.yAxis[this_yAxis].plotLines.push({
+                        value: parseFloat(s[plKey + "_value"]),
+                        color: plColor,
+                        dashStyle: plDashStyle,
+                        width: plWidth,
+                        zIndex: plZIndex,
+                        label: plLabelOpts
                     });
                 }
 
