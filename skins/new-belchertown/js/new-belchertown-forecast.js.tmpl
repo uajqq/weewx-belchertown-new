@@ -461,8 +461,8 @@ function forecast_bind_observation_info() {
 
     forecast_observation_info_bound = true;
     document.addEventListener("click", function(event) {
-        const trigger = event.target.closest(".observation-source-info");
-        if (!trigger) {
+        const trigger = event.target.closest(".observation-source-info, .wx-aqi-category[data-observation]");
+        if (!trigger || !forecast_external_observations[trigger.dataset.observation]) {
             return;
         }
         event.preventDefault();
@@ -482,11 +482,11 @@ function forecast_register_external_observation(observationKey, data, options) {
         const obsCell = document.querySelector(".station-observations ." + observationKey);
         row = obsCell ? obsCell.closest("tr") : null;
     }
-    if (!row) {
+    if (!row && observationKey !== "aqi") {
         return;
     }
 
-    const label = forecast_observation_label(row, observationKey);
+    const label = row ? forecast_observation_label(row, observationKey) : forecast_label_text("$obs.label.aqi");
     const metadata = options["metadata"] || {};
     const sourceProvider = options["sourceProvider"] || metadata["provider"];
     const source = sourceProvider
@@ -502,6 +502,21 @@ function forecast_register_external_observation(observationKey, data, options) {
         source: source,
         epoch: observationEpoch
     };
+
+    if (observationKey === "aqi") {
+        document.querySelectorAll(".wx-aqi-category").forEach(function(badge) {
+            badge.dataset.observation = observationKey;
+            badge.disabled = false;
+            badge.setAttribute("aria-haspopup", "dialog");
+            badge.setAttribute("aria-label", forecast_template_text("$obs.label.observation_source_information", [label]) + ": " + badge.textContent);
+            badge.setAttribute("title", forecast_template_text("$obs.label.observation_source_information", [label]));
+        });
+    }
+    forecast_bind_observation_info();
+
+    if (!row) {
+        return;
+    }
 
     row.classList.add("station-observation-row", "station-observation-row--external");
 
@@ -520,12 +535,14 @@ function forecast_register_external_observation(observationKey, data, options) {
     button.dataset.observation = observationKey;
     button.setAttribute("aria-label", forecast_template_text("$obs.label.observation_source_information", [label]));
     button.setAttribute("title", forecast_template_text("$obs.label.observation_source_information", [label]));
-
-    forecast_bind_observation_info();
 }
 
 function forecast_register_external_observations(sourceKey, data, options) {
     const observationSources = forecast_station_observation_sources || {};
+    // The standalone AQI badge also needs source details when AQI is not an observation.
+    if (sourceKey === "aqi" && !observationSources["aqi"]) {
+        forecast_register_external_observation("aqi", data, options);
+    }
     Object.keys(observationSources).forEach(function(observationKey) {
         let metadata = observationSources[observationKey] || {};
         if (metadata["source_key"] !== sourceKey) {
@@ -1448,7 +1465,8 @@ function forecast_update_aqi(data) {
             try {
                 document.querySelectorAll(".station-observations .aqi").forEach(function(el) {
                     el.textContent = aqiValue + " ";
-                    const category = document.createElement("span");
+                    const category = document.createElement("button");
+                    category.type = "button";
                     category.className = "wx-aqi-category";
                     category.textContent = aqiCategory;
                     el.appendChild(category);
@@ -1478,7 +1496,8 @@ function forecast_update_aqi(data) {
             try {
                 document.querySelectorAll(".station-observations .aqi").forEach(function(el) {
                     el.textContent = forecast_label_text("$obs.label.no_data") + " ";
-                    const category = document.createElement("span");
+                    const category = document.createElement("button");
+                    category.type = "button";
                     category.className = "wx-aqi-category";
                     category.textContent = aqiNoDataCategory;
                     el.appendChild(category);
