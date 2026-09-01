@@ -3414,6 +3414,9 @@ button.wx-aqi-category:focus-visible {
 }
 
 .frontpage .homepage-card--almanac {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   padding-top: 4px;
   padding-bottom: 4px;
   align-self: stretch;
@@ -3421,8 +3424,11 @@ button.wx-aqi-category:focus-visible {
 
 .frontpage .homepage-card--almanac .homepage-card-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
+  justify-content: center;
   gap: 1px;
+  min-height: 0;
 }
 
 .frontpage .homepage-card--almanac .almanac-main {
@@ -3442,8 +3448,15 @@ button.wx-aqi-category:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 12px;
+  width: 100%;
   padding: 0;
   margin: 4px 0 8px;
+}
+
+.frontpage .homepage-card--almanac .almanac-meta-block--moon {
+  flex: 0 1 auto;
+  margin-right: auto;
+  margin-left: auto;
 }
 
 .frontpage .homepage-card--almanac .almanac-diagram {
@@ -3639,20 +3652,38 @@ button.wx-aqi-category:focus-visible {
   text-align: center;
 }
 
-.frontpage .homepage-card--almanac .almanac-details-link {
-  width: 100%;
-  margin-top: 1px;
-  margin-bottom: 6px;
-  text-align: center;
-  font-size: 14px;
-  line-height: 1.15;
+.frontpage .homepage-card--almanac .almanac-info-button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--homepage-card-border);
+  border-radius: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.82);
+  color: #6b7280;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.frontpage .homepage-card--almanac .almanac-details-link--inline {
-  width: auto;
-  margin: 0;
-  text-align: left;
-  white-space: nowrap;
+.frontpage .homepage-card--almanac .almanac-info-button:hover,
+.frontpage .homepage-card--almanac .almanac-info-button:focus {
+  color: #e5554e;
+  border-color: #e5554e;
+  outline: none;
+}
+
+.dark .frontpage .homepage-card--almanac .almanac-info-button {
+  background: rgba(49, 49, 49, 0.88);
+  color: #cbd5e1;
 }
 
 .frontpage .homepage-card--wind .homepage-card-body {

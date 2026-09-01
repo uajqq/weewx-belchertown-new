@@ -428,6 +428,9 @@
                         </section>
 
                         <section class="homepage-card homepage-card--almanac">
+                            #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
+                            <button type="button" class="almanac-info-button" data-bs-toggle="modal" data-bs-target="#almanac-modal" aria-label="$obs.label.almanac_modal_title" title="$obs.label.almanac_modal_title"><i class="fa fa-info" aria-hidden="true"></i></button>
+                            #end if
                             <div class="homepage-card-body">
                                 <div class="almanac-main">
                                 #set $almanac_diagram_context = build_almanac_template_context($almanac, $current.dateTime.raw, $almanac.hasExtras, $relative_url)
@@ -451,11 +454,6 @@
                                             <span class="moon-visible"><strong>$almanac.moon_fullness%</strong> $obs.label.moon_visible</span><!-- AJAX -->
                                         </div>
                                     </div>
-                                    #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
-                                    <div class="almanac-details-link almanac-details-link--inline">
-                                        <a href="#almanac-modal" data-bs-toggle="modal" data-bs-target="#almanac-modal">$obs.label.almanac_more_details</a>
-                                    </div>
-                                    #end if
                                 </div>
                                     #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
                                     <div class="modal fade" id="almanac-modal" tabindex="-1" role="dialog" aria-labelledby="almanac-modal-title" aria-hidden="true">

@@ -273,8 +273,7 @@ html {
   .frontpage .homepage-card--almanac .almanac-sun-time,
   .frontpage .homepage-card--almanac .sun,
   .frontpage .homepage-card--almanac .moon,
-  .frontpage .homepage-card--almanac .moon-container,
-  .frontpage .homepage-card--almanac .almanac-details-link {
+  .frontpage .homepage-card--almanac .moon-container {
     font-size: 13px;
   }
 
