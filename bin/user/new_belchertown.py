@@ -56,7 +56,7 @@ if weewx.__version__ < "5":
 log = logging.getLogger(__name__)
 
 # Print version in syslog for easier troubleshooting
-log.info("version 2.1beta4")
+log.info("version 2.1")
 
 HIGHCHARTS_LANG_DEFAULTS = OrderedDict(
     [
