@@ -8,6 +8,102 @@ generator even if within a comment.
 #encoding "UTF-8"
 */
 
+// Day.js setup: plugins plus moment-compatible relative-time thresholds.
+// The skin previously set moment.relativeTimeThreshold("m", 60); the "mm" row
+// reproduces that (minutes shown up to 59, then "an hour").
+(function() {
+    if (typeof dayjs === "undefined") {
+        return;
+    }
+    var thresholds = [
+        { l: "s",  r: 44, d: "second" },
+        { l: "m",  r: 89, d: "second" },
+        { l: "mm", r: 59, d: "minute" },
+        { l: "h",  r: 89, d: "minute" },
+        { l: "hh", r: 21, d: "hour" },
+        { l: "d",  r: 35, d: "hour" },
+        { l: "dd", r: 25, d: "day" },
+        { l: "M",  r: 45, d: "day" },
+        { l: "MM", r: 10, d: "month" },
+        { l: "y",  r: 17, d: "month" },
+        { l: "yy", d: "year" }
+    ];
+    dayjs.extend(window.dayjs_plugin_utc);
+    if (window.dayjs_plugin_timezone) {
+        dayjs.extend(window.dayjs_plugin_timezone);
+    }
+    dayjs.extend(window.dayjs_plugin_localizedFormat);
+    dayjs.extend(window.dayjs_plugin_customParseFormat);
+    dayjs.extend(window.dayjs_plugin_relativeTime, { thresholds: thresholds });
+    dayjs.extend(window.dayjs_plugin_localeData);
+})();
+
+var belchertown_dayjs_locale_promises = {};
+
+function belchertown_dayjs_locale_name(name) {
+    var norm = String(name || "").toLowerCase().replace(/_/g, "-").split(".", 1)[0];
+    var regionalLocales = {
+        "ar-dz": true, "ar-iq": true, "ar-kw": true, "ar-ly": true, "ar-ma": true,
+        "ar-sa": true, "ar-tn": true, "de-at": true, "de-ch": true,
+        "en-au": true, "en-ca": true, "en-gb": true, "en-ie": true, "en-il": true,
+        "en-in": true, "en-nz": true, "en-sg": true, "en-tt": true, "es-do": true,
+        "es-mx": true, "es-pr": true, "es-us": true, "fr-ca": true, "fr-ch": true,
+        "it-ch": true, "ms-my": true, "nl-be": true, "pt-br": true, "zh-cn": true,
+        "zh-hk": true, "zh-tw": true
+    };
+    var base = norm.split("-")[0];
+
+    if (!norm || norm === "c" || norm === "posix") {
+        return "en";
+    }
+    if (norm === "no" || base === "no") {
+        return "nb";
+    }
+    if (norm === "en-us") {
+        return "en";
+    }
+    if (dayjs.Ls[norm] || regionalLocales[norm]) {
+        return norm;
+    }
+    return base || "en";
+}
+
+// Apply a moment-style locale name ("en-US", "de_DE", ...) to Day.js.
+// header.html.tmpl preloads the canonical locale for first render; this remains
+// as a cached fallback for dynamic or custom calls.
+function belchertown_set_datetime_locale(name) {
+    if (!name || typeof dayjs === "undefined") {
+        return Promise.resolve();
+    }
+    var localeName = belchertown_dayjs_locale_name(name);
+    if (localeName === "en") {
+        dayjs.locale("en");
+        return Promise.resolve("en");
+    }
+    if (dayjs.Ls[localeName]) {
+        dayjs.locale(localeName);
+        return Promise.resolve(localeName);
+    }
+    if (belchertown_dayjs_locale_promises[localeName]) {
+        return belchertown_dayjs_locale_promises[localeName];
+    }
+
+    belchertown_dayjs_locale_promises[localeName] = new Promise(function(resolve) {
+        var script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/" + localeName + ".js";
+        script.onload = function() {
+            dayjs.locale(localeName);
+            resolve(localeName);
+        };
+        script.onerror = function() {
+            resolve(dayjs.locale());
+        };
+        document.head.appendChild(script);
+    });
+
+    return belchertown_dayjs_locale_promises[localeName];
+}
+
 var pages = ["charts", "records", "reports", "about", "pi"];
 var pageName = "";
 
@@ -166,11 +262,21 @@ function belchertown_date_time_parse_formats() {
         ? monthFirstFormats.concat(dayFirstFormats)
         : dayFirstFormats.concat(monthFirstFormats);
 
-    if (typeof moment !== "undefined" && moment.ISO_8601) {
-        formats.unshift(moment.ISO_8601);
-    }
-
     return formats.concat(commonFormats);
+}
+
+// Parse a date/time string against the skin's known formats (strict).
+// ISO 8601 strings are handled natively by Day.js, so try that first —
+// moment did the same via the moment.ISO_8601 entry in the format list.
+function belchertown_parse_date_time(value, formats) {
+    var text = String(value || "");
+    if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+        var isoParsed = dayjs(text);
+        if (isoParsed.isValid()) {
+            return isoParsed;
+        }
+    }
+    return dayjs(text, formats, true);
 }
 
 function belchertown_decode_text_node_filter(textNode) {
@@ -264,8 +370,8 @@ function belchertown_decode_document_labels(root) {
 function tzAdjustedMoment(input) {
     let tz = "$moment_js_tz";
     if (!tz) {
-        return moment.unix(input).utcOffset($moment_js_utc_offset);
+        return dayjs.unix(input).utcOffset($moment_js_utc_offset);
     } else {
-        return moment.unix(input).tz(tz);
+        return dayjs.unix(input).tz(tz);
     }
 }

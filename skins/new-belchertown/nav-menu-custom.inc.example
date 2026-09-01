@@ -1,0 +1,30 @@
+#encoding UTF-8
+## Custom navigation menu.
+##
+## To use this file:
+## 1. Copy nav-menu-custom.inc.example to nav-menu-custom.inc.
+## 2. Edit nav-menu-custom.inc only.
+##
+## Upgrades will not overwrite your custom menu. This menu is used 
+## by both the desktop header and the mobile "drawer."
+
+<li class="menu-item menu-item-home${" current-menu-item" if $page == "home" else ""}"><a href="$relative_url" itemprop="url"><span itemprop="name">$obs.label.nav_home</span></a></li>
+#if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
+<li class="menu-item menu-item-1${" current-menu-item" if $page == "charts" else ""}"><a href="$relative_url/charts/" itemprop="url"><span itemprop="name">$nav_charts_label</span></a></li>
+#end if
+<li class="menu-item menu-item-2${" current-menu-item" if $page == "records" else ""}"><a href="$relative_url/records/" itemprop="url"><span itemprop="name">$obs.label.nav_records</span></a></li>
+<li class="menu-item menu-item-3${" current-menu-item" if $page == "reports" else ""}"><a href="$relative_url/reports/" itemprop="url"><span itemprop="name">$obs.label.nav_reports</span></a></li>
+<li class="menu-item menu-item-4${" current-menu-item" if $page == "about" else ""}"><a href="$relative_url/about/" itemprop="url"><span itemprop="name">$obs.label.nav_about</span></a></li>
+
+## Add custom menu items below, or reorder/remove the default items above.
+##
+## Flat item:
+## <li class="menu-item menu-item-webcam${" current-menu-item" if $page == "webcam" else ""}"><a href="$relative_url/webcam/" itemprop="url"><span itemprop="name">$obs.label.nav_webcam</span></a></li>
+##
+## Dropdown:
+## <li class="menu-item menu-item-more">
+##     <a href="#" itemprop="url"><span itemprop="name">More</span></a>
+##     <ul class="sub-menu">
+##         <li class="menu-item"><a href="$relative_url/webcam/" itemprop="url"><span itemprop="name">Webcam</span></a></li>
+##     </ul>
+## </li>

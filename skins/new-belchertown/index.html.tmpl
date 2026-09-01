@@ -30,19 +30,60 @@
     defaultForecastInterval = 24;
     // #end if
     window.moment_locale = "$moment_locale_js";
-    moment.locale(window.moment_locale);
+    belchertown_set_datetime_locale(window.moment_locale);
 
     window.homepage_chartgroup = "$Extras.highcharts_homepage_chartgroup";
     window.homepageChartsInitialized = false;
+    window.homepageChartsRenderInProgress = false;
+    window.homepageChartsRetryTimer = null;
+
+    function scheduleHomepageChartsRetry() {
+        if (window.homepageChartsRetryTimer !== null) {
+            return;
+        }
+
+        window.homepageChartsRetryTimer = window.setTimeout(function() {
+            window.homepageChartsRetryTimer = null;
+            window.renderHomepageCharts(true);
+        }, 15000);
+    }
 
     window.renderHomepageCharts = function(forceRender = false) {
         if (!forceRender && window.homepageChartsInitialized) {
             return;
         }
+        if (window.homepageChartsRenderInProgress) {
+            return;
+        }
 
         var renderChartsNow = function() {
-            showChart(window.homepage_chartgroup);
-            window.homepageChartsInitialized = true;
+            window.homepageChartsRenderInProgress = true;
+            var renderResult = showChart(window.homepage_chartgroup);
+
+            if (renderResult && typeof renderResult.then === "function") {
+                renderResult.then(function(rendered) {
+                    if (rendered === false) {
+                        window.homepageChartsInitialized = false;
+                        scheduleHomepageChartsRetry();
+                        return;
+                    }
+
+                    window.homepageChartsInitialized = true;
+                    if (window.homepageChartsRetryTimer !== null) {
+                        window.clearTimeout(window.homepageChartsRetryTimer);
+                        window.homepageChartsRetryTimer = null;
+                    }
+                }).catch(function(err) {
+                    console.log("ERROR: Cannot render homepage charts: " + err.message);
+                    window.homepageChartsInitialized = false;
+                    scheduleHomepageChartsRetry();
+                }).finally(function() {
+                    window.homepageChartsRenderInProgress = false;
+                });
+            } else {
+                window.homepageChartsInitialized = true;
+                window.homepageChartsRenderInProgress = false;
+            }
         };
 
         if (typeof showChart !== "function") {
@@ -70,15 +111,15 @@
         setTimeout(autoRefreshPage, $Extras.webpage_autorefresh);
         // #end if
 
-        jQuery(document).ready(function() {
+        belchertown_on_ready(function() {
             // #if $Extras.has_key("aqi_enabled") and $Extras.aqi_enabled == '1'
             get_aqi_color("$aqi");
             // #end if
 
             // #if $Extras.has_key("beaufort_category") and $Extras.beaufort_category == '1' and $Extras.beaufort_category_gusts != '1'
-            jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort("$current.windSpeed.knot.toString(addLabel=False)")));
+            belchertown_set_html(".beaufort", beaufort_cat(kts_to_beaufort("$current.windSpeed.knot.toString(addLabel=False)")));
             // #else
-            jQuery(".beaufort").html(beaufort_cat(kts_to_beaufort("$current.windGust.knot.toString(addLabel=False)")));
+            belchertown_set_html(".beaufort", beaufort_cat(kts_to_beaufort("$current.windGust.knot.toString(addLabel=False)")));
             // #end if
 
             get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
@@ -92,14 +133,19 @@
             // Update the Last Updated timestamp with moment.js,
             updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
             updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
-            jQuery(".updated").text(updated_text);
+            belchertown_set_text(".updated", updated_text);
 
             // #if $Extras.has_key('earthquake_enabled') and $Extras.earthquake_enabled == '1'            
-            if (moment.unix("$earthquake_time").isValid()) {
+            if (typeof renderEarthquakeData === "function" && typeof weewx_data === "object" && weewx_data) {
+                renderEarthquakeData(weewx_data);
+            } else if (dayjs.unix("$earthquake_time").isValid()) {
                 // Check that the time is the time (number) and not the "no earthquake available" wording
-                jQuery(".earthquake-time").text(tzAdjustedMoment("$earthquake_time").format(belchertown_label_text("$obs.label.time_earthquake")));
+                belchertown_set_text(".earthquake-time", tzAdjustedMoment("$earthquake_time").format(belchertown_label_text("$obs.label.time_earthquake")));
             } else {
-                jQuery(".earthquake-time").text(belchertown_label_text("$earthquake_time"));
+                belchertown_set_text(".earthquake-time", belchertown_label_text("$earthquake_time"));
+            }
+            if (typeof belchertown_start_earthquake_refresh_timer === "function") {
+                belchertown_start_earthquake_refresh_timer("$Extras.earthquake_stale");
             }
             // #end if
 
@@ -109,7 +155,7 @@
             // Loop through the chart groups for this page and add the chart divs to the page
             try {
                 thisPageCharts.forEach(chartID => {
-                    jQuery(".chart-outer").append('<div class="homepage-chart-panel"><div id="' + chartID + '" style="width:100%;height:100%;"></div></div>');
+                    document.querySelectorAll(".chart-outer").forEach(function(el) { el.insertAdjacentHTML("beforeend", '<div class="homepage-chart-panel"><div id="' + chartID + '" style="width:100%;height:100%;"></div></div>'); });
                 });
 
                 belchertown_run_when_visible(".homepage-card--charts", function() {
@@ -131,13 +177,13 @@
                 connect(); // Begin mqtt after WeeWX initial load
             }
 
-            // #if $Extras.has_key("reload_hook_images") and $Extras.reload_hook_images == '1'
-            // Update any images in the radar section or hooks
-
             // #if $Extras.has_key("reload_images_radar") and $Extras.reload_images_radar != '-1'
             var reload_radar_timer = $Extras.reload_images_radar * 1000; // convert to millis
             setTimeout(function() {ajaximages("radar", $Extras.reload_images_radar);}, reload_radar_timer);
             // #end if
+
+            // #if $Extras.has_key("reload_hook_images") and $Extras.reload_hook_images == '1'
+            // Update any images in the hooks
 
             // #if $Extras.has_key("reload_images_hook_asi") and $Extras.reload_images_hook_asi != '-1'
             var reload_asi_timer = $Extras.reload_images_hook_asi * 1000; // convert to millis
@@ -169,15 +215,15 @@
             if ((Math.floor(new Date().getTime() / 1000.0) - $Extras.last_updated_alert_threshold) > $current.dateTime.raw) {
                 belchertown_debug("Last Updated Alert: The WeeWX report timestamp is " + $current.dateTime.raw + ". The current timestamp is " + Math.floor(new Date().getTime() / 1000.0) + ". The threshold is " + $Extras.last_updated_alert_threshold + ". Report timestamp is greater than threshold of current time, showing no update alert.");
                 last_updated_alert_text = "<i class='fa fa-exclamation-triangle' style='color:red;'></i> " + belchertown_label_html("$obs.label.header_last_updated_alert");
-                jQuery(".last-updated-alert").html(last_updated_alert_text);
-                jQuery(".last-updated-alert").show();
+                belchertown_set_html(".last-updated-alert", last_updated_alert_text);
+                document.querySelectorAll(".last-updated-alert").forEach(function(el) { el.style.display = ""; });
             }
             // #end if
 
             // Update the Last Updated timestamp with moment.js,
             updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
             updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
-            jQuery(".updated").text(updated_text);
+            belchertown_set_text(".updated", updated_text);
 
             // #end if
 
@@ -248,7 +294,7 @@
                         <section class="homepage-card homepage-card--temperature">
                             <div class="homepage-card-body homepage-temperature-content">
                                 <div class="row temp-observation">
-                                    <div class="col-sm-6 current_obs_top">
+                                    <div class="col-md-6 current_obs_top">
                                         #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
                                             #set $homepage_current_icon = "unknown.png"
                                             #if $current_obs_icon != ""
@@ -257,7 +303,7 @@
                                             <img id="wxicon" src="$relative_url/images/$homepage_current_icon" alt="$obs.label.current_conditions" width="128" height="101" loading="eager" decoding="async" fetchpriority="high">
                                         #end if
                                     </div>
-                                    <div class="col-sm-6 current_temp">
+                                    <div class="col-md-6 current_temp">
                                         <div class="outtemp_outer">
                                             <span class="outtemp">$current.outTemp.formatted</span>
                                             <sup class="outtempunitlabelsuper">$unit.label.outTemp</sup>
@@ -265,20 +311,20 @@
                                     </div>
                                 </div>
                                 <div class="row homepage-temperature-details">
-                                    <div class="col-sm-6 current-obs-container">
+                                    <div class="col-md-6 current-obs-container">
                                         <div class="current-obs-text">
                                             $current_obs_summary
                                         </div>
                                         #if $Extras.has_key("aqi_enabled") and $Extras.aqi_enabled == '1'
                                         <div class="aqi_outer">
-                                            $obs.label.aqi: <span class="wx-aqi">$aqi</span> (<span class="wx-aqi-category">$aqi_category</span>)
+                                            $obs.label.aqi: <span class="wx-aqi">$aqi</span> <button type="button" class="wx-aqi-category" disabled>$aqi_category</button>
                                             #if $Extras.has_key("aqi_location_enabled") and $Extras.aqi_location_enabled == '1'
                                             <span class="aqi_location_outer"><br>$aqi_location</span>
                                             #end if
                                         </div>
                                         #end if
                                     </div>
-                                    <div class="col-sm-6 homepage-temperature-sidebar">
+                                    <div class="col-md-6 homepage-temperature-sidebar">
                                         #if $current.appTemp.has_data
                                         <div class="feelslike">$obs.label.feels_like $current.appTemp</div><!-- AJAX -->
                                         #end if
@@ -319,8 +365,8 @@
                         <section class="homepage-card homepage-card--wind#if $Extras.has_key('wind_compass_marker') and str($Extras.wind_compass_marker).strip() == 'windbarb'# homepage-card--windbarb#end if#">
                             <div class="homepage-card-body">
                                 <div class="windrow">
-                                    <div class="col-sm-12 current_wind">
-                                        <div class="col-sm-6">
+                                    <div class="col-md-12 current_wind">
+                                        <div class="col-md-6">
                                             <div class="compass">
                                                 <div class="direction">
                                                     <span class="curwinddir">
@@ -341,7 +387,7 @@
                                                 <div class="arrow$wind_compass_marker_class"$wind_compass_marker_style_attr></div>
                                             </div>
                                         </div>
-                                        <div class="col-sm-6 windspeedtable">
+                                        <div class="col-md-6 windspeedtable">
                                             <table class="wind-table">
                                                 <tbody>
                                                     <tr>
@@ -382,6 +428,9 @@
                         </section>
 
                         <section class="homepage-card homepage-card--almanac">
+                            #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
+                            <button type="button" class="almanac-info-button" data-bs-toggle="modal" data-bs-target="#almanac-modal" aria-label="$obs.label.almanac_modal_title" title="$obs.label.almanac_modal_title"><i class="fa fa-info" aria-hidden="true"></i></button>
+                            #end if
                             <div class="homepage-card-body">
                                 <div class="almanac-main">
                                 #set $almanac_diagram_context = build_almanac_template_context($almanac, $current.dateTime.raw, $almanac.hasExtras, $relative_url)
@@ -405,27 +454,20 @@
                                             <span class="moon-visible"><strong>$almanac.moon_fullness%</strong> $obs.label.moon_visible</span><!-- AJAX -->
                                         </div>
                                     </div>
-                                    #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
-                                    <div class="almanac-details-link almanac-details-link--inline">
-                                        <a href="#almanac-modal" data-toggle="modal" data-target="#almanac-modal">$obs.label.almanac_more_details</a>
-                                    </div>
-                                    #end if
                                 </div>
                                     #if $Extras.has_key("almanac_extras") and $Extras.almanac_extras == '1' and $almanac.hasExtras
                                     <div class="modal fade" id="almanac-modal" tabindex="-1" role="dialog" aria-labelledby="almanac-modal-title" aria-hidden="true">
                                         <div class="modal-dialog modal-lg" role="document">
                                             <div class="modal-content">
                                                 <div class="modal-header">
-                                                    <button type="button" class="close" data-dismiss="modal" aria-label="$obs.label.close">
-                                                        <span aria-hidden="true">&times;</span>
-                                                    </button>
                                                     <h4 class="modal-title" id="almanac-modal-title">$obs.label.almanac_modal_title</h4>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="$obs.label.close"></button>
                                                 </div>
                                                 <div class="almanac-extras-modal-body modal-body">
                                                     #include "celestial.inc"
                                                 </div><!-- AJAX -->
                                                 <div class="modal-footer">
-                                                    <button type="button" class="btn btn-primary" data-dismiss="modal">$obs.label.close</button>
+                                                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">$obs.label.close</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -477,16 +519,16 @@
                 <div class="row forecastrow">
                     #if $Extras.has_key("forecast_interval_hours") and $Extras.forecast_interval_hours != '0'
                     <div id="1hour-selected-forecast" style="display: none;">
-                        <div class="col-lg-12 row onehr_forecasts row-no-padding"></div><!-- JS -->
+                        <div class="col-xl-12 row onehr_forecasts row-no-padding"></div><!-- JS -->
                     </div>
                     #end if
 
                     <div id="3hour-selected-forecast" style="display: none;">
-                        <div class="col-lg-12 row threehr_forecasts row-no-padding"></div><!-- JS -->
+                        <div class="col-xl-12 row threehr_forecasts row-no-padding"></div><!-- JS -->
                     </div>
 
                     <div id="24hour-selected-forecast" style="display: none;">
-                        <div class="col-lg-12 row day_forecasts row-no-padding"></div><!-- JS -->
+                        <div class="col-xl-12 row day_forecasts row-no-padding"></div><!-- JS -->
                     </div>
                 </div>
             </section>
@@ -520,9 +562,9 @@
                     </div>
                     <div class="homepage-card-body">
                         <div class="row">
-                            <div class="col-sm-6 stn-quick-stats">
+                            <div class="col-md-6 stn-quick-stats">
                                 <div class="stats-title">
-                                    <label class="sr-only" for="snapshot-day-select">$obs.label.weather_snapshots $obs.label.snapshot_period_today</label>
+                                    <label class="visually-hidden" for="snapshot-day-select">$obs.label.weather_snapshots $obs.label.snapshot_period_today</label>
                                     <select id="snapshot-day-select" class="snapshot-period-select">
                                         <option value="day">$obs.label.snapshot_period_today</option>
                                         <option value="yesterday">$obs.label.snapshot_period_yesterday</option>
@@ -532,34 +574,34 @@
                                 <div class="snapshot-metric-grid">
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_high</span>
-                                        <span class="snapshot-metric-value dailystatshigh">$day.outTemp.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatshigh">#echo str($day.outTemp.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_low</span>
-                                        <span class="snapshot-metric-value dailystatslow">$day.outTemp.min</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatslow">#echo str($day.outTemp.min).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_avg_wind</span>
-                                        <span class="snapshot-metric-value dailystatswindavg">$day.wind.avg</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatswindavg">#echo str($day.wind.avg).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_high_wind</span>
-                                        <span class="snapshot-metric-value dailystatswindmax">$day.wind.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatswindmax">#echo str($day.wind.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_rain</span>
-                                        <span class="snapshot-metric-value dailystatsrain">$day.rain.sum</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatsrain">#echo str($day.rain.sum).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_today_rainrate</span>
-                                        <span class="snapshot-metric-value dailystatsrainrate">$day.rainRate.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value dailystatsrainrate">#echo str($day.rainRate.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="col-sm-6 stn-quick-stats homepage-snapshot-column homepage-snapshot-column--secondary">
+                            <div class="col-md-6 stn-quick-stats homepage-snapshot-column homepage-snapshot-column--secondary">
                                 <div class="stats-title">
-                                    <label class="sr-only" for="snapshot-month-select">$obs.label.weather_snapshots $obs.label.snapshot_period_month</label>
+                                    <label class="visually-hidden" for="snapshot-month-select">$obs.label.weather_snapshots $obs.label.snapshot_period_month</label>
                                     <select id="snapshot-month-select" class="snapshot-period-select">
                                         <option value="month">$obs.label.snapshot_period_month</option>
                                         <option value="year">$obs.label.snapshot_period_ytd</option>
@@ -570,27 +612,27 @@
                                 <div class="snapshot-metric-grid">
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_high</span>
-                                        <span class="snapshot-metric-value monthstatshigh">$month.outTemp.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatshigh">#echo str($month.outTemp.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_low</span>
-                                        <span class="snapshot-metric-value monthstatslow">$month.outTemp.min</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatslow">#echo str($month.outTemp.min).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_avg_wind</span>
-                                        <span class="snapshot-metric-value monthstatswindavg">$month.wind.avg</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatswindavg">#echo str($month.wind.avg).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_high_wind</span>
-                                        <span class="snapshot-metric-value monthstatswindmax">$month.wind.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatswindmax">#echo str($month.wind.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_rain</span>
-                                        <span class="snapshot-metric-value monthstatsrain">$month.rain.sum</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatsrain">#echo str($month.rain.sum).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                     <div class="snapshot-metric">
                                         <span class="snapshot-metric-label">$obs.label.snapshot_month_rainrate</span>
-                                        <span class="snapshot-metric-value monthstatsrainrate">$month.rainRate.max</span><!-- AJAX -->
+                                        <span class="snapshot-metric-value monthstatsrainrate">#echo str($month.rainRate.max).replace("/", "&NoBreak;/&NoBreak;")#</span><!-- AJAX -->
                                     </div>
                                 </div>
                             </div>
@@ -615,10 +657,10 @@
                         <div class="earthquake-subcard earthquake-subcard--stats">
                             <a class="earthquake-info-link" href="$earthquake_url" target="_blank">
                                 <div class="row earthquake-info">
-                                    <div class="col-sm-6 earthquake-stat earthquake-stat--magnitude">
+                                    <div class="col-md-6 earthquake-stat earthquake-stat--magnitude">
                                         <i class="wi wi-earthquake" aria-hidden="true"></i><span class="earthquake-stat-label">$obs.label.earthquake_magnitude</span> <span class="magnitude">$earthquake_magnitude</span>
                                     </div>
-                                    <div class="col-sm-6 earthquake-distance-outer border-left earthquake-stat earthquake-stat--distance">
+                                    <div class="col-md-6 earthquake-distance-outer border-left earthquake-stat earthquake-stat--distance">
                                         <span class="earthquake-distance">$earthquake_distance_away $earthquake_distance_label $earthquake_bearing</span>
                                     </div>
                                 </div>

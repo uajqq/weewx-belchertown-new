@@ -43,7 +43,7 @@ if (getURLvar("debug") && (getURLvar("debug") == "true" || getURLvar("debug") ==
 }
 
 var moment_locale = "$moment_locale_js";
-moment.locale(moment_locale);
+belchertown_set_datetime_locale(moment_locale);
 
 var chartgroups_raw = $charts;
 var chartgroups_titles = $chartpage_titles;
@@ -54,66 +54,94 @@ var belchertownAutoThemeMediaQuery = null;
 var belchertownWindyRadarResizeTimer = null;
 var belchertownWindyRadarViewportWidth = null;
 var belchertownWebcamReloadTimers = [];
+var belchertownEarthquakeRefreshTimer = null;
+var belchertownEarthquakeLastRefreshMs = 0;
+var belchertownEarthquakeResumeHandlersBound = false;
+var belchertownEarthquakeResumeRefreshMinMs = 60000;
 
 function belchertown_radar_tab_containers() {
-    return jQuery(".belchertown-radar-tabs").add("#tabs-container").filter(function() {
-        return jQuery(this).find(".tabs-menu a").length && jQuery(this).find(".belchertown-radar-tab-panel").length;
+    var candidates = Array.prototype.slice.call(document.querySelectorAll(".belchertown-radar-tabs"));
+    var tabsContainer = document.getElementById("tabs-container");
+    if (tabsContainer && candidates.indexOf(tabsContainer) === -1) {
+        candidates.push(tabsContainer);
+    }
+    return candidates.filter(function(el) {
+        return el.querySelector(".tabs-menu a") && el.querySelector(".belchertown-radar-tab-panel");
+    });
+}
+
+function belchertown_fade_in(element) {
+    element.style.opacity = "0";
+    element.style.display = "";
+    requestAnimationFrame(function() {
+        element.style.transition = "opacity 200ms";
+        element.style.opacity = "1";
+        setTimeout(function() {
+            element.style.transition = "";
+            element.style.opacity = "";
+        }, 250);
     });
 }
 
 function belchertown_activate_radar_tab(tabLink, animate) {
-    var link = jQuery(tabLink);
-    var container = link.closest(".belchertown-radar-tabs");
-    var activeTab = link.attr("href");
-
-    if (!container.length) {
-        container = link.closest("#tabs-container");
+    var link = tabLink && tabLink.jquery ? tabLink[0] : tabLink;
+    if (!link) {
+        return;
     }
-    if (!container.length || !activeTab || activeTab.charAt(0) !== "#") {
+    var container = link.closest(".belchertown-radar-tabs") || link.closest("#tabs-container");
+    var activeTab = link.getAttribute("href");
+
+    if (!container || !activeTab || activeTab.charAt(0) !== "#") {
         return;
     }
 
-    var activePanel = container.find(activeTab);
-    if (!activePanel.length) {
-        activePanel = jQuery(activeTab);
-    }
-    if (!activePanel.length) {
+    var activePanel = container.querySelector(activeTab) || document.querySelector(activeTab);
+    if (!activePanel) {
         return;
     }
 
-    link.parent().addClass("active");
-    link.parent().siblings().removeClass("active");
-    container.find(".belchertown-radar-tab-panel").not(activePanel).removeClass("is-active").hide();
-    activePanel.addClass("is-active");
+    var linkItem = link.parentElement;
+    linkItem.classList.add("active");
+    Array.prototype.forEach.call(linkItem.parentElement.children, function(sibling) {
+        if (sibling !== linkItem) {
+            sibling.classList.remove("active");
+        }
+    });
+    container.querySelectorAll(".belchertown-radar-tab-panel").forEach(function(panel) {
+        if (panel !== activePanel) {
+            panel.classList.remove("is-active");
+            panel.style.display = "none";
+        }
+    });
+    activePanel.classList.add("is-active");
     if (animate === false) {
-        activePanel.show();
+        activePanel.style.display = "";
     } else {
-        activePanel.fadeIn();
+        belchertown_fade_in(activePanel);
     }
 
     belchertown_schedule_windy_radar_scale(document, true);
 }
 
 function belchertown_initialize_radar_tabs() {
-    belchertown_radar_tab_containers().each(function() {
-        var container = jQuery(this);
-        var activeLink = container.find(".tabs-menu li.active a").first();
-        var activePanel = container.find(".belchertown-radar-tab-panel.is-active").first();
+    belchertown_radar_tab_containers().forEach(function(container) {
+        var activeLink = container.querySelector(".tabs-menu li.active a");
+        var activePanel = container.querySelector(".belchertown-radar-tab-panel.is-active");
 
-        if (!activeLink.length && activePanel.length && activePanel.attr("id")) {
-            activeLink = container.find('.tabs-menu a[href="#' + activePanel.attr("id") + '"]').first();
+        if (!activeLink && activePanel && activePanel.id) {
+            activeLink = container.querySelector('.tabs-menu a[href="#' + activePanel.id + '"]');
         }
-        if (!activeLink.length) {
-            activeLink = container.find(".tabs-menu a").first();
+        if (!activeLink) {
+            activeLink = container.querySelector(".tabs-menu a");
         }
-        if (activeLink.length) {
+        if (activeLink) {
             belchertown_activate_radar_tab(activeLink, false);
         }
     });
 }
 
 function belchertown_webcam_reload_interval(container) {
-    var interval = parseInt(jQuery(container).attr("data-webcam-reload-interval-ms"), 10);
+    var interval = parseInt(container.getAttribute("data-webcam-reload-interval-ms"), 10);
 
     if (isNaN(interval)) {
         return 300000;
@@ -123,17 +151,31 @@ function belchertown_webcam_reload_interval(container) {
 }
 
 function belchertown_reload_webcam_images(container) {
-    var containers = container ? jQuery(container) : belchertown_radar_tab_containers();
+    var containers = container ? [container] : belchertown_radar_tab_containers();
 
-    containers.find("#webcam img").each(function() {
-        var image = jQuery(this);
-        var imageUrl = image.attr("src");
+    containers.forEach(function(containerEl) {
+        containerEl.querySelectorAll('.belchertown-webcam-panel img, .belchertown-radar-tab-panel[id^="webcam"] img').forEach(function(image) {
+            var imageUrl = image.getAttribute("src");
 
-        if (!imageUrl) {
-            return;
-        }
+            if (!imageUrl) {
+                return;
+            }
 
-        image.attr("src", imageUrl.split("?")[0] + "?" + Math.floor(Math.random() * 999999999));
+            var hashIndex = imageUrl.indexOf("#");
+            var fragment = hashIndex === -1 ? "" : imageUrl.slice(hashIndex);
+            var urlWithoutFragment = hashIndex === -1 ? imageUrl : imageUrl.slice(0, hashIndex);
+            var cacheValue = Math.floor(Math.random() * 999999999);
+            var cacheParam = "belchertown_cache=" + cacheValue;
+            var cachePattern = /([?&])belchertown_cache=[^&#]*/;
+
+            if (cachePattern.test(urlWithoutFragment)) {
+                urlWithoutFragment = urlWithoutFragment.replace(cachePattern, "$1" + cacheParam);
+            } else {
+                urlWithoutFragment += (urlWithoutFragment.indexOf("?") === -1 ? "?" : "&") + cacheParam;
+            }
+
+            image.setAttribute("src", urlWithoutFragment + fragment);
+        });
     });
 }
 
@@ -719,19 +761,290 @@ function belchertown_readable_color(color, background, minimumRatio) {
     return belchertown_rgb_to_hex(target);
 }
 
-function belchertown_apply_readable_color(selector, color, minimumRatio) {
-    jQuery(selector).each(function() {
-        var background = belchertown_effective_background_color(this);
-        jQuery(this).css("color", belchertown_readable_color(color, background, minimumRatio));
+function belchertown_set_html(selector, html) {
+    if (typeof html === "undefined") {
+        return; // match jQuery .html(undefined), which left content unchanged
+    }
+    document.querySelectorAll(selector).forEach(function(el) {
+        el.innerHTML = html;
     });
 }
 
-jQuery(document).ready(function() {
+function belchertown_set_text(selector, text) {
+    if (typeof text === "undefined") {
+        return; // match jQuery .text(undefined), which left content unchanged
+    }
+    document.querySelectorAll(selector).forEach(function(el) {
+        el.textContent = text;
+    });
+}
+
+function earthquakeMapTileUrl(subdomain, zoom, x, y) {
+    var host = subdomain ? subdomain + ".tile.openstreetmap.org" : "tile.openstreetmap.org";
+    return "https://" + host + "/" + zoom + "/" + x + "/" + y + ".png";
+}
+
+function createEarthquakeMapSubcard() {
+    var cardBody = document.querySelector(".homepage-card--earthquake .eq-region");
+    var mapSubcard;
+    var mapWrap;
+    var mapLink;
+    var map;
+    var mapGrid;
+    var marker;
+    var mapLabel = belchertown_label_text("$obs.label.earthquake_title");
+
+    if (!cardBody) {
+        return null;
+    }
+
+    mapSubcard = document.createElement("div");
+    mapSubcard.className = "earthquake-subcard earthquake-subcard--map";
+    mapWrap = document.createElement("div");
+    mapWrap.className = "earthquake-map-wrap";
+    mapLink = document.createElement("a");
+    mapLink.className = "earthquake-map-link";
+    mapLink.target = "_blank";
+    mapLink.setAttribute("aria-label", mapLabel);
+    map = document.createElement("div");
+    map.className = "earthquake-map";
+    map.setAttribute("role", "img");
+    map.setAttribute("aria-label", mapLabel);
+    mapGrid = document.createElement("div");
+    mapGrid.className = "earthquake-map-grid";
+    marker = document.createElement("span");
+    marker.className = "earthquake-map-marker";
+    marker.setAttribute("aria-hidden", "true");
+
+    map.appendChild(mapGrid);
+    mapLink.appendChild(map);
+    mapWrap.appendChild(mapLink);
+    mapWrap.appendChild(marker);
+    mapSubcard.appendChild(mapWrap);
+    cardBody.appendChild(mapSubcard);
+    return mapSubcard;
+}
+
+function clearEarthquakeMapGrid(mapGrid) {
+    while (mapGrid.firstChild) {
+        mapGrid.removeChild(mapGrid.firstChild);
+    }
+}
+
+function renderEarthquakeMap(mapData, url) {
+    var mapSubcard = document.querySelector(".homepage-card--earthquake .earthquake-subcard--map");
+    var zoom = mapData ? parseInt(mapData.zoom, 10) : null;
+    var tiles = mapData && Array.isArray(mapData.tiles) ? mapData.tiles : [];
+    var offsetX = mapData ? parseFloat(mapData.offset_x) : null;
+    var offsetY = mapData ? parseFloat(mapData.offset_y) : null;
+    var mapLink;
+    var mapGrid;
+
+    if (!mapData || !isFinite(zoom) || !isFinite(offsetX) || !isFinite(offsetY) || !tiles.length) {
+        if (mapSubcard) {
+            mapSubcard.style.display = "none";
+        }
+        return;
+    }
+
+    if (!mapSubcard) {
+        mapSubcard = createEarthquakeMapSubcard();
+    }
+    if (!mapSubcard) {
+        return;
+    }
+
+    mapLink = mapSubcard.querySelector(".earthquake-map-link");
+    mapGrid = mapSubcard.querySelector(".earthquake-map-grid");
+    if (!mapLink || !mapGrid) {
+        return;
+    }
+    mapSubcard.style.display = "";
+    mapGrid.style.setProperty("--earthquake-map-grid-left", "calc(50% - " + offsetX + "px)");
+    mapGrid.style.setProperty("--earthquake-map-grid-top", "calc(50% - " + offsetY + "px)");
+    clearEarthquakeMapGrid(mapGrid);
+
+    tiles.forEach(function(tile) {
+        var x = parseInt(tile.x, 10);
+        var y = parseInt(tile.y, 10);
+        var image;
+
+        if (!isFinite(x) || !isFinite(y)) {
+            return;
+        }
+
+        image = document.createElement("img");
+        image.className = "earthquake-map-tile";
+        image.alt = "";
+        image.setAttribute("aria-hidden", "true");
+        image.setAttribute("loading", "lazy");
+        image.setAttribute("decoding", "async");
+        image.setAttribute("fetchpriority", "low");
+        image.width = 256;
+        image.height = 256;
+        image.src = earthquakeMapTileUrl("", zoom, x, y);
+        image.onerror = function() {
+            var fallbackIndex = parseInt(this.dataset.fallback || "0", 10);
+            var fallbackSubdomains = ["a", "b", "c"];
+
+            if (fallbackIndex >= fallbackSubdomains.length) {
+                return;
+            }
+
+            this.dataset.fallback = String(fallbackIndex + 1);
+            this.src = earthquakeMapTileUrl(fallbackSubdomains[fallbackIndex], zoom, x, y);
+        };
+        mapGrid.appendChild(image);
+    });
+
+    if (url) {
+        mapLink.href = url;
+    } else {
+        mapLink.removeAttribute("href");
+    }
+}
+
+function renderEarthquakeData(data) {
+    var quake = data && data.earthquake ? data.earthquake : null;
+    var timeValue = quake ? quake.time : "";
+    var epoch = parseFloat(timeValue);
+    var quakeUrl = quake && quake.url ? belchertown_decode_html_entities(quake.url) : "";
+    var distanceParts = [];
+
+    if (!document.querySelector(".homepage-card--earthquake")) {
+        return;
+    }
+
+    if (isFinite(epoch) && typeof dayjs !== "undefined" && dayjs.unix(epoch).isValid()) {
+        belchertown_set_text(".earthquake-time", tzAdjustedMoment(epoch).format(belchertown_label_text("$obs.label.time_earthquake")));
+    } else {
+        belchertown_set_text(".earthquake-time", belchertown_label_text(timeValue));
+    }
+
+    belchertown_set_text(".homepage-card--earthquake .magnitude", quake ? quake.magnitude : "");
+
+    ["distance_away", "distance_label", "bearing"].forEach(function(key) {
+        if (quake && quake[key]) {
+            distanceParts.push(belchertown_decode_html_entities(quake[key]));
+        }
+    });
+    belchertown_set_text(".homepage-card--earthquake .earthquake-distance", distanceParts.join(" "));
+
+    document.querySelectorAll(".homepage-card--earthquake .earthquake-info-link").forEach(function(link) {
+        if (quakeUrl) {
+            link.href = quakeUrl;
+            link.style.pointerEvents = "";
+        } else {
+            link.removeAttribute("href");
+            link.style.pointerEvents = "none";
+        }
+    });
+
+    renderEarthquakeMap(quake ? quake.map : null, quakeUrl);
+}
+
+function refreshEarthquakeData(force) {
+    var now = Date.now();
+
+    if (!document.querySelector(".homepage-card--earthquake") || typeof ajaxweewx !== "function") {
+        return;
+    }
+    if (!force && belchertownEarthquakeLastRefreshMs && (now - belchertownEarthquakeLastRefreshMs) < belchertownEarthquakeResumeRefreshMinMs) {
+        return;
+    }
+
+    belchertownEarthquakeLastRefreshMs = now;
+    ajaxweewx().then(function(data) {
+        if (data) {
+            weewx_data = data;
+            renderEarthquakeData(data);
+        }
+    }).catch(function(e) {
+        belchertown_debug("Earthquake refresh failed: " + e.message);
+    });
+}
+
+function refreshEarthquakeDataAfterResume() {
+    if (document.hidden) {
+        return;
+    }
+    refreshEarthquakeData(false);
+}
+
+function bindEarthquakeRefreshResumeHandlers() {
+    if (belchertownEarthquakeResumeHandlersBound) {
+        return;
+    }
+
+    belchertownEarthquakeResumeHandlersBound = true;
+    document.addEventListener("visibilitychange", refreshEarthquakeDataAfterResume);
+    window.addEventListener("focus", refreshEarthquakeDataAfterResume);
+    window.addEventListener("pageshow", refreshEarthquakeDataAfterResume);
+    window.addEventListener("online", refreshEarthquakeDataAfterResume);
+}
+
+function belchertown_start_earthquake_refresh_timer(intervalSeconds) {
+    var seconds = parseFloat(intervalSeconds);
+    var intervalMs;
+
+    if (!document.querySelector(".homepage-card--earthquake") || belchertownEarthquakeRefreshTimer !== null) {
+        return;
+    }
+    if (!isFinite(seconds) || seconds <= 0) {
+        seconds = 10740;
+    }
+
+    intervalMs = Math.max(seconds * 1000, 60000);
+    bindEarthquakeRefreshResumeHandlers();
+    belchertownEarthquakeRefreshTimer = window.setInterval(function() {
+        refreshEarthquakeData(true);
+    }, intervalMs);
+}
+
+function belchertown_apply_readable_color(selector, color, minimumRatio) {
+    document.querySelectorAll(selector).forEach(function(el) {
+        var background = belchertown_effective_background_color(el);
+        el.style.color = belchertown_readable_color(color, background, minimumRatio);
+    });
+}
+
+const AQI_COLORS = {
+    light: [
+        {background: "#1b6f35", text: "#ffffff"},
+        {background: "#ffbe00", text: "#000000"},
+        {background: "#ff7e00", text: "#000000"},
+        {background: "#c1121f", text: "#ffffff"},
+        {background: "#8f3f97", text: "#ffffff"},
+        {background: "#7e0023", text: "#ffffff"}
+    ],
+    dark: [
+        {background: "#7bdc65", text: "#000000"},
+        {background: "#f0cf5a", text: "#000000"},
+        {background: "#ffb45a", text: "#000000"},
+        {background: "#ff7a73", text: "#000000"},
+        {background: "#d69af0", text: "#000000"},
+        {background: "#f0a3bd", text: "#000000"}
+    ]
+};
+const AQI_CATEGORY_SELECTOR = ".wx-aqi-category";
+const AQI_SCALE = "$Extras.aqi_scale";
+
+function belchertown_on_ready(fn) {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", fn);
+    } else {
+        fn();
+    }
+}
+
+belchertown_on_ready(function() {
     belchertown_decode_document_labels(document.documentElement);
 
     // Bootstrap hover tooltips
-    if (jQuery.fn.tooltip) {
-        jQuery('[data-toggle="tooltip"]').tooltip()
+    if (typeof bootstrap !== "undefined" && bootstrap.Tooltip) {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+            bootstrap.Tooltip.getOrCreateInstance(el);
+        });
     }
 
     // Fail-open for pages generated with deferred iframe markup.
@@ -740,8 +1053,7 @@ jQuery(document).ready(function() {
     var radarTabContainers = belchertown_radar_tab_containers();
     if (radarTabContainers.length) {
         belchertown_initialize_radar_tabs();
-        radarTabContainers.each(function() {
-            var container = this;
+        radarTabContainers.forEach(function(container) {
             var reloadInterval = belchertown_webcam_reload_interval(container);
 
             belchertown_reload_webcam_images(container);
@@ -750,13 +1062,20 @@ jQuery(document).ready(function() {
                     belchertown_reload_webcam_images(container);
                 }, reloadInterval));
             }
-        });
-        radarTabContainers.on("click", ".tabs-menu a", function(event) {
-            event.preventDefault();
-            belchertown_activate_radar_tab(this);
+            container.addEventListener("click", function(event) {
+                var tabAnchor = event.target.closest(".tabs-menu a");
+                if (!tabAnchor || !container.contains(tabAnchor)) {
+                    return;
+                }
+                event.preventDefault();
+                belchertown_activate_radar_tab(tabAnchor);
+            });
         });
     }
-    jQuery(window).on("resize orientationchange", function() {
+    window.addEventListener("resize", function() {
+        belchertown_schedule_windy_radar_scale(document);
+    });
+    window.addEventListener("orientationchange", function() {
         belchertown_schedule_windy_radar_scale(document);
     });
 
@@ -764,6 +1083,14 @@ jQuery(document).ready(function() {
     if (sessionStorage.getItem('theme') == "toggleOverride") {
         belchertown_debug("Theme: sessionStorage override in place.");
         changeTheme(sessionStorage.getItem('currentTheme'));
+    } else if (sessionStorage.getItem('theme') == "auto") {
+        belchertown_debug("Theme: sessionStorage auto mode in place.");
+        setThemeModeControls("auto");
+        configuredAutomaticTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
+    } else if (sessionStorage.getItem('theme') == "sun") {
+        belchertown_debug("Theme: sessionStorage daylight mode in place.");
+        setThemeModeControls("auto");
+        sunTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
     }
 
     // Change theme if a URL variable is set
@@ -777,58 +1104,79 @@ jQuery(document).ready(function() {
         } else if (window.location.search.indexOf('?theme=auto') === 0) {
             belchertown_debug("Theme: Setting auto theme because of URL override");
             sessionStorage.setItem('theme', 'auto');
-            autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
+            setThemeModeControls("auto");
+            configuredAutomaticTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
+        } else if (window.location.search.indexOf('?theme=sun') === 0) {
+            belchertown_debug("Theme: Setting daylight theme because of URL override");
+            sessionStorage.setItem('theme', 'sun');
+            setThemeModeControls("auto");
+            sunTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
         }
     }
 
-    // Dark mode checkbox toggle switcher
-    // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
+    // Theme selector
     try {
-        document.getElementById('themeSwitch').addEventListener('change', function(event) {
-            belchertown_debug("Theme: Toggle button changed");
-            (event.target.checked) ? changeTheme("dark", true) : changeTheme("light", true);
+        document.querySelectorAll('.themeModeButton').forEach(function(themeModeButton) {
+            themeModeButton.addEventListener('click', function(event) {
+                var selectedTheme = event.currentTarget.getAttribute("data-theme-mode");
+                belchertown_debug("Theme: Selector changed to " + selectedTheme);
+                if (selectedTheme === "auto") {
+                    sessionStorage.setItem('theme', 'auto');
+                    setThemeModeControls("auto");
+                    configuredAutomaticTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
+                } else if (selectedTheme === "dark" || selectedTheme === "light") {
+                    changeTheme(selectedTheme, true, selectedTheme);
+                }
+            });
         });
     } catch (err) {
         // Silently exit
     }
-    // #end if
 
     // After charts are loaded, if an anchor tag is in the URL, let's scroll to it
-    jQuery(window).on('load', function() {
+    window.addEventListener('load', function() {
         var anchor_tag = location.hash.replace('#', '');
         if (anchor_tag != '') {
-            // Scroll the webpage to the chart. The timeout is to let jQuery finish appending the outer div so the height of the page is completed.
+            // Scroll the webpage to the chart. The timeout is to let the chart code finish appending the outer div so the height of the page is completed.
             setTimeout(function() {
-                jQuery('html, body').animate({scrollTop: jQuery('#' + anchor_tag).offset().top}, 500);
+                var anchorEl = document.getElementById(anchor_tag);
+                if (anchorEl) {
+                    window.scrollTo({top: anchorEl.getBoundingClientRect().top + window.pageYOffset, behavior: "smooth"});
+                }
             }, 500);
         }
     });
 
     // #if $Extras.has_key("back_to_top_button_enabled") and $Extras.back_to_top_button_enabled == '1'
     // Back to Top Button is visible after 400px
-    jQuery(window).scroll(function() {
-        if (jQuery(this).scrollTop() > 400) {
-            jQuery('#btn-back-to-top').css('transform', 'scale(1)');
+    var backToTopButton = document.getElementById('btn-back-to-top');
+    window.addEventListener("scroll", function() {
+        if (!backToTopButton) {
+            return;
+        }
+        if (window.pageYOffset > 400) {
+            backToTopButton.style.transform = 'scale(1)';
         } else {
-            jQuery('#btn-back-to-top').css('transform', 'scale(0)');
+            backToTopButton.style.transform = 'scale(0)';
         }
     });
 
-    jQuery('#btn-back-to-top').click(function() {
-        jQuery("html, body").animate({
-            scrollTop: 0
-        }, 1000);
-        return false;
-    });
+    if (backToTopButton) {
+        backToTopButton.addEventListener("click", function(event) {
+            event.preventDefault();
+            window.scrollTo({top: 0, behavior: "smooth"});
+        });
 
-    // #if $Extras.back_to_top_button_position == '1'
-    // Button is visible on left side
-    jQuery('#btn-back-to-top').css('left', '20px').css('right', 'auto');
-    // #end if
+        // #if $Extras.back_to_top_button_position == '1'
+        // Button is visible on left side
+        backToTopButton.style.left = '20px';
+        backToTopButton.style.right = 'auto';
+        // #end if
 
-    // #if $Extras.back_to_top_button_opacity >= '0.1' and $Extras.back_to_top_button_opacity <= '0.9'
-    jQuery('#btn-back-to-top').css('opacity', '$Extras.back_to_top_button_opacity');
-    // #end if
+        // #if $Extras.back_to_top_button_opacity >= '0.1' and $Extras.back_to_top_button_opacity <= '0.9'
+        backToTopButton.style.opacity = '$Extras.back_to_top_button_opacity';
+        // #end if
+    }
     // #end if
 
     initializeAlmanacDiagramFromDOM();
@@ -842,17 +1190,19 @@ jQuery(document).ready(function() {
 
     // Style legacy celestial table markup as modern sub-cards in the extras modal.
     enhanceAlmanacExtrasModal();
-    jQuery('#almanac-modal').on('shown.bs.modal', function() {
-        enhanceAlmanacExtrasModal();
-    });
+    var almanacModalEl = document.getElementById('almanac-modal');
+    if (almanacModalEl) {
+        almanacModalEl.addEventListener('shown.bs.modal', function() {
+            enhanceAlmanacExtrasModal();
+        });
+    }
 
 });
 
-// #if $Extras.has_key("theme") and $Extras.theme == 'auto'
-// Run this on every page for dark mode if skin theme is auto, without fetching
-// full weather JSON on non-weather pages.
-autoTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
-// #end if
+// Keep automatic theme modes current without fetching full weather JSON on
+// non-weather pages. The visible selector stays "Auto"; the stored mode decides
+// whether that means system preference or sunrise/sunset.
+storedAutomaticTheme($sunset_hour, $sunset_minute, $sunrise_hour, $sunrise_minute);
 
 // http://stackoverflow.com/a/14887961/1177153
 var weatherdirection = $charts_windDir_ordinals_label;
@@ -910,25 +1260,82 @@ function new_gradient_temp(value, min, max) {
     return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
 }
 
-// Change the color of the AQI value
-function get_aqi_color(aqi) {
-    aqi = parseInt(aqi);
-    if (isNaN(aqi)) return;
-    var color;
-    if (aqi <= 50) {
-        color = "#71bc3c";
-    } else if (aqi <= 100) {
-        color = "rgba(255,174,0,0.9)";
-    } else if (aqi <= 150) {
-        color = "rgba(255,127,0,1)";
-    } else if (aqi <= 200) {
-        color = "rgba(255,69,69,1)";
-    } else if (aqi <= 300) {
-        color = "#b16286";
-    } else {
-        color = "#cc241d";
+function belchertown_current_theme() {
+    if (document.body.classList.contains("dark") || sessionStorage.getItem("currentTheme") === "dark") {
+        return "dark";
     }
-    belchertown_apply_readable_color(".wx-aqi, .wx-aqi-category, .aqi_outer", color);
+    return "light";
+}
+
+function belchertown_aqi_colors(aqi) {
+    var palette = AQI_COLORS[belchertown_current_theme()];
+    if (AQI_SCALE === "european") {
+        if (aqi <= 20) {
+            return palette[0];
+        } else if (aqi <= 40) {
+            return palette[1];
+        } else if (aqi <= 60) {
+            return palette[2];
+        } else if (aqi <= 80) {
+            return palette[3];
+        } else if (aqi <= 100) {
+            return palette[4];
+        }
+        return palette[5];
+    }
+    if (AQI_SCALE === "canada") {
+        if (aqi <= 3) return palette[0];
+        if (aqi <= 6) return palette[1];
+        if (aqi <= 10) return palette[3];
+        return palette[5];
+    }
+    if (AQI_SCALE === "uk") {
+        if (aqi <= 3) return palette[0];
+        if (aqi <= 6) return palette[1];
+        if (aqi <= 9) return palette[3];
+        return palette[5];
+    }
+    if (aqi <= 50) {
+        return palette[0];
+    } else if (aqi <= 100) {
+        return palette[1];
+    } else if (aqi <= 150) {
+        return palette[2];
+    } else if (aqi <= 200) {
+        return palette[3];
+    } else if (aqi <= 300) {
+        return palette[4];
+    }
+    return palette[5];
+}
+
+// Color only the AQI category badge.
+function get_aqi_color(aqi) {
+    aqi = parseFloat(aqi);
+    if (isNaN(aqi)) {
+        clear_aqi_color();
+        return;
+    }
+    var aqiColors = belchertown_aqi_colors(aqi);
+    document.querySelectorAll(AQI_CATEGORY_SELECTOR).forEach(function(el) {
+        el.style.backgroundColor = aqiColors.background;
+        el.style.color = aqiColors.text;
+    });
+}
+
+function clear_aqi_color() {
+    document.querySelectorAll(AQI_CATEGORY_SELECTOR).forEach(function(el) {
+        el.style.backgroundColor = "";
+        el.style.color = "";
+    });
+}
+
+function refresh_aqi_color() {
+    var aqiEl = document.querySelector(".wx-aqi");
+    var aqiValue = aqiEl ? aqiEl.textContent : "";
+    if (aqiValue) {
+        get_aqi_color(aqiValue);
+    }
 }
 
 function get_outTemp_color(unit, outTemp, returnColor = false) {
@@ -955,35 +1362,37 @@ function get_outTemp_color(unit, outTemp, returnColor = false) {
 }
 
 function kts_to_beaufort(windspeed) {
-    // Given windspeed in knots, converts to Beaufort scale
+    // Match weewx.wxformulas.beaufort(): given windspeed in knots,
+    // return the Beaufort scale number.
     var ws = parseFloat(windspeed);
-    if (!isFinite(ws) || ws < 0) {
+    if (!isFinite(ws)) {
         return null;
     }
+    ws = Math.abs(ws);
 
-    if (ws <= 1) {
+    if (ws < 1) {
         return 0
-    } else if (ws <= 3) {
+    } else if (ws < 4) {
         return 1
-    } else if (ws <= 6) {
+    } else if (ws < 7) {
         return 2
-    } else if (ws <= 10) {
+    } else if (ws < 11) {
         return 3
-    } else if (ws <= 15) {
+    } else if (ws < 17) {
         return 4
-    } else if (ws <= 21) {
+    } else if (ws < 22) {
         return 5
-    } else if (ws <= 27) {
+    } else if (ws < 28) {
         return 6
-    } else if (ws <= 33) {
+    } else if (ws < 34) {
         return 7
-    } else if (ws <= 40) {
+    } else if (ws < 41) {
         return 8
-    } else if (ws <= 47) {
+    } else if (ws < 48) {
         return 9
-    } else if (ws <= 55) {
+    } else if (ws < 56) {
         return 10
-    } else if (ws <= 63) {
+    } else if (ws < 64) {
         return 11
     } else {
         return 12
@@ -1070,11 +1479,9 @@ function wind_compass_unit_label(obsName) {
     ) {
         return unit_label_array["windSpeed"];
     }
-    if (typeof jQuery === "function") {
-        var label = jQuery(".wind-table td.mph").first().text();
-        if (label) {
-            return label;
-        }
+    var labelCell = document.querySelector(".wind-table td.mph");
+    if (labelCell && labelCell.textContent) {
+        return labelCell.textContent;
     }
     return wind_compass_default_unit_label;
 }
@@ -1106,12 +1513,9 @@ function wind_compass_value_to_knots(value, unitLabel) {
 }
 
 function displayed_wind_compass_knots(obsName) {
-    if (typeof jQuery !== "function") {
-        return null;
-    }
-
     var selector = obsName == "windGust" ? ".curwindgust" : ".curwindspeed";
-    var displayedValue = jQuery(selector).first().text();
+    var displayedEl = document.querySelector(selector);
+    var displayedValue = displayedEl ? displayedEl.textContent : "";
     return wind_compass_value_to_knots(displayedValue, wind_compass_unit_label(obsName));
 }
 
@@ -1234,16 +1638,25 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     var parsedWindSpeedKnots = parse_wind_compass_knots(windSpeedKnots);
     var parsedWindGustKnots = parse_wind_compass_knots(windGustKnots);
     var selectedKnots = wind_compass_source == "windGust" ? parsedWindGustKnots : parsedWindSpeedKnots;
-    var arrow = jQuery(".arrow");
+    var arrows = document.querySelectorAll(".arrow");
+    var windArrows = document.querySelectorAll(".wind-arrow");
 
-    if (arrow.length === 0) {
+    if (arrows.length === 0) {
         return;
     }
 
     // Calm wind: hide both indicator styles (triangle and windbarb).
     if (wind_compass_is_calm(windSpeedKnots, windGustKnots)) {
-        arrow.removeClass("windbarb-marker").addClass("wind-compass-marker--hidden").empty().css("visibility", "hidden");
-        jQuery(".wind-arrow").addClass("wind-compass-marker--hidden").css("visibility", "hidden");
+        arrows.forEach(function(el) {
+            el.classList.remove("windbarb-marker");
+            el.classList.add("wind-compass-marker--hidden");
+            el.innerHTML = "";
+            el.style.visibility = "hidden";
+        });
+        windArrows.forEach(function(el) {
+            el.classList.add("wind-compass-marker--hidden");
+            el.style.visibility = "hidden";
+        });
         return;
     }
 
@@ -1252,22 +1665,34 @@ function render_wind_compass_marker(direction, windSpeedKnots, windGustKnots) {
     }
 
     // Wind is not calm: ensure indicators are visible.
-    arrow.removeClass("wind-compass-marker--hidden").css("visibility", "visible");
-    jQuery(".wind-arrow").removeClass("wind-compass-marker--hidden").css("visibility", "visible");
+    arrows.forEach(function(el) {
+        el.classList.remove("wind-compass-marker--hidden");
+        el.style.visibility = "visible";
+    });
+    windArrows.forEach(function(el) {
+        el.classList.remove("wind-compass-marker--hidden");
+        el.style.visibility = "visible";
+    });
 
     if (wind_compass_marker == "windbarb") {
-        arrow.addClass("windbarb-marker");
         if (selectedKnots === null) {
             selectedKnots = parsedWindSpeedKnots !== null ? parsedWindSpeedKnots : parsedWindGustKnots;
         }
         var svg = build_windbarb_svg(selectedKnots);
-        if (svg) {
-            arrow.html(svg);
-        } else {
-            arrow.removeClass("windbarb-marker").empty();
-        }
+        arrows.forEach(function(el) {
+            if (svg) {
+                el.classList.add("windbarb-marker");
+                el.innerHTML = svg;
+            } else {
+                el.classList.remove("windbarb-marker");
+                el.innerHTML = "";
+            }
+        });
     } else {
-        arrow.removeClass("windbarb-marker").empty();
+        arrows.forEach(function(el) {
+            el.classList.remove("windbarb-marker");
+            el.innerHTML = "";
+        });
     }
 
     rotateThis(rotation);
@@ -1409,8 +1834,9 @@ function rotateThis(newRotation) {
     if (currentRotation < 180 && (newRotation > (currentRotation + 180))) {finalRotation -= 360;}
     if (currentRotation >= 180 && (newRotation <= (currentRotation - 180))) {finalRotation += 360;}
     finalRotation += (newRotation - currentRotation);
-    jQuery(".wind-arrow").css("transform", "rotate(" + finalRotation + "deg)");
-    jQuery(".arrow").css("transform", "rotate(" + finalRotation + "deg)");
+    document.querySelectorAll(".wind-arrow, .arrow").forEach(function(el) {
+        el.style.transform = "rotate(" + finalRotation + "deg)";
+    });
 }
 
 function almanacTrackXBounds() {
@@ -1440,8 +1866,8 @@ function almanacWrapDiagramX(xValue, xOffset) {
 }
 
 function almanacDiagramCenteringMode() {
-    var diagramEl = jQuery(".almanac-diagram").first();
-    var mode = String(diagramEl.attr("data-centering-mode") || diagramEl.data("centeringMode") || "off").toLowerCase();
+    var diagramEl = document.querySelector(".almanac-diagram");
+    var mode = String((diagramEl && diagramEl.getAttribute("data-centering-mode")) || "off").toLowerCase();
     if (mode === "now" || mode === "transit") {
         return mode;
     }
@@ -1449,27 +1875,19 @@ function almanacDiagramCenteringMode() {
 }
 
 function almanacBodyXOffsetInfo(bodyKey) {
-    var diagramEl = jQuery(".almanac-diagram").first();
+    var diagramEl = document.querySelector(".almanac-diagram");
     var mode = almanacDiagramCenteringMode();
     var attrName = bodyKey === "moon" ? "data-moon-x-offset" : "data-sun-x-offset";
-    var dataKey = bodyKey === "moon" ? "moonXOffset" : "sunXOffset";
     var attrRaw;
-    var dataRaw;
     var parsed;
 
-    if (mode === "off") {
+    if (mode === "off" || !diagramEl) {
         return { value: 0, hasExplicit: false };
     }
 
-    attrRaw = diagramEl.attr(attrName);
+    attrRaw = diagramEl.getAttribute(attrName);
     parsed = parseFloat(attrRaw);
     if (attrRaw !== undefined && attrRaw !== null && String(attrRaw).trim() !== "" && isFinite(parsed)) {
-        return { value: parsed, hasExplicit: true };
-    }
-
-    dataRaw = diagramEl.data(dataKey);
-    parsed = parseFloat(dataRaw);
-    if (dataRaw !== undefined && dataRaw !== null && String(dataRaw).trim() !== "" && isFinite(parsed)) {
         return { value: parsed, hasExplicit: true };
     }
 
@@ -1509,28 +1927,20 @@ function almanacCurrentTimeToDiagramX(currentTs, currentX, fallbackCurrentX) {
 }
 
 function readAlmanacDiagramNumber(diagram, attrName, dataKey) {
-    var attrValue = parseFloat(diagram.attr(attrName));
-    var dataValue;
+    var attrValue = parseFloat(diagram.getAttribute(attrName));
 
-    if (isFinite(attrValue)) {
-        return attrValue;
-    }
-
-    dataValue = parseFloat(diagram.data(dataKey));
-    return isFinite(dataValue) ? dataValue : null;
+    return isFinite(attrValue) ? attrValue : null;
 }
 
 function writeAlmanacDiagramNumber(diagram, attrName, dataKey, value) {
     var parsed = parseFloat(value);
 
     if (!isFinite(parsed)) {
-        diagram.removeAttr(attrName);
-        diagram.removeData(dataKey);
+        diagram.removeAttribute(attrName);
         return;
     }
 
-    diagram.attr(attrName, parsed.toFixed(3));
-    diagram.data(dataKey, parsed);
+    diagram.setAttribute(attrName, parsed.toFixed(3));
 }
 
 function almanacEventBelowHorizon(riseEpoch, setEpoch, nowEpoch) {
@@ -1552,24 +1962,55 @@ function almanacEventBelowHorizon(riseEpoch, setEpoch, nowEpoch) {
     return !aboveHorizon;
 }
 
+function setAlmanacDiagramTrackOrder(sunIsUp) {
+    if (typeof sunIsUp !== "boolean") {
+        return;
+    }
+
+    document.querySelectorAll(".almanac-diagram-svg").forEach(function(svg) {
+        var sunTrack = svg.querySelector(".almanac-diagram-track--sun");
+        var moonTrack = svg.querySelector(".almanac-diagram-track--moon");
+        var firstObject = svg.querySelector(".almanac-diagram-object");
+        var topTrack;
+        var bottomTrack;
+
+        if (!sunTrack || !moonTrack) {
+            return;
+        }
+
+        topTrack = sunIsUp ? sunTrack : moonTrack;
+        bottomTrack = sunIsUp ? moonTrack : sunTrack;
+        svg.insertBefore(bottomTrack, firstObject);
+        svg.insertBefore(topTrack, firstObject);
+    });
+}
+
 function setAlmanacDiagramBodyBelowHorizon(bodyKey, belowHorizon) {
     var key = bodyKey === "moon" ? "moon" : "sun";
 
-    jQuery(".almanac-diagram-object--" + key).toggleClass("is-below-horizon", belowHorizon);
-    jQuery(".almanac-diagram-track--" + key).toggleClass("is-below-horizon", belowHorizon);
+    var toggleAll = function(selector) {
+        document.querySelectorAll(selector).forEach(function(el) {
+            el.classList.toggle("is-below-horizon", belowHorizon);
+        });
+    };
+    toggleAll(".almanac-diagram-object--" + key);
+    toggleAll(".almanac-diagram-track--" + key);
 
-    if (key === "sun" && !jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
-        jQuery(".almanac-diagram-track").toggleClass("is-below-horizon", belowHorizon);
+    if (key === "sun" && !document.querySelector(".almanac-diagram-track--sun, .almanac-diagram-track--moon")) {
+        toggleAll(".almanac-diagram-track");
+    }
+    if (key === "sun") {
+        setAlmanacDiagramTrackOrder(!belowHorizon);
     }
 }
 
 function refreshAlmanacDiagramHorizonStateFromSchedule(nowEpoch) {
-    var diagram = jQuery(".almanac-diagram").first();
+    var diagram = document.querySelector(".almanac-diagram");
     var now = parseFloat(nowEpoch);
     var sunBelowHorizon;
     var moonBelowHorizon;
 
-    if (!diagram.length) {
+    if (!diagram) {
         return;
     }
 
@@ -1599,7 +2040,7 @@ function refreshAlmanacDiagramHorizonStateFromSchedule(nowEpoch) {
 var almanacDiagramHorizonTimer = null;
 
 function startAlmanacDiagramHorizonTimer() {
-    if (!jQuery(".almanac-diagram").length) {
+    if (!document.querySelector(".almanac-diagram")) {
         return;
     }
 
@@ -1615,7 +2056,7 @@ function startAlmanacDiagramHorizonTimer() {
 }
 
 function almanacExistingMarkerX(marker) {
-    var transformText = String(marker.attr("transform") || "");
+    var transformText = String(marker.getAttribute("transform") || "");
     var match = transformText.match(/translate\(\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/i);
     var parsed = match ? parseFloat(match[1]) : NaN;
 
@@ -1623,8 +2064,8 @@ function almanacExistingMarkerX(marker) {
 }
 
 function almanacVerticalScale() {
-    var diagramEl = jQuery(".almanac-diagram").first();
-    var scale = parseFloat(diagramEl.attr("data-vertical-scale") || diagramEl.data("verticalScale"));
+    var diagramEl = document.querySelector(".almanac-diagram");
+    var scale = parseFloat(diagramEl ? diagramEl.getAttribute("data-vertical-scale") : null);
 
     if (!isFinite(scale)) {
         return 2.5;
@@ -1656,27 +2097,20 @@ function almanacDiagramViewBox() {
 }
 
 function setAlmanacDiagramTrackBelowHorizon(selector, altitude) {
-    var track = jQuery(selector);
     var alt = parseFloat(altitude);
 
-    if (!track.length) {
-        return;
-    }
-
-    track.toggleClass("is-below-horizon", isFinite(alt) && alt < 0);
+    document.querySelectorAll(selector).forEach(function(track) {
+        track.classList.toggle("is-below-horizon", isFinite(alt) && alt < 0);
+    });
 }
 
 function setAlmanacDiagramHorizonBounds() {
-    var horizon = jQuery(".almanac-diagram-horizon");
     var xBounds = almanacTrackXBounds();
 
-    if (!horizon.length) {
-        return;
-    }
-
-    horizon
-        .attr("x1", xBounds.minX.toFixed(1))
-        .attr("x2", xBounds.maxX.toFixed(1));
+    document.querySelectorAll(".almanac-diagram-horizon").forEach(function(horizon) {
+        horizon.setAttribute("x1", xBounds.minX.toFixed(1));
+        horizon.setAttribute("x2", xBounds.maxX.toFixed(1));
+    });
 }
 
 function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitude, currentTs, currentX) {
@@ -1684,15 +2118,22 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
     var bodyKey = selector.indexOf("--moon") !== -1 ? "moon" : "sun";
     var displayLabel = belchertown_decode_html_entities(label);
     var alt = parseFloat(altitude);
-    var marker = jQuery(selector);
+    var marker = document.querySelector(selector);
     var projectedX;
     var projectedY;
     var bodyOffsetInfo = almanacBodyXOffsetInfo(bodyKey);
     var bodyOffset = bodyOffsetInfo.value;
 
-    if (!marker.length) {
+    if (!marker) {
         return;
     }
+
+    var setMarkerTitle = function() {
+        var titleEl = marker.querySelector("title");
+        if (titleEl) {
+            titleEl.textContent = displayLabel;
+        }
+    };
 
     // Python is authoritative for curve geometry. Marker position should be a
     // direct projection of live altitude at current time using the same x-offset.
@@ -1713,45 +2154,49 @@ function setAlmanacDiagramObject(selector, pathSelector, label, azimuth, altitud
 
     if (!point) {
         if (isFinite(alt)) {
-            marker.show();
-            marker.toggleClass("is-below-horizon", alt < 0);
-            marker.find("title").text(displayLabel);
+            marker.style.display = "";
+            marker.classList.toggle("is-below-horizon", alt < 0);
+            setMarkerTitle();
             return;
         }
-        marker.hide();
+        marker.style.display = "none";
         return;
     }
 
-    marker
-        .show()
-        .attr("transform", "translate(" + point.x.toFixed(1) + " " + point.y.toFixed(1) + ")")
-        .toggleClass("is-below-horizon", point.belowHorizon || (isFinite(alt) && alt < 0));
+    marker.style.display = "";
+    marker.setAttribute("transform", "translate(" + point.x.toFixed(1) + " " + point.y.toFixed(1) + ")");
+    marker.classList.toggle("is-below-horizon", point.belowHorizon || (isFinite(alt) && alt < 0));
 
-    marker.find("title").text(displayLabel);
+    setMarkerTitle();
 }
 
 function fitAlmanacDiagramViewBox(diagramData) {
-    var svg = jQuery(".almanac-diagram-svg");
+    var svgs = document.querySelectorAll(".almanac-diagram-svg");
 
-    if (!svg.length || !diagramData) {
+    if (!svgs.length || !diagramData) {
         return;
     }
 
     // Python is authoritative for content-fit SVG framing and viewport sizing.
     // Keep preserveAspectRatio aligned with server markup (no stretching).
-    svg.attr("preserveAspectRatio", "xMidYMid meet");
+    svgs.forEach(function(svg) {
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    });
 }
 
-jQuery(window).on("load orientationchange", function() {
+window.addEventListener("load", function() {
+    initializeAlmanacDiagramFromDOM();
+});
+window.addEventListener("orientationchange", function() {
     initializeAlmanacDiagramFromDOM();
 });
 
 function renderAlmanacDiagram(diagramData, preserveViewBox) {
-    var diagram = jQuery(".almanac-diagram");
+    var diagram = document.querySelector(".almanac-diagram");
 
     setAlmanacDiagramHorizonBounds();
 
-    if (!diagram.length) {
+    if (!diagram) {
         return;
     }
 
@@ -1769,7 +2214,7 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
         diagramData["moon"] = {};
     }
 
-    // Keep DOM data-* and jQuery data cache in sync with the freshest values
+    // Keep DOM data-* attributes in sync with the freshest values
     // so MQTT incremental updates don't fall back to stale template-time values.
     var sunAz = parseFloat(diagramData["sun"]["azimuth"]);
     var sunAlt = parseFloat(diagramData["sun"]["altitude"]);
@@ -1793,57 +2238,50 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
     resolvedCurrentX = almanacCurrentTimeToDiagramX(currentTs, currentX, fallbackCurrentX);
 
     if (isFinite(sunAz)) {
-        diagram.attr("data-sun-az", sunAz.toFixed(3));
-        diagram.data("sunAz", sunAz);
+        diagram.setAttribute("data-sun-az", sunAz.toFixed(3));
     }
     if (isFinite(sunAlt)) {
-        diagram.attr("data-sun-alt", sunAlt.toFixed(3));
-        diagram.data("sunAlt", sunAlt);
+        diagram.setAttribute("data-sun-alt", sunAlt.toFixed(3));
     }
     if (isFinite(moonAz)) {
-        diagram.attr("data-moon-az", moonAz.toFixed(3));
-        diagram.data("moonAz", moonAz);
+        diagram.setAttribute("data-moon-az", moonAz.toFixed(3));
     }
     if (isFinite(moonAlt)) {
-        diagram.attr("data-moon-alt", moonAlt.toFixed(3));
-        diagram.data("moonAlt", moonAlt);
+        diagram.setAttribute("data-moon-alt", moonAlt.toFixed(3));
     }
     writeAlmanacDiagramNumber(diagram, "data-sun-rise-epoch", "sunRiseEpoch", sunRiseEpoch);
     writeAlmanacDiagramNumber(diagram, "data-sun-set-epoch", "sunSetEpoch", sunSetEpoch);
     writeAlmanacDiagramNumber(diagram, "data-moon-rise-epoch", "moonRiseEpoch", moonRiseEpoch);
     writeAlmanacDiagramNumber(diagram, "data-moon-set-epoch", "moonSetEpoch", moonSetEpoch);
     if (isFinite(sunXOffset)) {
-        diagram.attr("data-sun-x-offset", sunXOffset.toFixed(3));
-        diagram.data("sunXOffset", sunXOffset);
+        diagram.setAttribute("data-sun-x-offset", sunXOffset.toFixed(3));
     }
     if (isFinite(moonXOffset)) {
-        diagram.attr("data-moon-x-offset", moonXOffset.toFixed(3));
-        diagram.data("moonXOffset", moonXOffset);
+        diagram.setAttribute("data-moon-x-offset", moonXOffset.toFixed(3));
     }
     if (centeringMode === "now" || centeringMode === "transit") {
-        diagram.attr("data-centering-mode", centeringMode);
-        diagram.data("centeringMode", centeringMode);
+        diagram.setAttribute("data-centering-mode", centeringMode);
     } else {
-        diagram.attr("data-centering-mode", "off");
-        diagram.data("centeringMode", "off");
+        diagram.setAttribute("data-centering-mode", "off");
     }
     if (isFinite(currentTs)) {
-        diagram.attr("data-current-ts", currentTs.toFixed(3));
-        diagram.data("currentTs", currentTs);
+        diagram.setAttribute("data-current-ts", currentTs.toFixed(3));
     }
     if (isFinite(resolvedCurrentX)) {
-        diagram.attr("data-current-x", resolvedCurrentX.toFixed(3));
-        diagram.data("currentX", resolvedCurrentX);
+        diagram.setAttribute("data-current-x", resolvedCurrentX.toFixed(3));
     }
 
-    diagram.removeClass("almanac-diagram--inactive");
+    diagram.classList.remove("almanac-diagram--inactive");
 
     // Python-authored SVG curves are authoritative. JS must never rewrite path d.
     // Keep only dynamic state classes in sync during live updates.
     setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--sun", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
     setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track--moon", diagramData && diagramData["moon"] && diagramData["moon"]["altitude"]);
+    if (isFinite(sunAlt)) {
+        setAlmanacDiagramTrackOrder(sunAlt >= 0);
+    }
 
-    if (!jQuery(".almanac-diagram-track--sun, .almanac-diagram-track--moon").length) {
+    if (!document.querySelector(".almanac-diagram-track--sun, .almanac-diagram-track--moon")) {
         setAlmanacDiagramTrackBelowHorizon(".almanac-diagram-track", diagramData && diagramData["sun"] && diagramData["sun"]["altitude"]);
     }
 
@@ -1873,22 +2311,16 @@ function renderAlmanacDiagram(diagramData, preserveViewBox) {
 }
 
 function initializeAlmanacDiagramFromDOM() {
-    var diagram = jQuery(".almanac-diagram");
+    var diagram = document.querySelector(".almanac-diagram");
 
-    if (!diagram.length) {
+    if (!diagram) {
         return;
     }
 
     var readNumericAttr = function(attrName, dataKey) {
-        var attrRaw = diagram.attr(attrName);
-        var attrParsed = parseFloat(attrRaw);
+        var attrParsed = parseFloat(diagram.getAttribute(attrName));
         if (isFinite(attrParsed)) {
             return attrParsed;
-        }
-
-        var dataParsed = parseFloat(diagram.data(dataKey));
-        if (isFinite(dataParsed)) {
-            return dataParsed;
         }
 
         return null;
@@ -1910,10 +2342,32 @@ function initializeAlmanacDiagramFromDOM() {
             set_epoch: readNumericAttr("data-moon-set-epoch", "moonSetEpoch"),
             x_offset: readNumericAttr("data-moon-x-offset", "moonXOffset")
         },
-        centering_mode: String(diagram.attr("data-centering-mode") || diagram.data("centeringMode") || "off").toLowerCase(),
+        centering_mode: String(diagram.getAttribute("data-centering-mode") || "off").toLowerCase(),
         current_ts: readNumericAttr("data-current-ts", "currentTs"),
         current_x: readNumericAttr("data-current-x", "currentX")
     });
+}
+
+function getConfiguredAutomaticThemeMode() {
+    return "$Extras.theme" === "sun" ? "sun" : "auto";
+}
+
+function getStoredAutomaticThemeMode() {
+    var themeMode = sessionStorage.getItem('theme');
+    if (themeMode === "auto" || themeMode === "sun") {
+        return themeMode;
+    }
+    return null;
+}
+
+function getEffectiveAutomaticThemeMode(themeMode) {
+    if (themeMode === "sun") {
+        return "sun";
+    }
+    if (themeMode === "auto") {
+        return getConfiguredAutomaticThemeMode();
+    }
+    return null;
 }
 
 function getPreferredColorSchemeTheme() {
@@ -2005,17 +2459,24 @@ function getSunriseSunsetTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_mi
     return dayTime ? "light" : "dark";
 }
 
-function applyAutoThemeChoice(themeName, reason) {
-    belchertown_debug("Auto theme: sessionStorage.getItem('theme') = " + sessionStorage.getItem('theme'));
+function applyAutomaticThemeChoice(themeMode, themeName, reason) {
+    var themeLabel = themeMode === "sun" ? "Daylight theme" : "Auto theme";
+    var storedThemeMode = sessionStorage.getItem('theme');
+    var effectiveThemeMode = getEffectiveAutomaticThemeMode(storedThemeMode);
+    belchertown_debug(themeLabel + ": sessionStorage.getItem('theme') = " + storedThemeMode);
 
-    if (sessionStorage.getItem('theme') == "auto") {
-        belchertown_debug("Auto theme: setting " + themeName + " theme from " + reason);
-        changeTheme(themeName);
+    if (storedThemeMode == themeMode || effectiveThemeMode == themeMode) {
+        belchertown_debug(themeLabel + ": setting " + themeName + " theme from " + reason);
+        changeTheme(themeName, false, "auto");
         return true;
     }
 
-    belchertown_debug("Auto theme: cannot set " + themeName + " theme since visitor used toggle to override theme. Refresh to reset the override.");
+    belchertown_debug(themeLabel + ": cannot set " + themeName + " theme since visitor used toggle to override theme. Refresh to reset the override.");
     return false;
+}
+
+function applyAutoThemeChoice(themeName, reason) {
+    return applyAutomaticThemeChoice("auto", themeName, reason);
 }
 
 function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
@@ -2043,21 +2504,59 @@ function autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
     return applyAutoThemeChoice(fallbackTheme, "sunrise/sunset fallback");
 }
 
-function ensureDarkThemeStylesheet() {
-    if (document.getElementById("belchertownDarkStyle")) {
-        return;
+function sunTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
+    // First check if ?theme= is in URL. If so, bail out and do not change anything.
+    const themeParam = getURLvar("theme");
+    var configuredAutoIsSun = themeParam === "auto" && getConfiguredAutomaticThemeMode() === "sun";
+    if (themeParam && themeParam !== "sun" && !configuredAutoIsSun) {
+        belchertown_debug("Daylight theme: theme override detected in URL. Skipping daylight theme");
+        return true;
+    }
+    belchertown_debug("Daylight theme: checking to see if theme needs to be switched");
+
+    var daylightTheme = getSunriseSunsetTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min);
+    if (!daylightTheme) {
+        return false;
     }
 
-    var darkStylesheet = document.createElement("link");
-    darkStylesheet.id = "belchertownDarkStyle";
-    darkStylesheet.rel = "stylesheet";
-    darkStylesheet.type = "text/css";
-    darkStylesheet.media = "all";
-    darkStylesheet.href = get_relative_url() + "/new-belchertown-dark.min.css?ver=$belchertown_version";
-    document.head.appendChild(darkStylesheet);
+    return applyAutomaticThemeChoice("sun", daylightTheme, "sunrise/sunset");
 }
 
-function changeTheme(themeName, toggleOverride = false) {
+function automaticTheme(themeMode, sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
+    if (themeMode === "sun") {
+        return sunTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min);
+    }
+    return autoTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min);
+}
+
+function configuredAutomaticTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
+    return automaticTheme(getConfiguredAutomaticThemeMode(), sunset_hour, sunset_min, sunrise_hour, sunrise_min);
+}
+
+function storedAutomaticTheme(sunset_hour, sunset_min, sunrise_hour, sunrise_min) {
+    var themeMode = getStoredAutomaticThemeMode();
+    if (!themeMode) {
+        return false;
+    }
+    return automaticTheme(getEffectiveAutomaticThemeMode(themeMode), sunset_hour, sunset_min, sunrise_hour, sunrise_min);
+}
+
+function setThemeModeControls(themeMode) {
+    if (themeMode === "sun") {
+        themeMode = "auto";
+    }
+    if (themeMode !== "auto" && themeMode !== "dark" && themeMode !== "light") {
+        themeMode = getStoredAutomaticThemeMode() ? 'auto' : (sessionStorage.getItem('currentTheme') || 'light');
+    }
+
+    document.querySelectorAll(".themeModeButton").forEach(function(el) {
+        var isActive = el.getAttribute("data-theme-mode") === themeMode;
+        el.classList.toggle("is-active", isActive);
+        el.setAttribute("aria-pressed", String(isActive));
+    });
+}
+
+function changeTheme(themeName, toggleOverride = false, themeMode = null) {
     belchertown_debug("Theme: Changing to " + themeName);
     // If the configured theme is auto, but the user toggles light/dark, remove the auto option.
     if (toggleOverride) {
@@ -2068,40 +2567,147 @@ function changeTheme(themeName, toggleOverride = false) {
         sessionStorage.setItem('theme', 'toggleOverride');
         belchertown_debug("Theme: sessionStorage.getItem('theme') is now: " + sessionStorage.getItem('theme'));
     }
+    var logoImage = document.getElementById("logo_image");
     if (themeName == "dark") {
-        ensureDarkThemeStylesheet();
-        // Apply dark theme
+        // Apply dark theme: Bootstrap's native colour mode plus the skin's body class
+        document.documentElement.setAttribute("data-bs-theme", "dark");
         // #if $radar_html_dark != "None"
-        jQuery('.radar_image').html('$radar_html_dark');
+        document.querySelectorAll('.radar_image').forEach(function(el) {
+            el.innerHTML = '$radar_html_dark';
+        });
         belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
         // #end if
-        jQuery('body').addClass("dark");
-        jQuery('body').removeClass("light");
-        // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        jQuery("#themeSwitch").prop("checked", true);
-        // #end if
+        document.body.classList.add("dark");
+        document.body.classList.remove("light");
+        setThemeModeControls(themeMode || (getStoredAutomaticThemeMode() ? 'auto' : 'dark'));
         // #if $Extras.has_key('logo_image_dark') and $Extras.logo_image_dark != ""
         belchertown_debug("Theme: logo_image_dark is defined.");
-        jQuery("#logo_image").attr("src", "$Extras.logo_image_dark");
+        if (logoImage) {
+            logoImage.src = "$Extras.logo_image_dark";
+        }
         // #end if
         sessionStorage.setItem('currentTheme', 'dark');
     } else if (themeName == "light") {
         // Apply light theme
+        document.documentElement.setAttribute("data-bs-theme", "light");
         // #if $radar_html_dark != "None"
-        jQuery('.radar_image').html('$radar_html');
+        document.querySelectorAll('.radar_image').forEach(function(el) {
+            el.innerHTML = '$radar_html';
+        });
         belchertown_schedule_deferred_iframes(document.querySelector(".radar_image"), 100);
         // #end if
-        jQuery('body').addClass("light");
-        jQuery('body').removeClass("dark");
-        // #if $Extras.has_key('theme_toggle_enabled') and $Extras.theme_toggle_enabled == '1'
-        jQuery("#themeSwitch").prop("checked", false);
-        // #end if
+        document.body.classList.add("light");
+        document.body.classList.remove("dark");
+        setThemeModeControls(themeMode || (getStoredAutomaticThemeMode() ? 'auto' : 'light'));
         // #if $Extras.has_key('logo_image') and $Extras.logo_image != ""
         belchertown_debug("Theme: logo_image is defined.");
-        jQuery("#logo_image").attr("src", "$Extras.logo_image");
+        if (logoImage) {
+            logoImage.src = "$Extras.logo_image";
+        }
         // #end if
         sessionStorage.setItem('currentTheme', 'light');
     }
+    refresh_aqi_color();
+}
+
+function belchertown_snapshot_number(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    var text = String(value).replace(/\u00a0/g, " ").replace(/,/g, ".").trim();
+    var parsed;
+
+    if (!text || text === "--" || text === "N/A") {
+        return null;
+    }
+
+    parsed = parseFloat(text);
+    return isFinite(parsed) ? parsed : null;
+}
+
+function belchertown_snapshot_metric_number(metric, rawKey, displayKey) {
+    var parsed;
+
+    if (!metric) {
+        return null;
+    }
+
+    parsed = belchertown_snapshot_number(metric[rawKey]);
+    if (parsed !== null) {
+        return parsed;
+    }
+
+    return belchertown_snapshot_number(metric[displayKey]);
+}
+
+function belchertown_snapshot_epoch_seconds(value) {
+    var parsed = belchertown_snapshot_number(value);
+
+    if (parsed === null || parsed <= 0) {
+        return null;
+    }
+
+    return parsed;
+}
+
+function belchertown_copy_snapshot_high(target, candidate) {
+    ["max", "max_raw", "maxtime", "maxtime_raw"].forEach(function(field) {
+        if (Object.prototype.hasOwnProperty.call(candidate, field)) {
+            target[field] = candidate[field];
+        }
+    });
+}
+
+function belchertown_normalize_snapshot_period_high(data, targetKey, lookbackDays) {
+    var target = data && data[targetKey] && data[targetKey]["outTemp"];
+    var current = data && data["current"] ? data["current"] : {};
+    var nowSeconds = belchertown_snapshot_epoch_seconds(current["datetime_raw"]);
+    var startSeconds;
+    var targetValue;
+
+    if (!target) {
+        return;
+    }
+
+    if (nowSeconds === null) {
+        nowSeconds = belchertown_snapshot_epoch_seconds(current["epoch"]);
+    }
+
+    if (nowSeconds === null) {
+        return;
+    }
+
+    startSeconds = nowSeconds - (lookbackDays * 24 * 60 * 60);
+    targetValue = belchertown_snapshot_metric_number(target, "max_raw", "max");
+
+    ["month", "year", "alltime"].forEach(function(periodKey) {
+        var candidate = data[periodKey] && data[periodKey]["outTemp"] ? data[periodKey]["outTemp"] : null;
+        var candidateValue = belchertown_snapshot_metric_number(candidate, "max_raw", "max");
+        var candidateTime = candidate ? belchertown_snapshot_epoch_seconds(candidate["maxtime_raw"]) : null;
+
+        if (
+            candidateValue !== null &&
+            candidateTime !== null &&
+            candidateTime >= startSeconds &&
+            candidateTime <= nowSeconds &&
+            (targetValue === null || candidateValue > targetValue)
+        ) {
+            belchertown_copy_snapshot_high(target, candidate);
+            targetValue = candidateValue;
+        }
+    });
+}
+
+function belchertown_normalize_snapshot_highs(data) {
+    if (!data) {
+        return data;
+    }
+
+    belchertown_normalize_snapshot_period_high(data, "week", 7);
+    belchertown_normalize_snapshot_period_high(data, "last365", 365);
+
+    return data;
 }
 
 async function ajaxweewx() {
@@ -2110,7 +2716,7 @@ async function ajaxweewx() {
     if (!resp.ok) {
         throw new Error("HTTP error! Unable to load weewx_data.json");
     } else {
-        return await resp.json();
+        return belchertown_normalize_snapshot_highs(await resp.json());
     }
 }
 
@@ -2137,7 +2743,7 @@ function formatAlmanacEpochTime(epoch, formatString, unavailableText) {
 }
 
 function enhanceAlmanacExtrasModal(almanacData) {
-    var modalBody = jQuery("#almanac-modal .almanac-extras-modal-body");
+    var modalBody = document.querySelector("#almanac-modal .almanac-extras-modal-body");
     var sourceRaw;
     var sourceLabel;
     var sourceNote;
@@ -2183,24 +2789,28 @@ function enhanceAlmanacExtrasModal(almanacData) {
         almanacTimeFormat = "LT";
     }
 
-    if (!modalBody.length) {
+    if (!modalBody) {
         return;
     }
 
     belchertown_decode_text_nodes(modalBody);
 
-    modalBody.find("table.celestial").each(function() {
-        var table = jQuery(this);
+    var rowCells = function(row, tagName) {
+        return Array.prototype.filter.call(row.children, function(cell) {
+            return cell.tagName === tagName;
+        });
+    };
 
-        table.find("tr").each(function() {
-            var row = jQuery(this);
-            var headerCells = row.children("th");
-            var cells = row.children("td");
+    modalBody.querySelectorAll("table.celestial").forEach(function(table) {
 
-            row.removeClass("celestial-row celestial-row--header celestial-row--item");
+        table.querySelectorAll("tr").forEach(function(row) {
+            var headerCells = rowCells(row, "TH");
+            var cells = rowCells(row, "TD");
+
+            row.classList.remove("celestial-row", "celestial-row--header", "celestial-row--item");
 
             if (headerCells.length) {
-                row.addClass("celestial-row celestial-row--header");
+                row.classList.add("celestial-row", "celestial-row--header");
                 return;
             }
 
@@ -2208,12 +2818,14 @@ function enhanceAlmanacExtrasModal(almanacData) {
                 return;
             }
 
-            cells.removeClass("celestial-cell-label celestial-cell-value");
+            cells.forEach(function(cell) {
+                cell.classList.remove("celestial-cell-label", "celestial-cell-value");
+            });
 
-            var labelCell = jQuery(cells[0]);
-            var valueCell = jQuery(cells[1]);
-            var labelText = labelCell.text().replace(/\u00a0/g, " ").trim();
-            var valueText = valueCell.text().replace(/\u00a0/g, " ").trim();
+            var labelCell = cells[0];
+            var valueCell = cells[1];
+            var labelText = labelCell.textContent.replace(/\u00a0/g, " ").trim();
+            var valueText = valueCell.textContent.replace(/\u00a0/g, " ").trim();
 
             // Remove spacer rows coming from legacy table formatting.
             if (!labelText && !valueText) {
@@ -2221,28 +2833,27 @@ function enhanceAlmanacExtrasModal(almanacData) {
                 return;
             }
 
-            row.addClass("celestial-row celestial-row--item");
-            labelCell.addClass("celestial-cell-label");
-            valueCell.addClass("celestial-cell-value");
+            row.classList.add("celestial-row", "celestial-row--item");
+            labelCell.classList.add("celestial-cell-label");
+            valueCell.classList.add("celestial-cell-value");
 
             // Localize date/time-like values independent of UI language.
             var looksLikeDateTime = /\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}/.test(valueText) && /\d{1,2}:\d{2}/.test(valueText);
             var looksLikeTimeOnly = !looksLikeDateTime && /\b\d{1,2}:\d{2}(:\d{2})?\b/.test(valueText);
             if (looksLikeDateTime && valueText && valueText !== "--") {
-                var parsed = moment(
+                var parsed = belchertown_parse_date_time(
                     valueText,
-                    belchertown_date_time_parse_formats(),
-                    true
+                    belchertown_date_time_parse_formats()
                 );
                 if (parsed.isValid()) {
-                    var formattedDateTime = parsed.locale(moment.locale()).format(almanacDateTimeFormat);
+                    var formattedDateTime = parsed.locale(dayjs.locale()).format(almanacDateTimeFormat);
                     formattedDateTime = formattedDateTime.replace(/\s([AP]M)$/i, "\u00a0$1");
-                    valueCell.text(formattedDateTime);
+                    valueCell.textContent = formattedDateTime;
                 } else {
-                    valueCell.text(valueText.replace(/\s([AP]M)$/i, "\u00a0$1"));
+                    valueCell.textContent = valueText.replace(/\s([AP]M)$/i, "\u00a0$1");
                 }
             } else if (looksLikeTimeOnly && valueText && valueText !== "--") {
-                var parsedTime = moment(
+                var parsedTime = dayjs(
                     valueText,
                     [
                         "HH:mm:ss",
@@ -2257,11 +2868,11 @@ function enhanceAlmanacExtrasModal(almanacData) {
                     true
                 );
                 if (parsedTime.isValid()) {
-                    var formattedTime = parsedTime.locale(moment.locale()).format(almanacTimeFormat);
+                    var formattedTime = parsedTime.locale(dayjs.locale()).format(almanacTimeFormat);
                     formattedTime = formattedTime.replace(/\s([AP]M)$/i, "\u00a0$1");
-                    valueCell.text(formattedTime);
+                    valueCell.textContent = formattedTime;
                 } else {
-                    valueCell.text(valueText.replace(/\s([AP]M)$/i, "\u00a0$1"));
+                    valueCell.textContent = valueText.replace(/\s([AP]M)$/i, "\u00a0$1");
                 }
             }
         });
@@ -2274,34 +2885,40 @@ function enhanceAlmanacExtrasModal(almanacData) {
         moonAgeValue = belchertown_decode_html_entities(weewx_data["almanac"]["moon"]["moon_age"]).replace(/\u00a0/g, " ").trim();
     }
     if (moonAgeValue && moonAgeValue !== "--") {
-        var moonTable = modalBody.find("table.celestial").eq(1);
-        if (moonTable.length) {
-            var moonAgeRow = moonTable.find("tr[data-row='moon-age']").first();
-            if (!moonAgeRow.length) {
-                moonAgeRow = jQuery("<tr class='celestial-row celestial-row--item' data-row='moon-age'><td class='label celestial-cell-label'></td><td class='data celestial-cell-value'></td></tr>");
-                moonAgeRow.find("td").eq(0).text(moonAgeLabel);
+        var moonTable = modalBody.querySelectorAll("table.celestial")[1];
+        if (moonTable) {
+            var moonAgeRow = moonTable.querySelector("tr[data-row='moon-age']");
+            if (!moonAgeRow) {
+                moonAgeRow = document.createElement("tr");
+                moonAgeRow.className = "celestial-row celestial-row--item";
+                moonAgeRow.setAttribute("data-row", "moon-age");
+                moonAgeRow.innerHTML = "<td class='label celestial-cell-label'></td><td class='data celestial-cell-value'></td>";
+                moonAgeRow.children[0].textContent = moonAgeLabel;
 
-                var phaseRow = jQuery();
-                moonTable.find("tr").each(function() {
-                    var row = jQuery(this);
-                    var tds = row.children("td");
+                var phaseRow = null;
+                var moonRows = moonTable.querySelectorAll("tr");
+                for (var ri = 0; ri < moonRows.length; ri++) {
+                    var tds = rowCells(moonRows[ri], "TD");
                     if (tds.length >= 2) {
-                        var lbl = jQuery(tds[0]).text().replace(/\u00a0/g, " ").trim().toLowerCase();
+                        var lbl = tds[0].textContent.replace(/\u00a0/g, " ").trim().toLowerCase();
                         if (lbl === phaseLabel || lbl.indexOf(phaseLabel) !== -1) {
-                            phaseRow = row;
-                            return false;
+                            phaseRow = moonRows[ri];
+                            break;
                         }
                     }
-                });
+                }
 
-                if (phaseRow.length) {
-                    moonAgeRow.insertBefore(phaseRow);
+                if (phaseRow) {
+                    phaseRow.parentNode.insertBefore(moonAgeRow, phaseRow);
                 } else {
-                    moonTable.append(moonAgeRow);
+                    (moonTable.tBodies[0] || moonTable).appendChild(moonAgeRow);
                 }
             }
 
-            moonAgeRow.find("td").eq(1).text(moonAgeValue);
+            var moonAgeCells = moonAgeRow.querySelectorAll("td");
+            if (moonAgeCells.length > 1) {
+                moonAgeCells[1].textContent = moonAgeValue;
+            }
         }
     }
 
@@ -2348,43 +2965,45 @@ function enhanceAlmanacExtrasModal(almanacData) {
         sourceLabel = sourceNoneLabel;
     }
 
-    sourceNote = modalBody.find(".celestial_source_note").first();
-    if (!sourceNote.length) {
-        sourceNote = jQuery('<div class="celestial_source_note"><small></small></div>');
+    sourceNote = modalBody.querySelector(".celestial_source_note");
+    if (!sourceNote) {
+        sourceNote = document.createElement("div");
+        sourceNote.className = "celestial_source_note";
+        sourceNote.appendChild(document.createElement("small"));
     }
 
-    sourceNoteSmall = sourceNote.find("small");
-    if (!sourceNoteSmall.length) {
-        sourceNoteSmall = jQuery("<small></small>");
-        sourceNote.empty().append(sourceNoteSmall);
+    sourceNoteSmall = sourceNote.querySelector("small");
+    if (!sourceNoteSmall) {
+        sourceNoteSmall = document.createElement("small");
+        sourceNote.innerHTML = "";
+        sourceNote.appendChild(sourceNoteSmall);
     }
-    sourceNoteSmall.html(
+    sourceNoteSmall.innerHTML = (
         belchertown_escape_html(dataSourceLabel) +
         ": <strong>" +
         belchertown_escape_html(sourceLabel) +
         "</strong>"
     );
 
-    detailsContainer = modalBody.find("#celestial_details").first();
-    if (detailsContainer.length) {
-        detailsContainer.append(sourceNote);
+    detailsContainer = modalBody.querySelector("#celestial_details");
+    if (detailsContainer) {
+        detailsContainer.appendChild(sourceNote);
     } else {
-        modalBody.append(sourceNote);
+        modalBody.appendChild(sourceNote);
     }
 
     // If total daylight remained '--', compute a local fallback from sunrise/sunset.
     daylightValue = null;
-    modalBody.find("table.celestial tr").each(function() {
-        var row = jQuery(this);
-        var tds = row.children("td");
+    modalBody.querySelectorAll("table.celestial tr").forEach(function(row) {
+        var tds = rowCells(row, "TD");
         if (tds.length >= 2) {
-            var lbl = jQuery(tds[0]).text().replace(/\u00a0/g, " ").trim().toLowerCase();
+            var lbl = tds[0].textContent.replace(/\u00a0/g, " ").trim().toLowerCase();
             if (lbl === totalDaylightLabel || lbl.indexOf(totalDaylightLabel) !== -1) {
-                daylightValue = jQuery(tds[1]);
+                daylightValue = tds[1];
             }
         }
     });
-    if (daylightValue && daylightValue.text().replace(/\u00a0/g, " ").trim() === "--") {
+    if (daylightValue && daylightValue.textContent.replace(/\u00a0/g, " ").trim() === "--") {
         sunriseEpoch = parseFloat(almanacData && almanacData["sunrise_epoch"]);
         sunsetEpoch = parseFloat(almanacData && almanacData["sunset_epoch"]);
         if (isFinite(sunriseEpoch) && isFinite(sunsetEpoch) && sunsetEpoch >= sunriseEpoch) {
@@ -2392,7 +3011,7 @@ function enhanceAlmanacExtrasModal(almanacData) {
             var hours = Math.floor(total / 3600);
             var mins = Math.floor((total % 3600) / 60);
             var secs = total % 60;
-            daylightValue.text(hours + hourShort + " " + mins + minuteShort + " " + secs + secondShort);
+            daylightValue.textContent = hours + hourShort + " " + mins + minuteShort + " " + secs + secondShort;
         }
     }
 }
@@ -2412,60 +3031,831 @@ function getNestedValue(obj, path, fallback = "N/A") {
     }
 }
 
+function formatSnapshotMetricValue(value) {
+    if (value === null || value === undefined || value === "") {
+        return "N/A";
+    }
+    return String(value).replace(/\//g, "&NoBreak;/&NoBreak;");
+}
+
 function updateDailySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".dailystatshigh").html(getNestedValue(d, ["outTemp", "max"]));
-    jQuery(".dailystatslow").html(getNestedValue(d, ["outTemp", "min"]));
-    jQuery(".dailystatswindavg").html(getNestedValue(d, ["wind", "average"]));
-    jQuery(".dailystatswindmax").html(getNestedValue(d, ["wind", "max"]));
-    jQuery(".dailystatsrain").html(getNestedValue(d, ["rain", "sum"]));
-    jQuery(".dailystatsrainrate").html(getNestedValue(d, ["rain", "max"]));
-    jQuery(".dailystatsuvavg").html(getNestedValue(d, ["uv", "average"]));
-    jQuery(".dailystatsuvmax").html(getNestedValue(d, ["uv", "max"]));
-    jQuery(".dailystatsradiationavg").html(getNestedValue(d, ["solar_radiation", "average"]));
-    jQuery(".dailystatsradiationmax").html(getNestedValue(d, ["solar_radiation", "max"]));
-    jQuery(".dailystatssunshineDur").html(getNestedValue(d, ["sunshineDur", "sum"]));
+    belchertown_set_html(".dailystatshigh", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
+    belchertown_set_html(".dailystatslow", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
+    belchertown_set_html(".dailystatswindavg", formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
+    belchertown_set_html(".dailystatswindmax", formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
+    belchertown_set_html(".dailystatsrain", formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
+    belchertown_set_html(".dailystatsrainrate", formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
+    belchertown_set_html(".dailystatsuvavg", formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
+    belchertown_set_html(".dailystatsuvmax", formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
+    belchertown_set_html(".dailystatsradiationavg", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
+    belchertown_set_html(".dailystatsradiationmax", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
+    belchertown_set_html(".dailystatssunshineDur", formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
     if (d["wind"] && d["wind"]["windrun"]) {
-        jQuery(".dailywindrun").html(d["wind"]["windrun"]);
+        belchertown_set_html(".dailywindrun", formatSnapshotMetricValue(d["wind"]["windrun"]));
+    }
+    if (typeof BU_applyDailySnapshot === "function") {
+        BU_applyDailySnapshot(data, key); // Unit Switcher: overwrite with chosen-unit values
     }
 }
 
 function updateMonthlySnapshot(data, key) {
     var d = data[key];
     if (!d) return;
-    jQuery(".monthstatshigh").html(getNestedValue(d, ["outTemp", "max"]));
-    jQuery(".monthstatslow").html(getNestedValue(d, ["outTemp", "min"]));
-    jQuery(".monthstatswindavg").html(getNestedValue(d, ["wind", "average"]));
-    jQuery(".monthstatswindmax").html(getNestedValue(d, ["wind", "max"]));
-    jQuery(".monthstatsrain").html(getNestedValue(d, ["rain", "sum"]));
-    jQuery(".monthstatsrainrate").html(getNestedValue(d, ["rain", "max"]));
-    jQuery(".monthstatsuvavg").html(getNestedValue(d, ["uv", "average"]));
-    jQuery(".monthstatsuvmax").html(getNestedValue(d, ["uv", "max"]));
-    jQuery(".monthstatsradiationavg").html(getNestedValue(d, ["solar_radiation", "average"]));
-    jQuery(".monthstatsradiationmax").html(getNestedValue(d, ["solar_radiation", "max"]));
+    belchertown_set_html(".monthstatshigh", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "max"])));
+    belchertown_set_html(".monthstatslow", formatSnapshotMetricValue(getNestedValue(d, ["outTemp", "min"])));
+    belchertown_set_html(".monthstatswindavg", formatSnapshotMetricValue(getNestedValue(d, ["wind", "average"])));
+    belchertown_set_html(".monthstatswindmax", formatSnapshotMetricValue(getNestedValue(d, ["wind", "max"])));
+    belchertown_set_html(".monthstatsrain", formatSnapshotMetricValue(getNestedValue(d, ["rain", "sum"])));
+    belchertown_set_html(".monthstatsrainrate", formatSnapshotMetricValue(getNestedValue(d, ["rain", "max"])));
+    belchertown_set_html(".monthstatsuvavg", formatSnapshotMetricValue(getNestedValue(d, ["uv", "average"])));
+    belchertown_set_html(".monthstatsuvmax", formatSnapshotMetricValue(getNestedValue(d, ["uv", "max"])));
+    belchertown_set_html(".monthstatsradiationavg", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "average"])));
+    belchertown_set_html(".monthstatsradiationmax", formatSnapshotMetricValue(getNestedValue(d, ["solar_radiation", "max"])));
+    belchertown_set_html(".monthstatssunshineDur", formatSnapshotMetricValue(getNestedValue(d, ["sunshineDur", "sum"])));
+    if (typeof BU_applyMonthlySnapshot === "function") {
+        BU_applyMonthlySnapshot(data, key); // Unit Switcher: overwrite with chosen-unit values
+    }
 }
 
-jQuery(document).on("change", "#snapshot-day-select", function() {
-    if (weewx_data) {
-        updateDailySnapshot(weewx_data, jQuery(this).val());
+document.addEventListener("change", function(event) {
+    var daySelect = event.target.closest("#snapshot-day-select");
+    if (daySelect && weewx_data) {
+        updateDailySnapshot(weewx_data, daySelect.value);
+        return;
+    }
+    var monthSelect = event.target.closest("#snapshot-month-select");
+    if (monthSelect && weewx_data) {
+        updateMonthlySnapshot(weewx_data, monthSelect.value);
     }
 });
 
-jQuery(document).on("change", "#snapshot-month-select", function() {
-    if (weewx_data) {
-        updateMonthlySnapshot(weewx_data, jQuery(this).val());
+
+// ============================================================================
+// Belchertown Unit Switcher
+// Base units are METRICWX (°C, m/s, hPa, mm) as published in weewx_data.json
+// *_raw fields and the MQTT payload's _C / _mps / _mbar / _mm suffixed keys.
+// Converts to the user's chosen display system and writes into the existing
+// DOM elements that update_weewx_data() / updateDailySnapshot() /
+// updateMonthlySnapshot() / MQTT handlers already populate.
+// ============================================================================
+#set $unitSwitcherJsEnabled = False
+#if $Extras.has_key('unit_switching') and str($Extras.unit_switching).strip() == "1"
+#set $unitSwitcherJsEnabled = True
+#end if
+
+// ── Forecast data is fetched server-side already converted into ONE fixed
+// system (us / si / ca / uk2), mirroring new_belchertown.py's
+// _normalize_forecast_units(). It is never re-fetched client-side, so we
+// read which of the four it is DIRECTLY from forecast.json's own "units"
+// field (every provider build function in new_belchertown.py stamps
+// "units": forecast_units into the payload - this is ground truth, not
+// an inference) and convert FROM that fixed system TO whichever display
+// system the user has chosen.
+//
+//   forecast_units | temp        | wind speed       | precip | visibility | pressure
+//   us             | fahrenheit  | mile_per_hour    | inch   | miles      | hPa (always)
+//   si             | celsius     | meter_per_second | mm     | km         | hPa (always)
+//   ca             | celsius     | km_per_hour      | mm     | km         | hPa (always)
+//   uk2            | celsius     | mile_per_hour    | mm     | miles      | hPa (always)
+function BU_resolveForecastBase(forecastData) {
+    var aliasMap = { imperial: "us", metric: "ca", metricwx: "si" };
+    var valid = ["us", "si", "ca", "uk2"];
+
+    // 1. Ground truth: the fetched payload's own "units" field.
+    if (forecastData && forecastData.units) {
+        var fromPayload = String(forecastData.units).trim().toLowerCase();
+        fromPayload = aliasMap[fromPayload] || fromPayload;
+        if (valid.indexOf(fromPayload) !== -1) {
+            return fromPayload;
+        }
     }
-});
+
+    // 2. Explicit site config, if set.
+    // #if $Extras.has_key('forecast_units') and $Extras.forecast_units.strip() != "" and $Extras.forecast_units.strip().lower() != "auto"
+    var explicit = "#echo $Extras.forecast_units.strip().lower() #";
+    explicit = aliasMap[explicit] || explicit;
+    if (valid.indexOf(explicit) !== -1) {
+        return explicit;
+    }
+    // #end if
+
+    // 3. Last resort: infer from the site's configured display unit labels.
+    var tempLabel = "$unit.label.outTemp";
+    var speedLabel = "$unit.label.windSpeed";
+    if (tempLabel.indexOf("F") !== -1) { return "us"; }
+    if (speedLabel.indexOf("km") !== -1) { return "ca"; }
+    if (speedLabel.indexOf("m/s") !== -1 || speedLabel.indexOf("mps") !== -1) { return "si"; }
+    return "uk2";
+}
+
+var BU_FORECAST_FROM = {
+    us:  { temp: function(f) { return (f - 32) * 5 / 9; },      speed: function(mph) { return mph / 2.23694; },  precip: function(inch) { return inch * 25.4; },  vis: function(mi) { return mi * 1.609344; } },
+    si:  { temp: function(c) { return c; },                      speed: function(ms)  { return ms; },             precip: function(mm)   { return mm; },           vis: function(km) { return km; } },
+    ca:  { temp: function(c) { return c; },                      speed: function(kmh) { return kmh / 3.6; },      precip: function(mm)   { return mm; },           vis: function(km) { return km; } },
+    uk2: { temp: function(c) { return c; },                      speed: function(mph) { return mph / 2.23694; },  precip: function(mm)   { return mm; },           vis: function(mi) { return mi * 1.609344; } },
+};
+
+// Convert a forecast value (already in baseKey's units) to METRICWX
+// (°C, m/s, mm, km) so it can be fed through the same BU_SYS converters used
+// for current conditions.
+function BU_forecastToMetricWX(kind, value, baseKey) {
+    var v = parseFloat(value);
+    if (isNaN(v)) { return null; }
+    var conv = BU_FORECAST_FROM[baseKey];
+    if (!conv || !conv[kind]) { return null; }
+    return conv[kind](v);
+}
+
+var BU_SYS = {
+    us:          { temp:function(c){return c*9/5+32;},   tl:"\u00b0F", speed:function(ms){return ms*2.23694;}, sl:"mph",  press:function(h){return h*0.02953;}, pl:"inHg", rain:function(mm){return mm*0.03937;}, rl:"in",  rrl:"in/h", distance:function(km){return km*0.621371;}, dl:"mi", altitude:function(m){return m*3.28084;}, al:"ft" },
+    uk:          { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*2.23694;}, sl:"mph",  press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km*0.621371;}, dl:"mi", altitude:function(m){return m;},         al:"m" },
+    metric:      { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*3.6;},     sl:"km/h", press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km", altitude:function(m){return m;},         al:"m" },
+    scandinavia: { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms;},         sl:"m/s",  press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km", altitude:function(m){return m;},         al:"m" },
+    canada:      { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*3.6;},     sl:"km/h", press:function(h){return h*0.1;},      pl:"kPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km;},          dl:"km", altitude:function(m){return m;},         al:"m" },
+    nautical:    { temp:function(c){return c;},           tl:"\u00b0C", speed:function(ms){return ms*1.94384;}, sl:"kt",   press:function(h){return h;},          pl:"hPa",  rain:function(mm){return mm;},         rl:"mm",  rrl:"mm/h", distance:function(km){return km*0.539957;}, dl:"nm", altitude:function(m){return m;},         al:"m" },
+};
+
+var BU_CONFIGURED_UNIT_NAMES = $configured_unit_names_by_kind_json;
+var BU_CONFIGURED_UNIT_LABELS = $configured_unit_labels_by_kind_json;
+
+// BEGIN MQTT CONFIGURED UNIT CONVERSION
+var BU_METRICWX_TO_CONFIGURED_UNIT = {
+    degree_c:          { kind: "temp",     convert: function(c) { return c; } },
+    degree_f:          { kind: "temp",     convert: function(c) { return c * 9 / 5 + 32; } },
+    meter_per_second:  { kind: "speed",    convert: function(ms) { return ms; } },
+    km_per_hour:       { kind: "speed",    convert: function(ms) { return ms * 3.6; } },
+    mile_per_hour:     { kind: "speed",    convert: function(ms) { return ms * 2.23694; } },
+    knot:              { kind: "speed",    convert: function(ms) { return ms * 1.94384; } },
+    beaufort:          { kind: "speed",    convert: function(ms) { return kts_to_beaufort(ms * 1.943844); } },
+    mbar:              { kind: "press",    convert: function(hpa) { return hpa; } },
+    hpa:               { kind: "press",    convert: function(hpa) { return hpa; } },
+    kpa:               { kind: "press",    convert: function(hpa) { return hpa * 0.1; } },
+    inhg:              { kind: "press",    convert: function(hpa) { return hpa * 0.02953; } },
+    mmhg:              { kind: "press",    convert: function(hpa) { return hpa * 0.7500617; } },
+    mm:                { kind: "rain",     convert: function(mm) { return mm; } },
+    cm:                { kind: "rain",     convert: function(mm) { return mm / 10; } },
+    inch:              { kind: "rain",     convert: function(mm) { return mm * 0.03937; } },
+    mm_per_hour:       { kind: "rainrate", convert: function(mm) { return mm; } },
+    cm_per_hour:       { kind: "rainrate", convert: function(mm) { return mm / 10; } },
+    inch_per_hour:     { kind: "rainrate", convert: function(mm) { return mm * 0.03937; } },
+    km:                { kind: "distance", convert: function(km) { return km; } },
+    mile:              { kind: "distance", convert: function(km) { return km * 0.621371; } },
+    nautical_mile:     { kind: "distance", convert: function(km) { return km * 0.539957; } },
+    meter:             { kind: "altitude", convert: function(m) { return m; } },
+    foot:              { kind: "altitude", convert: function(m) { return m * 3.28084; } },
+    microgram_per_meter_cubed: { kind: "concentration", convert: function(ug) { return ug; } },
+    milligram_per_meter_cubed: { kind: "concentration", convert: function(ug) { return ug / 1000; } },
+    gram_per_meter_cubed:      { kind: "concentration", convert: function(ug) { return ug / 1000000; } },
+};
+
+function BU_metricWXToConfiguredUnit(kind, value, unitName) {
+    var numericValue = parseFloat(value);
+    var normalizedUnit = String(unitName || "").trim().toLowerCase();
+    var converter = BU_METRICWX_TO_CONFIGURED_UNIT[normalizedUnit];
+    if (!isFinite(numericValue) || !converter || converter.kind !== kind) {
+        return null;
+    }
+    return converter.convert(numericValue);
+}
+// END MQTT CONFIGURED UNIT CONVERSION
+
+// ============================================================================
+// Chart unit classification & conversion
+// ============================================================================
+// Highcharts series JSON (homepage.json etc.) is pre-converted server-side
+// by HighchartsJsonGenerator using weewx.units.Converter.fromSkinDict() -
+// i.e. the SAME site-wide display unit as current conditions/snapshots, NOT
+// forecast's separate fixed system. Each series carries a human-readable
+// yAxis_label like "Temperature (\u00b0C)" or "Wind Speed (mph)", or (for
+// range/windBarb series) a raw WeeWX unit name like "degree_C" / "mile_per_hour"
+// in range_unit/obs_unit. BU_classifyChartUnit() reads either form and
+// returns {kind, fromMetricWX} - a function converting a METRICWX value
+// INTO that series' base unit, so we can invert it back to METRICWX, then
+// forward into the user's chosen system using the same BU_SYS table above.
+var BU_CHART_TO_METRICWX = {
+    // temperature
+    "\u00b0c": function(c) { return c; },
+    "degree_c": function(c) { return c; },
+    "\u00b0f": function(f) { return (f - 32) * 5 / 9; },
+    "degree_f": function(f) { return (f - 32) * 5 / 9; },
+    // wind speed
+    "mph": function(mph) { return mph / 2.23694; },
+    "mile_per_hour": function(mph) { return mph / 2.23694; },
+    "km/h": function(kmh) { return kmh / 3.6; },
+    "km_per_hour": function(kmh) { return kmh / 3.6; },
+    "m/s": function(ms) { return ms; },
+    "meter_per_second": function(ms) { return ms; },
+    "kt": function(kt) { return kt / 1.94384; },
+    "knot": function(kt) { return kt / 1.94384; },
+    // pressure
+    "hpa": function(h) { return h; },
+    "mbar": function(h) { return h; },
+    "kpa": function(kpa) { return kpa * 10; },
+    "inhg": function(inhg) { return inhg / 0.02953; },
+    // rain / rain rate
+    "mm/hr": function(mm) { return mm; },
+    "mm_per_hour": function(mm) { return mm; },
+    "mm": function(mm) { return mm; },
+    "cm/hr": function(cm) { return cm * 10; },
+    "cm_per_hour": function(cm) { return cm * 10; },
+    "cm": function(cm) { return cm * 10; },
+    "in/hr": function(inch) { return inch / 0.03937; },
+    "inch_per_hour": function(inch) { return inch / 0.03937; },
+    "in": function(inch) { return inch / 0.03937; },
+    "inch": function(inch) { return inch / 0.03937; },
+    // distance (e.g. windrun)
+    "km": function(km) { return km; },
+    "kilometer": function(km) { return km; },
+    "mi": function(mi) { return mi * 1.609344; },
+    "mile": function(mi) { return mi * 1.609344; },
+    // altitude
+    "m": function(m) { return m; },
+    "meter": function(m) { return m; },
+    "metre": function(m) { return m; },
+    "ft": function(ft) { return ft / 3.28084; },
+    "foot": function(ft) { return ft / 3.28084; },
+    "feet": function(ft) { return ft / 3.28084; },
+};
+
+function BU_chartUnitKind(unitToken) {
+    var t = unitToken.toLowerCase();
+    if (t.indexOf("c") !== -1 && (t === "\u00b0c" || t === "degree_c" || t === "c")) { return "temp"; }
+    if (t === "\u00b0f" || t === "degree_f" || t === "f") { return "temp"; }
+    if (t.indexOf("mph") !== -1 || t === "mile_per_hour") { return "speed"; }
+    if (t === "km/h" || t === "km_per_hour" || t === "kph") { return "speed"; }
+    if (t.indexOf("m/s") !== -1 || t === "meter_per_second" || t === "mps") { return "speed"; }
+    if (t === "kt" || t === "knot" || t.indexOf("knot") !== -1) { return "speed"; }
+    if (t.indexOf("hpa") !== -1 || t.indexOf("mbar") !== -1) { return "press"; }
+    if (t.indexOf("kpa") !== -1) { return "press"; }
+    if (t.indexOf("inhg") !== -1) { return "press"; }
+    if (t.indexOf("mm/hr") !== -1 || t === "mm_per_hour" || t.indexOf("cm/hr") !== -1 || t === "cm_per_hour") { return "rainrate"; }
+    if (t === "mm" || t.indexOf("millimeter") !== -1 || t === "cm") { return "rain"; }
+    if (t.indexOf("in/hr") !== -1 || t === "inch_per_hour") { return "rainrate"; }
+    if (t === "in" || t === "inch") { return "rain"; }
+    if (t === "km" || t.indexOf("kilometer") !== -1) { return "distance"; }
+    if (t === "mi" || t === "mile" || t.indexOf("mile") !== -1) { return "distance"; }
+    if (t === "m" || t === "meter" || t === "metre") { return "altitude"; }
+    if (t === "ft" || t === "foot" || t === "feet") { return "altitude"; }
+    return null;
+}
+
+// Extract the unit token from a yAxis_label like "Temperature (\u00b0C)" ->
+// "\u00b0c", or accept a raw WeeWX unit name like "degree_C" -> "degree_c" directly.
+function BU_extractUnitToken(label) {
+    if (!label) { return null; }
+    var s = String(label);
+    var m = s.match(/\(([^)]+)\)\s*$/);
+    if (m) { return m[1].trim().toLowerCase(); }
+    return s.trim().toLowerCase();
+}
+
+// Convert a single METRICWX value into the display system the user has
+// chosen, given the chart series' detected physical "kind".
+function BU_chartMetricWXToDisplay(kind, value) {
+    var sysKey = BU_getSystem();
+    var s = BU_SYS[sysKey];
+    if (!s) { return value; }
+    switch (kind) {
+        case "temp":     return s.temp(value);
+        case "speed":    return s.speed(value);
+        case "press":    return s.press(value);
+        case "rain":     return s.rain(value);
+        case "rainrate": return s.rain(value);
+        case "distance": return s.distance(value);
+        case "altitude": return s.altitude(value);
+        default:         return value;
+    }
+}
+
+function BU_chartUnitLabelFor(kind) {
+    var sysKey = BU_getSystem();
+    var s = BU_SYS[sysKey];
+    if (!s) { return ""; }
+    switch (kind) {
+        case "temp":     return s.tl;
+        case "speed":    return s.sl;
+        case "press":    return s.pl;
+        case "rain":     return s.rl;
+        case "rainrate": return s.rrl;
+        case "distance": return s.dl;
+        case "altitude": return s.al;
+        default:         return "";
+    }
+}
+
+// Convert a single chart value FROM its server-baked base unit TO METRICWX,
+// THEN to the user's chosen display unit, in one step. unitToken can be
+// either a yAxis_label-style "(\u00b0C)" string or a raw WeeWX unit name.
+function BU_convertChartValue(value, unitToken) {
+    var v = parseFloat(value);
+    if (isNaN(v) || !unitToken) { return value; }
+    var kind = BU_chartUnitKind(unitToken);
+    if (!kind) { return value; }
+    var toMetricFn = BU_CHART_TO_METRICWX[unitToken.toLowerCase()];
+    var metricVal = toMetricFn ? toMetricFn(v) : v;
+    return BU_chartMetricWXToDisplay(kind, metricVal);
+}
+
+function BU_getSystem() {
+    var defaultKey = window.BU_DEFAULT_UNIT_SYSTEM || "metric";
+    var key = defaultKey;
+    if (window.BU_UNIT_SWITCHER_ENABLED) {
+        try { key = localStorage.getItem("belchertown_unit_system") || defaultKey; } catch(e) {}
+    }
+    return BU_SYS[key] ? key : (BU_SYS[defaultKey] ? defaultKey : "metric");
+}
+
+function BU_fmt(v, dp) {
+    if (v === null || v === undefined || isNaN(v)) { return null; }
+    var decimals = parseInt(dp !== undefined ? dp : 1, 10);
+    if (isNaN(decimals)) { decimals = 1; }
+    return Number(v).toLocaleString("$system_locale_js", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function BU_obsDecimals(obsName, fallback) {
+    if (typeof unit_rounding_array === "object" && unit_rounding_array && unit_rounding_array.hasOwnProperty(obsName)) {
+        var rounding = unit_rounding_array[obsName];
+        if (rounding === "%d") { return 0; }
+        var parsed = parseInt(rounding, 10);
+        if (!isNaN(parsed)) { return parsed; }
+    }
+    return fallback;
+}
+
+function BU_setText(sel, val) {
+    if (val === null || val === undefined) { return; }
+    document.querySelectorAll(sel).forEach(function(el) { el.textContent = val; });
+}
+
+function BU_setHtml(sel, val) {
+    if (val === null || val === undefined) { return; }
+    document.querySelectorAll(sel).forEach(function(el) { el.innerHTML = val; });
+}
+
+// BEGIN ALWAYS-ON MQTT UNIT APPLICATION
+var BU_UNIT_SWITCHER_MEASUREMENT_KINDS = {
+    temp: true,
+    speed: true,
+    press: true,
+    rain: true,
+    rainrate: true,
+    distance: true,
+    altitude: true,
+};
+
+function BU_mqttDisplayMeasurement(value, kind, decimals, displayMeta) {
+    var numericValue = parseFloat(value);
+    if (!isFinite(numericValue)) { return null; }
+
+    var converted;
+    var label;
+    var unitName = "";
+    if (window.BU_UNIT_SWITCHER_ENABLED === true && BU_UNIT_SWITCHER_MEASUREMENT_KINDS[kind]) {
+        converted = BU_chartMetricWXToDisplay(kind, numericValue);
+        label = BU_chartUnitLabelFor(kind);
+    } else {
+        unitName = (displayMeta && displayMeta.unit_name) || BU_CONFIGURED_UNIT_NAMES[kind] || "";
+        converted = BU_metricWXToConfiguredUnit(kind, numericValue, unitName);
+        label = displayMeta && displayMeta.hasOwnProperty("unit_label")
+            ? displayMeta.unit_label
+            : BU_CONFIGURED_UNIT_LABELS[kind] || "";
+    }
+
+    var formatted = BU_fmt(converted, decimals);
+    if (formatted === null) { return null; }
+    return {
+        numeric: converted,
+        formatted: formatted,
+        label: String(label || "").replace(/&nbsp;/g, " ").trim(),
+        unitName: unitName,
+    };
+}
+
+function BU_formatCurrentObservation(value, kind, decimals, displayMeta) {
+    var measurement = BU_mqttDisplayMeasurement(value, kind, decimals, displayMeta);
+    if (!measurement) { return null; }
+    return measurement.formatted + (measurement.label ? "\u00a0" + measurement.label : "");
+}
+
+function BU_formatCurrentObservationTime(value) {
+    var timestamp = parseFloat(value);
+    if (!isFinite(timestamp) || typeof tzAdjustedMoment !== "function") { return null; }
+    return tzAdjustedMoment(timestamp).format("L LTS");
+}
+
+function BU_stationObservationUnitMetadata(data) {
+    return data &&
+        data.station_observations &&
+        data.station_observations.unit_switch &&
+        typeof data.station_observations.unit_switch === "object"
+        ? data.station_observations.unit_switch
+        : null;
+}
+
+function BU_applyStationObservationUnitMetadata(metaByObs, valueResolver) {
+    if (!metaByObs) { return; }
+    Object.keys(metaByObs).forEach(function(obsName) {
+        var meta = metaByObs[obsName];
+        if (!meta || !meta.selector || !meta.kind) { return; }
+        var rawValue = valueResolver ? valueResolver(obsName, meta) : meta.raw;
+        var value = meta.kind === "time"
+            ? BU_formatCurrentObservationTime(rawValue)
+            : BU_formatCurrentObservation(rawValue, meta.kind, meta.decimals, meta);
+        if (value !== null) {
+            BU_setHtml(meta.selector, value);
+        }
+    });
+}
+
+function BU_mqttObservationValue(obsName, meta, packet) {
+    if (!packet) { return null; }
+    var keys = [];
+    if (Array.isArray(meta.mqtt_keys)) {
+        keys = keys.concat(meta.mqtt_keys);
+    }
+    var selectorName = meta.selector ? String(meta.selector).replace(/^\./, "") : "";
+    var names = [obsName, selectorName];
+    if (meta.kind === "time") {
+        for (var timeIndex = 0; timeIndex < names.length; timeIndex++) {
+            var timeKey = names[timeIndex];
+            if (timeKey && packet[timeKey] !== undefined && packet[timeKey] !== null && packet[timeKey] !== "") {
+                return packet[timeKey];
+            }
+        }
+        return meta.raw;
+    }
+    for (var i = 0; i < keys.length; i++) {
+        if (packet[keys[i]] !== undefined && packet[keys[i]] !== null && packet[keys[i]] !== "") {
+            return packet[keys[i]];
+        }
+    }
+
+    var suffixedValue = BU_mqttPacketMetricWXValue(
+        packet,
+        names,
+        meta.kind,
+        BU_mqttMetricSuffixes(meta.kind),
+        null
+    );
+    if (suffixedValue !== null && suffixedValue !== undefined) {
+        return suffixedValue;
+    }
+
+    var fallbackKeys = [obsName, selectorName];
+    for (var j = 0; j < fallbackKeys.length; j++) {
+        var fallbackKey = fallbackKeys[j];
+        if (!fallbackKey || packet[fallbackKey] === undefined || packet[fallbackKey] === null || packet[fallbackKey] === "") {
+            continue;
+        }
+        var fallbackValue = parseFloat(packet[fallbackKey]);
+        if (isNaN(fallbackValue)) {
+            continue;
+        }
+        if (meta.kind === "concentration") {
+            return fallbackValue;
+        }
+        var label = "";
+        if (typeof unit_label_array === "object" && unit_label_array) {
+            label = unit_label_array[fallbackKey] || unit_label_array[obsName] || unit_label_array[selectorName] || "";
+        }
+        var token = BU_extractUnitToken(String(label || "").replace(/&nbsp;/g, " ").trim());
+        var toMetricWX = token ? BU_CHART_TO_METRICWX[token] : null;
+        if (toMetricWX) {
+            return toMetricWX(fallbackValue);
+        }
+    }
+
+    return meta.raw;
+}
+
+// BEGIN MQTT PAYLOAD NORMALIZATION
+function BU_mqttMetricSuffixes(kind) {
+    var suffixesByKind = {
+        temp: [
+            { suffix: "_C", toMetricWX: function(c) { return c; } },
+            { suffix: "_F", toMetricWX: function(f) { return (f - 32) * 5 / 9; } },
+        ],
+        press: [
+            { suffix: "_mbar", toMetricWX: function(hpa) { return hpa; } },
+            { suffix: "_hPa", toMetricWX: function(hpa) { return hpa; } },
+            { suffix: "_kPa", toMetricWX: function(kpa) { return kpa * 10; } },
+            { suffix: "_inHg", toMetricWX: function(inhg) { return inhg / 0.02953; } },
+            { suffix: "_mmHg", toMetricWX: function(mmhg) { return mmhg / 0.7500617; } },
+        ],
+        rain: [
+            { suffix: "_mm", toMetricWX: function(mm) { return mm; } },
+            { suffix: "_cm", toMetricWX: function(cm) { return cm * 10; } },
+            { suffix: "_inch", toMetricWX: function(inch) { return inch / 0.03937; } },
+        ],
+        rainrate: [
+            { suffix: "_mm_per_hour", toMetricWX: function(mm) { return mm; } },
+            { suffix: "_cm_per_hour", toMetricWX: function(cm) { return cm * 10; } },
+            { suffix: "_inch_per_hour", toMetricWX: function(inch) { return inch / 0.03937; } },
+        ],
+        speed: [
+            { suffix: "_mps", toMetricWX: function(ms) { return ms; } },
+            { suffix: "_kph", toMetricWX: function(kph) { return kph / 3.6; } },
+            { suffix: "_mph", toMetricWX: function(mph) { return mph / 2.23694; } },
+            { suffix: "_knot", toMetricWX: function(knot) { return knot / 1.94384; } },
+            { suffix: "_beaufort", toMetricWX: function(beaufort) {
+                var knots = beaufort_to_knots(beaufort);
+                return knots === null ? NaN : knots / 1.94384;
+            } },
+        ],
+        distance: [
+            { suffix: "_km", toMetricWX: function(km) { return km; } },
+            { suffix: "_mile", toMetricWX: function(mile) { return mile * 1.609344; } },
+        ],
+        altitude: [
+            { suffix: "_meter", toMetricWX: function(meter) { return meter; } },
+            { suffix: "_foot", toMetricWX: function(foot) { return foot / 3.28084; } },
+        ],
+        concentration: [
+            { suffix: "_microgram_per_meter_cubed", toMetricWX: function(ug) { return ug; } },
+            { suffix: "_milligram_per_meter_cubed", toMetricWX: function(mg) { return mg * 1000; } },
+            { suffix: "_gram_per_meter_cubed", toMetricWX: function(g) { return g * 1000000; } },
+        ],
+    };
+    return suffixesByKind[kind] || [];
+}
+
+function BU_mqttPacketMetricWXValue(packet, names, kind, rawSuffixes, fallbackRaw) {
+    if (!packet) { return null; }
+    rawSuffixes = rawSuffixes || [];
+    for (var i = 0; i < names.length; i++) {
+        for (var j = 0; j < rawSuffixes.length; j++) {
+            var key = names[i] + rawSuffixes[j].suffix;
+            if (packet[key] === undefined || packet[key] === null || packet[key] === "") {
+                continue;
+            }
+            var rawValue = parseFloat(packet[key]);
+            if (isNaN(rawValue)) {
+                continue;
+            }
+            return rawSuffixes[j].toMetricWX(rawValue);
+        }
+    }
+
+    for (var k = 0; k < names.length; k++) {
+        var fallbackKey = names[k];
+        if (!fallbackKey || packet[fallbackKey] === undefined || packet[fallbackKey] === null || packet[fallbackKey] === "") {
+            continue;
+        }
+        var fallbackValue = parseFloat(packet[fallbackKey]);
+        if (isNaN(fallbackValue)) {
+            continue;
+        }
+        var label = "";
+        if (typeof unit_label_array === "object" && unit_label_array) {
+            label = unit_label_array[fallbackKey] || "";
+        }
+        var token = BU_extractUnitToken(String(label || "").replace(/&nbsp;/g, " ").trim());
+        var toMetricWX = token ? BU_CHART_TO_METRICWX[token] : null;
+        if (toMetricWX && BU_chartUnitKind(token) === kind) {
+            return toMetricWX(fallbackValue);
+        }
+    }
+
+    return fallbackRaw;
+}
+// END MQTT PAYLOAD NORMALIZATION
+
+function BU_mqttTemperatureValue(packet, names, fallbackRaw) {
+    return BU_mqttPacketMetricWXValue(packet, names, "temp", BU_mqttMetricSuffixes("temp"), fallbackRaw);
+}
+
+function BU_applyOutTempColor(displayValue, unitLabel, unitName) {
+    if (displayValue === null || displayValue === undefined || isNaN(displayValue)) { return; }
+    var normalizedName = String(unitName || "").trim().toLowerCase();
+    if (normalizedName === "degree_f" || unitLabel === "\u00b0F") {
+        get_outTemp_color("degree_F", displayValue);
+    } else if (normalizedName === "degree_c" || unitLabel === "\u00b0C") {
+        get_outTemp_color("degree_C", displayValue);
+    }
+}
+
+// MQTT values are normalized on every live update. The optional unit switcher
+// only selects the target system; with it disabled, the configured WeeWX units
+// embedded above remain the target.
+function BU_applyMQTT(data) {
+    if (!data) { return; }
+
+    var tC = BU_mqttTemperatureValue(data, ["outTemp"], null);
+    var outTemp = BU_mqttDisplayMeasurement(tC, "temp", BU_obsDecimals("outTemp", 1));
+    if (outTemp) {
+        BU_setHtml(".outtemp", outTemp.formatted);
+        BU_setText(".outtempunitlabelsuper", outTemp.label);
+        BU_applyOutTempColor(outTemp.numeric, outTemp.label, outTemp.unitName);
+    }
+
+    var appC = BU_mqttTemperatureValue(data, ["appTemp"], null);
+    var appTemp = BU_mqttDisplayMeasurement(appC, "temp", BU_obsDecimals("appTemp", 1));
+    if (appTemp) {
+        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + appTemp.formatted + (appTemp.label ? "\u00a0" + appTemp.label : ""));
+    }
+
+    var wcC = BU_mqttTemperatureValue(data, ["windchill"], null);
+    var windchill = BU_mqttDisplayMeasurement(wcC, "temp", BU_obsDecimals("windchill", 1));
+    if (windchill) {
+        BU_setText(".curwindchill", windchill.formatted + (windchill.label ? "\u00a0" + windchill.label : ""));
+    }
+
+    var dpC = BU_mqttTemperatureValue(data, ["dewpoint"], null);
+    var dewpoint = BU_mqttDisplayMeasurement(dpC, "temp", BU_obsDecimals("dewpoint", 1));
+    if (dewpoint) {
+        BU_setText(".dewpoint", dewpoint.formatted + (dewpoint.label ? "\u00a0" + dewpoint.label : ""));
+    }
+
+    var wsMs = BU_mqttPacketMetricWXValue(data, ["windSpeed"], "speed", BU_mqttMetricSuffixes("speed"), null);
+    var windSpeed = BU_mqttDisplayMeasurement(wsMs, "speed", BU_obsDecimals("windSpeed", 0));
+    if (windSpeed) {
+        BU_setHtml(".curwindspeed", windSpeed.formatted);
+        BU_setText(".mph", windSpeed.label);
+    }
+
+    var wgMs = BU_mqttPacketMetricWXValue(data, ["windGust"], "speed", BU_mqttMetricSuffixes("speed"), null);
+    var windGust = BU_mqttDisplayMeasurement(wgMs, "speed", BU_obsDecimals("windGust", 0));
+    if (windGust) {
+        BU_setHtml(".curwindgust", windGust.formatted);
+    }
+
+    var bMb = BU_mqttPacketMetricWXValue(data, ["barometer"], "press", BU_mqttMetricSuffixes("press"), null);
+    var barometer = BU_mqttDisplayMeasurement(bMb, "press", BU_obsDecimals("barometer", 3));
+    if (barometer) {
+        BU_setHtml(".barometer", barometer.formatted + (barometer.label ? "\u00a0" + barometer.label : ""));
+    }
+
+    var drMm = BU_mqttPacketMetricWXValue(data, ["dayRain"], "rain", BU_mqttMetricSuffixes("rain"), null);
+    var dayRain = BU_mqttDisplayMeasurement(drMm, "rain", BU_obsDecimals("dayRain", 2));
+    if (dayRain) {
+        BU_setHtml(".dayRain", dayRain.formatted + (dayRain.label ? "\u00a0" + dayRain.label : ""));
+    }
+
+    var rrMm = BU_mqttPacketMetricWXValue(data, ["rainRate"], "rainrate", BU_mqttMetricSuffixes("rainrate"), null);
+    var rainRate = BU_mqttDisplayMeasurement(rrMm, "rainrate", BU_obsDecimals("rainRate", 2));
+    if (rainRate) {
+        BU_setHtml(".rainRate", rainRate.formatted + (rainRate.label ? "\u00a0" + rainRate.label : ""));
+    }
+
+    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(weewx_data), function(obsName, meta) {
+        return BU_mqttObservationValue(obsName, meta, data);
+    });
+}
+// END ALWAYS-ON MQTT UNIT APPLICATION
+
+#if $unitSwitcherJsEnabled
+
+// ── Re-render daily high/low and max gust from current weewx_data ──────────
+function BU_applyCurrent(data) {
+    if (!data) { return; }
+    var sysKey = BU_getSystem();
+    var s = BU_SYS[sysKey];
+    var cur = data["current"] || {};
+    var day = data["day"] || {};
+
+    // ── Current temperature ─────────────────────────────────────────────
+    var tC = parseFloat(cur.outTemp_raw);
+    if (tC !== null && tC !== undefined && !isNaN(tC)) {
+        var outTemp = BU_fmt(s.temp(tC), BU_obsDecimals("outTemp", 1));
+        BU_setHtml(".outtemp", outTemp);
+        BU_setText(".outtempunitlabelsuper", s.tl);
+        BU_applyOutTempColor(outTemp, s.tl);
+    }
+
+    var appC = parseFloat(cur.appTemp_raw);
+    if (appC !== null && appC !== undefined && !isNaN(appC)) {
+        BU_setText(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + BU_fmt(s.temp(appC), BU_obsDecimals("appTemp", 1)) + "\u00a0" + s.tl);
+    }
+
+    var wcC = parseFloat(cur.windchill_raw);
+    if (wcC !== null && wcC !== undefined && !isNaN(wcC)) { BU_setText(".curwindchill", BU_fmt(s.temp(wcC), BU_obsDecimals("windchill", 1)) + "\u00a0" + s.tl); }
+
+    var dpC = parseFloat(cur.dewpoint_raw);
+    if (dpC !== null && dpC !== undefined && !isNaN(dpC)) { BU_setText(".dewpoint", BU_fmt(s.temp(dpC), BU_obsDecimals("dewpoint", 1)) + "\u00a0" + s.tl); }
+
+    // ── Current wind ─────────────────────────────────────────────────────
+    var wsMs = parseFloat(cur.windspeed_raw);
+    var wgMs = parseFloat(cur.windGust_raw);
+    if (!isNaN(wsMs)) { BU_setHtml(".curwindspeed", BU_fmt(s.speed(wsMs), BU_obsDecimals("windSpeed", 0))); BU_setText(".mph", s.sl); }
+    if (!isNaN(wgMs)) { BU_setHtml(".curwindgust",  BU_fmt(s.speed(wgMs), BU_obsDecimals("windGust", 0))); }
+
+    // ── Current pressure ────────────────────────────────────────────────
+    var bMb = parseFloat(cur.barometer_raw);
+    if (!isNaN(bMb)) { BU_setHtml(".barometer", BU_fmt(s.press(bMb), BU_obsDecimals("barometer", 3)) + "\u00a0" + s.pl); }
+
+    // ── Current rain ─────────────────────────────────────────────────────
+    var drMm = parseFloat(cur.dayRain_raw);
+    var rrMm = parseFloat(cur.rainRate_raw);
+    if (!isNaN(drMm)) { BU_setHtml(".dayRain",  BU_fmt(s.rain(drMm), BU_obsDecimals("dayRain", 2)) + "\u00a0" + s.rl);  }
+    if (!isNaN(rrMm)) { BU_setHtml(".rainRate", BU_fmt(s.rain(rrMm), BU_obsDecimals("rainRate", 2)) + "\u00a0" + s.rrl); }
+
+    // ── Daily high/low/gust ──────────────────────────────────────────────
+    var hiC = parseFloat((day.outTemp || {}).max_raw);
+    var loC = parseFloat((day.outTemp || {}).min_raw);
+    if (!isNaN(hiC)) { BU_setHtml(".high", BU_fmt(s.temp(hiC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
+    if (!isNaN(loC)) { BU_setHtml(".low",  BU_fmt(s.temp(loC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
+
+    var gustMs = parseFloat((day.wind || {}).max_raw);
+    if (!isNaN(gustMs)) { BU_setHtml(".dailymaxgust", BU_fmt(s.speed(gustMs), BU_obsDecimals("windGust", 0))); }
+
+    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(data));
+}
+
+// ── Re-render the daily/weekly/yesterday snapshot grid ─────────────────────
+function BU_applySnapshot(data, key, prefix) {
+    if (!data) { return; }
+    var d = data[key];
+    if (!d) { return; }
+    var sysKey = BU_getSystem();
+    var s = BU_SYS[sysKey];
+
+    var hiC = parseFloat((d.outTemp || {}).max_raw);
+    var loC = parseFloat((d.outTemp || {}).min_raw);
+    if (!isNaN(hiC)) { BU_setHtml("." + prefix + "high", BU_fmt(s.temp(hiC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
+    if (!isNaN(loC)) { BU_setHtml("." + prefix + "low",  BU_fmt(s.temp(loC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
+
+    var wAvgMs = parseFloat((d.wind || {}).avg_raw);
+    var wMaxMs = parseFloat((d.wind || {}).max_raw);
+    if (!isNaN(wAvgMs)) { BU_setHtml("." + prefix + "windavg", BU_fmt(s.speed(wAvgMs), BU_obsDecimals("windSpeed", 0)) + "\u00a0" + s.sl); }
+    if (!isNaN(wMaxMs)) { BU_setHtml("." + prefix + "windmax", BU_fmt(s.speed(wMaxMs), BU_obsDecimals("windGust", 0)) + "\u00a0" + s.sl); }
+
+    var rSumMm = parseFloat((d.rain || {}).sum_raw);
+    var rMaxMm = parseFloat((d.rain || {}).max_raw);
+    if (!isNaN(rSumMm)) { BU_setHtml("." + prefix + "rain",     BU_fmt(s.rain(rSumMm), BU_obsDecimals("rain", 2)) + "\u00a0" + s.rl);  }
+    if (!isNaN(rMaxMm)) { BU_setHtml("." + prefix + "rainrate", BU_fmt(s.rain(rMaxMm), BU_obsDecimals("rainRate", 2)) + "\u00a0" + s.rrl); }
+}
+
+function BU_applyDailySnapshot(data, key) { BU_applySnapshot(data, key, "dailystats"); }
+function BU_applyMonthlySnapshot(data, key) { BU_applySnapshot(data, key, "monthstats"); }
+
+// ── Re-apply everything we know about when the user switches systems ───────
+function BU_reapplyAll() {
+    if (typeof weewx_data === "object" && weewx_data) {
+        BU_applyCurrent(weewx_data);
+        var daySelectEl = document.getElementById("snapshot-day-select");
+        var dayKey = (daySelectEl && daySelectEl.value) || "day";
+        BU_applyDailySnapshot(weewx_data, dayKey);
+        var monthSelectEl = document.getElementById("snapshot-month-select");
+        var monthKey = (monthSelectEl && monthSelectEl.value) || "month";
+        BU_applyMonthlySnapshot(weewx_data, monthKey);
+    }
+    if (window.BU_lastMQTT) { BU_applyMQTT(window.BU_lastMQTT); }
+    if (typeof window.BU_reapplyForecast === "function") { window.BU_reapplyForecast(); }
+    if (typeof window.BU_reapplyCharts === "function") { window.BU_reapplyCharts(); }
+
+    // Homepage's mini-charts only render once they scroll into view
+    // (belchertown_run_when_visible). If the user switches units before
+    // scrolling that far, BU_lastChartsRaw has nothing cached for that
+    // chartgroup yet. Force it to render now with forceRender=true so it
+    // picks up the just-changed unit on its first (and only) render -
+    // BU_convertSeriesUnits reads the current system fresh from
+    // localStorage, so this naturally renders correctly without needing
+    // BU_reapplyCharts to find it afterward.
+    if (typeof window.renderHomepageCharts === "function") {
+        window.renderHomepageCharts(true);
+    }
+}
+
+window.addEventListener("belchertownUnitsChanged", BU_reapplyAll);
+
+// ── Sitewide header-temperature init ────────────────────────────────────
+// update_weewx_data() (which populates the global `weewx_data` BU_reapplyAll
+// reads from) was previously only ever called from index_html.tmpl's own
+// inline script - meaning every other page (records, reports, charts,
+// about...) left `weewx_data` empty, so switching units there had nothing
+// to convert the header's .outtemp span from and it stayed stuck in
+// whatever unit the report was generated in.
+//
+// Rather than invoke the full update_weewx_data() here (which also drives
+// homepage-only things like the almanac diagram and snapshot panels),
+// just fetch weewx_data.json and apply the unit-aware conversion directly -
+// the same thing BU_reapplyAll() does once weewx_data is populated.
+if (typeof ajaxweewx === "function") {
+    ajaxweewx().then(function(data) {
+        if (typeof weewx_data !== "object" || !weewx_data) {
+            weewx_data = data;
+        }
+        BU_applyCurrent(data);
+    }).catch(function(e) {});
+}
+
+// ============================================================================
+// End Belchertown Unit Switcher
+// ============================================================================
+#end if
 
 function update_weewx_data(data) {
     belchertown_debug("Updating WeeWX data");
     weewx_data = data;
 
-    // #if $Extras.has_key("theme") and $Extras.theme == 'auto'
-    // Auto theme if enabled
-    autoTheme(data["almanac"]["sunset_hour"], data["almanac"]["sunset_minute"], data["almanac"]["sunrise_hour"], data["almanac"]["sunrise_minute"]);
-    // #end if
+    // Auto theme if enabled. The stored mode decides whether this follows the
+    // system color scheme or sunrise/sunset.
+    storedAutomaticTheme(data["almanac"]["sunset_hour"], data["almanac"]["sunset_minute"], data["almanac"]["sunrise_hour"], data["almanac"]["sunrise_minute"]);
 
     //station_obs_array = data["station_observations"];
     unit_rounding_array = data["unit_rounding"];
@@ -2474,8 +3864,11 @@ function update_weewx_data(data) {
     // Daily High Low
     high = data["day"]["outTemp"]["max"];
     low = data["day"]["outTemp"]["min"];
-    jQuery(".high").html(high);
-    jQuery(".low").html(low);
+    belchertown_set_html(".high", high);
+    belchertown_set_html(".low", low);
+    if (typeof BU_applyCurrent === "function") {
+        BU_applyCurrent(data); // Unit Switcher: overwrite with chosen-unit values
+    }
 
     try {
         // Barometer trending by finding a negative number
@@ -2485,50 +3878,55 @@ function update_weewx_data(data) {
     }
 
     if (count >= 1) {
-        jQuery(".pressure-trend").html('<i class="fa fa-arrow-down barometer-down"></i>');
+        belchertown_set_html(".pressure-trend", '<i class="fa fa-arrow-down barometer-down"></i>');
     } else {
-        jQuery(".pressure-trend").html('<i class="fa fa-arrow-up barometer-up"></i>');
+        belchertown_set_html(".pressure-trend", '<i class="fa fa-arrow-up barometer-up"></i>');
     }
 
     // Daily max gust span
-    jQuery(".dailymaxgust").html(parseFloat(data["day"]["wind"]["max"]).toFixed(1));
+    belchertown_set_html(".dailymaxgust", parseFloat(data["day"]["wind"]["max"]).toFixed(1));
+    // (dailymaxgust unit-corrected by BU_applyCurrent above)
 
     // Daily Snapshot Stats Section — use current dropdown selection (default: "day")
-    var dayKey = jQuery("#snapshot-day-select").val() || "day";
+    var daySelectEl = document.getElementById("snapshot-day-select");
+    var dayKey = (daySelectEl && daySelectEl.value) || "day";
     updateDailySnapshot(data, dayKey);
 
     // Month Snapshot Stats Section — use current dropdown selection (default: "month")
-    var monthKey = jQuery("#snapshot-month-select").val() || "month";
+    var monthSelectEl = document.getElementById("snapshot-month-select");
+    var monthKey = (monthSelectEl && monthSelectEl.value) || "month";
     updateMonthlySnapshot(data, monthKey);
 
     // Sunrise, sunset, moonrise and moonset
-    jQuery(".sunrise-value").text(formatAlmanacEpochTime(data["almanac"]["sunrise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["sunrise"] || "N/A"));
-    jQuery(".sunset-value").text(formatAlmanacEpochTime(data["almanac"]["sunset_epoch"], belchertown_label_text("$obs.label.time_sunset"), data["almanac"]["sunset"] || "N/A"));
-    jQuery(".moonrise-value").text(formatAlmanacEpochTime(data["almanac"]["moon"]["moon_rise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_rise"] || "N/A"));
-    jQuery(".moonset-value").text(formatAlmanacEpochTime(data["almanac"]["moon"]["moon_set_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_set"] || "N/A"));
+    belchertown_set_text(".sunrise-value", formatAlmanacEpochTime(data["almanac"]["sunrise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["sunrise"] || "N/A"));
+    belchertown_set_text(".sunset-value", formatAlmanacEpochTime(data["almanac"]["sunset_epoch"], belchertown_label_text("$obs.label.time_sunset"), data["almanac"]["sunset"] || "N/A"));
+    belchertown_set_text(".moonrise-value", formatAlmanacEpochTime(data["almanac"]["moon"]["moon_rise_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_rise"] || "N/A"));
+    belchertown_set_text(".moonset-value", formatAlmanacEpochTime(data["almanac"]["moon"]["moon_set_epoch"], belchertown_label_text("$obs.label.time_sunrise"), data["almanac"]["moon"]["moon_set"] || "N/A"));
 
     // Moon icon, phase and illumination percent
-    jQuery(".moon-container > .moon-icon").html(render_moon_icon_html(data));
-    jQuery(".moon-phase").text(titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
-    jQuery(".moon-visible").html("<strong>" + belchertown_escape_html(data["almanac"]["moon"]["moon_fullness"]) + "%</strong> " + belchertown_label_html("$obs.label.moon_visible"));
+    belchertown_set_html(".moon-container > .moon-icon", render_moon_icon_html(data));
+    belchertown_set_text(".moon-phase", titleCase(data["almanac"]["moon"]["moon_phase"])); // Javascript function above
+    belchertown_set_html(".moon-visible", "<strong>" + belchertown_escape_html(data["almanac"]["moon"]["moon_fullness"]) + "%</strong> " + belchertown_label_html("$obs.label.moon_visible"));
 
     // Do not synthesize daylight text in JS. Keep server-rendered daylight
     // string authoritative (includes change-vs-yesterday when available).
 
+    renderEarthquakeData(data);
     renderAlmanacDiagram(data["almanac"]["diagram"]);
     // #if $almanac.hasExtras
     // Close current modal if open
-    if (jQuery.fn.modal && jQuery('#almanac-modal').length) {
-        jQuery('#almanac-modal').modal('hide');
+    var almanacModalToHide = document.getElementById('almanac-modal');
+    if (almanacModalToHide && typeof bootstrap !== "undefined" && bootstrap.Modal) {
+        bootstrap.Modal.getOrCreateInstance(almanacModalToHide).hide();
     }
     if (data["almanac"] && typeof data["almanac"]["almanac_extras_modal_html"] === "string" && data["almanac"]["almanac_extras_modal_html"].length > 0) {
-        jQuery(".almanac-extras-modal-body").html(data["almanac"]["almanac_extras_modal_html"]);
-        belchertown_decode_text_nodes(jQuery(".almanac-extras-modal-body"));
+        belchertown_set_html(".almanac-extras-modal-body", data["almanac"]["almanac_extras_modal_html"]);
+        belchertown_decode_text_nodes(document.querySelector(".almanac-extras-modal-body"));
     }
     enhanceAlmanacExtrasModal(data["almanac"]);
     try {
         almanac_updated = belchertown_label_text("$obs.label.header_last_updated") + " " + tzAdjustedMoment(data["current"]["datetime_raw"]).format(belchertown_label_text("$obs.label.time_last_updated"));
-        jQuery(".almanac_last_updated").text(almanac_updated);
+        belchertown_set_text(".almanac_last_updated", almanac_updated);
     } catch (err) {
         // Returned "current" data does not have this value
     }
@@ -2619,7 +4017,7 @@ function render_oriented_moon_svg(illuminationFraction, waxing, orientationDeg) 
     var litPath = moon_illuminated_path(illuminationFraction, waxing, cx, cy, r);
     var litFillRule = illuminationFraction > 0.5 && illuminationFraction < 1 ? "evenodd" : "nonzero";
 
-    var isDarkTheme = jQuery("body").hasClass("dark") || sessionStorage.getItem('currentTheme') === 'dark';
+    var isDarkTheme = document.body.classList.contains("dark") || sessionStorage.getItem('currentTheme') === 'dark';
     var moonDark = isDarkTheme ? "#6b7280" : "#8b95a5";
     var moonLight = isDarkTheme ? "#e5ebf7" : "#f6f8fc";
     var moonEdge = isDarkTheme ? "#cbd5e1" : "#6b7280";
@@ -2738,7 +4136,9 @@ window.addEventListener("resize", forecast_sync_row_height);
 //  function to display selected forecast according to value of interval (1, 3 or 24); 0 hides all forecasts
 function forecast_select(interval) {
     if (interval == 0) {
-        jQuery(".forecastrow").hide();
+        document.querySelectorAll(".forecastrow").forEach(function(el) {
+            el.style.display = "none";
+        });
     } else {
         forecast_sync_row_height();
         oldinterval = sessionStorage.getItem("forecastInterval");

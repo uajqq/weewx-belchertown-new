@@ -4,13 +4,13 @@
 <footer class="site-footer">
     <div class="wrap">
         <div class="row">
-            <div class="col-sm-4 footerLeft">
+            <div class="col-md-4 footerLeft">
                 $obs.label.copyright &copy; $current.dateTime.format("%Y") $obs.label.footer_copyright_text
             </div>
-            <div class="col-sm-4 footerCenter">
+            <div class="col-md-4 footerCenter">
                 <strong>$obs.label.footer_disclaimer_text</strong>
             </div>
-            <div class="col-sm-4 footerRight">
+            <div class="col-md-4 footerRight">
                 $obs.label.footer_theme_by <a href="https://github.com/uajqq/weewx-belchertown-new" target="_blank">Pat O'Brien and uajqq</a>
             </div>
         </div>
@@ -18,7 +18,228 @@
 </footer>
 
 #if $page != "kiosk" and $page != "pi"
-<script defer type='text/javascript' src='$relative_url/js/responsive-menu${asset_suffix}.js?ver=$asset_version'></script>
+## Offcanvas mobile menu. Lives at the end of <body>: Bootstrap positions the
+## panel with position:fixed, which breaks inside the header wrappers.
+<div class="offcanvas offcanvas-end" tabindex="-1" id="site-offcanvas" aria-label="$obs.label.nav_menu">
+    <div class="offcanvas-header">
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="$obs.label.close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <ul class="offcanvas-nav-list"></ul>
+        <div class="offcanvas-settings">
+            <h6 class="offcanvas-settings-heading">$obs.label.appearance_heading</h6>
+            <div class="offcanvas-theme-row">
+                <div class="themeModeButtons" role="group" aria-label="$obs.label.appearance_heading">
+                    <button type="button" class="themeModeButton $themeModeAutoActive" data-theme-mode="auto" aria-pressed="$themeModeAutoPressed">$obs.label.theme_auto</button>
+                    <button type="button" class="themeModeButton $themeModeLightActive" data-theme-mode="light" aria-pressed="$themeModeLightPressed">$obs.label.theme_light</button>
+                    <button type="button" class="themeModeButton $themeModeDarkActive" data-theme-mode="dark" aria-pressed="$themeModeDarkPressed">$obs.label.theme_dark</button>
+                </div>
+            </div>
+            #if $unitSwitcherEnabled
+            <h6 class="offcanvas-settings-heading">Units</h6>
+            <div class="offcanvas-theme-row">
+                <select class="unitSwitcherSelect" aria-label="Units">
+                    <option value="" selected>Default ($unitSwitcherDefaultLabel)</option>
+                    <option value="us">US Customary</option>
+                    <option value="uk">UK</option>
+                    <option value="metric">Metric</option>
+                    <option value="scandinavia">Scandinavia</option>
+                    <option value="canada">Canada</option>
+                    <option value="nautical">Nautical</option>
+                </select>
+            </div>
+            #end if
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    // Bind to the final click activation only, and only ever request show().
+    // That keeps repeated activation from closing the drawer during its opening
+    // sequence, which can look like a flicker on touch devices.
+    var btn = document.querySelector(".menu-offcanvas-toggle");
+    var panel = document.getElementById("site-offcanvas");
+    var desktopMenu = document.getElementById("menu-menu");
+    var offcanvasMenu = panel ? panel.querySelector(".offcanvas-nav-list") : null;
+    if (!btn || !panel) { return; }
+
+    function directSubMenu(item) {
+        for (var i = 0; i < item.children.length; i++) {
+            if (item.children[i].classList && item.children[i].classList.contains("sub-menu")) {
+                return item.children[i];
+            }
+        }
+        return null;
+    }
+
+    function normalizeSubMenus(menu, trackExpandedState) {
+        if (!menu) { return; }
+        var containers = [menu].concat(Array.prototype.slice.call(menu.querySelectorAll(".sub-menu")));
+
+        containers.forEach(function(container) {
+            Array.prototype.slice.call(container.children).forEach(function(child) {
+                if (!child.classList || !child.classList.contains("sub-menu")) {
+                    return;
+                }
+
+                var previousItem = child.previousElementSibling;
+                if (!previousItem || !previousItem.classList || !previousItem.classList.contains("menu-item")) {
+                    return;
+                }
+
+                previousItem.appendChild(child);
+                previousItem.classList.add("menu-item-has-children");
+            });
+        });
+
+        menu.querySelectorAll(".menu-item > .sub-menu").forEach(function(submenu) {
+            submenu.parentElement.classList.add("menu-item-has-children");
+            if (trackExpandedState) {
+                submenu.parentElement.setAttribute("aria-expanded", "false");
+            }
+        });
+    }
+
+    function closeSubMenu(item) {
+        item.classList.remove("menu-open");
+        item.setAttribute("aria-expanded", "false");
+    }
+
+    function removeDuplicateIds(element) {
+        if (element.removeAttribute) {
+            element.removeAttribute("id");
+        }
+        if (element.querySelectorAll) {
+            element.querySelectorAll("[id]").forEach(function(child) {
+                child.removeAttribute("id");
+            });
+        }
+    }
+
+    function populateOffcanvasMenu(sourceMenu, targetMenu) {
+        if (!sourceMenu || !targetMenu) { return; }
+        targetMenu.innerHTML = "";
+        Array.prototype.slice.call(sourceMenu.children).forEach(function(child) {
+            if (!child.classList || !child.classList.contains("menu-item")) {
+                return;
+            }
+            // The Settings gear has its own dedicated panel further down the
+            // offcanvas, so don't mirror it into the mobile nav list.
+            if (child.classList.contains("menu-settings")) {
+                return;
+            }
+            var clone = child.cloneNode(true);
+            removeDuplicateIds(clone);
+            targetMenu.appendChild(clone);
+        });
+    }
+
+    function setupOffcanvasSubMenus(menu) {
+        if (!menu) { return; }
+        menu.addEventListener("click", function(event) {
+            var target = event.target;
+            if (!target || typeof target.closest !== "function") { return; }
+            var item = target.closest(".menu-item-has-children");
+            if (!item || !menu.contains(item)) { return; }
+
+            var submenu = directSubMenu(item);
+            if (!submenu || submenu.contains(target)) { return; }
+
+            event.preventDefault();
+            var isOpen = item.classList.toggle("menu-open");
+            item.setAttribute("aria-expanded", String(isOpen));
+        });
+    }
+
+    function setupSettingsHoverMenu() {
+        if (setupSettingsHoverMenu.isBound) { return; }
+        if (typeof window.matchMedia !== "function" || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+            return;
+        }
+
+        var settingsItem = desktopMenu ? desktopMenu.querySelector(".menu-settings") : null;
+        if (!settingsItem || typeof bootstrap === "undefined" || !bootstrap.Dropdown) {
+            return;
+        }
+
+        var toggle = settingsItem.querySelector(".menu-settings-btn");
+        if (!toggle) { return; }
+
+        var dropdown = bootstrap.Dropdown.getOrCreateInstance(toggle);
+        var closeTimer = null;
+
+        function openMenu() {
+            window.clearTimeout(closeTimer);
+            dropdown.show();
+        }
+
+        function closeMenu() {
+            window.clearTimeout(closeTimer);
+            closeTimer = window.setTimeout(function() {
+                dropdown.hide();
+            }, 140);
+        }
+
+        settingsItem.addEventListener("mouseenter", openMenu);
+        settingsItem.addEventListener("mouseleave", closeMenu);
+        settingsItem.addEventListener("focusin", openMenu);
+        settingsItem.addEventListener("focusout", function(event) {
+            if (!settingsItem.contains(event.relatedTarget)) {
+                closeMenu();
+            }
+        });
+        toggle.addEventListener("click", function(event) {
+            if (toggle.getAttribute("aria-expanded") === "true") {
+                event.preventDefault();
+                event.stopPropagation();
+                openMenu();
+            }
+        });
+        setupSettingsHoverMenu.isBound = true;
+    }
+
+    function scheduleSettingsHoverMenuSetup() {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", setupSettingsHoverMenu);
+        } else {
+            setupSettingsHoverMenu();
+        }
+        window.addEventListener("load", setupSettingsHoverMenu, {once: true});
+    }
+
+    var lastShow = 0;
+    function showPanel(event) {
+        if (event && typeof event.preventDefault === "function") {
+            event.preventDefault();
+        }
+        // A plain "click" listener can be missed on touch devices, so we also
+        // bind touchend/mouseup; this guard stops those extra events from
+        // re-triggering during the panel's opening sequence.
+        var now = Date.now();
+        if (now - lastShow < 400) { return; }
+        lastShow = now;
+        if (typeof bootstrap !== "undefined" && bootstrap.Offcanvas) {
+            bootstrap.Offcanvas.getOrCreateInstance(panel).show();
+        }
+    }
+
+    normalizeSubMenus(desktopMenu, false);
+    populateOffcanvasMenu(desktopMenu, offcanvasMenu);
+    normalizeSubMenus(offcanvasMenu, true);
+    setupOffcanvasSubMenus(offcanvasMenu);
+    scheduleSettingsHoverMenuSetup();
+    btn.addEventListener("click", showPanel);
+    btn.addEventListener("mouseup", showPanel);
+    btn.addEventListener("touchend", showPanel);
+    panel.addEventListener("show.bs.offcanvas", function() { btn.setAttribute("aria-expanded", "true"); });
+    panel.addEventListener("hidden.bs.offcanvas", function() {
+        btn.setAttribute("aria-expanded", "false");
+        if (offcanvasMenu) {
+            offcanvasMenu.querySelectorAll(".menu-item-has-children").forEach(closeSubMenu);
+        }
+    });
+})();
+</script>
 #end if
 
 <!-- New Belchertown Skin Version: $belchertown_version -->

@@ -1,4 +1,126 @@
 var belchertown_highcharts_defaults_applied = false;
+var belchertown_chart_resume_events_bound = false;
+var belchertown_chart_resume_refresh_in_progress = false;
+var belchertown_chart_resume_refresh_min_ms = 60000;
+var belchertown_rendered_chart_groups = {};
+var belchertown_chart_data_grouping_threshold = 2000;
+
+function belchertown_apply_automatic_data_grouping(seriesList) {
+    // Keep normal charts at their exact generated timestamps. For genuinely
+    // large datasets, group the whole chart so mixed series stay aligned.
+    var enabled = seriesList.some(function(series) {
+        return Array.isArray(series.data) && series.data.length >= belchertown_chart_data_grouping_threshold;
+    });
+
+    seriesList.forEach(function(series) {
+        // Wind barbs rely on Highstock's native grouping to thin the symbols,
+        // while their companion wind-speed line is kept ungrouped separately.
+        if (series.obsType === "windBarb") {
+            return;
+        }
+        // Hays charts rebuild their range series later and require every
+        // original high/low timestamp to preserve the polar envelope.
+        if (series.obsType === "haysChart") {
+            series.dataGrouping = {enabled: false};
+            return;
+        }
+        series.dataGrouping = {enabled: enabled};
+    });
+
+    return enabled;
+}
+
+function belchertown_track_chart_group(json_file, prepend_renderTo) {
+    if (typeof json_file === "undefined" || json_file === null || json_file === "") {
+        return null;
+    }
+
+    var chartGroup = String(json_file);
+    var entry = belchertown_rendered_chart_groups[chartGroup] || {
+        json_file: chartGroup,
+        prepend_renderTo: false,
+        lastRefreshMs: 0,
+        lastAttemptMs: 0
+    };
+
+    entry.prepend_renderTo = prepend_renderTo === true;
+    entry.lastAttemptMs = Date.now();
+    belchertown_rendered_chart_groups[chartGroup] = entry;
+    window.belchertownRenderedChartGroups = belchertown_rendered_chart_groups;
+    return entry;
+}
+
+function belchertown_mark_chart_group_refreshed(json_file) {
+    if (typeof json_file === "undefined" || json_file === null || json_file === "") {
+        return;
+    }
+
+    var chartGroup = String(json_file);
+    var entry = belchertown_rendered_chart_groups[chartGroup] || belchertown_track_chart_group(chartGroup, false);
+    if (entry) {
+        entry.lastRefreshMs = Date.now();
+    }
+}
+
+function belchertown_chart_group_refresh_entries(forceRefresh = false) {
+    var nowMs = Date.now();
+    return Object.keys(belchertown_rendered_chart_groups).map(function(chartGroup) {
+        return belchertown_rendered_chart_groups[chartGroup];
+    }).filter(function(entry) {
+        if (!entry || !entry.json_file) {
+            return false;
+        }
+        if (forceRefresh) {
+            return true;
+        }
+        return !entry.lastRefreshMs || (nowMs - entry.lastRefreshMs) >= belchertown_chart_resume_refresh_min_ms;
+    });
+}
+
+function belchertown_refresh_rendered_charts(forceRefresh = false) {
+    if (belchertown_chart_resume_refresh_in_progress) {
+        return Promise.resolve(false);
+    }
+
+    var entries = belchertown_chart_group_refresh_entries(forceRefresh);
+    if (entries.length === 0) {
+        return Promise.resolve(false);
+    }
+
+    belchertown_chart_resume_refresh_in_progress = true;
+    return Promise.all(entries.map(function(entry) {
+        return showChart(entry.json_file, entry.prepend_renderTo);
+    })).then(function(results) {
+        return results.some(function(result) {
+            return result === true;
+        });
+    }).catch(function(err) {
+        belchertown_debug("Chart resume refresh failed: " + err.message);
+        return false;
+    }).then(function(result) {
+        belchertown_chart_resume_refresh_in_progress = false;
+        return result;
+    });
+}
+
+function belchertown_refresh_charts_after_resume() {
+    if (document.hidden) {
+        return;
+    }
+    belchertown_refresh_rendered_charts(false);
+}
+
+function belchertown_bind_chart_resume_events() {
+    if (belchertown_chart_resume_events_bound) {
+        return;
+    }
+    belchertown_chart_resume_events_bound = true;
+
+    document.addEventListener("visibilitychange", belchertown_refresh_charts_after_resume);
+    window.addEventListener("focus", belchertown_refresh_charts_after_resume);
+    window.addEventListener("pageshow", belchertown_refresh_charts_after_resume);
+    window.addEventListener("online", belchertown_refresh_charts_after_resume);
+}
 
 function belchertown_ensure_highcharts_core() {
     if (typeof Highcharts !== "undefined") {
@@ -17,6 +139,16 @@ function belchertown_configure_highcharts_defaults() {
         return;
     }
 
+    var highchartsRangeSelectorLabels = $charts_range_selector_labels_json;
+    var highchartsLang = $highcharts_lang_json;
+    highchartsLang.months = dayjs.months();
+    highchartsLang.shortMonths = dayjs.monthsShort();
+    highchartsLang.weekdays = dayjs.weekdays();
+    highchartsLang.shortWeekdays = dayjs.weekdaysShort();
+    highchartsLang.decimalPoint = "$highcharts_decimal";
+    highchartsLang.thousandsSep = "$highcharts_thousands";
+    highchartsLang.rangeSelectorZoom = highchartsRangeSelectorLabels.zoom;
+
     Highcharts.setOptions({
         time: {
             timezoneOffset: $highcharts_timezoneoffset
@@ -26,6 +158,15 @@ function belchertown_configure_highcharts_defaults() {
                 fontFamily: 'Roboto, sans-serif',
                 fontSize: '14px',
                 fontWeight: '500'
+            }
+        },
+        navigator: {
+            xAxis: {
+                labels: {
+                    style: {
+                        textOutline: 'none'
+                    }
+                }
             }
         },
         title: {
@@ -40,17 +181,59 @@ function belchertown_configure_highcharts_defaults() {
                 fontWeight: '300'
             }
         },
-        lang: {
-            months: moment.months(),
-            shortMonths: moment.monthsShort(),
-            weekdays: moment.weekdays(),
-            shortWeekdays: moment.weekdaysShort(),
-            decimalPoint: "$highcharts_decimal",
-            thousandsSep: "$highcharts_thousands"
-        }
+        lang: highchartsLang
     });
 
     belchertown_highcharts_defaults_applied = true;
+}
+
+function belchertown_zoom_range_to_ms(zoomRange) {
+    if (typeof zoomRange === "undefined" || zoomRange === null) {
+        return null;
+    }
+
+    var normalized = String(zoomRange).trim().toLowerCase();
+    if (!normalized || normalized === "false" || normalized === "none") {
+        return null;
+    }
+
+    var keywordRanges = {
+        hour: 3600000,
+        day: 86400000,
+        today: 86400000,
+        week: 604800000,
+        month: 2592000000,
+        year: 31536000000
+    };
+    if (Object.prototype.hasOwnProperty.call(keywordRanges, normalized)) {
+        return keywordRanges[normalized];
+    }
+
+    var seconds = parseFloat(normalized);
+    if (isFinite(seconds) && seconds > 0) {
+        return seconds * 1000;
+    }
+
+    return null;
+}
+
+function belchertown_apply_initial_zoom_range(chart, zoomRange) {
+    var rangeMs = belchertown_zoom_range_to_ms(zoomRange);
+    if (!rangeMs || !chart || !chart.xAxis || !chart.xAxis[0]) {
+        return;
+    }
+
+    var axis = chart.xAxis[0];
+    var dataMax = typeof axis.dataMax === "number" ? axis.dataMax : axis.max;
+    var dataMin = typeof axis.dataMin === "number" ? axis.dataMin : axis.min;
+    if (!isFinite(dataMax) || !isFinite(dataMin) || dataMax <= dataMin) {
+        return;
+    }
+
+    var min = Math.max(dataMin, dataMax - rangeMs);
+    if (min < dataMax) {
+        axis.setExtremes(min, dataMax, true, false);
+    }
 }
 
 function belchertown_is_element_near_viewport(element, rootMarginPx = 0) {
@@ -270,9 +453,10 @@ function belchertown_detect_highcharts_modules(chartData) {
         return modules;
     }
 
-    jQuery.each(chartData, function(plotname, plotData) {
+    Object.keys(chartData).forEach(function(plotname) {
+        var plotData = chartData[plotname];
         if (!plotData || typeof plotData !== "object" || !plotData.options) {
-            return true;
+            return;
         }
 
         if (plotData.options.type === "gauge") {
@@ -286,15 +470,13 @@ function belchertown_detect_highcharts_modules(chartData) {
         }
 
         if (plotData.series && typeof plotData.series === "object") {
-            jQuery.each(plotData.series, function(seriesName, seriesData) {
+            Object.keys(plotData.series).forEach(function(seriesName) {
+                var seriesData = plotData.series[seriesName];
                 if (seriesData && seriesData.obsType === "windBarb") {
                     modules.add("windbarb");
                 }
-                return true;
             });
         }
-
-        return true;
     });
 
     return modules;
@@ -506,7 +688,112 @@ function belchertown_apply_flat_axis_ranges(options, seriesAnalysis) {
     });
 }
 
+// ── Unit Switcher: convert one chart series object in place from its
+// server-baked unit to the user's chosen display system. Idempotent - a
+// __BU_converted marker prevents double-conversion on re-render.
+//
+// Series shapes seen in homepage.json / charts.conf-driven JSON:
+//   normal line/spline/area: { yAxis_label: "Temperature (°C)", data: [[ts, value], ...] }
+//   range/weatherRange:      { range_unit: "degree_C", data: [[ts, min, max, avg], ...] }
+//   windBarb:                { obs_unit: "mile_per_hour", data: [[ts, speed_ms, dir], ...],
+//                               windspeedData: [[ts, display_speed], ...] }
+//     NOTE: windBarb's main `data` speed component is ALWAYS m/s regardless
+//     of display unit (confirmed in new_belchertown.py - windSpeed_ms is a
+//     separate always-metric variable from windSpeed_display). Only
+//     windspeedData (the display-unit line) needs base-unit conversion.
+//   gauge: single-point line series, same shape as normal but data.length<=1
+function BU_convertSeriesUnits(s) {
+    if (!s || s.__BU_converted) {
+        return;
+    }
+
+    // windDir is a compass bearing in degrees, never unit-converted.
+    if (s.obsType === "windDir") { s.__BU_converted = true; return; }
+
+    // ── Range / weatherRange series: [ts, min, max, avg] quadruples ──────
+    if (s.range_unit && Array.isArray(s.data)) {
+        var rangeToken = String(s.range_unit).toLowerCase();
+        var rangeKind = BU_chartUnitKind(rangeToken);
+        if (rangeKind) {
+            s.data = s.data.map(function(point) {
+                if (!Array.isArray(point)) { return point; }
+                var converted = [point[0]];
+                for (var idx = 1; idx < point.length; idx++) {
+                    converted.push(BU_convertChartValue(point[idx], rangeToken));
+                }
+                return converted;
+            });
+            if (s.range_unit_label !== undefined) {
+                s.range_unit_label = BU_chartUnitLabelFor(rangeKind);
+            }
+        }
+        s.__BU_converted = true;
+        return;
+    }
+
+    // ── windBarb series: data stays m/s-based (left alone); only the
+    // separate windspeedData display line needs conversion. ────────────
+    if (s.windBarb && Array.isArray(s.windspeedData)) {
+        var obsToken = s.obs_unit ? String(s.obs_unit).toLowerCase() : null;
+        var obsKind = obsToken ? BU_chartUnitKind(obsToken) : "speed";
+        if (obsKind) {
+            s.windspeedData = s.windspeedData.map(function(point) {
+                if (!Array.isArray(point)) { return point; }
+                return [point[0], BU_convertChartValue(point[1], obsToken || "m/s")];
+            });
+            if (s.obs_unit_label !== undefined) {
+                s.obs_unit_label = BU_chartUnitLabelFor(obsKind);
+            }
+        }
+        // data (the [ts, speed_ms, dir] triples) stays in m/s on purpose -
+        // the windbarb renderer expects raw m/s for barb-length calculation.
+        s.__BU_converted = true;
+        return;
+    }
+
+    // ── Normal line/spline/area/gauge series ─────────────────────────────
+    var unitToken = BU_extractUnitToken(s.yAxis_label);
+    var kind = unitToken ? BU_chartUnitKind(unitToken) : null;
+    if (kind && Array.isArray(s.data)) {
+        s.data = s.data.map(function(point) {
+            if (Array.isArray(point)) {
+                if (point.length >= 2) {
+                    var converted = point.slice();
+                    converted[1] = BU_convertChartValue(point[1], unitToken);
+                    return converted;
+                }
+                if (point.length === 1) {
+                    return [BU_convertChartValue(point[0], unitToken)];
+                }
+                return point;
+            }
+            if (point && typeof point === "object") {
+                var out = Object.assign({}, point);
+                if (Object.prototype.hasOwnProperty.call(out, "y")) {
+                    out.y = BU_convertChartValue(out.y, unitToken);
+                } else if (Object.prototype.hasOwnProperty.call(out, "value")) {
+                    out.value = BU_convertChartValue(out.value, unitToken);
+                }
+                return out;
+            }
+            return BU_convertChartValue(point, unitToken);
+        });
+
+        // Update the human-readable label to reflect the new unit, e.g.
+        // "Temperature (°C)" -> "Temperature (°F)". Preserve everything
+        // before the trailing "(...)" segment.
+        if (s.yAxis_label) {
+            var newUnitLabel = BU_chartUnitLabelFor(kind);
+            s.yAxis_label = String(s.yAxis_label).replace(/\([^)]+\)\s*$/, "(" + newUnitLabel.trim() + ")");
+        }
+    }
+
+    s.__BU_converted = true;
+}
+
 function showChart(json_file, prepend_renderTo = false) {
+    belchertown_track_chart_group(json_file, prepend_renderTo);
+
     var highchartsCorePromise = belchertown_ensure_highcharts_core().then(function() {
         return null;
     }).catch(function(err) {
@@ -514,69 +801,85 @@ function showChart(json_file, prepend_renderTo = false) {
     });
 
     // Relative URL by finding what page we're on currently.
-    jQuery.ajax({
-        url: get_relative_url() + '/json/' + json_file + '.json',
-        dataType: 'json',
-        headers: {'Cache-Control': 'no-cache'},
-    }).done(function(data) {
+    return fetch(get_relative_url() + '/json/' + json_file + '.json', {cache: "no-cache"}).then(function(resp) {
+        if (!resp.ok) {
+            throw new Error("HTTP error! Unable to load " + json_file + ".json");
+        }
+        return resp.json();
+    }).then(function(data) {
+
+        // ── Unit Switcher: keep a pristine, unconverted copy per json_file so
+        // switching units later can re-derive from the original fetched
+        // values rather than re-converting already-converted numbers.
+        try {
+            window.BU_lastChartsRaw = window.BU_lastChartsRaw || {};
+            window.BU_lastChartsRaw[json_file] = {
+                data: JSON.parse(JSON.stringify(data)),
+                prepend_renderTo: prepend_renderTo
+            };
+        } catch (_BU_e) {}
 
         var renderCharts = function() {
 
         // Loop through each chart name (e.g. chart1, chart2, chart3)
-        jQuery.each(data, function(plotname, obsname) {
+        Object.keys(data).forEach(function(plotname) {
+            var obsname = data[plotname];
             var observation_type = undefined;
             xAxis_categories = [];
             plot_tooltip_date_format = undefined;
+            var zoom_enabled = false;
+            var zoom_range = "";
 
             try {
 
             // Ignore the New Belchertown Version since this "plot" has no other options
             if (plotname == "belchertown_version") {
-                return true;
+                return;
             }
 
             // Ignore the generated timestamp since this "plot" has no other options
             if (plotname == "generated_timestamp") {
-                return true;
+                return;
             }
 
             // Ignore the chartgroup_title since this "plot" has no other options
             if (plotname == "chartgroup_title") {
-                return true;
+                return;
             }
 
             // Set the chart's tooltip date time format, then return since this "plot" has no other options
             if (plotname == "tooltip_date_format") {
                 tooltip_date_format = obsname;
-                return true;
+                return;
             }
 
             // Set the chart colors, then return right away since this "plot" has no other options
             if (plotname == "colors") {
                 colors = obsname.split(",");
-                return true;
+                return;
             }
 
             // Set the chart credits, then return right away since this "plot" has no other options
             if (plotname == "credits") {
                 credits = obsname.split(",")[0];
-                return true;
+                return;
             }
 
             // Set the chart credits url, then return right away since this "plot" has no other options
             if (plotname == "credits_url") {
                 credits_url = obsname.split(",")[0];
-                return true;
+                return;
             }
 
             // Set the chart credits position, then return right away since this "plot" has no other options
             if (plotname == "credits_position") {
                 credits_position = obsname;
-                return true;
+                return;
             }
 
             // Loop through each chart options
-            jQuery.each(data[plotname]["options"], function(optionName, optionVal) {
+            Object.keys(data[plotname]["options"]).forEach(function(optionName) {
+                var optionVal = data[plotname]["options"][optionName];
                 switch (optionName) {
                     case "type":
                         type = optionVal;
@@ -625,6 +928,12 @@ function showChart(json_file, prepend_renderTo = false) {
                         break;
                     case "exporting":
                         exporting_enabled = optionVal;
+                        break;
+                    case "zoom":
+                        zoom_enabled = optionVal;
+                        break;
+                    case "zoom_range":
+                        zoom_range = optionVal;
                         break;
                 }
             });
@@ -679,7 +988,10 @@ function showChart(json_file, prepend_renderTo = false) {
 
                                         this.subtitle.update({style: {color: darktheme_textcolor}});
 
-                                        this.chartBackground.attr({fill: jQuery(".highcharts-background").css("fill")});
+                                        var hcBackground = document.querySelector(".highcharts-background");
+                                        if (hcBackground) {
+                                            this.chartBackground.attr({fill: getComputedStyle(hcBackground).fill});
+                                        }
                                     } else {
                                         var lighttheme_textcolor = '#666666';
                                         for (var i = this.yAxis.length - 1; i >= 0; i--) {
@@ -806,7 +1118,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     },
                 },
 
-                // Highstock is needed for gapsize. Disable these 3 to make it look like standard Highcharts
+                // Highstock is needed for gapsize. Disable these by default to make it look like standard Highcharts.
                 scrollbar: {
                     enabled: false
                 },
@@ -875,7 +1187,14 @@ function showChart(json_file, prepend_renderTo = false) {
             belchertown_debug(options.chart.renderTo + ": building a " + type + " chart");
 
             if (css_class) {
-                jQuery("#" + options.chart.renderTo).addClass(css_class);
+                var chartDiv = document.getElementById(options.chart.renderTo);
+                if (chartDiv) {
+                    css_class.split(/\s+/).forEach(function(cls) {
+                        if (cls) {
+                            chartDiv.classList.add(cls);
+                        }
+                    });
+                }
                 belchertown_debug(options.chart.renderTo + ": div id is " + options.chart.renderTo + " and adding CSS class: " + css_class);
             }
 
@@ -924,11 +1243,19 @@ function showChart(json_file, prepend_renderTo = false) {
 
             // Build the series
             var i = 0;
-            jQuery.each(data[plotname]["series"], function(seriesName, seriesVal) {
+            Object.keys(data[plotname]["series"]).forEach(function(seriesName) {
                 observation_type = data[plotname]["series"][seriesName]["obsType"];
                 options.series[i] = data[plotname]["series"][seriesName];
                 i++;
             });
+
+            // ── Unit Switcher: convert each series' data points from the
+            // server-baked site-wide display unit (read from yAxis_label or
+            // range_unit/obs_unit) into the user's chosen system, in place,
+            // before any of the yAxis/min-max/formatting logic below runs.
+            if (typeof BU_convertSeriesUnits === "function") {
+                options.series.forEach(function(s) { BU_convertSeriesUnits(s); });
+            }
 
             var isFiniteNumber = belchertown_is_finite_number;
             var axisOptionNumber = belchertown_axis_option_number;
@@ -995,6 +1322,83 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Some charts may require a defined soft min/max on the yAxis
                 options.yAxis[this_yAxis].softMin = axisOptionNumber(s, "yAxis_softMin");
                 options.yAxis[this_yAxis].softMax = axisOptionNumber(s, "yAxis_softMax");
+
+                // Horizontal reference line(s) on this series' yAxis -- a
+                // freezing mark, flood stage, record highs, reservoir pool
+                // elevations. Lines are numbered like the gauge colorX options:
+                // yAxis_plotLine_value is line 1, yAxis_plotLine2_value is line
+                // 2, and so on (max 20). Each line takes its own _label /
+                // _color / _dashStyle / _width / _zIndex / _labelAlign /
+                // _labelVerticalAlign with the matching number; numbering stops
+                // at the first missing _value.
+                var plUnquote = function (v) {
+                    // Strip surrounding quotes charts.conf string quoting can
+                    // leave behind (matches the colorX handling below).
+                    return v === undefined || v === null
+                        ? ""
+                        : String(v).replace(/^["']|["']$/g, "");
+                };
+                var plEdgeOffset = { left: 8, center: 0, right: -8 };
+                for (var pl = 1; pl <= 20; pl++) {
+                    var plKey = "yAxis_plotLine" + (pl === 1 ? "" : pl);
+                    if (!isFiniteNumber(s[plKey + "_value"])) {
+                        break;
+                    }
+                    var plColor = plUnquote(s[plKey + "_color"]) || "#dc322f";
+                    var plDashStyle =
+                        plUnquote(s[plKey + "_dashStyle"]) || "ShortDash";
+                    var plWidth = isFiniteNumber(s[plKey + "_width"])
+                        ? parseFloat(s[plKey + "_width"])
+                        : 2;
+                    var plZIndex = isFiniteNumber(s[plKey + "_zIndex"])
+                        ? parseFloat(s[plKey + "_zIndex"])
+                        : 5;
+                    var plLabelAlign = plUnquote(
+                        s[plKey + "_labelAlign"]
+                    ).toLowerCase();
+                    if (
+                        plLabelAlign !== "left" &&
+                        plLabelAlign !== "center" &&
+                        plLabelAlign !== "right"
+                    ) {
+                        plLabelAlign = "right";
+                    }
+                    var plLabelVAlign = plUnquote(
+                        s[plKey + "_labelVerticalAlign"]
+                    ).toLowerCase();
+                    var plLabelOpts = {
+                        // ConfigObj already removes config quotes; preserve
+                        // punctuation in literal and translated label text.
+                        text: s[plKey + "_label"] || null,
+                        align: plLabelAlign,
+                        x: plEdgeOffset[plLabelAlign],
+                        style: { color: plColor, fontWeight: "bold" }
+                    };
+                    if (
+                        plLabelVAlign === "top" ||
+                        plLabelVAlign === "middle" ||
+                        plLabelVAlign === "bottom"
+                    ) {
+                        plLabelOpts.verticalAlign = plLabelVAlign;
+                        // Highcharts anchors the label at the line; nudge it
+                        // clear when it sits on or below the line.
+                        if (plLabelVAlign === "middle") {
+                            plLabelOpts.y = 4;
+                        } else if (plLabelVAlign === "bottom") {
+                            plLabelOpts.y = 14;
+                        }
+                    }
+                    options.yAxis[this_yAxis].plotLines =
+                        options.yAxis[this_yAxis].plotLines || [];
+                    options.yAxis[this_yAxis].plotLines.push({
+                        value: parseFloat(s[plKey + "_value"]),
+                        color: plColor,
+                        dashStyle: plDashStyle,
+                        width: plWidth,
+                        zIndex: plZIndex,
+                        label: plLabelOpts
+                    });
+                }
 
                 // Set the yAxis tick interval. Mostly used for barometer. 
                 if (isFiniteNumber(s.yAxis_tickInterval) && parseFloat(s.yAxis_tickInterval) > 0) {
@@ -1074,6 +1478,8 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             belchertown_apply_flat_axis_ranges(options, seriesAnalysis);
+
+            belchertown_apply_automatic_data_grouping(options.series);
 
             // If windRose is present, configure a special chart to show that data
             if (observation_type == "windRose") {
@@ -1352,6 +1758,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     color: currentSeriesColor,
                     fillColor: currentSeriesColor,
                     connectEnds: false,
+                    dataGrouping: {enabled: false},
                 });
             }
 
@@ -1396,9 +1803,6 @@ function showChart(json_file, prepend_renderTo = false) {
                     var color = options.series[0].color;
                     if (!color) {
                         // Set color of the column based on the average temperature, or return default if not temperature
-                        if (seriesData[3] == null) {
-                            console.log("Requesting " + seriesData[0] + ". Value is " + seriesData[3])
-                        }
                         color = get_outTemp_color(range_unit, seriesData[3], true);
                     }
                     newSeriesData.push({
@@ -1542,15 +1946,15 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             // Apply any width, height CSS overrides to the parent div of the chart
-            if (css_height != "") {
-                jQuery("#" + options.chart.renderTo).parent().css({
-                    'height': css_height,
-                    'padding': '0px 15px',
-                    'margin-bottom': '20px'
-                });
+            var chartParent = document.getElementById(options.chart.renderTo);
+            chartParent = chartParent ? chartParent.parentElement : null;
+            if (css_height != "" && chartParent) {
+                chartParent.style.height = css_height;
+                chartParent.style.padding = '0px 15px';
+                chartParent.style.marginBottom = '20px';
             }
-            if (css_width != "") {
-                jQuery("#" + options.chart.renderTo).parent().css('width', css_width);
+            if (css_width != "" && chartParent) {
+                chartParent.style.width = css_width;
             }
 
             if (credits != "highcharts_default") {
@@ -1566,8 +1970,9 @@ function showChart(json_file, prepend_renderTo = false) {
             }
 
             // Finally all options are done, now show the chart
-            // Wind rose and category charts must use Highcharts.chart(), not stockChart()
-            // Highstock forces a datetime axis internally and ignores type: 'category'
+            // Datetime charts use stockChart for consistent axis behavior.
+            // Wind rose and category charts must use Highcharts.chart() because
+            // Highstock forces a datetime axis internally and ignores type: 'category'.
             // weatherRange always uses datetime data even when xAxis_categories provides custom labels
 
             // Wind barb chart: mirrors https://www.highcharts.com/samples/highcharts/demo/windbarb-series
@@ -1594,6 +1999,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.series.push({
                     type: "line",
                     id: "windbarb-windspeed",
+                    gapSize: 0,
                     name: windBarbSeries.name,
                     data: windSpeedLineData,
                     color: windBarbSeries.color,
@@ -1601,6 +2007,10 @@ function showChart(json_file, prepend_renderTo = false) {
                     rounding: windBarbSeries.rounding,
                     numberFormat: windBarbSeries.numberFormat,
                     showInLegend: true,
+                    showInNavigator: true,
+                    dataGrouping: {
+                        enabled: false
+                    },
                     states: {
                         inactive: { opacity: 1 }
                     }
@@ -1609,6 +2019,7 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Reconfigure as a Highcharts windbarb series
                 windBarbSeries.type = "windbarb";
                 windBarbSeries.showInLegend = false;
+                windBarbSeries.showInNavigator = false;
                 windBarbSeries.vectorLength = 24;
                 windBarbSeries.enableMouseTracking = false;
                 delete windBarbSeries.tooltip;
@@ -1625,6 +2036,14 @@ function showChart(json_file, prepend_renderTo = false) {
                     }
                 });
                 windBarbSeries.data = windBarbData;
+
+                options.series.forEach(function(series) {
+                    if (series.type !== "windbarb") {
+                        series.dataGrouping = {
+                            enabled: false
+                        };
+                    }
+                });
 
                 // Custom tooltip: show wind speed (respecting rounding) plus direction.
                 // The windbarb series is excluded from this.points (enableMouseTracking:false),
@@ -1655,8 +2074,56 @@ function showChart(json_file, prepend_renderTo = false) {
                 options.xAxis.offset = 40;
             }
 
-            var useStockChart = (observation_type !== "windRose") && !windBarbSeries && (xAxis_categories.length === 0 || observation_type === "weatherRange");
+            var zoomRequested = JSON.parse(String(zoom_enabled));
+            var useStockChart = (observation_type !== "windRose") && (xAxis_categories.length === 0 || observation_type === "weatherRange");
+            var zoomControlsEnabled = zoomRequested && useStockChart;
+            if (zoomControlsEnabled) {
+                var rangeSelectorLabels = $charts_range_selector_labels_json;
+                var rangeSelectorTitles = $charts_range_selector_titles_json;
+                options.chart.zooming.type = "x";
+                options.chart.zooming.mouseWheel.enabled = true;
+                options.scrollbar.enabled = true;
+                options.navigator.enabled = true;
+                options.rangeSelector.enabled = true;
+                options.rangeSelector.buttons = [{
+                    type: "day",
+                    count: 1,
+                    text: rangeSelectorLabels.day,
+                    title: rangeSelectorTitles.day
+                }, {
+                    type: "week",
+                    count: 1,
+                    text: rangeSelectorLabels.week,
+                    title: rangeSelectorTitles.week
+                }, {
+                    type: "month",
+                    count: 1,
+                    text: rangeSelectorLabels.month,
+                    title: rangeSelectorTitles.month
+                }, {
+                    type: "month",
+                    count: 3,
+                    text: rangeSelectorLabels.three_months,
+                    title: rangeSelectorTitles.three_months
+                }, {
+                    type: "ytd",
+                    text: rangeSelectorLabels.ytd,
+                    title: rangeSelectorTitles.ytd
+                }, {
+                    type: "year",
+                    count: 1,
+                    text: rangeSelectorLabels.year,
+                    title: rangeSelectorTitles.year
+                }, {
+                    type: "all",
+                    text: rangeSelectorLabels.all,
+                    title: rangeSelectorTitles.all
+                }];
+            }
             var chart = useStockChart ? Highcharts.stockChart(options) : Highcharts.chart(options);
+            if (zoomControlsEnabled) {
+                belchertown_apply_initial_zoom_range(chart, zoom_range);
+            }
 
             // If using debug, show a copy paste debug for use with jsfiddle
             belchertown_debug(options);
@@ -1669,10 +2136,10 @@ function showChart(json_file, prepend_renderTo = false) {
                 // Add a visible placeholder for the skipped chart so users
                 // know why this chart is empty.
                 if (typeof options !== "undefined" && options.chart && options.chart.renderTo) {
-                    var failedChart = jQuery("#" + options.chart.renderTo);
-                    if (failedChart.length) {
+                    var failedChart = document.getElementById(options.chart.renderTo);
+                    if (failedChart) {
                         var unavailableObs = observation_type || plotname || belchertown_label_text("$obs.label.unknown_observation");
-                        failedChart.html(
+                        failedChart.innerHTML = (
                             '<div class="chart-unavailable" style="padding:14px 10px;text-align:center;color:#888;">' +
                             '<div>' + belchertown_label_html("$obs.label.chart_unavailable") + ' (' + belchertown_label_html("$obs.label.chart_unavailable_detail") + ')</div>' +
                             '<div style="margin-top:6px;font-weight:500;">' + belchertown_label_html("$obs.label.observation") + ': ' + belchertown_escape_html(unavailableObs) + '</div>' +
@@ -1681,7 +2148,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     }
                 }
 
-                return true;
+                return;
             }
 
         });
@@ -1689,7 +2156,7 @@ function showChart(json_file, prepend_renderTo = false) {
         };
 
         var requiredModules = belchertown_detect_highcharts_modules(data);
-        highchartsCorePromise.then(function(coreError) {
+        return highchartsCorePromise.then(function(coreError) {
             if (coreError) {
                 throw coreError;
             }
@@ -1697,17 +2164,41 @@ function showChart(json_file, prepend_renderTo = false) {
         }).then(function() {
             belchertown_configure_highcharts_defaults();
             renderCharts();
+            belchertown_mark_chart_group_refreshed(json_file);
+            return true;
         }).catch(function(err) {
             if (typeof Highcharts === "undefined") {
                 belchertown_debug("Highcharts load error: " + err.message + ". Skipping chart render.");
-                return;
+                return false;
             }
 
             belchertown_debug("Highcharts module preload error: " + err.message + ". Continuing render with available modules.");
             belchertown_configure_highcharts_defaults();
             renderCharts();
+            belchertown_mark_chart_group_refreshed(json_file);
+            return true;
         });
 
+    }).catch(function(err) {
+        belchertown_debug("Chart data load error: " + err.message + ". Skipping chart render.");
+        return false;
     });
 
 };
+
+// ── Unit Switcher: re-render all previously-shown charts in the newly
+// chosen system, using each chart group's pristine unconverted snapshot.
+// Called from BU_reapplyAll() in new-belchertown.js.tmpl.
+window.BU_reapplyCharts = function() {
+    if (!window.BU_lastChartsRaw) {
+        return;
+    }
+    Object.keys(window.BU_lastChartsRaw).forEach(function(json_file) {
+        var entry = window.BU_lastChartsRaw[json_file];
+        if (entry && entry.data) {
+            showChart(json_file, entry.prepend_renderTo);
+        }
+    });
+};
+
+belchertown_bind_chart_resume_events();

@@ -3,6 +3,7 @@
 #set global $page = "records"
 
 #import datetime
+#import json
 #from datetime import timedelta
 
 #include "header.html.tmpl"
@@ -11,7 +12,7 @@
     (function() {
     function initRecordsPage() {
     var moment_locale = "$moment_locale_js";
-    moment.locale(moment_locale);
+    belchertown_set_datetime_locale(moment_locale);
 
     function enhanceRecordsPage(snapshotData) {
         function decodeHtmlEntities(value) {
@@ -41,6 +42,30 @@
             return decodeHtmlEntities(String(value || ""));
         }
 
+        function belchertown_trim(value) {
+            return value == null ? "" : String(value).trim();
+        }
+
+        function buildElementFromHtml(html) {
+            var wrapper = document.createElement("div");
+            wrapper.innerHTML = html;
+            return wrapper.firstElementChild;
+        }
+
+        function setElementText(root, selector, text) {
+            var el = root.querySelector(selector);
+            if (el) {
+                el.textContent = text;
+            }
+        }
+
+        function setElementHtml(root, selector, html) {
+            var el = root.querySelector(selector);
+            if (el) {
+                el.innerHTML = html;
+            }
+        }
+
         function escapeHtml(value) {
             return displayText(value)
                 .replace(/&/g, "&amp;")
@@ -48,6 +73,69 @@
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#39;");
+        }
+
+        // ── Unit-aware value rendering ──────────────────────────────────
+        // kind is one of "temp" | "temp_delta" | "speed" | "press" | "rain" |
+        // "rainrate" | null. Reuses the existing global unit helpers from
+        // new-belchertown.js.tmpl rather than duplicating conversion logic.
+        function displayUnitLabel(kind) {
+            var labelKind = kind === "temp_delta" ? "temp" : kind;
+            return (typeof BU_chartUnitLabelFor === "function") ? BU_chartUnitLabelFor(labelKind) : "";
+        }
+
+        function displayMetricWxValue(rawMetricWxValue, kind) {
+            if (kind === "temp_delta") {
+                return (typeof BU_getSystem === "function" && BU_getSystem() === "us")
+                    ? rawMetricWxValue * 9 / 5
+                    : rawMetricWxValue;
+            }
+
+            if (typeof BU_chartMetricWXToDisplay !== "function") {
+                return rawMetricWxValue;
+            }
+
+            return BU_chartMetricWXToDisplay(kind, rawMetricWxValue);
+        }
+
+        function convertedValueHtml(rawMetricWxValue, kind, decimals) {
+            var num = parseFloat(rawMetricWxValue);
+            if (isNaN(num)) {
+                return null;
+            }
+            if (!kind) {
+                return belchertown_trim(displayText(rawMetricWxValue));
+            }
+            var converted = displayMetricWxValue(num, kind);
+            var dp = (typeof decimals === "number") ? decimals : 1;
+            var fmtVal = (typeof BU_fmt === "function") ? BU_fmt(converted, dp) : converted;
+            if (fmtVal === null || fmtVal === undefined) {
+                return null;
+            }
+            var label = displayUnitLabel(kind);
+            return fmtVal + (label ? "\u00a0" + label : "");
+        }
+
+        // ── Convert a [min, max] METRICWX detail pair for range-style rows ──
+        function formatRangeDetail(detailArr, kind) {
+            if (!detailArr || !Array.isArray(detailArr) || detailArr.length < 2) {
+                return belchertown_trim(displayText(detailArr || ""));
+            }
+            var minNum = parseFloat(detailArr[0]);
+            var maxNum = parseFloat(detailArr[1]);
+            if (isNaN(minNum) || isNaN(maxNum)) {
+                return "";
+            }
+            var minText = convertedValueHtml(minNum, kind, 1);
+            var maxText = convertedValueHtml(maxNum, kind, 1);
+            if (minText === null || maxText === null) {
+                return "";
+            }
+            // Strip the trailing unit label from the first value - only
+            // the closing one needs it, e.g. "(11.9 - 33.5 \u00b0F)".
+            var label = displayUnitLabel(kind);
+            var minNoLabel = label ? minText.replace("\u00a0" + label, "") : minText;
+            return "(" + minNoLabel + " - " + maxText + ")";
         }
 
         function makeRecord(label, metric, year, alltime, options) {
@@ -60,93 +148,131 @@
             };
         }
 
-        function metric(group, valueKey, timeKey, rawKey) {
+        function metric(group, valueKey, timeKey, rawKey, kind) {
             return {
                 group: group,
                 valueKey: valueKey,
                 timeKey: timeKey,
-                rawKey: rawKey
+                rawKey: rawKey,
+                kind: kind || null
             };
         }
 
         function getRecordsSectionsConfig() {
-            var hasAppTemp = "$year.appTemp.has_data" === "True" && "$alltime.appTemp.has_data" === "True";
-            var hasWindRun = "$year.windrun.has_data" === "True" && "$alltime.windrun.has_data" === "True";
-            var hasRadiation = "$year.radiation.has_data" === "True";
-            var hasUv = "$year.UV.has_data" === "True";
+            var hasAppTemp = #if $records_has_app_temp#true#else#false#end if#;
+            var hasWindRun = #if $records_has_windrun#true#else#false#end if#;
+            var hasRadiation = #if $records_has_radiation#true#else#false#end if#;
+            var hasUv = #if $records_has_uv#true#else#false#end if#;
+            var hasSunshineDur = #if $records_has_sunshine_dur#true#else#false#end if#;
 
             var temperatureRows = [
                 makeRecord(
                     "$obs.label.records_high_temp",
-                    metric("outTemp", "max", "maxtime", "maxtime_raw"),
-                    { value: "$year.outTemp.max", dateText: "$year.outTemp.maxtime", dateRaw: "$year.outTemp.maxtime.raw" },
-                    { value: "$alltime.outTemp.max", dateText: "$alltime.outTemp.maxtime", dateRaw: "$alltime.outTemp.maxtime.raw" }
+                    metric("outTemp", "max_raw", "maxtime", "maxtime_raw", "temp"),
+                    { value: $json.dumps($year.outTemp.max.degree_C.raw), dateText: "$year.outTemp.maxtime", dateRaw: "$year.outTemp.maxtime.raw" },
+                    { value: $json.dumps($alltime.outTemp.max.degree_C.raw), dateText: "$alltime.outTemp.maxtime", dateRaw: "$alltime.outTemp.maxtime.raw" },
+                    { hideDatePeriods: ["day"], kind: "temp" }
+                ),
+                makeRecord(
+                    "$obs.label.records_avg_temp",
+                    metric("outTemp", "avg_raw", null, null, "temp"),
+                    { value: $json.dumps($year.outTemp.avg.degree_C.raw) },
+                    { value: $json.dumps($alltime.outTemp.avg.degree_C.raw) },
+                    { hideDatePeriods: ["day", "yesterday", "week", "month", "year", "alltime"], kind: "temp" }
                 ),
                 makeRecord(
                     "$obs.label.records_low_temp",
-                    metric("outTemp", "min", "mintime", "mintime_raw"),
-                    { value: "$year.outTemp.min", dateText: "$year.outTemp.mintime", dateRaw: "$year.outTemp.mintime.raw" },
-                    { value: "$alltime.outTemp.min", dateText: "$alltime.outTemp.mintime", dateRaw: "$alltime.outTemp.mintime.raw" }
+                    metric("outTemp", "min_raw", "mintime", "mintime_raw", "temp"),
+                    { value: $json.dumps($year.outTemp.min.degree_C.raw), dateText: "$year.outTemp.mintime", dateRaw: "$year.outTemp.mintime.raw" },
+                    { value: $json.dumps($alltime.outTemp.min.degree_C.raw), dateText: "$alltime.outTemp.mintime", dateRaw: "$alltime.outTemp.mintime.raw" },
+                    { hideDatePeriods: ["day"], kind: "temp" }
                 )
             ];
 
+#if $records_has_app_temp
             if (hasAppTemp) {
+                ## Cheetah-level guard (not just the JS hasAppTemp check above)
+                ## mirrors weewx_data.json.tmpl's own availability wrapper and
+                ## avoids adding empty appTemp rows.
+                #if $year.appTemp.has_data and $alltime.appTemp.has_data
                 temperatureRows.push(
                     makeRecord(
                         "$obs.label.records_high_apptemp",
-                        metric("appTemp", "max", "maxtime", "maxtime_raw"),
-                        { value: "$year.appTemp.max", dateText: "$year.appTemp.maxtime", dateRaw: "$year.appTemp.maxtime.raw" },
-                        { value: "$alltime.appTemp.max", dateText: "$alltime.appTemp.maxtime", dateRaw: "$alltime.appTemp.maxtime.raw" }
+                        metric("appTemp", "max_raw", "maxtime", "maxtime_raw", "temp"),
+                        { value: $json.dumps($year.appTemp.max.degree_C.raw), dateText: "$year.appTemp.maxtime", dateRaw: "$year.appTemp.maxtime.raw" },
+                        { value: $json.dumps($alltime.appTemp.max.degree_C.raw), dateText: "$alltime.appTemp.maxtime", dateRaw: "$alltime.appTemp.maxtime.raw" },
+                        { hideDatePeriods: ["day"], kind: "temp" }
                     ),
                     makeRecord(
                         "$obs.label.records_low_apptemp",
-                        metric("appTemp", "min", "mintime", "mintime_raw"),
-                        { value: "$year.appTemp.min", dateText: "$year.appTemp.mintime", dateRaw: "$year.appTemp.mintime.raw" },
-                        { value: "$alltime.appTemp.min", dateText: "$alltime.appTemp.mintime", dateRaw: "$alltime.appTemp.mintime.raw" }
+                        metric("appTemp", "min_raw", "mintime", "mintime_raw", "temp"),
+                        { value: $json.dumps($year.appTemp.min.degree_C.raw), dateText: "$year.appTemp.mintime", dateRaw: "$year.appTemp.mintime.raw" },
+                        { value: $json.dumps($alltime.appTemp.min.degree_C.raw), dateText: "$alltime.appTemp.mintime", dateRaw: "$alltime.appTemp.mintime.raw" },
+                        { hideDatePeriods: ["day"], kind: "temp" }
                     )
                 );
+                #end if
             }
+#end if
 
             temperatureRows.push(
                 makeRecord(
                     "$obs.label.records_high_heatindex",
-                    metric("heatindex", "max", "maxtime", "maxtime_raw"),
-                    { value: "$year.heatindex.max", dateText: "$year.heatindex.maxtime", dateRaw: "$year.heatindex.maxtime.raw" },
-                    { value: "$alltime.heatindex.max", dateText: "$alltime.heatindex.maxtime", dateRaw: "$alltime.heatindex.maxtime.raw" }
+                    metric("heatindex", "max_raw", "maxtime", "maxtime_raw", "temp"),
+                    { value: $json.dumps($year.heatindex.max.degree_C.raw), dateText: "$year.heatindex.maxtime", dateRaw: "$year.heatindex.maxtime.raw" },
+                    { value: $json.dumps($alltime.heatindex.max.degree_C.raw), dateText: "$alltime.heatindex.maxtime", dateRaw: "$alltime.heatindex.maxtime.raw" },
+                    { hideDatePeriods: ["day"], kind: "temp" }
                 ),
                 makeRecord(
                     "$obs.label.records_low_windchill",
-                    metric("windchill", "max", "maxtime", "maxtime_raw"),
-                    { value: "$year.windchill.min", dateText: "$year.windchill.mintime", dateRaw: "$year.windchill.mintime.raw" },
-                    { value: "$alltime.windchill.min", dateText: "$alltime.windchill.mintime", dateRaw: "$alltime.windchill.mintime.raw" }
+                    metric("windchill", "max_raw", "maxtime", "maxtime_raw", "temp"),
+                    { value: $json.dumps($year.windchill.min.degree_C.raw), dateText: "$year.windchill.mintime", dateRaw: "$year.windchill.mintime.raw" },
+                    { value: $json.dumps($alltime.windchill.min.degree_C.raw), dateText: "$alltime.windchill.mintime", dateRaw: "$alltime.windchill.mintime.raw" },
+                    { hideDatePeriods: ["day"], kind: "temp" }
                 ),
+                ## NOTE: the two "temperature range" rows below are driven by a
+                ## custom search-list-extension (year_outTemp_range_max etc.)
+                ## rather than a standard WeeWX ValueHelper. Left unconverted
+                ## pending review of that SLE's source - see chat notes.
+                ## Now using the raw METRICWX companions from belchertown.py
+                ## (year_outTemp_range_max_raw etc.) instead of the
+                ## skin-default-formatted strings, so this reacts to the
+                ## front-end unit switcher like everything else.
                 makeRecord(
                     "$obs.label.records_largest_temp_range",
                     null,
-                    { value: "$year_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($year_outTemp_range_max[2] - $year_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$year_outTemp_range_max[0]", dateRaw: "$year_outTemp_range_max[0]" },
-                    { value: "$at_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($at_outTemp_range_max[2] - $at_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$at_outTemp_range_max[0]", dateRaw: "$at_outTemp_range_max[0]" },
+                    { value: $json.dumps($year_outTemp_range_max_raw[1]), valueDetail: [$json.dumps($year_outTemp_range_max_raw[2]), $json.dumps($year_outTemp_range_max_raw[3])], dateText: "$year_outTemp_range_max[0]", dateRaw: "$year_outTemp_range_max[0]" },
+                    { value: $json.dumps($at_outTemp_range_max_raw[1]), valueDetail: [$json.dumps($at_outTemp_range_max_raw[2]), $json.dumps($at_outTemp_range_max_raw[3])], dateText: "$at_outTemp_range_max[0]", dateRaw: "$at_outTemp_range_max[0]" },
                     {
                         omitTime: true,
-                        hideDatePeriods: ["yesterday"],
+                        hideDatePeriods: ["day"],
+                        blankPeriods: ["day"],
+                        kind: "temp_delta",
+                        detailKind: "temp",
+                        rangeDetail: true,
                         periodValues: {
-                            yesterday: { value: "$yesterday_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($yesterday_outTemp_range_max[2] - $yesterday_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$yesterday_outTemp_range_max[0]", dateRaw: "$yesterday_outTemp_range_max[0]" },
-                            week: { value: "$week_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($week_outTemp_range_max[2] - $week_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$week_outTemp_range_max[0]", dateRaw: "$week_outTemp_range_max[0]" },
-                            month: { value: "$month_outTemp_range_max[1] $unit.label.outTemp", valueDetail: "($month_outTemp_range_max[2] - $month_outTemp_range_max[3] $unit.label.outTemp)", dateText: "$month_outTemp_range_max[0]", dateRaw: "$month_outTemp_range_max[0]" }
+                            yesterday: { value: $json.dumps($yesterday_outTemp_range_max_raw[1]), valueDetail: [$json.dumps($yesterday_outTemp_range_max_raw[2]), $json.dumps($yesterday_outTemp_range_max_raw[3])], dateText: "$yesterday_outTemp_range_max[0]", dateRaw: "$yesterday_outTemp_range_max[0]" },
+                            week: { value: $json.dumps($week_outTemp_range_max_raw[1]), valueDetail: [$json.dumps($week_outTemp_range_max_raw[2]), $json.dumps($week_outTemp_range_max_raw[3])], dateText: "$week_outTemp_range_max[0]", dateRaw: "$week_outTemp_range_max[0]" },
+                            month: { value: $json.dumps($month_outTemp_range_max_raw[1]), valueDetail: [$json.dumps($month_outTemp_range_max_raw[2]), $json.dumps($month_outTemp_range_max_raw[3])], dateText: "$month_outTemp_range_max[0]", dateRaw: "$month_outTemp_range_max[0]" }
                         }
                     }
                 ),
                 makeRecord(
                     "$obs.label.records_smallest_temp_range",
                     null,
-                    { value: "$year_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($year_outTemp_range_min[2] - $year_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$year_outTemp_range_min[0]", dateRaw: "$year_outTemp_range_min[0]" },
-                    { value: "$at_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($at_outTemp_range_min[2] - $at_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$at_outTemp_range_min[0]", dateRaw: "$at_outTemp_range_min[0]" },
+                    { value: $json.dumps($year_outTemp_range_min_raw[1]), valueDetail: [$json.dumps($year_outTemp_range_min_raw[2]), $json.dumps($year_outTemp_range_min_raw[3])], dateText: "$year_outTemp_range_min[0]", dateRaw: "$year_outTemp_range_min[0]" },
+                    { value: $json.dumps($at_outTemp_range_min_raw[1]), valueDetail: [$json.dumps($at_outTemp_range_min_raw[2]), $json.dumps($at_outTemp_range_min_raw[3])], dateText: "$at_outTemp_range_min[0]", dateRaw: "$at_outTemp_range_min[0]" },
                     {
                         omitTime: true,
-                        hideDatePeriods: ["yesterday"],
+                        ##hideDatePeriods: ["day"],
+                        blankPeriods: ["day", "yesterday"],
+                        kind: "temp_delta",
+                        detailKind: "temp",
+                        rangeDetail: true,
                         periodValues: {
-                            yesterday: { value: "$yesterday_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($yesterday_outTemp_range_min[2] - $yesterday_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$yesterday_outTemp_range_min[0]", dateRaw: "$yesterday_outTemp_range_min[0]" },
-                            week: { value: "$week_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($week_outTemp_range_min[2] - $week_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$week_outTemp_range_min[0]", dateRaw: "$week_outTemp_range_min[0]" },
-                            month: { value: "$month_outTemp_range_min[1] $unit.label.outTemp", valueDetail: "($month_outTemp_range_min[2] - $month_outTemp_range_min[3] $unit.label.outTemp)", dateText: "$month_outTemp_range_min[0]", dateRaw: "$month_outTemp_range_min[0]" }
+                            yesterday: { value: $json.dumps($yesterday_outTemp_range_min_raw[1]), valueDetail: [$json.dumps($yesterday_outTemp_range_min_raw[2]), $json.dumps($yesterday_outTemp_range_min_raw[3])], dateText: "$yesterday_outTemp_range_min[0]", dateRaw: "$yesterday_outTemp_range_min[0]" },
+                            week: { value: $json.dumps($week_outTemp_range_min_raw[1]), valueDetail: [$json.dumps($week_outTemp_range_min_raw[2]), $json.dumps($week_outTemp_range_min_raw[3])], dateText: "$week_outTemp_range_min[0]", dateRaw: "$week_outTemp_range_min[0]" },
+                            month: { value: $json.dumps($month_outTemp_range_min_raw[1]), valueDetail: [$json.dumps($month_outTemp_range_min_raw[2]), $json.dumps($month_outTemp_range_min_raw[3])], dateText: "$month_outTemp_range_min[0]", dateRaw: "$month_outTemp_range_min[0]" }
                         }
                     }
                 )
@@ -155,23 +281,26 @@
             var windRows = [
                 makeRecord(
                     "$obs.label.records_strongest_wind",
-                    metric("wind", "max", "maxtime", "maxtime_raw"),
-                    { value: "$year.windGust.max", dateText: "$year.windGust.maxtime", dateRaw: "$year.windGust.maxtime.raw" },
-                    { value: "$alltime.windGust.max", dateText: "$alltime.windGust.maxtime", dateRaw: "$alltime.windGust.maxtime.raw" }
+                    metric("wind", "max_raw", "maxtime", "maxtime_raw", "speed"),
+                    { value: $json.dumps($year.wind.max.meter_per_second.raw), dateText: "$year.windGust.maxtime", dateRaw: "$year.windGust.maxtime.raw" },
+                    { value: $json.dumps($alltime.wind.max.meter_per_second.raw), dateText: "$alltime.windGust.maxtime", dateRaw: "$alltime.windGust.maxtime.raw" },
+                    { hideDatePeriods: ["day"], kind: "speed" }
                 )
             ];
 
+#if $records_has_windrun
             if (hasWindRun) {
                 windRows.push(
                     makeRecord(
                         "$obs.label.records_daily_windrun",
-                        metric("wind", "windrun", "windrun_maxtime", "windrun_maxtime_raw"),
-                        { value: "$year.windrun.maxsum", dateText: "$year.windrun.maxsumtime", dateRaw: "$year.windrun.maxsumtime.raw" },
-                        { value: "$alltime.windrun.maxsum", dateText: "$alltime.windrun.maxsumtime", dateRaw: "$alltime.windrun.maxsumtime.raw" },
-                        { omitTime: true, hideDatePeriods: ["yesterday"] }
+                        metric("wind", "windrun_maxsum_raw", "windrun_maxsumtime", "windrun_maxsumtime_raw", "distance"),
+                        { value: $json.dumps($year_windrun_maxsum_raw[1]), dateText: "$year_windrun_maxsum_raw[0]", dateRaw: $json.dumps($year_windrun_maxsum_raw[0]) },
+                        { value: $json.dumps($at_windrun_maxsum_raw[1]), dateText: "$at_windrun_maxsum_raw[0]", dateRaw: $json.dumps($at_windrun_maxsum_raw[0]) },
+                        { omitTime: true, hideDatePeriods: ["day", "yesterday"], kind: "distance" }
                     )
                 );
             }
+#end if
 
             var sections = [
                 {
@@ -190,33 +319,40 @@
                     title: "$obs.label.records_rain_records",
                     yearLabel: "$current.dateTime.format('%Y')",
                     alltimeLabel: "$obs.label.records_all_time",
+                    ## Rainfall rows use raw METRICWX values where available
+                    ## so the front-end switcher can re-render them in the
+                    ## selected unit system.
                     rows: [
                         makeRecord(
                             "$obs.label.records_highest_daily_rainfall",
-                            metric("rain", "sum", "maxtime", "maxtime_raw"),
-                            { value: "$rainiest_day[1] $unit.label.rain", dateText: "$rainiest_day[0]", dateRaw: "$rainiest_day[0]" },
-                            { value: "$at_rainiest_day[1] $unit.label.rain", dateText: "$at_rainiest_day[0]", dateRaw: "$at_rainiest_day[0]" },
-                            { omitTime: true, hideDatePeriods: ["yesterday"] }
+                            metric("rain", "maxsum_raw", "maxsumtime", "maxsumtime_raw", "rain"),
+                            { value: $json.dumps($rainiest_day_raw[1]), dateText: "$rainiest_day[0]", dateRaw: "$rainiest_day[0]" },
+                            { value: $json.dumps($at_rainiest_day_raw[1]), dateText: "$at_rainiest_day[0]", dateRaw: "$at_rainiest_day[0]" },
+                            { omitTime: true, hideDatePeriods: ["day", "yesterday"], kind: "rain" }
                         ),
                         makeRecord(
                             "$obs.label.records_highest_daily_rainrate",
-                            metric("rain", "max", "maxtime", "maxtime_raw"),
-                            { value: "$year.rainRate.max", dateText: "$year.rainRate.maxtime", dateRaw: "$year.rainRate.maxtime.raw" },
-                            { value: "$alltime.rainRate.max", dateText: "$alltime.rainRate.maxtime", dateRaw: "$alltime.rainRate.maxtime.raw" }
+                            metric("rain", "max_raw", "maxtime", "maxtime_raw", "rainrate"),
+                            { value: $json.dumps($year.rainRate.max.mm_per_hour.raw), dateText: "$year.rainRate.maxtime", dateRaw: "$year.rainRate.maxtime.raw" },
+                            { value: $json.dumps($alltime.rainRate.max.mm_per_hour.raw), dateText: "$alltime.rainRate.maxtime", dateRaw: "$alltime.rainRate.maxtime.raw" },
+                            { hideDatePeriods: ["day"], kind: "rainrate" }
                         ),
                         makeRecord(
                             "$obs.label.records_month_high_rainfall",
                             null,
-                            { value: "$year_rainiest_month[1] $unit.label.rain", dateText: "$year_rainiest_month[0]", dateRaw: null },
-                            { value: "$at_rainiest_month[1] $unit.label.rain", dateText: "$at_rainiest_month[0]", dateRaw: null },
-                            { dashPeriods: ["yesterday", "week", "month"] }
+                            { value: $json.dumps($year_rainiest_month_raw[1]), dateText: "$year_rainiest_month[0]", dateRaw: null },
+                            { value: $json.dumps($at_rainiest_month_raw[1]), dateText: "$at_rainiest_month[0]", dateRaw: null },
+                            {
+                                dashPeriods: ["day", "yesterday", "week", "month"],
+                                kind: "rain"
+                            }
                         ),
                         makeRecord(
                             "$obs.label.records_total_rainfall",
-                            metric("rain", "sum", null, null),
-                            { value: "$year.rain.sum", dateText: "$current.dateTime.format('%Y')", dateRaw: null },
-                            { value: "$at_rain_highest_year[1] $unit.label.rain", dateText: "$at_rain_highest_year[0]", dateRaw: null },
-                            { omitTime: true, hideDatePeriods: ["yesterday"], hideAlltimeLabel: true }
+                            metric("rain", "sum_raw", null, null, "rain"),
+                            { value: $json.dumps($year.rain.sum.mm.raw), dateText: "$current.dateTime.format('%Y')", dateRaw: null },
+                            { value: $json.dumps($at_rain_highest_year_raw[1]), dateText: "$at_rain_highest_year[0]", dateRaw: null },
+                            { omitTime: true, hideDatePeriods: ["day", "yesterday"], hideAlltimeLabel: true, kind: "rain" }
                         ),
                         makeRecord(
                             "$obs.label.records_consec_days_with_rain",
@@ -226,7 +362,7 @@
                             {
                                 omitTime: true,
                                 datePrefix: "$obs.label.records_ending ",
-                                blankPeriods: ["yesterday"],
+                                blankPeriods: ["day", "yesterday"],
                                 periodValues: {
                                     week: { value: "$week_days_with_rain[0] $obs.label.records_days_text", dateText: "$week_days_with_rain[1]", dateRaw: "$week_days_with_rain[1]" },
                                     month: { value: "$month_days_with_rain[0] $obs.label.records_days_text", dateText: "$month_days_with_rain[1]", dateRaw: "$month_days_with_rain[1]" }
@@ -241,7 +377,7 @@
                             {
                                 omitTime: true,
                                 datePrefix: "$obs.label.records_ending ",
-                                blankPeriods: ["yesterday"],
+                                blankPeriods: ["day", "yesterday"],
                                 periodValues: {
                                     week: { value: "$week_days_without_rain[0] $obs.label.records_days_text", dateText: "$week_days_without_rain[1]", dateRaw: "$week_days_without_rain[1]" },
                                     month: { value: "$month_days_without_rain[0] $obs.label.records_days_text", dateText: "$month_days_without_rain[1]", dateRaw: "$month_days_without_rain[1]" }
@@ -259,25 +395,29 @@
                             "$obs.label.records_high_humidity",
                             metric("humidity", "max", "maxtime", "maxtime_raw"),
                             { value: "$year.outHumidity.max", dateText: "$year.outHumidity.maxtime", dateRaw: "$year.outHumidity.maxtime.raw" },
-                            { value: "$alltime.outHumidity.max", dateText: "$alltime.outHumidity.maxtime", dateRaw: "$alltime.outHumidity.maxtime.raw" }
+                            { value: "$alltime.outHumidity.max", dateText: "$alltime.outHumidity.maxtime", dateRaw: "$alltime.outHumidity.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
                         ),
                         makeRecord(
                             "$obs.label.records_lowest_humidity",
                             metric("humidity", "min", "mintime", "mintime_raw"),
                             { value: "$year.outHumidity.min", dateText: "$year.outHumidity.mintime", dateRaw: "$year.outHumidity.mintime.raw" },
-                            { value: "$alltime.outHumidity.min", dateText: "$alltime.outHumidity.mintime", dateRaw: "$alltime.outHumidity.mintime.raw" }
+                            { value: "$alltime.outHumidity.min", dateText: "$alltime.outHumidity.mintime", dateRaw: "$alltime.outHumidity.mintime.raw" },
+                            { hideDatePeriods: ["day"] }
                         ),
                         makeRecord(
                             "$obs.label.records_highest_dewpoint",
-                            metric("dewpoint", "max", "maxtime", "maxtime_raw"),
-                            { value: "$year.dewpoint.max", dateText: "$year.dewpoint.maxtime", dateRaw: "$year.dewpoint.maxtime.raw" },
-                            { value: "$alltime.dewpoint.max", dateText: "$alltime.dewpoint.maxtime", dateRaw: "$alltime.dewpoint.maxtime.raw" }
+                            metric("dewpoint", "max_raw", "maxtime", "maxtime_raw", "temp"),
+                            { value: $json.dumps($year.dewpoint.max.degree_C.raw), dateText: "$year.dewpoint.maxtime", dateRaw: "$year.dewpoint.maxtime.raw" },
+                            { value: $json.dumps($alltime.dewpoint.max.degree_C.raw), dateText: "$alltime.dewpoint.maxtime", dateRaw: "$alltime.dewpoint.maxtime.raw" },
+                            { hideDatePeriods: ["day"], kind: "temp" }
                         ),
                         makeRecord(
                             "$obs.label.records_lowest_dewpoint",
-                            metric("dewpoint", "min", "mintime", "mintime_raw"),
-                            { value: "$year.dewpoint.min", dateText: "$year.dewpoint.mintime", dateRaw: "$year.dewpoint.mintime.raw" },
-                            { value: "$alltime.dewpoint.min", dateText: "$alltime.dewpoint.mintime", dateRaw: "$alltime.dewpoint.mintime.raw" }
+                            metric("dewpoint", "min_raw", "mintime", "mintime_raw", "temp"),
+                            { value: $json.dumps($year.dewpoint.min.degree_C.raw), dateText: "$year.dewpoint.mintime", dateRaw: "$year.dewpoint.mintime.raw" },
+                            { value: $json.dumps($alltime.dewpoint.min.degree_C.raw), dateText: "$alltime.dewpoint.mintime", dateRaw: "$alltime.dewpoint.mintime.raw" },
+                            { hideDatePeriods: ["day"], kind: "temp" }
                         )
                     ]
                 },
@@ -288,44 +428,66 @@
                     rows: [
                         makeRecord(
                             "$obs.label.records_high_barometer",
-                            metric("barometer", "max", "maxtime", "maxtime_raw"),
-                            { value: "$year.barometer.max", dateText: "$year.barometer.maxtime", dateRaw: "$year.barometer.maxtime.raw" },
-                            { value: "$alltime.barometer.max", dateText: "$alltime.barometer.maxtime", dateRaw: "$alltime.barometer.maxtime.raw" }
+                            metric("barometer", "max_raw", "maxtime", "maxtime_raw", "press"),
+                            { value: $json.dumps($year.barometer.max.hPa.raw), dateText: "$year.barometer.maxtime", dateRaw: "$year.barometer.maxtime.raw" },
+                            { value: $json.dumps($alltime.barometer.max.hPa.raw), dateText: "$alltime.barometer.maxtime", dateRaw: "$alltime.barometer.maxtime.raw" },
+                            { hideDatePeriods: ["day"], kind: "press" }
                         ),
                         makeRecord(
                             "$obs.label.records_low_barometer",
-                            metric("barometer", "min", "mintime", "mintime_raw"),
-                            { value: "$year.barometer.min", dateText: "$year.barometer.mintime", dateRaw: "$year.barometer.mintime.raw" },
-                            { value: "$alltime.barometer.min", dateText: "$alltime.barometer.mintime", dateRaw: "$alltime.barometer.mintime.raw" }
+                            metric("barometer", "min_raw", "mintime", "mintime_raw", "press"),
+                            { value: $json.dumps($year.barometer.min.hPa.raw), dateText: "$year.barometer.mintime", dateRaw: "$year.barometer.mintime.raw" },
+                            { value: $json.dumps($alltime.barometer.min.hPa.raw), dateText: "$alltime.barometer.mintime", dateRaw: "$alltime.barometer.mintime.raw" },
+                            { hideDatePeriods: ["day"], kind: "press" }
                         )
                     ]
                 }
             ];
 
-            if (hasRadiation || hasUv) {
+            if (hasRadiation || hasUv || hasSunshineDur) {
                 var sunRows = [];
 
-                if (hasRadiation) {
-                    sunRows.push(
-                        makeRecord(
-                            "$obs.label.records_high_solar_rad",
-                            metric("solar_radiation", "max", "maxtime", "maxtime_raw"),
-                            { value: "$year.radiation.max", dateText: "$year.radiation.maxtime", dateRaw: "$year.radiation.maxtime.raw" },
-                            { value: "$alltime.radiation.max", dateText: "$alltime.radiation.maxtime", dateRaw: "$alltime.radiation.maxtime.raw" }
-                        )
-                    );
-                }
-
+#if $records_has_uv
                 if (hasUv) {
                     sunRows.push(
                         makeRecord(
                             "$obs.label.records_high_uv",
                             metric("uv", "max", "maxtime", "maxtime_raw"),
                             { value: "$year.UV.max", dateText: "$year.UV.maxtime", dateRaw: "$year.UV.maxtime.raw" },
-                            { value: "$alltime.UV.max", dateText: "$alltime.UV.maxtime", dateRaw: "$alltime.UV.maxtime.raw" }
+                            { value: "$alltime.UV.max", dateText: "$alltime.UV.maxtime", dateRaw: "$alltime.UV.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
                         )
                     );
                 }
+#end if
+
+#if $records_has_radiation
+                if (hasRadiation) {
+                    sunRows.push(
+                        makeRecord(
+                            "$obs.label.records_high_solar_rad",
+                            metric("solar_radiation", "max", "maxtime", "maxtime_raw"),
+                            { value: "$year.radiation.max", dateText: "$year.radiation.maxtime", dateRaw: "$year.radiation.maxtime.raw" },
+                            { value: "$alltime.radiation.max", dateText: "$alltime.radiation.maxtime", dateRaw: "$alltime.radiation.maxtime.raw" },
+                            { hideDatePeriods: ["day"] }
+                        )
+                    );
+                }
+#end if
+
+#if $records_has_sunshine_dur
+                if (hasSunshineDur) {
+                    sunRows.push(
+                        makeRecord(
+                            "$obs.label.records_total_sunshine",
+                            metric("sunshineDur", "sum"),
+                            { value: "$year.sunshineDur.sum", dateText: null },
+                            { value: "$alltime.sunshineDur.sum", dateText: null },
+                            { omitTime: true, hideDatePeriods: ["day", "yesterday", "week", "month", "year", "alltime"] }
+                        )
+                    );
+                }
+#end if
 
                 sections.push({
                     title: "$obs.label.records_sun_records",
@@ -339,15 +501,16 @@
         }
 
         function updateSectionPeriodHeader(section, labels) {
-            if (!section || !section.length) {
+            if (!section) {
                 return;
             }
 
-            section.find(".records-section-card__period-header-cell--yesterday").text(displayText("$obs.label.snapshot_period_yesterday"));
-            section.find(".records-section-card__period-header-cell--week").text(displayText("$obs.label.snapshot_period_7days"));
-            section.find(".records-section-card__period-header-cell--month").text(displayText("$obs.label.snapshot_period_month"));
-            section.find(".records-section-card__period-header-cell--year").text(displayText(labels.year || ""));
-            section.find(".records-section-card__period-header-cell--alltime").text(displayText(labels.alltime || "$obs.label.records_all_time"));
+            setElementText(section, ".records-section-card__period-header-cell--day", displayText("$obs.label.snapshot_period_day"));
+            setElementText(section, ".records-section-card__period-header-cell--yesterday", displayText("$obs.label.snapshot_period_yesterday"));
+            setElementText(section, ".records-section-card__period-header-cell--week", displayText("$obs.label.snapshot_period_7days"));
+            setElementText(section, ".records-section-card__period-header-cell--month", displayText("$obs.label.snapshot_period_month"));
+            setElementText(section, ".records-section-card__period-header-cell--year", displayText(labels.year || ""));
+            setElementText(section, ".records-section-card__period-header-cell--alltime", displayText(labels.alltime || "$obs.label.records_all_time"));
         }
 
         function snapshotMetric(periodData, metricDef) {
@@ -365,17 +528,27 @@
                 return null;
             }
 
+            var displayValue;
+            if (metricDef.kind) {
+                displayValue = convertedValueHtml(value, metricDef.kind);
+                if (displayValue === null) {
+                    return null;
+                }
+            } else {
+                displayValue = belchertown_trim(displayText(value));
+            }
+
             return {
-                value: jQuery.trim(displayText(value)),
-                dateText: jQuery.trim(displayText(groupData[metricDef.timeKey] || "--")) || "--",
+                value: displayValue,
+                dateText: belchertown_trim(displayText(groupData[metricDef.timeKey] || "--")) || "--",
                 dateRaw: metricDef.rawKey ? groupData[metricDef.rawKey] : null,
                 valueDetail: null
             };
         }
 
         function formatValueHtml(valueText, valueDetailText) {
-            var mainValue = jQuery.trim(String(valueText || "--")) || "--";
-            var detailValue = jQuery.trim(String(valueDetailText || ""));
+            var mainValue = belchertown_trim(String(valueText || "--")) || "--";
+            var detailValue = belchertown_trim(String(valueDetailText || ""));
             var html = '<span class="records-record-period__value-main">' + escapeHtml(mainValue) + '</span>';
 
             if (detailValue) {
@@ -386,7 +559,7 @@
         }
 
         function parseSnapshotMoment(dateRaw, dateText) {
-            var rawText = jQuery.trim(String(dateRaw || ""));
+            var rawText = belchertown_trim(String(dateRaw || ""));
             if (rawText && /^\d+(\.\d+)?$/.test(rawText)) {
                 var raw = parseFloat(rawText);
                 if (isFinite(raw) && raw > 0) {
@@ -394,7 +567,7 @@
                 }
             }
 
-            var text = jQuery.trim(displayText(dateText || ""));
+            var text = belchertown_trim(displayText(dateText || ""));
             if (!text || text === "--") {
                 return null;
             }
@@ -406,10 +579,10 @@
                 }
             }
 
-            var m = moment(text, belchertown_date_time_parse_formats(), true);
+            var m = belchertown_parse_date_time(text, belchertown_date_time_parse_formats());
 
             if (!m.isValid()) {
-                m = moment(text);
+                m = dayjs(text);
             }
 
             if (m.isValid()) {
@@ -420,7 +593,7 @@
         }
 
         function splitDateNote(text) {
-            var rawText = jQuery.trim(displayText(text || ""));
+            var rawText = belchertown_trim(displayText(text || ""));
             if (!rawText) {
                 return { primary: "", secondary: "" };
             }
@@ -428,8 +601,8 @@
             var noteStart = rawText.indexOf("(");
             if (noteStart > 0) {
                 return {
-                    primary: jQuery.trim(rawText.substring(0, noteStart)),
-                    secondary: jQuery.trim(rawText.substring(noteStart).replace(/^\(|\)$/g, ""))
+                    primary: belchertown_trim(rawText.substring(0, noteStart)),
+                    secondary: belchertown_trim(rawText.substring(noteStart).replace(/^\(|\)$/g, ""))
                 };
             }
 
@@ -446,7 +619,7 @@
             var parsed = parseSnapshotMoment(dateRaw, dateText);
 
             if (rowOptions.omitTime) {
-                var sourceText = jQuery.trim(displayText(dateText || ""));
+                var sourceText = belchertown_trim(displayText(dateText || ""));
                 var dateLine = "";
 
                 if (/^\d{4}$/.test(sourceText)) {
@@ -480,6 +653,14 @@
                 return '<span class="records-record-period__time-line">--</span>';
             }
 
+            if (periodKey === "day") {
+                if (parsed && parsed.isValid()) {
+                    return '<span class="records-record-period__time-line">' + escapeHtml(parsed.format("LT")) + '</span>';
+                }
+
+                return '<span class="records-record-period__time-line">--</span>';
+            }
+
             if (parsed && parsed.isValid()) {
                 var dateLine = parsed.format(belchertown_moment_compact_date_format(periodKey === "alltime"));
                 var timeLine = parsed.format("LT");
@@ -487,7 +668,7 @@
                        '<span class="records-record-period__time-line">' + escapeHtml(timeLine) + '</span>';
             }
 
-            var text = jQuery.trim(displayText(dateText || ""));
+            var text = belchertown_trim(displayText(dateText || ""));
             if (!text || text === "--") {
                 return '<span class="records-record-period__date-line">--</span>';
             }
@@ -507,7 +688,7 @@
                 return metricValue;
             }
 
-            if (options && options.noMetricFallback) {
+            if (metricDef || (options && options.noMetricFallback)) {
                 return {
                     value: "--",
                     dateText: "--",
@@ -527,18 +708,15 @@
         function applyPeriod(recordCard, periodClass, labelText, periodKey, periodData, metricDef, fallback, rowOptions) {
             var options = rowOptions || {};
             var blankPeriods = options.blankPeriods || [];
-            if (blankPeriods.indexOf(periodKey) !== -1) {
-                recordCard.find(periodClass + " .records-record-period__label").text(displayText(labelText));
-                recordCard.find(periodClass + " .records-record-period__value").html(formatValueHtml("--", ""));
-                recordCard.find(periodClass + " .records-record-period__date").removeClass("records-record-period__date--prefixed").html('<span class="records-record-period__date-line">--</span>');
-                return;
-            }
-
             var dashPeriods = options.dashPeriods || [];
-            if (dashPeriods.indexOf(periodKey) !== -1) {
-                recordCard.find(periodClass + " .records-record-period__label").text(displayText(labelText));
-                recordCard.find(periodClass + " .records-record-period__value").html(formatValueHtml("--", ""));
-                recordCard.find(periodClass + " .records-record-period__date").removeClass("records-record-period__date--prefixed").html('<span class="records-record-period__date-line">--</span>');
+            if (blankPeriods.indexOf(periodKey) !== -1 || dashPeriods.indexOf(periodKey) !== -1) {
+                setElementText(recordCard, periodClass + " .records-record-period__label", displayText(labelText));
+                setElementHtml(recordCard, periodClass + " .records-record-period__value", formatValueHtml("--", ""));
+                var blankDateElement = recordCard.querySelector(periodClass + " .records-record-period__date");
+                if (blankDateElement) {
+                    blankDateElement.classList.remove("records-record-period__date--prefixed");
+                    blankDateElement.innerHTML = '<span class="records-record-period__date-line">--</span>';
+                }
                 return;
             }
 
@@ -553,31 +731,44 @@
             var valueDetailText = resolved.valueDetail;
             var dateText = resolved.dateText;
             var dateRaw = resolved.dateRaw;
+
+            // Custom SLE-driven rows (metricDef is null) that carry a raw
+            // METRICWX value/detail need converting here - rows that go
+            // through snapshotMetric() (metricDef set) are already final
+            // display text and must not be converted a second time.
+            if (!metricDef && rowOptions && rowOptions.kind && valueText !== "--") {
+                var convertedText = convertedValueHtml(valueText, rowOptions.kind);
+                if (convertedText !== null) {
+                    valueText = convertedText;
+                    if (rowOptions.rangeDetail) {
+                        valueDetailText = formatRangeDetail(valueDetailText, rowOptions.detailKind || rowOptions.kind);
+                    }
+                }
+            }
+
             var formattedDateHtml = formatSnapshotDateHtml(dateRaw, dateText, periodKey, rowOptions);
             var formattedValueHtml = formatValueHtml(valueText, valueDetailText);
-            var dateElement = recordCard.find(periodClass + " .records-record-period__date");
+            var dateElement = recordCard.querySelector(periodClass + " .records-record-period__date");
 
-            recordCard.find(periodClass + " .records-record-period__label").text(displayText(labelText));
-            recordCard.find(periodClass + " .records-record-period__value").html(formattedValueHtml);
-            if (rowOptions && rowOptions.datePrefix) {
-                dateElement.addClass("records-record-period__date--prefixed");
-            } else {
-                dateElement.removeClass("records-record-period__date--prefixed");
+            setElementText(recordCard, periodClass + " .records-record-period__label", displayText(labelText));
+            setElementHtml(recordCard, periodClass + " .records-record-period__value", formattedValueHtml);
+            if (dateElement) {
+                dateElement.classList.toggle("records-record-period__date--prefixed", !!(rowOptions && rowOptions.datePrefix));
+                dateElement.innerHTML = formattedDateHtml;
             }
-            dateElement.html(formattedDateHtml);
         }
 
-        var sectionsContainer = jQuery("#records-sections");
-        if (!sectionsContainer.length) {
+        var sectionsContainer = document.getElementById("records-sections");
+        if (!sectionsContainer) {
             return;
         }
 
-        sectionsContainer.empty();
+        sectionsContainer.innerHTML = "";
 
         var sections = getRecordsSectionsConfig();
 
         sections.forEach(function(sectionConfig) {
-            var section = jQuery(
+            var section = buildElementFromHtml(
                     '<section class="records-section-card">' +
                         '<div class="records-section-card__header">' +
                             '<h2 class="records-section-card__title"></h2>' +
@@ -585,6 +776,7 @@
                         '<div class="records-section-card__table">' +
                             '<div class="records-section-card__period-header">' +
                                 '<div class="records-section-card__period-header-spacer" aria-hidden="true"></div>' +
+                                '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--day"></div>' +
                                 '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--yesterday"></div>' +
                                 '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--week"></div>' +
                                 '<div class="records-section-card__period-header-cell records-section-card__period-header-cell--month"></div>' +
@@ -595,20 +787,25 @@
                         '</div>' +
                     '</section>'
                 );
-            section.find(".records-section-card__title").text(displayText(sectionConfig.title));
+            setElementText(section, ".records-section-card__title", displayText(sectionConfig.title));
             updateSectionPeriodHeader(section, {
                 year: sectionConfig.yearLabel,
                 alltime: sectionConfig.alltimeLabel
             });
 
-            var sectionBody = section.find(".records-section-card__body");
+            var sectionBody = section.querySelector(".records-section-card__body");
 
             sectionConfig.rows.forEach(function(rowConfig) {
                 var recordTitle = displayText(rowConfig.label);
 
-                var recordCard = jQuery(
+                var recordCard = buildElementFromHtml(
                 '<article class="records-record-card">' +
                     '<h3 class="records-record-card__title"></h3>' +
+                    '<section class="records-record-period records-record-period--day">' +
+                        '<div class="records-record-period__label"></div>' +
+                        '<div class="records-record-period__value"></div>' +
+                        '<div class="records-record-period__date"></div>' +
+                    '</section>' +
                     '<section class="records-record-period records-record-period--yesterday">' +
                         '<div class="records-record-period__label"></div>' +
                         '<div class="records-record-period__value"></div>' +
@@ -637,19 +834,30 @@
                 '</article>'
             );
 
-                recordCard.find(".records-record-card__title").text(recordTitle);
+                setElementText(recordCard, ".records-record-card__title", recordTitle);
 
-                var yearValueText = jQuery.trim(displayText(rowConfig.year.value || "--")) || "--";
-                var yearValueDetailText = jQuery.trim(displayText(rowConfig.year.valueDetail || ""));
-                var yearDateText = jQuery.trim(displayText(rowConfig.year.dateText || "--")) || "--";
-                var yearDateRaw = rowConfig.year.dateRaw;
                 var rowOptions = rowConfig.options || {};
+                var rowKind = rowOptions.kind || null;
+                var rowDetailKind = rowOptions.detailKind || rowKind;
+
+                var yearRawOrText = rowConfig.year.value;
+                var yearValueText;
+                if (rowKind) {
+                    yearValueText = convertedValueHtml(yearRawOrText, rowKind) || "--";
+                } else {
+                    yearValueText = belchertown_trim(displayText(yearRawOrText || "--")) || "--";
+                }
+                var yearValueDetailText = rowOptions.rangeDetail
+                    ? formatRangeDetail(rowConfig.year.valueDetail, rowDetailKind)
+                    : belchertown_trim(displayText(rowConfig.year.valueDetail || ""));
+                var yearDateText = belchertown_trim(displayText(rowConfig.year.dateText || "--")) || "--";
+                var yearDateRaw = rowConfig.year.dateRaw;
                 var yearDateHtml = formatSnapshotDateHtml(yearDateRaw, yearDateText, "year", rowOptions);
                 var yearValueHtml = formatValueHtml(yearValueText, yearValueDetailText);
 
-                recordCard.find(".records-record-period--year .records-record-period__label").text(displayText(sectionConfig.yearLabel));
-                recordCard.find(".records-record-period--year .records-record-period__value").html(yearValueHtml);
-                recordCard.find(".records-record-period--year .records-record-period__date").html(yearDateHtml);
+                setElementText(recordCard, ".records-record-period--year .records-record-period__label", displayText(sectionConfig.yearLabel));
+                setElementHtml(recordCard, ".records-record-period--year .records-record-period__value", yearValueHtml);
+                setElementHtml(recordCard, ".records-record-period--year .records-record-period__date", yearDateHtml);
 
                 var fallback = {
                     value: yearValueText,
@@ -658,6 +866,16 @@
                     dateRaw: yearDateRaw
                 };
 
+                applyPeriod(
+                    recordCard,
+                    ".records-record-period--day",
+                    "$obs.label.snapshot_period_day",
+                    "day",
+                    snapshotData ? snapshotData["day"] : null,
+                    rowConfig.metric,
+                    fallback,
+                    rowOptions
+                );
                 applyPeriod(
                     recordCard,
                     ".records-record-period--yesterday",
@@ -689,35 +907,53 @@
                     rowOptions
                 );
 
-                var alltimeValueText = jQuery.trim(displayText(rowConfig.alltime.value || "--")) || "--";
-                var alltimeValueDetailText = jQuery.trim(displayText(rowConfig.alltime.valueDetail || ""));
-                var alltimeDateText = jQuery.trim(displayText(rowConfig.alltime.dateText || "--")) || "--";
+                var alltimeRawOrText = rowConfig.alltime.value;
+                var alltimeValueText;
+                if (rowKind) {
+                    alltimeValueText = convertedValueHtml(alltimeRawOrText, rowKind) || "--";
+                } else {
+                    alltimeValueText = belchertown_trim(displayText(alltimeRawOrText || "--")) || "--";
+                }
+                var alltimeValueDetailText = rowOptions.rangeDetail
+                    ? formatRangeDetail(rowConfig.alltime.valueDetail, rowDetailKind)
+                    : belchertown_trim(displayText(rowConfig.alltime.valueDetail || ""));
+                var alltimeDateText = belchertown_trim(displayText(rowConfig.alltime.dateText || "--")) || "--";
                 var alltimeDateRaw = rowConfig.alltime.dateRaw;
                 var alltimeDateHtml = formatSnapshotDateHtml(alltimeDateRaw, alltimeDateText, "alltime", rowOptions);
                 var alltimeValueHtml = formatValueHtml(alltimeValueText, alltimeValueDetailText);
                 var alltimeLabelText = rowOptions.hideAlltimeLabel ? "" : sectionConfig.alltimeLabel;
-                recordCard.find(".records-record-period--alltime .records-record-period__label").text(displayText(alltimeLabelText));
-                recordCard.find(".records-record-period--alltime .records-record-period__value").html(alltimeValueHtml);
-                recordCard.find(".records-record-period--alltime .records-record-period__date").html(alltimeDateHtml);
+                setElementText(recordCard, ".records-record-period--alltime .records-record-period__label", displayText(alltimeLabelText));
+                setElementHtml(recordCard, ".records-record-period--alltime .records-record-period__value", alltimeValueHtml);
+                setElementHtml(recordCard, ".records-record-period--alltime .records-record-period__date", alltimeDateHtml);
 
-                sectionBody.append(recordCard);
+                if (sectionBody) {
+                    sectionBody.appendChild(recordCard);
+                }
             });
 
-            sectionsContainer.append(section);
+            sectionsContainer.appendChild(section);
         });
     }
 
-    jQuery(document).ready(function() {
-        if (typeof ajaxweewx === "function") {
-            ajaxweewx().then(function(weewxData) {
-                enhanceRecordsPage(weewxData);
-            }).catch(function() {
-                enhanceRecordsPage(null);
-            });
-        } else {
-            enhanceRecordsPage(null);
-        }
+    // Cache the fetched snapshot so unit-switching can re-render without
+    // an extra network round trip.
+    window._recordsSnapshotCache = null;
 
+    if (typeof ajaxweewx === "function") {
+        ajaxweewx().then(function(weewxData) {
+            window._recordsSnapshotCache = weewxData;
+            enhanceRecordsPage(weewxData);
+        }).catch(function() {
+            enhanceRecordsPage(null);
+        });
+    } else {
+        enhanceRecordsPage(null);
+    }
+
+    // Re-render (no refetch) whenever the header unit switcher changes
+    // systems, exactly like BU_reapplyAll() does for the other pages.
+    window.addEventListener("belchertownUnitsChanged", function() {
+        enhanceRecordsPage(window._recordsSnapshotCache);
     });
 
     }
