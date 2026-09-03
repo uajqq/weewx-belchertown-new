@@ -864,13 +864,13 @@ def _auto_aqi_scale(timezone_value, extras_dict=None):
     timezone_values = _config_list_values(timezone_value)
     timezone_key = timezone_values[0].lower() if timezone_values else ""
     if timezone_key in CANADIAN_TIMEZONES:
-        log.info("AQI scale auto-selected 'canada' from station timezone '%s'.", timezone_key)
+        log.info("AQI scale auto-selected 'canada' from location timezone '%s'.", timezone_key)
         return "canada"
     if timezone_key == "europe/london":
-        log.info("AQI scale auto-selected 'uk' from station timezone '%s'.", timezone_key)
+        log.info("AQI scale auto-selected 'uk' from location timezone '%s'.", timezone_key)
         return "uk"
     if _meteoalarm_country_slug_from_timezone(timezone_value):
-        log.info("AQI scale auto-selected 'european' from station timezone '%s'.", timezone_key)
+        log.info("AQI scale auto-selected 'european' from location timezone '%s'.", timezone_key)
         return "european"
     log.info("AQI scale auto-selected 'us'; no location-specific scale was resolved.")
     return "us"
@@ -3148,6 +3148,7 @@ def _openmeteo_transform_to_belch(payload, forecast_units):
         "daily": daily,
         "alerts": [],
         "provider": "open-meteo",
+        "location_timezone": payload.get("timezone") or "",
         "units": forecast_units,
         "schema": "belchertown.forecast.v1",
         "generated_at": generated_at,
@@ -6612,13 +6613,16 @@ class getData(SearchList):
         forecast_enabled = str(extras_dict.get("forecast_enabled", "1")).strip()
         aqi_enabled = to_bool(extras_dict.get("aqi_enabled", "0"))
         aqi_source = _normalize_aqi_source(extras_dict.get("aqi_source", "auto"))
-        aqi_scale = _normalize_aqi_scale(extras_dict.get("aqi_scale", "us"))
-        if aqi_scale == "auto":
+        configured_aqi_scale = _normalize_aqi_scale(
+            extras_dict.get("aqi_scale", "auto")
+        )
+        aqi_scale_is_auto = configured_aqi_scale == "auto"
+        aqi_scale = configured_aqi_scale
+        if aqi_scale_is_auto:
             aqi_scale = _auto_aqi_scale(moment_js_tz, extras_dict)
         else:
             log.info("AQI scale configured as '%s'.", aqi_scale)
         extras_dict["aqi_source"] = aqi_source
-        extras_dict["aqi_scale"] = aqi_scale
         local_aqi_enabled = (
             aqi_enabled
             and aqi_source in ("auto", "local")
@@ -6672,6 +6676,28 @@ class getData(SearchList):
                     log.error(
                         f"Unable to create forecast json directory {forecast_json_dir}: {e}"
                     )
+
+                if aqi_scale_is_auto and os.path.isfile(forecast_file):
+                    try:
+                        with open(forecast_file, "r", encoding="utf-8") as fh:
+                            cached_forecast = json.load(fh)
+                        cached_timezone = cached_forecast.get("location_timezone")
+                    except (OSError, ValueError, AttributeError):
+                        cached_timezone = ""
+                    if cached_timezone:
+                        aqi_scale = _auto_aqi_scale(cached_timezone, extras_dict)
+                        local_aqi_enabled = (
+                            aqi_enabled
+                            and aqi_source in ("auto", "local")
+                            and aqi_scale in ("us", "european")
+                        )
+                        local_aqi_payload = (
+                            _archive_local_aqi_payload(
+                                manager, aqi_scale=aqi_scale
+                            )
+                            if local_aqi_enabled
+                            else None
+                        )
 
                 forecast_api_id = extras_dict.get("forecast_api_id", "")
                 forecast_api_secret = extras_dict.get("forecast_api_secret", "")
@@ -7234,6 +7260,15 @@ class getData(SearchList):
                                 om_raw = _http_get_json(
                                     om_url, headers=HTTP_HEADERS["OPEN_METEO"]
                                 )
+                                if aqi_scale_is_auto:
+                                    aqi_scale = _auto_aqi_scale(
+                                        om_raw.get("timezone"), extras_dict
+                                    )
+                                    local_aqi_enabled = (
+                                        aqi_enabled
+                                        and aqi_source in ("auto", "local")
+                                        and aqi_scale in ("us", "european")
+                                    )
                                 normalized = _openmeteo_transform_to_belch(
                                     om_raw, forecast_units
                                 )
@@ -8502,6 +8537,7 @@ class getData(SearchList):
             "social_html": social_html,
             "custom_css_exists": custom_css_exists,
             "aqi": aqi,
+            "aqi_scale": aqi_scale,
             "aqi_category": aqi_category,
             "aqi_location": aqi_location,
             "aqi_time": aqi_time,
