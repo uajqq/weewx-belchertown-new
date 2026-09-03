@@ -55,8 +55,10 @@ if weewx.__version__ < "5":
 
 log = logging.getLogger(__name__)
 
+VERSION = "2.1"
+
 # Print version in syslog for easier troubleshooting
-log.info("version 2.1")
+log.info("version %s", VERSION)
 
 HIGHCHARTS_LANG_DEFAULTS = OrderedDict(
     [
@@ -5253,15 +5255,24 @@ class getData(SearchList):
         noaa_dir = os.path.join(html_root, noaa_relative_dir)
 
         try:
-            for html_root_entry in os.listdir(html_root):
-                html_root_entry_path = os.path.join(html_root, html_root_entry)
-                if (
-                    html_root_entry.lower() == "noaa"
-                    and os.path.isdir(html_root_entry_path)
-                ):
-                    noaa_relative_dir = html_root_entry
-                    noaa_dir = html_root_entry_path
-                    break
+            # Use directory entries to compare spelling. On a case-insensitive
+            # filesystem, isdir("noaa") also matches a directory named "NOAA",
+            # but that distinction matters after syncing to a Linux web server.
+            html_root_entries = os.listdir(html_root)
+            noaa_entries = [
+                entry
+                for entry in html_root_entries
+                if entry.lower() == noaa_relative_dir
+                and os.path.isdir(os.path.join(html_root, entry))
+            ]
+            if noaa_relative_dir in noaa_entries:
+                selected_noaa_dir = noaa_relative_dir
+            elif noaa_entries:
+                selected_noaa_dir = noaa_entries[0]
+            else:
+                selected_noaa_dir = noaa_relative_dir
+            noaa_relative_dir = selected_noaa_dir
+            noaa_dir = os.path.join(html_root, selected_noaa_dir)
 
             # Only process NOAA report files; ignore any other files (csv, etc.) in the directory.
             noaa_file_pattern = re.compile(r"^NOAA-(\d{4})(?:-(\d{2}))?\.txt$")
@@ -8375,7 +8386,7 @@ class getData(SearchList):
 
         # Build the search list with the new values
         search_list_extension = {
-            "belchertown_version": "2.1beta4",
+            "belchertown_version": VERSION,
             "asset_suffix": asset_suffix,
             "belchertown_debug": belchertown_debug,
             "moment_js_utc_offset": moment_js_utc_offset,
@@ -8842,7 +8853,7 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
             )  # This retains the order in which to load the charts on the page.
             chart_options = accumulateLeaves(self.chart_dict[chart_group])
 
-            output[chart_group]["belchertown_version"] = "2.1beta4"
+            output[chart_group]["belchertown_version"] = VERSION
             output[chart_group]["generated_timestamp"] = generated_timestamp
 
             # Setup the JSON file name for each chart group
