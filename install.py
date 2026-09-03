@@ -11,7 +11,7 @@ import sys
 
 # -------- extension info -----------
 
-VERSION = "2.1"
+VERSION = "2.1.1"
 NAME = "new-belchertown"
 DESCRIPTION = "A clean, modern skin with real time streaming updates and interactive charts."
 AUTHOR = "Pat OBrien and uajqq"
