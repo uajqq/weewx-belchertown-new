@@ -821,11 +821,11 @@ def _normalize_aqi_scale(aqi_scale):
         return scale_key
 
     log.warning(
-        "Invalid aqi_scale '%s'. Valid values are: %s. Falling back to 'us'.",
+        "Invalid aqi_scale '%s'. Valid values are: %s. Falling back to 'auto'.",
         aqi_scale,
         ", ".join(VALID_AQI_SCALES),
     )
-    return "us"
+    return "auto"
 
 
 def _aqi_scale_from_meteoalarm_country(country_slug):
@@ -846,7 +846,7 @@ def _auto_aqi_scale(timezone_value, extras_dict=None):
     ):
         resolved_scale = _aqi_scale_from_meteoalarm_country(country_slug)
         if resolved_scale:
-            log.info(
+            log.debug(
                 "AQI scale auto-selected '%s' from alert location '%s'.",
                 resolved_scale,
                 country_slug,
@@ -855,31 +855,65 @@ def _auto_aqi_scale(timezone_value, extras_dict=None):
 
     forecast_place = str(extras_dict.get("forecast_place", "")).strip().upper()
     if forecast_place.rsplit(",", 1)[-1].strip() in ("CA", "CANADA"):
-        log.info("AQI scale auto-selected 'canada' from forecast location '%s'.", forecast_place)
+        log.debug("AQI scale auto-selected 'canada' from forecast location '%s'.", forecast_place)
         return "canada"
     if forecast_place.rsplit(",", 1)[-1].strip() in ("GB", "UK"):
-        log.info("AQI scale auto-selected 'uk' from forecast location '%s'.", forecast_place)
+        log.debug("AQI scale auto-selected 'uk' from forecast location '%s'.", forecast_place)
         return "uk"
+    forecast_country = forecast_place.rsplit(",", 1)[-1].strip()
+    if forecast_country in METEOALARM_COUNTRY_SLUG_BY_CODE:
+        resolved_scale = _aqi_scale_from_meteoalarm_country(
+            METEOALARM_COUNTRY_SLUG_BY_CODE[forecast_country]
+        )
+        if resolved_scale:
+            log.debug(
+                "AQI scale auto-selected '%s' from forecast location '%s'.",
+                resolved_scale, forecast_place,
+            )
+            return resolved_scale
 
     timezone_values = _config_list_values(timezone_value)
+    if not timezone_values:
+        timezone_values = _system_timezone_values()
     timezone_key = timezone_values[0].lower() if timezone_values else ""
     if timezone_key in CANADIAN_TIMEZONES:
-        log.info("AQI scale auto-selected 'canada' from location timezone '%s'.", timezone_key)
+        log.debug("AQI scale auto-selected 'canada' from location timezone '%s'.", timezone_key)
         return "canada"
-    if timezone_key == "europe/london":
-        log.info("AQI scale auto-selected 'uk' from location timezone '%s'.", timezone_key)
+    if timezone_key in ("europe/london", "gmt", "bst"):
+        log.debug("AQI scale auto-selected 'uk' from location timezone '%s'.", timezone_key)
         return "uk"
-    if _meteoalarm_country_slug_from_timezone(timezone_value):
-        log.info("AQI scale auto-selected 'european' from location timezone '%s'.", timezone_key)
+    if (
+        timezone_key.startswith("europe/")
+        or timezone_key in ("cet", "cest", "eet", "eest", "wet", "west")
+        or _meteoalarm_country_slug_from_timezone(timezone_key)
+    ):
+        log.debug("AQI scale auto-selected 'european' from location timezone '%s'.", timezone_key)
         return "european"
-    log.info("AQI scale auto-selected 'us'; no location-specific scale was resolved.")
+    log.debug("AQI scale auto-selected 'us'; no location-specific scale was resolved.")
     return "us"
+
+
+def _system_timezone_values():
+    """Return the host IANA timezone when the report does not configure one."""
+    candidates = [os.environ.get("TZ")]
+    try:
+        candidates.append(getattr(datetime.datetime.now().astimezone().tzinfo, "key", None))
+    except Exception:
+        pass
+    try:
+        localtime_path = os.path.realpath("/etc/localtime")
+        marker = "/zoneinfo/"
+        if marker in localtime_path:
+            candidates.append(localtime_path.split(marker, 1)[1])
+    except OSError:
+        pass
+    return [str(value).strip() for value in candidates if value and str(value).strip()]
 
 
 def _aqi_forecast_provider_for_forecast_provider(forecast_provider):
     """Return the AQI provider used by a forecast provider, if any."""
     provider_key = _canonical_forecast_provider(forecast_provider)
-    if provider_key in ("nws", "open-meteo"):
+    if provider_key in ("nws", "open-meteo", "pirateweather"):
         return "open-meteo"
     if provider_key == "aeris":
         return "aeris"
@@ -2299,6 +2333,7 @@ def _nws_transform_to_belch(
     observation_payload,
     alerts_payload,
     forecast_units,
+    location_timezone="",
 ):
     """Map NWS responses to the compact structure this skin uses."""
     hourly_all = _nws_build_hourly(hourly_payload, forecast_units)
@@ -2319,6 +2354,7 @@ def _nws_transform_to_belch(
         "daily": _nws_build_daily(forecast_payload, forecast_units),
         "alerts": _nws_build_alerts(alerts_payload),
         "provider": "nws",
+        "location_timezone": location_timezone or "",
         "units": forecast_units,
         "schema": "belchertown.forecast.v1",
         "generated_at": int(time.time()),
@@ -2592,6 +2628,8 @@ def _local_aqi_payload(aqi_value, timestamp, method, pm25_value=None, aqi_scale=
 
 def _archive_latest_numeric(archive_manager, column_name):
     """Return the latest (timestamp, float value) for a hard-coded archive column."""
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", str(column_name or "")):
+        return None
     try:
         row = archive_manager.getSql(
             f"SELECT dateTime, {column_name} FROM archive "
@@ -2607,6 +2645,33 @@ def _archive_latest_numeric(archive_manager, column_name):
         return timestamp, value
     except Exception:
         return None
+
+
+def _archive_column_names(archive_manager):
+    """Return archive columns without assuming a database backend."""
+    try:
+        return list(archive_manager.connection.columnsOf("archive"))
+    except Exception:
+        return []
+
+
+def _local_pm25_columns(archive_manager):
+    """Automatically discover PM2.5 archive columns."""
+    columns = _archive_column_names(archive_manager)
+    discovered = [
+        value for value in columns
+        if re.match(r"^pm2_5(?:_aqi)?(?:_[A-Za-z0-9]+)*$", value, re.IGNORECASE)
+    ]
+    return sorted(discovered, key=lambda value: (value != "pm2_5", value))
+
+
+def _fresh_archive_value(archive_manager, column_name, max_age):
+    latest = _archive_latest_numeric(archive_manager, column_name)
+    if latest is None:
+        return None
+    if max_age and int(time.time()) - latest[0] > max_age:
+        return None
+    return latest
 
 
 def _pm25_nowcast_from_hourly(hourly_offsets):
@@ -2629,9 +2694,11 @@ def _pm25_nowcast_from_hourly(hourly_offsets):
     return numerator / denominator
 
 
-def _archive_pm25_nowcast_payload(archive_manager, aqi_scale="us"):
+def _archive_pm25_nowcast_payload(
+    archive_manager, aqi_scale="us", pm25_column="pm2_5", max_age=7200
+):
     """Build local AQI from archive PM2.5 using the configured AQI scale."""
-    latest = _archive_latest_numeric(archive_manager, "pm2_5")
+    latest = _fresh_archive_value(archive_manager, pm25_column, max_age)
     if latest is None:
         return None
 
@@ -2640,8 +2707,8 @@ def _archive_pm25_nowcast_payload(archive_manager, aqi_scale="us"):
     try:
         rows = list(
             archive_manager.genSql(
-                "SELECT dateTime, pm2_5 FROM archive "
-                "WHERE dateTime >= ? AND dateTime <= ? AND pm2_5 IS NOT NULL "
+                f"SELECT dateTime, {pm25_column} FROM archive "
+                f"WHERE dateTime >= ? AND dateTime <= ? AND {pm25_column} IS NOT NULL "
                 "ORDER BY dateTime DESC",
                 (start_ts, latest_ts),
             )
@@ -2681,6 +2748,33 @@ def _archive_pm25_nowcast_payload(archive_manager, aqi_scale="us"):
         aqi_value = _european_aqi_from_concentration("pm2.5", latest_pm25)
         method = "pm2_5_european"
         pm25_value = latest_pm25
+    elif aqi_scale == "uk":
+        aqi_value = _uk_daqi_from_pollutants(
+            [{"type": "pm2.5", "valueUGM3": latest_pm25}]
+        )
+        method = "pm2_5_uk"
+        pm25_value = latest_pm25
+    elif aqi_scale == "canada":
+        suffix = pm25_column[len("pm2_5"):]
+        pollutants = [{"type": "pm2.5", "valueUGM3": latest_pm25}]
+        for pollutant_type, base_names in (
+            ("o3", ("o3", "ozone")),
+            ("no2", ("no2", "nitrogen_dioxide")),
+        ):
+            latest_pollutant = None
+            for base_name in base_names:
+                latest_pollutant = _fresh_archive_value(
+                    archive_manager, base_name + suffix, max_age
+                )
+                if latest_pollutant is not None:
+                    break
+            if latest_pollutant is not None:
+                pollutants.append(
+                    {"type": pollutant_type, "valueUGM3": latest_pollutant[1]}
+                )
+        aqi_value = _canadian_aqhi_from_pollutants(pollutants)
+        method = "local_pollutants_canada"
+        pm25_value = latest_pm25
     elif nowcast_pm25 is not None:
         aqi_value = _us_aqi_from_pm25(nowcast_pm25)
         method = "pm2_5_nowcast"
@@ -2701,24 +2795,44 @@ def _archive_pm25_nowcast_payload(archive_manager, aqi_scale="us"):
     )
 
 
-def _archive_local_aqi_payload(archive_manager, aqi_scale="us"):
-    """Return archive pm2_5_aqi first, then PM2.5 NowCast/estimate."""
-    if aqi_scale == "us":
-        latest_aqi = _archive_latest_numeric(archive_manager, "pm2_5_aqi")
-        if latest_aqi is not None:
-            timestamp, aqi_value = latest_aqi
-            latest_pm25 = _archive_latest_numeric(archive_manager, "pm2_5")
+def _archive_local_aqi_payload(
+    archive_manager, aqi_scale="us", max_age=7200
+):
+    """Return the freshest usable AQI/PM2.5 payload from local sensor columns."""
+    columns = _local_pm25_columns(archive_manager)
+    if not columns:
+        columns = ["pm2_5_aqi", "pm2_5"]
+    candidates = []
+    for column in columns:
+        is_aqi = "_aqi" in column.lower()
+        if is_aqi and aqi_scale != "us":
+            continue
+        latest = _fresh_archive_value(archive_manager, column, max_age)
+        if latest is not None:
+            candidates.append((latest[0], column, latest, is_aqi))
+    for _, column, latest, is_aqi in sorted(candidates, reverse=True):
+        if is_aqi:
+            timestamp, aqi_value = latest
+            pm25_column = column.lower().replace("_aqi", "")
+            latest_pm25 = _fresh_archive_value(archive_manager, pm25_column, max_age)
             payload = _local_aqi_payload(
                 aqi_value,
                 timestamp,
-                "pm2_5_aqi",
+                column,
                 pm25_value=latest_pm25[1] if latest_pm25 is not None else None,
                 aqi_scale=aqi_scale,
             )
             if payload is not None:
                 return payload
-
-    return _archive_pm25_nowcast_payload(archive_manager, aqi_scale=aqi_scale)
+        else:
+            payload = _archive_pm25_nowcast_payload(
+                archive_manager, aqi_scale=aqi_scale,
+                pm25_column=column, max_age=max_age,
+            )
+            if payload is not None:
+                payload["method"] = payload["method"].replace("pm2_5", column, 1)
+                return payload
+    return None
 
 
 def _openmeteo_air_quality_to_aeris_payload(payload, aqi_scale="us"):
@@ -3869,6 +3983,18 @@ def _aeris_transform_to_belch(aeris_payload, forecast_units, label_dict, icon_ma
     if not hourly or not three_hourly or not daily:
         raise ValueError("Xweather forecast response contained no current forecast periods")
 
+    location_timezone = ""
+    try:
+        first_endpoint = aeris_payload.get("forecast_24hr", [])[0]
+        first_response = (first_endpoint.get("response") or [])[0]
+        location_timezone = (
+            (first_response.get("profile") or {}).get("tz")
+            or (first_response.get("place") or {}).get("tz")
+            or ""
+        )
+    except (AttributeError, IndexError, TypeError):
+        pass
+
     return {
         "current": [],
         "hourly": hourly,
@@ -3877,6 +4003,7 @@ def _aeris_transform_to_belch(aeris_payload, forecast_units, label_dict, icon_ma
         "alerts": _aeris_alerts_to_common(aeris_payload, label_dict),
         "aqi": aeris_payload.get("aqi", []),
         "provider": "aeris",
+        "location_timezone": location_timezone,
         "units": forecast_units,
         "schema": "belchertown.forecast.v1",
         "generated_at": _safe_epoch(aeris_payload.get("timestamp")) or int(time.time()),
@@ -6613,6 +6740,10 @@ class getData(SearchList):
         forecast_enabled = str(extras_dict.get("forecast_enabled", "1")).strip()
         aqi_enabled = to_bool(extras_dict.get("aqi_enabled", "0"))
         aqi_source = _normalize_aqi_source(extras_dict.get("aqi_source", "auto"))
+        aqi_local_max_age = to_int(extras_dict.get("aqi_local_max_age", 7200))
+        if aqi_local_max_age is None or aqi_local_max_age < 0:
+            log.warning("Invalid aqi_local_max_age; falling back to 7200 seconds.")
+            aqi_local_max_age = 7200
         configured_aqi_scale = _normalize_aqi_scale(
             extras_dict.get("aqi_scale", "auto")
         )
@@ -6626,7 +6757,8 @@ class getData(SearchList):
         local_aqi_enabled = (
             aqi_enabled
             and aqi_source in ("auto", "local")
-            and aqi_scale in ("us", "european")
+            and aqi_scale in VALID_AQI_SCALES
+            and aqi_scale != "auto"
         )
         forecast_aqi_enabled = aqi_enabled and aqi_source in ("auto", "forecast")
 
@@ -6638,7 +6770,9 @@ class getData(SearchList):
         aqi_location = ""
         aqi_time = ""
         local_aqi_payload = (
-            _archive_local_aqi_payload(manager, aqi_scale=aqi_scale)
+            _archive_local_aqi_payload(
+                manager, aqi_scale=aqi_scale, max_age=aqi_local_max_age,
+            )
             if local_aqi_enabled
             else None
         )
@@ -6649,6 +6783,74 @@ class getData(SearchList):
                 aqi_location,
                 aqi_time,
             ) = _extract_aqi_globals_from_payload(local_aqi_payload, label_dict)
+
+        # AQI is independently useful when the forecast display is disabled.
+        # Keep a small standalone cache so this does not trigger a download on
+        # every Cheetah search-list invocation.
+        if (
+            aqi_enabled
+            and local_aqi_payload is None
+            and forecast_aqi_enabled
+            and forecast_enabled != "1"
+        ):
+            standalone_aqi_file = os.path.join(html_root, "json", "aqi.json")
+            standalone_aqi_payload = None
+            try:
+                stale_seconds = int(extras_dict.get("forecast_stale", 3600))
+                if (
+                    os.path.isfile(standalone_aqi_file)
+                    and time.time() - os.path.getmtime(standalone_aqi_file) <= stale_seconds
+                ):
+                    with open(standalone_aqi_file, "r", encoding="utf-8") as fh:
+                        cached_payload = json.load(fh)
+                    expected_provider = _aqi_forecast_provider_for_forecast_provider(
+                        forecast_provider
+                    )
+                    if (
+                        _canonical_forecast_provider(cached_payload.get("provider"))
+                        == _canonical_forecast_provider(expected_provider)
+                        and cached_payload.get("scale", "us") == aqi_scale
+                    ):
+                        standalone_aqi_payload = cached_payload
+            except (OSError, ValueError, AttributeError):
+                standalone_aqi_payload = None
+
+            if standalone_aqi_payload is None:
+                try:
+                    standalone_provider = _aqi_forecast_provider_for_forecast_provider(
+                        forecast_provider
+                    )
+                    if standalone_provider == "open-meteo":
+                        standalone_lat, standalone_lon = _resolve_forecast_lat_lon(
+                            config_dict["Station"].get("latitude"),
+                            config_dict["Station"].get("longitude"),
+                            extras_dict.get("forecast_place", ""),
+                        )
+                        if standalone_lat is not None and standalone_lon is not None:
+                            standalone_aqi_payload = _fetch_openmeteo_aqi_payload(
+                                standalone_lat, standalone_lon, aqi_scale=aqi_scale
+                            )
+                    elif standalone_provider == "aeris":
+                        standalone_aqi_payload = _fetch_xweather_aqi_payload(
+                            extras_dict.get("forecast_place", ""),
+                            extras_dict.get("forecast_api_id", ""),
+                            extras_dict.get("forecast_api_secret", ""),
+                            aqi_scale=aqi_scale,
+                        )
+                    if standalone_aqi_payload is not None:
+                        _write_json_file(standalone_aqi_file, standalone_aqi_payload)
+                except Exception as e:
+                    log.warning("Standalone AQI update failed. Reason: %s", e)
+
+            if standalone_aqi_payload is not None:
+                (
+                    aqi,
+                    aqi_category,
+                    aqi_location,
+                    aqi_time,
+                ) = _extract_aqi_globals_from_payload(
+                    standalone_aqi_payload, label_dict
+                )
 
         # ----------------------------
         # Pirate Weather
@@ -6689,11 +6891,13 @@ class getData(SearchList):
                         local_aqi_enabled = (
                             aqi_enabled
                             and aqi_source in ("auto", "local")
-                            and aqi_scale in ("us", "european")
+                            and aqi_scale in VALID_AQI_SCALES
+                            and aqi_scale != "auto"
                         )
                         local_aqi_payload = (
                             _archive_local_aqi_payload(
-                                manager, aqi_scale=aqi_scale
+                                manager, aqi_scale=aqi_scale,
+                                max_age=aqi_local_max_age,
                             )
                             if local_aqi_enabled
                             else None
@@ -6839,7 +7043,10 @@ class getData(SearchList):
                 def _refresh_local_aqi_payload():
                     nonlocal local_aqi_payload
                     local_aqi_payload = (
-                        _archive_local_aqi_payload(manager, aqi_scale=aqi_scale)
+                        _archive_local_aqi_payload(
+                            manager, aqi_scale=aqi_scale,
+                            max_age=aqi_local_max_age,
+                        )
                         if local_aqi_enabled
                         else None
                     )
@@ -7136,6 +7343,7 @@ class getData(SearchList):
                                     observation_payload=observation_data,
                                     alerts_payload=alerts_data,
                                     forecast_units=forecast_units,
+                                    location_timezone=points_props.get("timeZone", ""),
                                 )
                                 _write_normalized_forecast_file(
                                     forecast_file, normalized
@@ -7267,7 +7475,8 @@ class getData(SearchList):
                                     local_aqi_enabled = (
                                         aqi_enabled
                                         and aqi_source in ("auto", "local")
-                                        and aqi_scale in ("us", "european")
+                                        and aqi_scale in VALID_AQI_SCALES
+                                        and aqi_scale != "auto"
                                     )
                                 normalized = _openmeteo_transform_to_belch(
                                     om_raw, forecast_units

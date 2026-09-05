@@ -439,6 +439,9 @@ function forecast_render_observation_modal(observationKey) {
     const source = forecast_escape_html(info["source"]);
     const observedAt = forecast_absolute_time(info["epoch"], '$obs.label.time_current_conditions_last_updated');
     let body = "<p>" + forecast_template_html("$obs.label.observation_source_provider", ["<strong>" + label + "</strong>", source]) + "</p>";
+    if (observationKey === "aqi" && info["scale"]) {
+        body += "<p><strong>" + forecast_escape_html(forecast_label_text("$obs.label.aqi_scale")) + ":</strong> " + forecast_escape_html(info["scale"]) + "</p>";
+    }
     body += "<p>" + forecast_escape_html(forecast_observation_age_sentence(info["epoch"])) + "</p>";
     if (observedAt) {
         body += "<p class='observation-source-modal-time'>" + forecast_escape_html(observedAt) + "</p>";
@@ -500,7 +503,8 @@ function forecast_register_external_observation(observationKey, data, options) {
     forecast_external_observations[observationKey] = {
         label: label,
         source: source,
-        epoch: observationEpoch
+        epoch: observationEpoch,
+        scale: options["scale"] || metadata["scale"] || ""
     };
 
     if (observationKey === "aqi") {
@@ -551,7 +555,8 @@ function forecast_register_external_observations(sourceKey, data, options) {
         forecast_register_external_observation(observationKey, data, {
             metadata: metadata,
             sourceProvider: options && options["sourceProvider"],
-            epoch: options && options["epoch"]
+            epoch: options && options["epoch"],
+            scale: options && options["scale"]
         });
     });
 }
@@ -923,6 +928,15 @@ function show_forcast_alert(data) {
     }
 
     forecast_remove_stale_alert_modals(currentAlertIds, activeAlertId);
+}
+
+function forecast_aqi_scale_label(scale) {
+    const scaleKey = String(scale || "").trim().toLowerCase();
+    if (scaleKey === "european") return "European AQI";
+    if (scaleKey === "canada") return "Canadian AQHI";
+    if (scaleKey === "uk") return "UK DAQI";
+    if (scaleKey === "us") return "US AQI";
+    return scaleKey.toUpperCase();
 }
 
 function forecast_aqi_translate(data) {
@@ -1477,7 +1491,8 @@ function forecast_update_aqi(data) {
             get_aqi_color(aqiValue);
             forecast_register_external_observations("aqi", data, {
                 sourceProvider: aqiPayload["provider"],
-                epoch: aqiPeriod["timestamp"] || data["generated_at"] || data["timestamp"]
+                epoch: aqiPeriod["timestamp"] || data["generated_at"] || data["timestamp"],
+                scale: forecast_aqi_scale_label(aqiPayload["scale"] || "$aqi_scale")
             });
         } else if (data["aqi"] && data["aqi"][0] && data["aqi"][0]["success"] && data["aqi"][0]["error"] && data["aqi"][0]["error"]["code"] === "warn_no_data") {
             const aqiNoDataCategory = forecast_aqi_translate("");
@@ -1507,7 +1522,8 @@ function forecast_update_aqi(data) {
             }
             forecast_register_external_observations("aqi", data, {
                 sourceProvider: aqiPayload["provider"],
-                epoch: data["generated_at"] || data["timestamp"]
+                epoch: data["generated_at"] || data["timestamp"],
+                scale: forecast_aqi_scale_label(aqiPayload["scale"] || "$aqi_scale")
             });
         }
     } catch (err) {
