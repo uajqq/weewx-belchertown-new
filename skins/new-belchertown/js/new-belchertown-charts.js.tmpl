@@ -1224,7 +1224,7 @@ function showChart(json_file, prepend_renderTo = false) {
                     split: false,
                     formatter: function() {
                         // The first returned item is the header, subsequent items are the points
-                        return [this.x].concat(
+                        return [xAxis_categories[this.x]].concat(
                             this.points.map(function(point) {
                                 // If observation_type is in the series array, use that otherwise use the obsType
                                 var point_obsType = point.series.userOptions.observation_type ? point.series.userOptions.observation_type : point.series.userOptions.obsType;
