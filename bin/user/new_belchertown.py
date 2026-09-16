@@ -8640,6 +8640,9 @@ class getData(SearchList):
             ]
         )
         highcharts_lang = _highcharts_lang_options(skin_dict)
+        records_week_time_format = self.generator.formatter.time_format_dict.get(
+            "week", weewx.units.DEFAULT_TIME_FORMAT
+        )
 
         # Build the search list with the new values
         search_list_extension = {
@@ -8654,6 +8657,7 @@ class getData(SearchList):
             "moment_locale_js": moment_locale_js,
             "dayjs_locale_js": dayjs_locale_js,
             "locale_encoding": locale_encoding,
+            "records_week_time_format": records_week_time_format,
             "highcharts_decimal": highcharts_decimal,
             "highcharts_thousands": highcharts_thousands,
             "radar_html": radar_html,

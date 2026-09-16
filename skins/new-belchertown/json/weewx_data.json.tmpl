@@ -401,70 +401,70 @@
         "outTemp": {
             "max": "$span(time_delta=604800).outTemp.max",
             "max_raw": $json.dumps($span(time_delta=604800).outTemp.max.degree_C.raw),
-            "maxtime": "$span(time_delta=604800).outTemp.maxtime",
+            "maxtime": "$span(time_delta=604800).outTemp.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).outTemp.maxtime.raw",
             "average": "$span(time_delta=604800).outTemp.avg",
             "avg_raw": $json.dumps($span(time_delta=604800).outTemp.avg.degree_C.raw),
             "min": "$span(time_delta=604800).outTemp.min",
             "min_raw": $json.dumps($span(time_delta=604800).outTemp.min.degree_C.raw),
-            "mintime": "$span(time_delta=604800).outTemp.mintime",
+            "mintime": "$span(time_delta=604800).outTemp.mintime.format($records_week_time_format)",
             "mintime_raw": "$span(time_delta=604800).outTemp.mintime.raw"
         },
         #if $records_has_app_temp
         "appTemp": {
             "max": "$span(time_delta=604800).appTemp.max",
             "max_raw": $json.dumps($span(time_delta=604800).appTemp.max.degree_C.raw),
-            "maxtime": "$span(time_delta=604800).appTemp.maxtime",
+            "maxtime": "$span(time_delta=604800).appTemp.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).appTemp.maxtime.raw",
             "min": "$span(time_delta=604800).appTemp.min",
             "min_raw": $json.dumps($span(time_delta=604800).appTemp.min.degree_C.raw),
-            "mintime": "$span(time_delta=604800).appTemp.mintime",
+            "mintime": "$span(time_delta=604800).appTemp.mintime.format($records_week_time_format)",
             "mintime_raw": "$span(time_delta=604800).appTemp.mintime.raw"
         },
         #end if
         "heatindex": {
             "max": "$span(time_delta=604800).heatindex.max",
             "max_raw": $json.dumps($span(time_delta=604800).heatindex.max.degree_C.raw),
-            "maxtime": "$span(time_delta=604800).heatindex.maxtime",
+            "maxtime": "$span(time_delta=604800).heatindex.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).heatindex.maxtime.raw"
         },
         "windchill": {
             "max": "$span(time_delta=604800).windchill.min",
             "max_raw": $json.dumps($span(time_delta=604800).windchill.min.degree_C.raw),
-            "maxtime": "$span(time_delta=604800).windchill.mintime",
+            "maxtime": "$span(time_delta=604800).windchill.mintime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).windchill.mintime.raw"
         },
         "humidity": {
             "max": "$span(time_delta=604800).outHumidity.max",
-            "maxtime": "$span(time_delta=604800).outHumidity.maxtime",
+            "maxtime": "$span(time_delta=604800).outHumidity.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).outHumidity.maxtime.raw",
             "min": "$span(time_delta=604800).outHumidity.min",
-            "mintime": "$span(time_delta=604800).outHumidity.mintime",
+            "mintime": "$span(time_delta=604800).outHumidity.mintime.format($records_week_time_format)",
             "mintime_raw": "$span(time_delta=604800).outHumidity.mintime.raw"
         },
         "dewpoint": {
             "max": "$span(time_delta=604800).dewpoint.max",
             "max_raw": $json.dumps($span(time_delta=604800).dewpoint.max.degree_C.raw),
-            "maxtime": "$span(time_delta=604800).dewpoint.maxtime",
+            "maxtime": "$span(time_delta=604800).dewpoint.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).dewpoint.maxtime.raw",
             "min": "$span(time_delta=604800).dewpoint.min",
             "min_raw": $json.dumps($span(time_delta=604800).dewpoint.min.degree_C.raw),
-            "mintime": "$span(time_delta=604800).dewpoint.mintime",
+            "mintime": "$span(time_delta=604800).dewpoint.mintime.format($records_week_time_format)",
             "mintime_raw": "$span(time_delta=604800).dewpoint.mintime.raw"
         },
         "barometer": {
             "max": "$span(time_delta=604800).barometer.max",
             "max_raw": $json.dumps($span(time_delta=604800).barometer.max.hPa.raw),
-            "maxtime": "$span(time_delta=604800).barometer.maxtime",
+            "maxtime": "$span(time_delta=604800).barometer.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).barometer.maxtime.raw",
             "min": "$span(time_delta=604800).barometer.min",
             "min_raw": $json.dumps($span(time_delta=604800).barometer.min.hPa.raw),
-            "mintime": "$span(time_delta=604800).barometer.mintime",
+            "mintime": "$span(time_delta=604800).barometer.mintime.format($records_week_time_format)",
             "mintime_raw": "$span(time_delta=604800).barometer.mintime.raw"
         },
         "wind": {
             "max": "$span(time_delta=604800).wind.max",
-            "maxtime": "$span(time_delta=604800).wind.maxtime",
+            "maxtime": "$span(time_delta=604800).wind.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).wind.maxtime.raw",
             "gustdir": "$span(time_delta=604800).wind.gustdir",
             "max_raw": $json.dumps($span(time_delta=604800).wind.max.meter_per_second.raw),
@@ -492,7 +492,7 @@
         #if $records_has_uv
         "uv": {
             "max": "$span(time_delta=604800).UV.max",
-            "maxtime": "$span(time_delta=604800).UV.maxtime",
+            "maxtime": "$span(time_delta=604800).UV.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).UV.maxtime.raw",
             "average": "$span(time_delta=604800).UV.avg",
             "min": "$span(time_delta=604800).UV.min",
@@ -502,7 +502,7 @@
         #if $records_has_radiation
         "solar_radiation": {
             "max": "$span(time_delta=604800).radiation.max",
-            "maxtime": "$span(time_delta=604800).radiation.maxtime",
+            "maxtime": "$span(time_delta=604800).radiation.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).radiation.maxtime.raw",
             "average": "$span(time_delta=604800).radiation.avg",
             "min": "$span(time_delta=604800).radiation.min",
@@ -523,7 +523,7 @@
             "maxsumtime_raw": "$week_rainiest_day[0]",
             "max": "$span(time_delta=604800).rainRate.max",
             "max_raw": $json.dumps($span(time_delta=604800).rainRate.max.mm_per_hour.raw),
-            "maxtime": "$span(time_delta=604800).rainRate.maxtime",
+            "maxtime": "$span(time_delta=604800).rainRate.maxtime.format($records_week_time_format)",
             "maxtime_raw": "$span(time_delta=604800).rainRate.maxtime.raw"
         }
     },

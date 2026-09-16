@@ -616,6 +616,14 @@
                 return "";
             }
 
+            var configuredText = belchertown_trim(displayText(dateText || ""));
+            if (!rowOptions.omitTime && configuredText && configuredText !== "--") {
+                var configuredClass = (periodKey === "day" || periodKey === "yesterday")
+                    ? "records-record-period__time-line"
+                    : "records-record-period__date-line";
+                return '<span class="' + configuredClass + '">' + escapeHtml(configuredText) + '</span>';
+            }
+
             var parsed = parseSnapshotMoment(dateRaw, dateText);
 
             if (rowOptions.omitTime) {
