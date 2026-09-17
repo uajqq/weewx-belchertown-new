@@ -2609,6 +2609,32 @@ def _archive_latest_numeric(archive_manager, column_name):
         return None
 
 
+def _archive_latest_pm2_5_aqi_xtype(archive_manager):
+    """Latest (timestamp, pm2_5_aqi) via WeeWX's XType system (e.g. weewx-purple),
+    rather than a stored 'pm2_5_aqi' column. Extensions such as weewx-purple
+    compute pm2_5_aqi live from pm2_5 and deliberately never write it to the
+    archive table (averaging AQI across an archive interval is not
+    meaningful), so it must be asked for through weewx.xtypes.get_scalar()
+    instead of a plain SELECT."""
+    row = archive_manager.getSql(
+        "SELECT dateTime, usUnits, pm2_5 FROM archive "
+        "WHERE pm2_5 IS NOT NULL ORDER BY dateTime DESC LIMIT 1"
+    )
+    if not row:
+        return None
+    ts, us_units, pm25 = row
+    record = {"usUnits": us_units, "pm2_5": pm25}
+    try:
+        aqi_vt = weewx.xtypes.get_scalar("pm2_5_aqi", record, archive_manager)
+    except (weewx.CannotCalculate, weewx.UnknownType):
+        return None
+    timestamp = _safe_epoch(ts)
+    value = _safe_float(aqi_vt[0])
+    if timestamp is None or value is None:
+        return None
+    return timestamp, value
+
+
 def _pm25_nowcast_from_hourly(hourly_offsets):
     """Return PM NowCast concentration from (hours_ago, value) pairs."""
     if len(hourly_offsets) < 2:
@@ -2702,9 +2728,13 @@ def _archive_pm25_nowcast_payload(archive_manager, aqi_scale="us"):
 
 
 def _archive_local_aqi_payload(archive_manager, aqi_scale="us"):
-    """Return archive pm2_5_aqi first, then PM2.5 NowCast/estimate."""
+    """Return the XType-computed pm2_5_aqi first (e.g. from weewx-purple), then
+    the raw archive pm2_5_aqi column (kept for any station that populates it
+    directly), then PM2.5 NowCast/estimate."""
     if aqi_scale == "us":
-        latest_aqi = _archive_latest_numeric(archive_manager, "pm2_5_aqi")
+        latest_aqi = _archive_latest_pm2_5_aqi_xtype(archive_manager)
+        if latest_aqi is None:
+            latest_aqi = _archive_latest_numeric(archive_manager, "pm2_5_aqi")
         if latest_aqi is not None:
             timestamp, aqi_value = latest_aqi
             latest_pm25 = _archive_latest_numeric(archive_manager, "pm2_5")
