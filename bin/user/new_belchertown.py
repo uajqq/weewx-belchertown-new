@@ -2690,10 +2690,13 @@ def _archive_latest_pm2_5_aqi_xtype(archive_manager):
     archive table (averaging AQI across an archive interval is not
     meaningful), so it must be asked for through weewx.xtypes.get_scalar()
     instead of a plain SELECT."""
-    row = archive_manager.getSql(
-        "SELECT dateTime, usUnits, pm2_5 FROM archive "
-        "WHERE pm2_5 IS NOT NULL ORDER BY dateTime DESC LIMIT 1"
-    )
+    try:
+        row = archive_manager.getSql(
+            "SELECT dateTime, usUnits, pm2_5 FROM archive "
+            "WHERE pm2_5 IS NOT NULL ORDER BY dateTime DESC LIMIT 1"
+        )
+    except Exception:
+        return None
     if not row:
         return None
     ts, us_units, pm25 = row
