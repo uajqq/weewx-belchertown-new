@@ -825,8 +825,8 @@ function showChart(json_file, prepend_renderTo = false) {
         Object.keys(data).forEach(function(plotname) {
             var obsname = data[plotname];
             var observation_type = undefined;
-            xAxis_categories = [];
-            plot_tooltip_date_format = undefined;
+            var xAxis_categories = [];
+            var plot_tooltip_date_format = undefined;
             var zoom_enabled = false;
             var zoom_range = "";
 
