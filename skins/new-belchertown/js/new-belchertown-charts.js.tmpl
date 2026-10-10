@@ -828,6 +828,7 @@ function showChart(json_file, prepend_renderTo = false) {
             var xAxis_categories = [];
             var plot_tooltip_date_format = undefined;
             var zoom_enabled = false;
+            var markerminmax_enabled = true;
             var zoom_range = "";
 
             try {
@@ -931,6 +932,9 @@ function showChart(json_file, prepend_renderTo = false) {
                         break;
                     case "zoom":
                         zoom_enabled = optionVal;
+                        break;
+                    case "markerminmax":
+                        markerminmax_enabled = optionVal;
                         break;
                     case "zoom_range":
                         zoom_range = optionVal;
@@ -2163,10 +2167,12 @@ function showChart(json_file, prepend_renderTo = false) {
                     ];
                 };
             }
+
+            var markerminmaxRequested = JSON.parse(String(markerminmax_enabled));
             var markerExcluded = ["windRose", "windBarb", "weatherRange", "haysChart", "dewpoint", "windDir", "appTemp"];
             var maxOnlySeries = ["radiation", "UV", "rainRate", "windSpeed", "windGust", "rainTotal", "ETTotal", "sunshineDur", "rainDur", "rainDurTotal", "sunshineDurTotal", "sunshine_time", "maxSolarRad"];
             var _markerPalette = (options.colors && options.colors.length) ? options.colors : ["#7cb5ec","#434348","#90ed7d","#f7a35c","#8085e9","#f15c80","#e4d354","#2b908f","#f45b5b","#91e8e1"];
-            if (options.series && !(options.chart && ["gauge", "solidgauge"].indexOf(options.chart.type) !== -1)) {
+            if (markerminmaxRequested && options.series && !(options.chart && ["gauge", "solidgauge"].indexOf(options.chart.type) !== -1)) {
                 var _seriesSnapshot = options.series.slice();
                 _seriesSnapshot.forEach(function(series, seriesIdx) {
                     var obs = series.obsType || series.observation_type || "";
