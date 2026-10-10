@@ -55,7 +55,7 @@ if weewx.__version__ < "5":
 
 log = logging.getLogger(__name__)
 
-VERSION = "2.1.1_20261001"
+VERSION = "2.1.1_20261010"
 
 # Print version in syslog for easier troubleshooting
 log.info("version %s", VERSION)
@@ -9380,6 +9380,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                     output[chart_group][plotname]["options"]["exporting"] = "true"
                 else:
                     output[chart_group][plotname]["options"]["exporting"] = "false"
+
+                # Setup markerminmax option
+                markerminmax = plot_options.get("markerminmax", None)
+                if markerminmax is None or to_bool(markerminmax) == True:
+                    output[chart_group][plotname]["options"]["markerminmax"] = "true"
+                else:
+                    output[chart_group][plotname]["options"]["markerminmax"] = "false"
 
                 # Setup zoom option
                 zoom = plot_options.get("zoom", None)
