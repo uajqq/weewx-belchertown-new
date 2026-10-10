@@ -55,7 +55,7 @@ if weewx.__version__ < "5":
 
 log = logging.getLogger(__name__)
 
-VERSION = "2.1.1"
+VERSION = "2.1.1_20261010"
 
 # Print version in syslog for easier troubleshooting
 log.info("version %s", VERSION)
@@ -9381,6 +9381,13 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                 else:
                     output[chart_group][plotname]["options"]["exporting"] = "false"
 
+                # Setup markerminmax option
+                markerminmax = plot_options.get("markerminmax", None)
+                if markerminmax is None or to_bool(markerminmax) == True:
+                    output[chart_group][plotname]["options"]["markerminmax"] = "true"
+                else:
+                    output[chart_group][plotname]["options"]["markerminmax"] = "false"
+
                 # Setup zoom option
                 zoom = plot_options.get("zoom", None)
                 if zoom is not None and to_bool(zoom):
@@ -9849,11 +9856,11 @@ class HighchartsJsonGenerator(weewx.reportengine.ReportGenerator):
                             # centered at 255/2 and have an amplitude of
                             # 255/2, so they vary from 0 to 255.
                             n = sin(i) * 127.5 + 127.5
-                            red = format(int(n), "x")  # convert to hex
+                            red = format(int(n), "02x")  # convert to hex, zero-padded
                             n = sin(i + 2.09) * 127.5 + 127.5
-                            green = format(int(n), "x")  # convert to hex
+                            green = format(int(n), "02x")  # convert to hex, zero-padded
                             n = sin(i + 4.19) * 127.5 + 127.5
-                            blue = format(int(n), "x")  # convert to hex
+                            blue = format(int(n), "02x")  # convert to hex, zero-padded
                             return "#" + red + green + blue
 
                         # Set default colors, unless the user has specified
