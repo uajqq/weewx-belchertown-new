@@ -140,7 +140,7 @@ HTTP_HEADERS = {
     },
     "METEOALARM": {
         "User-Agent": "weewx-belchertown-new/meteoalarm",
-        "Accept": "application/atom+xml, application/xml, text/xml",
+        "Accept": "application/atom+xml, application/xml, text/xml, */*",
         "Connection": "keep-alive",
     },
 }
