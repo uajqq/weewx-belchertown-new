@@ -1246,6 +1246,18 @@ const TEMP_GRADIENT_COLORS = [
 ];
 
 function new_gradient_temp(value, min, max) {
+    // Missing observations and invalid chart bounds must not index the palette.
+    const inputs = [value, min, max];
+    if (inputs.some(input => (typeof input !== "number" && typeof input !== "string") ||
+                            (typeof input === "string" && input.trim() === ""))) {
+        return "#808080";
+    }
+    value = Number(value);
+    min = Number(min);
+    max = Number(max);
+    if (!Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+        return "#808080";
+    }
     if (value < min) { value = min; }
     if (value >= max) { value = max; }
     const position = (value - min) / (max - min) * 9; // position on 0–9 scale
@@ -1339,11 +1351,11 @@ function refresh_aqi_color() {
 }
 
 function get_outTemp_color(unit, outTemp, returnColor = false) {
-    if (outTemp != null) {
-        outTemp = parseFloat(outTemp).toFixed(0); // Convert back to decimal literal
-    } else {
-        return // No temperature value provided
+    outTemp = parseFloat(outTemp);
+    if (!Number.isFinite(outTemp)) {
+        return; // No usable temperature observation provided
     }
+    outTemp = outTemp.toFixed(0); // Preserve rounding for valid observations
 
     if (unit == "degree_F") {
         var outTemp_color = new_gradient_temp(outTemp, 10, 120);
