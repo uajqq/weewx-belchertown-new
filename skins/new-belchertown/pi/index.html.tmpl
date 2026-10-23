@@ -26,31 +26,39 @@
     window.moment_locale = "$moment_locale_js";
     belchertown_set_datetime_locale(window.moment_locale);
 
-    ajaxweewx(); // Initial call to load from WeeWX (date, daily high, low, etc)
+    ajaxweewx().then(function(weewx_data) {
+        update_weewx_data(weewx_data); // Initialize daily statistics and MQTT observation units before connecting
 
-    // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
-    // Load forecast
-    ajaxforecast(); // Initial call to load forecast data like 8 day outlook, weather icon and observation text
-    // #end if
-
-    belchertown_on_ready(function() {
-        get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
-
-        initialize_wind_compass_marker(
-            "$current.windDir.formatted",
-            "$current.windSpeed.knot.toString(addLabel=False, NONE_string='')",
-            "$current.windGust.knot.toString(addLabel=False, NONE_string='')"
-        );
-
-        // #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
-        connect(); // Begin mqtt after WeeWX initial load
-
-        // Update the Last Updated timestamp with moment.js,
-        updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
-        updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
-        belchertown_set_text(".updated", updated_text);
-
+        // #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '0' and $Extras.has_key("webpage_autorefresh") and $Extras.webpage_autorefresh != '0'
+        setTimeout(function() { location.reload(); }, $Extras.webpage_autorefresh);
         // #end if
+
+        // #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1'
+        // Load forecast
+        ajaxforecast(); // Initial call to load forecast data like 8 day outlook, weather icon and observation text
+        // #end if
+
+        belchertown_on_ready(function() {
+            get_outTemp_color("$unit.unit_type.outTemp", "$current.outTemp.formatted");
+
+            initialize_wind_compass_marker(
+                "$current.windDir.formatted",
+                "$current.windSpeed.knot.toString(addLabel=False, NONE_string='')",
+                "$current.windGust.knot.toString(addLabel=False, NONE_string='')"
+            );
+
+            // #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
+            connect(); // Begin mqtt after WeeWX initial load
+
+            // Update the Last Updated timestamp with moment.js,
+            updated = tzAdjustedMoment($current.dateTime.raw).format(belchertown_label_text("$obs.label.time_last_updated"));
+            updated_text = belchertown_label_text("$obs.label.header_last_updated") + " " + updated;
+            belchertown_set_text(".updated", updated_text);
+
+            // #end if
+        });
+    }).catch(function(e) {
+        console.log(e);
     });
 
     }
