@@ -685,6 +685,11 @@ function forecast_alert_is_pending(alertObj) {
     return startEpoch !== null && startEpoch > (Date.now() / 1000);
 }
 
+function forecast_alert_is_expired(alertObj) {
+    var expiresEpoch = forecast_number(alertObj['expires']);
+    return expiresEpoch !== null && expiresEpoch <= (Date.now() / 1000);
+}
+
 function forecast_alert_start_sort_timestamp(alertObj) {
     return forecast_number(forecast_alert_start_timestamp(alertObj));
 }
@@ -732,7 +737,16 @@ function forecast_alert_body_html(description) {
 }
 
 function forecast_render_alert_states() {
+    var removedExpiredAlert = false;
+    var currentAlertIds = {};
     document.querySelectorAll(".forecast-alert-badge").forEach(function(badge) {
+        if (forecast_alert_is_expired({"expires": badge.dataset.alertExpires})) {
+            badge.remove();
+            removedExpiredAlert = true;
+            return;
+        }
+        var modalTarget = badge.getAttribute("data-bs-target") || "";
+        currentAlertIds[modalTarget.slice(1)] = true;
         var alertTiming = forecast_alert_in_effect_text({
             "effective": badge.dataset.alertStart,
             "ends": badge.dataset.alertEnd
@@ -742,6 +756,16 @@ function forecast_render_alert_states() {
         badge.classList.toggle("forecast-alert-badge--active", !isPending);
         badge.setAttribute("aria-label", badge.textContent + (alertTiming ? ", " + alertTiming : ""));
     });
+
+    if (removedExpiredAlert) {
+        var activeAlertModal = forecast_active_alert_modal();
+        forecast_remove_stale_alert_modals(currentAlertIds, (activeAlertModal && activeAlertModal.id) || "");
+        if (!document.querySelector(".forecast-alert-badge")) {
+            document.querySelectorAll(".wx-stn-alert").forEach(function(el) {
+                el.style.display = "none";
+            });
+        }
+    }
 
     document.querySelectorAll(".forecast-alert-timing").forEach(function(timing) {
         timing.textContent = forecast_alert_in_effect_text({
@@ -852,6 +876,9 @@ function show_forcast_alert(data) {
     if (Array.isArray(data['alerts'])) {
         for (i = 0; i < data['alerts'].length; i++) {
             const alertObj = data['alerts'][i] || {};
+            if (forecast_alert_is_expired(alertObj)) {
+                continue;
+            }
             const alertDescription = (alertObj['description'] == null)
                 ? ""
                 : String(alertObj['description']);
@@ -868,6 +895,7 @@ function show_forcast_alert(data) {
                 "body": forecast_alert_body,
                 "start": forecast_alert_start,
                 "end": forecast_alert_end,
+                "expires": alertObj['expires'] == null ? "" : alertObj['expires'],
                 "timing": forecast_alert_timing,
                 "state": forecast_alert_state,
                 "start_order": forecast_alert_start_sort_timestamp(alertObj),
@@ -905,7 +933,7 @@ function show_forcast_alert(data) {
             if (forecast_alerts[i]["timing"]) {
                 alert_aria_label += ", " + forecast_alerts[i]["timing"];
             }
-            alert_link = "<a class='forecast-alert-badge forecast-alert-badge--" + forecast_alerts[i]["state"] + "' href='#" + forecastAlertId + "' data-alert-start='" + forecast_escape_html(forecast_alerts[i]["start"]) + "' data-alert-end='" + forecast_escape_html(forecast_alerts[i]["end"]) + "' data-bs-toggle='modal' data-bs-target='#" + forecastAlertId + "' aria-label='" + forecast_escape_html(alert_aria_label) + "'>" + forecast_escape_html(forecast_alerts[i]["title"]) + "</a>";
+            alert_link = "<a class='forecast-alert-badge forecast-alert-badge--" + forecast_alerts[i]["state"] + "' href='#" + forecastAlertId + "' data-alert-start='" + forecast_escape_html(forecast_alerts[i]["start"]) + "' data-alert-end='" + forecast_escape_html(forecast_alerts[i]["end"]) + "' data-alert-expires='" + forecast_escape_html(forecast_alerts[i]["expires"]) + "' data-bs-toggle='modal' data-bs-target='#" + forecastAlertId + "' aria-label='" + forecast_escape_html(alert_aria_label) + "'>" + forecast_escape_html(forecast_alerts[i]["title"]) + "</a>";
             if (alertContainer) {
                 alertContainer.insertAdjacentHTML("beforeend", alert_link);
             }
