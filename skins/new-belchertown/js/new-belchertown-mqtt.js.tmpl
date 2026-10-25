@@ -929,6 +929,7 @@ var mqtt_weewx_refresh_delay_ms = 10000;
 var mqtt_weewx_refresh_retry_delay_ms = 15000;
 var mqtt_archive_chart_refresh_timer = null;
 var mqtt_archive_forecast_refresh_timer = null;
+var mqtt_display_refresh_timer = null;
 var mqtt_visibility_refresh_bound = false;
 var mqtt_tab_was_hidden = typeof document !== "undefined" && document.hidden;
 var mqttStatusElements = null;
@@ -1030,6 +1031,23 @@ function mqtt_weewx_data_epoch(data) {
     return isFinite(epoch) ? epoch : null;
 }
 
+function mqtt_schedule_display_refresh() {
+    if (mqtt_display_refresh_timer !== null) {
+        clearTimeout(mqtt_display_refresh_timer);
+    }
+
+    var intervalMs = parseFloat("$archive_interval_ms");
+    if (!isFinite(intervalMs) || intervalMs <= 0) {
+        intervalMs = 300000;
+    }
+    // Archive packets are not guaranteed to reach every live page.
+    // Refresh the report JSON independently, allowing time for publication.
+    mqtt_display_refresh_timer = setTimeout(function() {
+        mqtt_display_refresh_timer = null;
+        mqtt_refresh_weewx_data("periodic display refresh");
+    }, intervalMs + mqtt_weewx_refresh_delay_ms);
+}
+
 function mqtt_update_required_weewx_epoch(epoch) {
     var requiredEpoch = parseFloat(epoch);
     if (!isFinite(requiredEpoch)) {
@@ -1118,15 +1136,20 @@ function mqtt_refresh_weewx_data(reason) {
             return;
         }
 
+        var previousEpoch = mqtt_weewx_data_epoch(weewx_data);
         update_weewx_data(data);
         belchertown_debug(data);
         mqtt_weewx_refresh_required_epoch = null;
         mqtt_weewx_refresh_retry_count = 0;
+        if (dataEpoch !== null && (previousEpoch === null || dataEpoch > previousEpoch)) {
+            mqtt_schedule_report_views();
+        }
     }).catch(function(e) {
         console.log(e);
         mqtt_schedule_weewx_retry("WeeWX data fetch failed");
     }).finally(function() {
         mqtt_weewx_refresh_in_progress = false;
+        mqtt_schedule_display_refresh();
     });
 }
 
@@ -1159,21 +1182,23 @@ function mqtt_handle_archive_packet(data) {
         true,
         "archive interval"
     );
+}
 
+function mqtt_schedule_report_views() {
     if (pageName == "pi" || pageName == "kiosk.html") {
         belchertown_debug("Skipping chart update for page " + pageName + ", no charts to be updated.");
     } else if (mqtt_archive_chart_refresh_timer === null) {
         mqtt_archive_chart_refresh_timer = setTimeout(function() {
             mqtt_archive_chart_refresh_timer = null;
             mqtt_render_archive_charts();
-        }, 30000);
+        }, 0);
     }
 
     if (typeof ajaxforecast === "function" && mqtt_archive_forecast_refresh_timer === null) {
         mqtt_archive_forecast_refresh_timer = setTimeout(function() {
             mqtt_archive_forecast_refresh_timer = null;
             ajaxforecast();
-        }, mqtt_weewx_refresh_delay_ms);
+        }, 0);
     }
 }
 
