@@ -1125,22 +1125,36 @@ function mqtt_refresh_weewx_data(reason) {
         }
 
         var dataEpoch = mqtt_weewx_data_epoch(data);
+        var previousEpoch = mqtt_weewx_data_epoch(weewx_data);
         var requiredEpoch = mqtt_weewx_refresh_required_epoch;
-        if (requiredEpoch !== null && (dataEpoch === null || dataEpoch < requiredEpoch)) {
+        var awaitingArchive = requiredEpoch !== null && (dataEpoch === null || dataEpoch < requiredEpoch);
+        if (awaitingArchive) {
             belchertown_debug(
                 "MQTT: weewx_data.json is older than the archive packet" +
                 " (JSON " + (dataEpoch === null ? "unknown" : dataEpoch) +
                 ", required " + requiredEpoch + ")"
             );
-            mqtt_schedule_weewx_retry("stale WeeWX data");
+            // A report can advance the display even while publication lags
+            // behind MQTT. Rejecting every intermediate report can freeze
+            // daily statistics indefinitely on slower report/upload schedules.
+            if (dataEpoch === null || (previousEpoch !== null && dataEpoch <= previousEpoch)) {
+                mqtt_schedule_weewx_retry("stale WeeWX data");
+                return;
+            }
+        }
+        if (dataEpoch !== null && previousEpoch !== null && dataEpoch < previousEpoch) {
+            mqtt_schedule_weewx_retry("older WeeWX data");
             return;
         }
 
-        var previousEpoch = mqtt_weewx_data_epoch(weewx_data);
         update_weewx_data(data);
         belchertown_debug(data);
-        mqtt_weewx_refresh_required_epoch = null;
-        mqtt_weewx_refresh_retry_count = 0;
+        if (awaitingArchive) {
+            mqtt_schedule_weewx_retry("waiting for archive publication");
+        } else {
+            mqtt_weewx_refresh_required_epoch = null;
+            mqtt_weewx_refresh_retry_count = 0;
+        }
         if (dataEpoch !== null && (previousEpoch === null || dataEpoch > previousEpoch)) {
             mqtt_schedule_report_views();
         }
