@@ -3562,11 +3562,13 @@ function BU_mqttMetricSuffixes(kind) {
         rain: [
             { suffix: "_mm", toMetricWX: function(mm) { return mm; } },
             { suffix: "_cm", toMetricWX: function(cm) { return cm * 10; } },
+            { suffix: "_in", toMetricWX: function(inch) { return inch * 25.4; } },
             { suffix: "_inch", toMetricWX: function(inch) { return inch / 0.03937; } },
         ],
         rainrate: [
             { suffix: "_mm_per_hour", toMetricWX: function(mm) { return mm; } },
             { suffix: "_cm_per_hour", toMetricWX: function(cm) { return cm * 10; } },
+            { suffix: "_in_per_hour", toMetricWX: function(inch) { return inch * 25.4; } },
             { suffix: "_inch_per_hour", toMetricWX: function(inch) { return inch / 0.03937; } },
         ],
         speed: [
