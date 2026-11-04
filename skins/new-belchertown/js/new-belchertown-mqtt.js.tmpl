@@ -1031,6 +1031,11 @@ function mqtt_weewx_data_epoch(data) {
     return isFinite(epoch) ? epoch : null;
 }
 
+function mqtt_weewx_report_version(data) {
+    var epoch = parseFloat(data && data["current"] && data["current"]["epoch"]);
+    return isFinite(epoch) ? epoch : mqtt_weewx_data_epoch(data);
+}
+
 function mqtt_schedule_display_refresh() {
     if (mqtt_display_refresh_timer !== null) {
         clearTimeout(mqtt_display_refresh_timer);
@@ -1113,7 +1118,7 @@ function mqtt_refresh_weewx_data(reason) {
         mqtt_schedule_weewx_refresh(1000, null, false, reason || "refresh already in progress");
         return;
     }
-    if (typeof ajaxweewx !== "function" || typeof update_weewx_data !== "function") {
+    if (typeof ajaxweewx !== "function" || typeof update_report_statistics !== "function") {
         belchertown_debug("MQTT: WeeWX data refresh functions are unavailable");
         return;
     }
@@ -1125,7 +1130,7 @@ function mqtt_refresh_weewx_data(reason) {
         }
 
         var dataEpoch = mqtt_weewx_data_epoch(data);
-        var previousEpoch = mqtt_weewx_data_epoch(weewx_data);
+        var previousVersion = mqtt_weewx_report_version(weewx_data);
         var requiredEpoch = mqtt_weewx_refresh_required_epoch;
         var awaitingArchive = requiredEpoch !== null && (dataEpoch === null || dataEpoch < requiredEpoch);
         if (awaitingArchive) {
@@ -1134,20 +1139,14 @@ function mqtt_refresh_weewx_data(reason) {
                 " (JSON " + (dataEpoch === null ? "unknown" : dataEpoch) +
                 ", required " + requiredEpoch + ")"
             );
-            // A report can advance the display even while publication lags
-            // behind MQTT. Rejecting every intermediate report can freeze
-            // daily statistics indefinitely on slower report/upload schedules.
-            if (dataEpoch === null || (previousEpoch !== null && dataEpoch <= previousEpoch)) {
-                mqtt_schedule_weewx_retry("stale WeeWX data");
-                return;
-            }
-        }
-        if (dataEpoch !== null && previousEpoch !== null && dataEpoch < previousEpoch) {
-            mqtt_schedule_weewx_retry("older WeeWX data");
-            return;
         }
 
-        update_weewx_data(data);
+        // Render report-owned values even while waiting for archive publication.
+        // Live observations remain owned by MQTT and are not reapplied here.
+        if (update_report_statistics(data) === false) {
+            mqtt_schedule_weewx_retry("older WeeWX report");
+            return;
+        }
         belchertown_debug(data);
         if (awaitingArchive) {
             mqtt_schedule_weewx_retry("waiting for archive publication");
@@ -1155,7 +1154,8 @@ function mqtt_refresh_weewx_data(reason) {
             mqtt_weewx_refresh_required_epoch = null;
             mqtt_weewx_refresh_retry_count = 0;
         }
-        if (dataEpoch !== null && (previousEpoch === null || dataEpoch > previousEpoch)) {
+        var reportVersion = mqtt_weewx_report_version(data);
+        if (reportVersion !== null && (previousVersion === null || reportVersion > previousVersion)) {
             mqtt_schedule_report_views();
         }
     }).catch(function(e) {

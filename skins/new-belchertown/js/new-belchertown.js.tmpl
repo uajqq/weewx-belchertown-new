@@ -2737,6 +2737,7 @@ async function ajaxweewx() {
 var unit_rounding_array = "";
 var unit_label_array = "";
 var weewx_data = "";
+var belchertown_report_timestamp = null;
 
 function formatAlmanacEpochTime(epoch, formatString, unavailableText) {
     var timestamp = parseFloat(epoch);
@@ -3724,13 +3725,12 @@ function BU_applyMQTT(data) {
 
 #if $unitSwitcherJsEnabled
 
-// ── Re-render daily high/low and max gust from current weewx_data ──────────
+// Re-render archive observations when initializing or changing display units.
 function BU_applyCurrent(data) {
     if (!data) { return; }
     var sysKey = BU_getSystem();
     var s = BU_SYS[sysKey];
     var cur = data["current"] || {};
-    var day = data["day"] || {};
 
     // ── Current temperature ─────────────────────────────────────────────
     var tC = parseFloat(cur.outTemp_raw);
@@ -3768,16 +3768,21 @@ function BU_applyCurrent(data) {
     if (!isNaN(drMm)) { BU_setHtml(".dayRain",  BU_fmt(s.rain(drMm), BU_obsDecimals("dayRain", 2)) + "\u00a0" + s.rl);  }
     if (!isNaN(rrMm)) { BU_setHtml(".rainRate", BU_fmt(s.rain(rrMm), BU_obsDecimals("rainRate", 2)) + "\u00a0" + s.rrl); }
 
-    // ── Daily high/low/gust ──────────────────────────────────────────────
+    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(data));
+}
+
+function BU_applyReportStatistics(data) {
+    var s = BU_SYS[BU_getSystem()];
+    var day = data["day"] || {};
+
+    // Daily high/low/gust have no live MQTT counterpart.
     var hiC = parseFloat((day.outTemp || {}).max_raw);
     var loC = parseFloat((day.outTemp || {}).min_raw);
     if (!isNaN(hiC)) { BU_setHtml(".high", BU_fmt(s.temp(hiC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
     if (!isNaN(loC)) { BU_setHtml(".low",  BU_fmt(s.temp(loC), BU_obsDecimals("outTemp", 1)) + "\u00a0" + s.tl); }
 
     var gustMs = parseFloat((day.wind || {}).max_raw);
-    if (!isNaN(gustMs)) { BU_setHtml(".dailymaxgust", BU_fmt(s.speed(gustMs), BU_obsDecimals("windGust", 0))); }
-
-    BU_applyStationObservationUnitMetadata(BU_stationObservationUnitMetadata(data));
+    if (!isNaN(gustMs)) { BU_setHtml(".dailymaxgust", BU_fmt(s.speed(gustMs), BU_obsDecimals("windGust", 0)) + "\u00a0" + s.sl); }
 }
 
 // ── Re-render the daily/weekly/yesterday snapshot grid ─────────────────────
@@ -3811,6 +3816,7 @@ function BU_applyMonthlySnapshot(data, key) { BU_applySnapshot(data, key, "month
 function BU_reapplyAll() {
     if (typeof weewx_data === "object" && weewx_data) {
         BU_applyCurrent(weewx_data);
+        BU_applyReportStatistics(weewx_data);
         var daySelectEl = document.getElementById("snapshot-day-select");
         var dayKey = (daySelectEl && daySelectEl.value) || "day";
         BU_applyDailySnapshot(weewx_data, dayKey);
@@ -3864,7 +3870,26 @@ if (typeof ajaxweewx === "function") {
 #end if
 
 function update_weewx_data(data) {
-    belchertown_debug("Updating WeeWX data");
+    if (update_report_statistics(data) === false) {
+        return;
+    }
+    if (typeof BU_applyCurrent === "function") {
+        BU_applyCurrent(data);
+    }
+}
+
+function update_report_statistics(data) {
+    var reportTimestamp = parseFloat(data && data["current"] && data["current"]["datetime_raw"]);
+    // Compare reports with reports, never with newer live MQTT timestamps.
+    // Equal timestamps are allowed: statistics can be corrected or regenerated.
+    if (isFinite(reportTimestamp) && belchertown_report_timestamp !== null && reportTimestamp < belchertown_report_timestamp) {
+        belchertown_debug("Skipping report older than the displayed report");
+        return false;
+    }
+    if (isFinite(reportTimestamp)) {
+        belchertown_report_timestamp = reportTimestamp;
+    }
+    belchertown_debug("Updating report statistics");
     weewx_data = data;
 
     // Auto theme if enabled. The stored mode decides whether this follows the
@@ -3876,12 +3901,11 @@ function update_weewx_data(data) {
     unit_label_array = data["unit_label"];
 
     // Daily High Low
-    high = data["day"]["outTemp"]["max"];
-    low = data["day"]["outTemp"]["min"];
-    belchertown_set_html(".high", high);
-    belchertown_set_html(".low", low);
-    if (typeof BU_applyCurrent === "function") {
-        BU_applyCurrent(data); // Unit Switcher: overwrite with chosen-unit values
+    belchertown_set_html(".high", data["day"]["outTemp"]["max"]);
+    belchertown_set_html(".low", data["day"]["outTemp"]["min"]);
+    belchertown_set_html(".dailymaxgust", data["day"]["wind"]["max"]);
+    if (typeof BU_applyReportStatistics === "function") {
+        BU_applyReportStatistics(data);
     }
 
     try {
@@ -3896,10 +3920,6 @@ function update_weewx_data(data) {
     } else {
         belchertown_set_html(".pressure-trend", '<i class="fa fa-arrow-up barometer-up"></i>');
     }
-
-    // Daily max gust span
-    belchertown_set_html(".dailymaxgust", parseFloat(data["day"]["wind"]["max"]).toFixed(1));
-    // (dailymaxgust unit-corrected by BU_applyCurrent above)
 
     // Daily Snapshot Stats Section — use current dropdown selection (default: "day")
     var daySelectEl = document.getElementById("snapshot-day-select");
@@ -3948,6 +3968,7 @@ function update_weewx_data(data) {
     if (typeof mqtt_schedule_display_refresh === "function") {
         mqtt_schedule_display_refresh();
     }
+    return true;
 }
 
 function to_radians(degrees) {
