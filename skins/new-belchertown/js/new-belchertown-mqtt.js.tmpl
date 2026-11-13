@@ -1456,9 +1456,14 @@ function update_current_wx(data) {
     }
 
     get_station_observation_cache();
+    var stationObservationMeta = BU_stationObservationUnitMetadata(weewx_data) || {};
     station_mqtt_data.forEach(function(mqttKey) {
         var observationKey = resolve_station_observation_key(mqttKey);
         if (!observationKey) {
+            return;
+        }
+
+        if (stationObservationMeta[observationKey] && stationObservationMeta[observationKey].kind === "time") {
             return;
         }
 
@@ -1482,6 +1487,7 @@ function update_current_wx(data) {
         });
     });
     // End dynamic station observation box
+    BU_applyStationObservationTimes(weewx_data, data);
 
     // Temperature F
     if (data.hasOwnProperty("outTemp_F")) {

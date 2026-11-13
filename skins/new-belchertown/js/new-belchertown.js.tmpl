@@ -3455,12 +3455,6 @@ function BU_formatCurrentObservation(value, kind, decimals, displayMeta) {
     return measurement.formatted + (measurement.label ? "\u00a0" + measurement.label : "");
 }
 
-function BU_formatCurrentObservationTime(value) {
-    var timestamp = parseFloat(value);
-    if (!isFinite(timestamp) || typeof tzAdjustedMoment !== "function") { return null; }
-    return tzAdjustedMoment(timestamp).format("L LTS");
-}
-
 function BU_stationObservationUnitMetadata(data) {
     return data &&
         data.station_observations &&
@@ -3474,13 +3468,59 @@ function BU_applyStationObservationUnitMetadata(metaByObs, valueResolver) {
     if (!metaByObs) { return; }
     Object.keys(metaByObs).forEach(function(obsName) {
         var meta = metaByObs[obsName];
-        if (!meta || !meta.selector || !meta.kind) { return; }
+        if (!meta || !meta.selector || !meta.kind || meta.kind === "time") { return; }
         var rawValue = valueResolver ? valueResolver(obsName, meta) : meta.raw;
-        var value = meta.kind === "time"
-            ? BU_formatCurrentObservationTime(rawValue)
-            : BU_formatCurrentObservation(rawValue, meta.kind, meta.decimals, meta);
+        var value = BU_formatCurrentObservation(rawValue, meta.kind, meta.decimals, meta);
         if (value !== null) {
             BU_setHtml(meta.selector, value);
+        }
+    });
+}
+
+var BU_liveStationObservationTimes = Object.create(null);
+
+function BU_mqttObservationTime(obsName, packet) {
+    var keys = [
+        [obsName, 1],
+        [obsName + "_unix_epoch", 1],
+        [obsName + "_unix_epoch_ms", 1000],
+        [obsName + "_unix_epoch_ns", 1000000000]
+    ];
+    for (var i = 0; i < keys.length; i++) {
+        var value = packet[keys[i][0]];
+        if (typeof value !== "number" &&
+            (typeof value !== "string" || !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()))) {
+            continue;
+        }
+        var epoch = Number(value) / keys[i][1];
+        if (isFinite(epoch) && Math.abs(epoch) <= 8640000000000) {
+            return epoch;
+        }
+    }
+    return null;
+}
+
+function BU_applyStationObservationTimes(data, packet) {
+    var metaByObs = BU_stationObservationUnitMetadata(data);
+    if (!metaByObs) { return; }
+    var archiveText = data.station_observations.current || {};
+    Object.keys(metaByObs).forEach(function(obsName) {
+        var meta = metaByObs[obsName];
+        if (!meta || !meta.selector || meta.kind !== "time") { return; }
+
+        if (packet) {
+            var epoch = BU_mqttObservationTime(obsName, packet);
+            if (epoch === null) { return; }
+            var time = tzAdjustedMoment(epoch);
+            if (!time.isValid()) { return; }
+            BU_liveStationObservationTimes[obsName] = epoch;
+            BU_setText(meta.selector, epoch === meta.raw && typeof archiveText[obsName] === "string"
+                ? archiveText[obsName] : time.format("L LTS"));
+        } else if (typeof archiveText[obsName] === "string" &&
+            (!(obsName in BU_liveStationObservationTimes) ||
+                (typeof meta.raw === "number" && meta.raw >= BU_liveStationObservationTimes[obsName]))) {
+            delete BU_liveStationObservationTimes[obsName];
+            BU_setText(meta.selector, archiveText[obsName]);
         }
     });
 }
@@ -3493,15 +3533,6 @@ function BU_mqttObservationValue(obsName, meta, packet) {
     }
     var selectorName = meta.selector ? String(meta.selector).replace(/^\./, "") : "";
     var names = [obsName, selectorName];
-    if (meta.kind === "time") {
-        for (var timeIndex = 0; timeIndex < names.length; timeIndex++) {
-            var timeKey = names[timeIndex];
-            if (timeKey && packet[timeKey] !== undefined && packet[timeKey] !== null && packet[timeKey] !== "") {
-                return packet[timeKey];
-            }
-        }
-        return meta.raw;
-    }
     for (var i = 0; i < keys.length; i++) {
         if (packet[keys[i]] !== undefined && packet[keys[i]] !== null && packet[keys[i]] !== "") {
             return packet[keys[i]];
@@ -3899,6 +3930,7 @@ function update_report_statistics(data) {
     //station_obs_array = data["station_observations"];
     unit_rounding_array = data["unit_rounding"];
     unit_label_array = data["unit_label"];
+    BU_applyStationObservationTimes(data);
 
     // Daily High Low
     belchertown_set_html(".high", data["day"]["outTemp"]["max"]);

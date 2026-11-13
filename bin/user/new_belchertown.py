@@ -2056,7 +2056,7 @@ def _unit_switch_station_observation_meta(obs_name, value_helper, decimals=None)
     kind = _unit_switch_kind_for_observation(obs_name, value_helper)
     selector = _unit_switch_selector(obs_name)
     raw_value = _unit_switch_raw_from_value_helper(value_helper)
-    if selector is None or raw_value is None:
+    if selector is None:
         return None
     if obs_group == "group_time":
         return {
@@ -2064,7 +2064,7 @@ def _unit_switch_station_observation_meta(obs_name, value_helper, decimals=None)
             "kind": "time",
             "raw": raw_value,
         }
-    if not kind:
+    if not kind or raw_value is None:
         return None
     meta = {
         "selector": selector,
