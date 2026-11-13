@@ -1257,8 +1257,13 @@ function forecast_metric_rows(row) {
 
 function forecast_wind_html(row, includeGust, sourceData) {
     const windSpeedText = forecast_plain_number_text(row["windSpeed"]);
+    const rawBearing = row["windBearing"];
+    const bearing = typeof rawBearing === "string" && rawBearing.trim() ? Number(rawBearing) : rawBearing;
+    const direction = Number.isFinite(bearing) && bearing >= 0 && bearing <= 360
+        ? " " + belchertown_label_html(ORDINATE_NAMES[Math.round(bearing / 22.5) % 16])
+        : "";
     let html = '<div class="forecast-wind">';
-    html += '<i class="wi wi-strong-wind"></i> <span class="forecast-wind-speed">' + windSpeedText + '</span>';
+    html += '<i class="wi wi-strong-wind"></i> <span class="forecast-wind-speed">' + windSpeedText + direction + '</span>';
     if (includeGust) {
         const gustUnitLabel = forecast_wind_unit_label(sourceData);
         const gustUnitHtml = gustUnitLabel ? " " + belchertown_label_html(gustUnitLabel) : "";

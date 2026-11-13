@@ -1875,6 +1875,7 @@ def _nws_build_daily(forecast_payload, forecast_units):
                 bucket["windSpeed"] is None or wind_speed > bucket["windSpeed"]
             ):
                 bucket["windSpeed"] = wind_speed
+                bucket["windBearing"] = _nws_parse_wind_direction(p.get("windDirection"))
             if wind_gust is not None and (
                 bucket["windGust"] is None or wind_gust > bucket["windGust"]
             ):
