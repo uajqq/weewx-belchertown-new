@@ -2064,7 +2064,7 @@ def _unit_switch_station_observation_meta(obs_name, value_helper, decimals=None)
             "kind": "time",
             "raw": raw_value,
         }
-    if not kind or raw_value is None:
+    if not kind:
         return None
     meta = {
         "selector": selector,

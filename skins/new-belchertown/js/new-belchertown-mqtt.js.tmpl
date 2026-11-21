@@ -935,7 +935,6 @@ var mqtt_tab_was_hidden = typeof document !== "undefined" && document.hidden;
 var mqttStatusElements = null;
 var mqttGtagConfigured = false;
 var stationObservationElementsByKey = null;
-var stationObservationUseGroupingByKey = null;
 
 function get_mqtt_status_elements() {
     if (mqttStatusElements) {
@@ -952,12 +951,11 @@ function get_mqtt_status_elements() {
 }
 
 function get_station_observation_cache() {
-    if (stationObservationElementsByKey && stationObservationUseGroupingByKey) {
+    if (stationObservationElementsByKey) {
         return;
     }
 
     stationObservationElementsByKey = {};
-    stationObservationUseGroupingByKey = {};
 
     document.querySelectorAll(".station-observations span").forEach(function(span) {
         var rawClass = span.getAttribute("class");
@@ -976,7 +974,6 @@ function get_station_observation_cache() {
 
         if (!stationObservationElementsByKey.hasOwnProperty(elementClass)) {
             stationObservationElementsByKey[elementClass] = document.querySelectorAll("." + elementClass);
-            stationObservationUseGroupingByKey[elementClass] = !(elementClass === "barometer" || elementClass === "pressure" || elementClass === "altimeter" || elementClass === "cloudbase");
         }
     });
 }
@@ -990,15 +987,44 @@ function resolve_station_observation_key(mqttKey) {
         return mqttKey;
     }
 
-    var separatorIndex = mqttKey.indexOf("_");
-    if (separatorIndex > 0) {
-        var baseKey = mqttKey.substring(0, separatorIndex);
-        if (stationObservationElementsByKey.hasOwnProperty(baseKey)) {
-            return baseKey;
+    var observationKeys = Object.keys(stationObservationElementsByKey);
+    observationKeys.sort(function(a, b) { return b.length - a.length; });
+    for (var i = 0; i < observationKeys.length; i++) {
+        if (mqttKey.indexOf(observationKeys[i] + "_") === 0) {
+            return observationKeys[i];
         }
     }
 
     return null;
+}
+
+// Older reports and observation groups without conversion metadata still update
+// through the shared number formatter, preserving the configured label verbatim.
+function mqtt_update_station_observation_fallback(data) {
+    get_station_observation_cache();
+    var metadata = BU_stationObservationUnitMetadata(weewx_data) || {};
+    var updated = Object.create(null);
+    Object.keys(data).forEach(function(mqttKey) {
+        var obsName = resolve_station_observation_key(mqttKey);
+        if (!obsName || metadata[obsName] || updated[obsName] ||
+            obsName === "barometer" || obsName === "dewpoint" ||
+            obsName === "dayRain" || obsName === "rainRate") { return; }
+        if (!unit_rounding_array.hasOwnProperty(obsName) ||
+            !unit_label_array.hasOwnProperty(obsName)) { return; }
+        var label = unit_label_array[obsName];
+        var kind = BU_chartUnitKind(BU_extractUnitToken(label) || "");
+        var value = kind
+            ? BU_mqttObservationValue(obsName, { kind: kind }, data)
+            : BU_mqttNumber(data[mqttKey]);
+        var formatted = kind
+            ? BU_formatCurrentObservation(value, kind, BU_obsDecimals(obsName, 0), { unit_label: label })
+            : BU_fmt(value, BU_obsDecimals(obsName, 0));
+        if (formatted === null) { return; }
+        updated[obsName] = true;
+        stationObservationElementsByKey[obsName].forEach(function(el) {
+            el.innerHTML = kind ? formatted : formatted + label;
+        });
+    });
 }
 
 function schedule_mqtt_ui_update(payload) {
@@ -1420,122 +1446,11 @@ function update_current_wx(data) {
     offlineMarkerEl.forEach(function(el) { el.style.display = "none"; });
     loadingMarkerEl.forEach(function(el) { el.style.display = "none"; });
 
-    // Update the station observation box elements
-    station_mqtt_data = Object.keys(data); // Turn data (mqtt message) into an object we can forEach
-    // Keep the original packet values paired with their advertised unit suffixes.
-    // BU_applyMQTT() normalizes those values later; mutating dayRain_cm into mm
-    // here would make that path interpret the converted value as cm and multiply
-    // it by 10 a second time.
-    var station_display_data = Object.assign({}, data);
-
-    // If our rain payload is in cm, convert it as necessary to the desired UOM
-    try {
-        let conversionFactor = 1.0;
-        let rateFactor = 1.0;
-        if (unit_label_array["dayRain"].trim() == "in") {
-            conversionFactor = 1.0 / 2.54;
-        } else if (unit_label_array["dayRain"].trim() == "mm") {
-            conversionFactor = 10;
-        } // else we are assuming we want "cm"
-        if (unit_label_array["rainRate"].trim() == "in/hr") {
-            rateFactor = 1.0 / 2.54;
-        } else if (unit_label_array["rainRate"].trim() == "mm/hr") {
-            rateFactor = 10;
-        } // else we are assuming we want "cm/hr"
-
-        station_display_data["dayRain_cm"] = parseFloat(station_display_data["dayRain_cm"] * conversionFactor).toFixed(4);
-        station_display_data["hourRain_cm"] = parseFloat(station_display_data["hourRain_cm"] * conversionFactor).toFixed(4);
-        station_display_data["monthRain_cm"] = parseFloat(station_display_data["monthRain_cm"] * conversionFactor).toFixed(4);
-        station_display_data["rain24_cm"] = parseFloat(station_display_data["rain24_cm"] * conversionFactor).toFixed(4);
-        station_display_data["rainRate_cm_per_hour"] = parseFloat(station_display_data["rainRate_cm_per_hour"] * rateFactor).toPrecision(4);
-        station_display_data["rain_cm"] = parseFloat(station_display_data["rain_cm"] * conversionFactor).toFixed(4);
-        station_display_data["stormRain_cm"] = parseFloat(station_display_data["stormRain_cm"] * conversionFactor).toFixed(4);
-        station_display_data["yearRain_cm"] = parseFloat(station_display_data["yearRain_cm"] * conversionFactor).toFixed(4);
-    } catch (err) {
-        // Silent
-    }
-
-    get_station_observation_cache();
-    var stationObservationMeta = BU_stationObservationUnitMetadata(weewx_data) || {};
-    station_mqtt_data.forEach(function(mqttKey) {
-        var observationKey = resolve_station_observation_key(mqttKey);
-        if (!observationKey) {
-            return;
-        }
-
-        if (stationObservationMeta[observationKey] && stationObservationMeta[observationKey].kind === "time") {
-            return;
-        }
-
-        if (!unit_rounding_array.hasOwnProperty(observationKey) || !unit_label_array.hasOwnProperty(observationKey)) {
-            return;
-        }
-
-        var numericValue = parseFloat(station_display_data[mqttKey]);
-        if (!isFinite(numericValue)) {
-            return;
-        }
-
-        var html_output = numericValue.toLocaleString("$system_locale_js", {
-            minimumFractionDigits: unit_rounding_array[observationKey],
-            maximumFractionDigits: unit_rounding_array[observationKey],
-            useGrouping: stationObservationUseGroupingByKey[observationKey]
-        }) + unit_label_array[observationKey];
-
-        stationObservationElementsByKey[observationKey].forEach(function(el) {
-            el.innerHTML = html_output;
-        });
-    });
-    // End dynamic station observation box
-    BU_applyStationObservationTimes(weewx_data, data);
-
-    // Temperature F
-    if (data.hasOwnProperty("outTemp_F")) {
-        // Inside parseFloat converts str to int. Outside parseFloat processes the locale string
-        // Help from: https://stackoverflow.com/a/40152286/1177153 and https://stackoverflow.com/a/31581206/1177153
-        outTemp = parseFloat(parseFloat(data["outTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]});
-        get_outTemp_color("degree_F", outTemp);
-        mqtt_set_html(".outtemp", outTemp);
-    }
-
-    // Temperature C
-    if (data.hasOwnProperty("outTemp_C")) {
-        outTemp = parseFloat(parseFloat(data["outTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]});
-        get_outTemp_color("degree_C", outTemp);
-        mqtt_set_html(".outtemp", outTemp);
-    }
-
-    // Apparent Temperature US
-    if (data.hasOwnProperty("appTemp_F")) {
-        mqtt_set_text(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_F"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
-    }
-
-    // Apparent Temperature Metric
-    if (data.hasOwnProperty("appTemp_C")) {
-        mqtt_set_text(".feelslike", belchertown_label_text("$obs.label.feels_like") + " " + parseFloat(parseFloat(data["appTemp_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["outTemp"], maximumFractionDigits: unit_rounding_array["outTemp"]}) + " " + belchertown_label_text("$unit.label.outTemp"));
-    }
-
     // Wind
     if (data.hasOwnProperty("windDir")) {
         rotateThis(data["windDir"]);
         mqtt_set_html(".curwinddeg", parseFloat(data["windDir"]).toFixed(0) + "&deg;");
         mqtt_set_html(".curwinddir", highcharts_tooltip_factory(parseFloat(data["windDir"]).toFixed(0), "windDir"));
-    }
-
-    if (data.hasOwnProperty("windSpeed_mph")) {
-        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_mph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-    }
-    if (data.hasOwnProperty("windSpeed_kph")) {
-        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_kph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-    }
-    if (data.hasOwnProperty("windSpeed_mps")) {
-        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_mps"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-    }
-    if (data.hasOwnProperty("windSpeed_beaufort")) {
-        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_beaufort"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-    }
-    if (data.hasOwnProperty("windSpeed_knot")) {
-        mqtt_set_html(".curwindspeed", parseFloat(parseFloat(data["windSpeed_knot"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
     }
 
     // #if $Extras.has_key("beaufort_category_gusts") and str($Extras.beaufort_category_gusts) == '1'
@@ -1550,44 +1465,10 @@ function update_current_wx(data) {
         mqtt_set_html(".beaufort", beaufort_cat(parseFloat(data["beaufort"])));
     }
 
-    if (data.hasOwnProperty("windGust_mph")) {
-        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_mph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
-    }
-    if (data.hasOwnProperty("windGust_kph")) {
-        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_kph"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
-    }
-    if (data.hasOwnProperty("windGust_mps")) {
-        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_mps"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windGust"], maximumFractionDigits: unit_rounding_array["windGust"]}));
-    }
-    if (data.hasOwnProperty("windGust_beaufort")) {
-        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_beaufort"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-    }
-    if (data.hasOwnProperty("windGust_knot")) {
-        mqtt_set_html(".curwindgust", parseFloat(parseFloat(data["windGust_knot"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windSpeed"], maximumFractionDigits: unit_rounding_array["windSpeed"]}));
-    }
-
-    if (data.hasOwnProperty("windchill")) {
-        mqtt_set_text(".curwindchill", parseFloat(parseFloat(data["windchill"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
-    }
-    if (data.hasOwnProperty("windchill_C")) {
-        mqtt_set_text(".curwindchill", parseFloat(parseFloat(data["windchill_C"])).toLocaleString("$system_locale_js", {minimumFractionDigits: unit_rounding_array["windchill"], maximumFractionDigits: unit_rounding_array["windchill"]}) + belchertown_label_text("$unit.label.outTemp"));
-    }
-
-    // ── Unit Switcher: re-render unit-bearing values in chosen system ──────
-    // BU_applyMQTT (defined in new-belchertown.js.tmpl) reads METRICWX-base
-    // fields from the MQTT payload (outTemp_C, windSpeed_mps, windGust_mps,
-    // barometer_mbar, dayRain_mm, rainRate_mm_per_hour, appTemp_C,
-    // dewpoint_C, windchill_C) and writes the chosen-unit values into
-    // .outtemp, .curwindspeed, .curwindgust, .mph, pressure observations,
-    // .dayRain, .rainRate, .apptemp, .dewpoint, .curwindchill.
-    try {
-        window.BU_lastMQTT = data;
-        if (typeof BU_applyMQTT === "function") {
-            BU_applyMQTT(data);
-        }
-    } catch (_BU_e) {
-        belchertown_debug("Unit Switcher: BU_applyMQTT error - " + _BU_e.message);
-    }
+    // One measurement renderer owns conversion, formatting, and station rows.
+    BU_applyStationObservationTimes(weewx_data, data);
+    BU_applyMQTT(data);
+    mqtt_update_station_observation_fallback(data);
 
     mqtt_render_status_modal();
 };
