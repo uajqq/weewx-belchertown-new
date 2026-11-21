@@ -2407,6 +2407,48 @@ def _openmeteo_weather_to_icon_summary(code, is_daytime=True):
     return ("Unknown", "unknown")
 
 
+def _localize_openmeteo_summaries(payload, label_dict):
+    """Localize normalized Open-Meteo rows in place; return whether any changed."""
+    if not isinstance(payload, dict) or payload.get("provider") != "open-meteo":
+        return False
+
+    # WMO codes mapped to the existing localized condition/intensity labels.
+    coded_weather = {
+        0: "::CL", 1: "::FW", 2: "::SC", 3: "::OV",
+        45: "::F", 48: "::ZF",
+        51: ":L:L", 53: "::L", 55: ":H:L",
+        56: ":L:ZL", 57: ":H:ZL",
+        61: ":L:R", 63: "::R", 65: ":H:R",
+        66: ":L:ZR", 67: ":H:ZR",
+        71: ":L:S", 73: "::S", 75: ":H:S", 77: "::S",
+        80: ":L:RW", 81: "::RW", 82: ":VH:RW",
+        85: ":L:SW", 86: ":H:SW",
+        95: "::T", 96: "::T", 99: "::T",
+    }
+    summaries = {
+        code: _aeris_coded_weather(coded, label_dict)
+        for code, coded in coded_weather.items()
+    }
+    for code, intensity in ((96, "L"), (99, "H")):
+        summaries[code] += " / " + _aeris_coded_weather(
+            ":%s:A" % intensity, label_dict
+        )
+
+    changed = False
+    for key in ("current", "hourly", "threeHourly", "daily"):
+        rows = payload.get(key) or []
+        if isinstance(rows, dict):
+            rows = [rows]
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            summary = summaries.get(_safe_float(row.get("weatherCode")))
+            if summary and row.get("summary") != summary:
+                row["summary"] = summary
+                changed = True
+    return changed
+
+
 def _aqi_category_from_us_aqi(aqi_value):
     """Return the existing AQI category key for a US AQI numeric value."""
     aqi_float = _safe_float(aqi_value)
@@ -7551,6 +7593,7 @@ class getData(SearchList):
                                 normalized = _openmeteo_transform_to_belch(
                                     om_raw, forecast_units
                                 )
+                                _localize_openmeteo_summaries(normalized, label_dict)
                                 (
                                     normalized["alerts"],
                                     alert_provider,
@@ -7602,6 +7645,13 @@ class getData(SearchList):
 
                     if not openmeteo_forecast_failed:
                         try:
+                            # Apply language/label changes to both caches without
+                            # changing their data timestamps or fetching again.
+                            for cache_file in (forecast_file, current_conditions_file):
+                                with open(cache_file, "r", encoding="utf-8") as rf:
+                                    cached = json.load(rf)
+                                if _localize_openmeteo_summaries(cached, label_dict):
+                                    _write_json_file(cache_file, cached)
                             (
                                 current_obs_icon,
                                 current_obs_summary,
