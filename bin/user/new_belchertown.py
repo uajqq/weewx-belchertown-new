@@ -3006,6 +3006,19 @@ def _fetch_openmeteo_aqi_payload(latitude, longitude, aqi_scale="us"):
     return _openmeteo_air_quality_to_aeris_payload(aqi_raw, aqi_scale=aqi_scale)
 
 
+def _xweather_aqi_place(latitude, longitude, forecast_place):
+    """Return the Xweather place to use for the airquality endpoint.
+
+    The airquality endpoint accepts coordinates, place names and postal codes,
+    but returns warn_no_data for PWS station IDs (PWS_<id>). Those, and an
+    empty forecast_place, fall back to the [Station] coordinates.
+    """
+    place = str(forecast_place or "").strip()
+    if not place or place.upper().startswith("PWS_"):
+        return f"{latitude},{longitude}"
+    return place
+
+
 def _fetch_xweather_aqi_payload(
     forecast_place, forecast_api_id, forecast_api_secret, aqi_scale="us"
 ):
@@ -6944,7 +6957,11 @@ class getData(SearchList):
                             )
                     elif standalone_provider == "aeris":
                         standalone_aqi_payload = _fetch_xweather_aqi_payload(
-                            extras_dict.get("forecast_place", ""),
+                            _xweather_aqi_place(
+                                config_dict["Station"].get("latitude"),
+                                config_dict["Station"].get("longitude"),
+                                extras_dict.get("forecast_place", ""),
+                            ),
                             extras_dict.get("forecast_api_id", ""),
                             extras_dict.get("forecast_api_secret", ""),
                             aqi_scale=aqi_scale,
@@ -7133,7 +7150,7 @@ class getData(SearchList):
 
                     try:
                         aqi_payload = _fetch_xweather_aqi_payload(
-                            forecast_place,
+                            _xweather_aqi_place(latitude, longitude, forecast_place),
                             forecast_api_id,
                             forecast_api_secret,
                             aqi_scale=aqi_scale,
