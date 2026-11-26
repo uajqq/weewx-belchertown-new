@@ -1003,10 +1003,12 @@ function resolve_station_observation_key(mqttKey) {
 function mqtt_update_station_observation_fallback(data) {
     get_station_observation_cache();
     var metadata = BU_stationObservationUnitMetadata(weewx_data) || {};
+    // Forecast-managed rows retain the source selected by the report.
+    var sources = weewx_data && weewx_data.station_observations && weewx_data.station_observations.sources || {};
     var updated = Object.create(null);
     Object.keys(data).forEach(function(mqttKey) {
         var obsName = resolve_station_observation_key(mqttKey);
-        if (!obsName || metadata[obsName] || updated[obsName] ||
+        if (!obsName || sources[obsName] || metadata[obsName] || updated[obsName] ||
             obsName === "barometer" || obsName === "dewpoint" ||
             obsName === "dayRain" || obsName === "rainRate") { return; }
         if (!unit_rounding_array.hasOwnProperty(obsName) ||
